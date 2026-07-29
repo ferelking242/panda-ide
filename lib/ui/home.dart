@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -98,6 +99,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // ── Pending shared file ────────────────────────────────────────────────────
   Future<void> _openPendingSharedFile() async {
+    if (kIsWeb) return; // NativeChannel not available on web
     if (_checkingPendingSharedFile) return;
     _checkingPendingSharedFile = true;
     try {
