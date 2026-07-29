@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
@@ -88,6 +89,25 @@ class _StartScreenState extends State<StartScreen> {
   }
 
   Future<void> _initializeApp(BuildContext context) async {
+    // On web: skip all native Android filesystem/binary setup entirely.
+    if (kIsWeb) {
+      await ensureCopilotEnabledPrefInitialized();
+      await ensureCopilotSignedPrefInitialized();
+      setState(() { isDone = true; });
+      Future.delayed(const Duration(milliseconds: 10), () {
+        if (context.mounted) {
+          Navigator.of(context).pushReplacement(PageRouteBuilder(
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                const SelectType(),
+            transitionsBuilder:
+                (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          ));
+        }
+      });
+      return;
+    }
     await NativeChannel.getExternalMediaDir();
     final downdir = Directory(downloadsDir);
     final gitCore = "$binDir/git-core";
