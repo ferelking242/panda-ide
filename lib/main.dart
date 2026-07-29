@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:code_forge/code_forge.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'bloc/repo_bloc/repo_bloc.dart';
@@ -10,8 +11,14 @@ import 'utils/themes.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await RustLib.init();
-  await migrateSharedStorageRoots();
+  // RustLib uses dart:ffi / native Rust — skip on web to avoid runtime crash.
+  if (!kIsWeb) {
+    await RustLib.init();
+  }
+  // migrateSharedStorageRoots uses dart:io (Directory) — skip on web.
+  if (!kIsWeb) {
+    await migrateSharedStorageRoots();
+  }
   final recent = await getRecent();
   final appTheme = await getAppTheme();
   final codeForgeConfig = await getCodeForgeConfig();
