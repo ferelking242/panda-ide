@@ -38,6 +38,9 @@ const _kTabBarLight    = Color(0xffececec);
 const _kTabActiveDark  = Color(0xff1e1e1e);
 const _kTabActiveLight = Color(0xffffffff);
 const _kAccent         = Color(0xff5090c8);
+const _kSidebarBgDark  = Color(0xff252526);
+const _kSidebarBgLight = Color(0xfff3f3f3);
+const _kSidebarWidth   = 240.0;
 const _kSectionTitle   = TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
@@ -65,6 +68,8 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // Active activity-bar item (0 = none/welcome)
   int _activeRail = 0;
+  // Whether the sidebar panel is expanded (shows the 240px content area)
+  bool _sidebarPanelOpen = false;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
@@ -626,25 +631,37 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             ),
 
             // ── Body ─────────────────────────────────────────────────────
-            body: Row(
-              children: [
-                // ── Activity bar ─────────────────────────────────────────
-                _buildActivityBar(context, appTheme),
+            body: SafeArea(
+              child: Row(
+                children: [
+                  // ── Activity bar ──────────────────────────────────────
+                  _buildActivityBar(context, appTheme),
 
-                // ── Main content ─────────────────────────────────────────
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildTopBar(context, appTheme, appThemestate),
-                      _buildTabBar(appTheme),
-                      Expanded(
-                        child: _buildWelcomePage(
-                            context, appTheme, appThemestate),
-                      ),
-                    ],
+                  // ── Sliding sidebar panel ─────────────────────────────
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    width: _sidebarPanelOpen ? _kSidebarWidth : 0,
+                    child: _sidebarPanelOpen
+                        ? _buildSidebarPanel(context, appTheme)
+                        : null,
                   ),
-                ),
-              ],
+
+                  // ── Main content ──────────────────────────────────────
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _buildTopBar(context, appTheme, appThemestate),
+                        _buildTabBar(appTheme),
+                        Expanded(
+                          child: _buildWelcomePage(
+                              context, appTheme, appThemestate),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -662,12 +679,14 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // ── Activity bar ──────────────────────────────────────────────────────────
   Widget _buildActivityBar(BuildContext context, AppTheme appTheme) {
-    final items = <_RailItem>[
-      _RailItem(icon: Broken.menu,            label: 'Menu',          idx: 0),
-      _RailItem(icon: Broken.element_3,       label: 'Explorer',      idx: 1),
-      _RailItem(icon: Broken.search_normal,   label: 'Search',        idx: 2),
-      _RailItem(icon: Broken.programming_arrows, label: 'Source Control', idx: 3),
-      _RailItem(icon: Broken.cpu,             label: 'Terminal',      idx: 4),
+    // Top items — each toggles a sidebar panel
+    final topItems = <_RailItem>[
+      _RailItem(icon: Broken.element_3,          label: 'Explorer',        idx: 1),
+      _RailItem(icon: Broken.search_normal,       label: 'Rechercher',      idx: 2),
+      _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',    idx: 3),
+      _RailItem(icon: Broken.play_circle,         label: 'Exécuter / Debug',idx: 4),
+      _RailItem(icon: Broken.cloud_connection,    label: 'Tunnel',          idx: 5),
+      _RailItem(icon: Broken.shop,               label: 'Marketplace',     idx: 6),
     ];
 
     return Container(
@@ -675,46 +694,98 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       color: _kActivityBg,
       child: Column(
         children: [
+          // ── Hamburger : ouvre/ferme le panneau latéral ──────────────
+          Tooltip(
+            message: _sidebarPanelOpen ? 'Fermer le panneau' : 'Ouvrir le panneau',
+            child: InkWell(
+              onTap: () {
+                setState(() {
+                  if (_sidebarPanelOpen) {
+                    _sidebarPanelOpen = false;
+                    _activeRail = 0;
+                  } else {
+                    // open to the last selected item, or Explorer by default
+                    if (_activeRail == 0) _activeRail = 1;
+                    _sidebarPanelOpen = true;
+                  }
+                });
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                child: Center(
+                  child: Icon(
+                    _sidebarPanelOpen ? Broken.close_square : Broken.menu,
+                    size: 22,
+                    color: _kActivityIcon,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const Divider(color: Color(0xff444444), height: 1),
           const SizedBox(height: 4),
-          ...items.map((item) => _ActivityBtn(
+
+          // ── Sidebar items ─────────────────────────────────────────────
+          ...topItems.map((item) => _ActivityBtn(
                 item: item,
-                selected: _activeRail == item.idx,
+                selected: _sidebarPanelOpen && _activeRail == item.idx,
                 onTap: () {
-                  if (item.idx == 0) {
-                    _scaffoldKey.currentState?.openDrawer();
-                    return;
-                  }
-                  if (item.idx == 4) {
-                    _push(
-                      context,
-                      SetupTerminal(
-                        projectDir: homeDir,
-                        sshId: null,
-                        termuxId: null,
-                      ),
-                    );
-                    return;
-                  }
-                  setState(() => _activeRail =
-                      _activeRail == item.idx ? 0 : item.idx);
+                  setState(() {
+                    if (_activeRail == item.idx && _sidebarPanelOpen) {
+                      // tap same icon → close panel
+                      _sidebarPanelOpen = false;
+                      _activeRail = 0;
+                    } else {
+                      _activeRail = item.idx;
+                      _sidebarPanelOpen = true;
+                    }
+                  });
                 },
               )),
-          const Spacer(),
-          // Settings at bottom
-          _ActivityBtn(
-            item: _RailItem(
-                icon: Broken.settings, label: 'Settings', idx: 99),
-            selected: false,
-            onTap: () => _push(context, const Settings()),
+
+          // ── Panda Agent ───────────────────────────────────────────────
+          Tooltip(
+            message: 'Panda Agent',
+            child: InkWell(
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Panda Agent — bientôt disponible 🐼'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: Container(
+                width: 48,
+                height: 48,
+                child: Center(
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/icons/app-icon.png',
+                      width: 26,
+                      height: 26,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Text(
+                        '🐼',
+                        style: TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
+
+          const Spacer(),
+
+          // ── Bas : thème + compte GitHub + paramètres ──────────────────
           // Theme toggle
           BlocBuilder<AppThemeBloc, AppThemeState>(
             builder: (context, state) => _ActivityBtn(
               item: _RailItem(
-                  icon: state.appTheme.isDark
-                      ? Broken.sun_1
-                      : Broken.moon,
-                  label: 'Toggle theme',
+                  icon: state.appTheme.isDark ? Broken.sun_1 : Broken.moon,
+                  label: 'Basculer le thème',
                   idx: 98),
               selected: false,
               onTap: () async {
@@ -722,24 +793,321 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                 final cur = prefs.getString('savedAppTheme');
                 if (context.mounted) {
                   if (cur == 'dark') {
-                    context
-                        .read<AppThemeBloc>()
-                        .add(AppThemeEvent(appTheme: LightTheme()));
+                    context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: LightTheme()));
                     prefs.setString('savedAppTheme', 'light');
                   } else {
-                    context
-                        .read<AppThemeBloc>()
-                        .add(AppThemeEvent(appTheme: DarkTheme()));
+                    context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: DarkTheme()));
                     prefs.setString('savedAppTheme', 'dark');
                   }
                 }
               },
             ),
           ),
-          // GitHub avatar
-          _GithubAvatar(onTap: () => _push(context, GithubPage())),
+
+          // GitHub account avatar
+          Tooltip(
+            message: 'Compte GitHub',
+            child: _GithubAvatar(onTap: () => _push(context, GithubPage())),
+          ),
+
+          // Settings
+          _ActivityBtn(
+            item: _RailItem(icon: Broken.settings, label: 'Paramètres', idx: 99),
+            selected: false,
+            onTap: () => _push(context, const Settings()),
+          ),
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+
+  // ── Sidebar panel content ─────────────────────────────────────────────────
+  Widget _buildSidebarPanel(BuildContext context, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final bg = isDark ? _kSidebarBgDark : _kSidebarBgLight;
+    final titleColor = isDark ? Colors.grey[400]! : Colors.grey[700]!;
+    final borderColor = isDark ? const Color(0xff3c3c3c) : const Color(0xffdddddd);
+
+    final titles = {
+      1: 'EXPLORATEUR',
+      2: 'RECHERCHER',
+      3: 'CONTRÔLE GIT',
+      4: 'EXÉCUTER / DEBUG',
+      5: 'TUNNEL / SSH',
+      6: 'MARKETPLACE',
+    };
+
+    Widget panelBody;
+    switch (_activeRail) {
+      case 1: // Explorer
+        panelBody = _sidebarExplorer(context, appTheme, isDark);
+        break;
+      case 2: // Search
+        panelBody = _sidebarSearch(context, appTheme, isDark);
+        break;
+      case 3: // Git
+        panelBody = _sidebarGit(context, appTheme, isDark);
+        break;
+      case 4: // Debug
+        panelBody = _sidebarDebug(context, appTheme, isDark);
+        break;
+      case 5: // Tunnel
+        panelBody = _sidebarTunnel(context, appTheme, isDark);
+        break;
+      case 6: // Marketplace
+        panelBody = _sidebarMarketplace(context, appTheme, isDark);
+        break;
+      default:
+        panelBody = const SizedBox.shrink();
+    }
+
+    return Container(
+      width: _kSidebarWidth,
+      color: bg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Panel header
+          Container(
+            height: 35,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: borderColor)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    titles[_activeRail] ?? '',
+                    style: _kSectionTitle.copyWith(color: titleColor),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                InkWell(
+                  onTap: () => setState(() {
+                    _sidebarPanelOpen = false;
+                    _activeRail = 0;
+                  }),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(Broken.close_circle,
+                        size: 14, color: titleColor),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: panelBody),
+        ],
+      ),
+    );
+  }
+
+  // ── Explorer panel ────────────────────────────────────────────────────────
+  Widget _sidebarExplorer(BuildContext ctx, AppTheme t, bool dark) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        _panelItem(ctx, t, Broken.document_text, 'Nouveau fichier…',
+            () { Navigator.of(ctx).pop(); _doNewFile(ctx, t); }),
+        _panelItem(ctx, t, Broken.document_upload, 'Ouvrir un fichier…',
+            () => _doOpenFile(ctx)),
+        _panelItem(ctx, t, Broken.folder_open, 'Ouvrir un dossier…',
+            () => _doOpenFolder(ctx, t)),
+        _panelItem(ctx, t, Broken.programming_arrows, 'Cloner un dépôt…',
+            () => _doCloneRepo(ctx, t)),
+        _panelItem(ctx, t, Broken.folder_2, 'Gestionnaire de fichiers',
+            () => _push(ctx, const FileManagerPage())),
+        const Divider(indent: 12, endIndent: 12),
+        _panelItem(ctx, t, Broken.sidebar_right, 'Projets',
+            () => _push(ctx, const ProjectScreen())),
+        _panelItem(ctx, t, Broken.document_download, 'Téléchargements',
+            () => _push(ctx, DownloadManager())),
+      ],
+    );
+  }
+
+  // ── Search panel ──────────────────────────────────────────────────────────
+  Widget _sidebarSearch(BuildContext ctx, AppTheme t, bool dark) {
+    final ctrl = TextEditingController();
+    return Padding(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: ctrl,
+            autofocus: false,
+            style: TextStyle(
+                color: dark ? Colors.grey[300] : Colors.grey[800],
+                fontSize: 13),
+            cursorColor: _kAccent,
+            decoration: InputDecoration(
+              hintText: 'Rechercher…',
+              hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+              prefixIcon: const Icon(Icons.search, size: 16, color: Colors.grey),
+              isDense: true,
+              filled: true,
+              fillColor: dark ? const Color(0xff3c3c3c) : Colors.white,
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(
+                    color: dark ? const Color(0xff555555) : const Color(0xffcccccc)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: _kAccent),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Ouvrez un fichier pour lancer la recherche dans un projet.',
+            style: TextStyle(
+                fontSize: 12,
+                color: dark ? Colors.grey[500] : Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Git panel ─────────────────────────────────────────────────────────────
+  Widget _sidebarGit(BuildContext ctx, AppTheme t, bool dark) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        _panelItem(ctx, t, Broken.programming_arrows, 'Ouvrir GitHub',
+            () => _push(ctx, GithubPage())),
+        _panelItem(ctx, t, Broken.add_circle, 'Cloner un dépôt…',
+            () => _doCloneRepo(ctx, t)),
+        BlocBuilder<GithubAuthCubit, GithubAuthState>(
+          builder: (_, s) => s.isSignedIn
+              ? _panelItem(ctx, t, Broken.add_square, 'Créer un dépôt…',
+                  () => _push(ctx, GithubPage()))
+              : const SizedBox.shrink(),
+        ),
+        const Divider(indent: 12, endIndent: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: BlocBuilder<GithubAuthCubit, GithubAuthState>(
+            builder: (_, s) => Text(
+              s.isSignedIn
+                  ? 'Connecté : ${s.user?.login ?? ''}'
+                  : 'Non connecté — appuyez sur « Ouvrir GitHub »',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: dark ? Colors.grey[500] : Colors.grey[600]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Debug panel ───────────────────────────────────────────────────────────
+  Widget _sidebarDebug(BuildContext ctx, AppTheme t, bool dark) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        _panelItem(ctx, t, Broken.cpu, 'Ouvrir le terminal',
+            () => _push(ctx, SetupTerminal(
+                  projectDir: homeDir,
+                  sshId: null,
+                  termuxId: null,
+                ))),
+        _panelItem(ctx, t, Broken.play_circle, 'Exécuter un fichier…',
+            () => _doOpenFile(ctx)),
+        const Divider(indent: 12, endIndent: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            'Ouvrez un projet pour accéder aux configurations de lancement.',
+            style: TextStyle(
+                fontSize: 12,
+                color: dark ? Colors.grey[500] : Colors.grey[600]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Tunnel panel ──────────────────────────────────────────────────────────
+  Widget _sidebarTunnel(BuildContext ctx, AppTheme t, bool dark) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        _panelItem(ctx, t, Broken.cpu, 'Ouvrir terminal SSH',
+            () => _push(ctx, SetupTerminal(
+                  projectDir: homeDir,
+                  sshId: null,
+                  termuxId: null,
+                ))),
+        _panelItem(ctx, t, Broken.settings, 'Paramètres SSH / Termux',
+            () => _push(ctx, const Settings())),
+        const Divider(indent: 12, endIndent: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            'Connectez-vous à un serveur distant ou configurez Termux pour exécuter du code nativement.',
+            style: TextStyle(
+                fontSize: 12,
+                color: dark ? Colors.grey[500] : Colors.grey[600]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Marketplace panel ─────────────────────────────────────────────────────
+  Widget _sidebarMarketplace(BuildContext ctx, AppTheme t, bool dark) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        _panelItem(ctx, t, Broken.shop, 'Parcourir les modèles',
+            () => _push(ctx, const MenuScreen())),
+        _panelItem(ctx, t, Broken.document_download, 'Téléchargements / Paquets',
+            () => _push(ctx, DownloadManager())),
+        const Divider(indent: 12, endIndent: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Text(
+            'Téléchargez des runtimes, extensions et modèles de projet.',
+            style: TextStyle(
+                fontSize: 12,
+                color: dark ? Colors.grey[500] : Colors.grey[600]),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Panel item helper ─────────────────────────────────────────────────────
+  Widget _panelItem(
+      BuildContext ctx, AppTheme t, IconData icon, String label, VoidCallback onTap) {
+    final dark = t.isDark;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Row(
+          children: [
+            Icon(icon, size: 15,
+                color: dark ? Colors.grey[400] : Colors.grey[700]),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: dark ? Colors.grey[300] : Colors.grey[800]),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
