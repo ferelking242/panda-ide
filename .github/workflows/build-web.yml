@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -31,14 +31,16 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Enable web support
+        # Le dossier web/ n'est pas commité — Flutter le génère à la volée.
+        # Cette commande est idempotente : elle crée web/ sans toucher au reste.
+        run: flutter create . --platforms web
+
       - name: Build Web
         run: |
           flutter build web \
             --release \
             --base-href "/panda-ide/"
-        # NOTE: flutter_pty, llama_flutter_android, android_intent_plus ne sont
-        # pas supportés sur le web — si le build échoue sur ces packages,
-        # des stubs conditionnels (kIsWeb) seront nécessaires dans le code.
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
