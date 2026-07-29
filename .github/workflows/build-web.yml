@@ -59,6 +59,7 @@ jobs:
         run: |
           flutter build web \
             --release \
+            --no-tree-shake-icons \
             --base-href "/panda-ide/"
 
       - name: Setup Pages
