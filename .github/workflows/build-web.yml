@@ -5,13 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Permissions pour GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
-# Un seul déploiement à la fois
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -37,11 +35,10 @@ jobs:
         run: |
           flutter build web \
             --release \
-            --web-renderer canvaskit \
             --base-href "/panda-ide/"
         # NOTE: flutter_pty, llama_flutter_android, android_intent_plus ne sont
-        # pas supportés sur le web. Si le build échoue à cause de ces packages,
-        # voir CONTRIBUTING.md pour les stubs conditionnels nécessaires.
+        # pas supportés sur le web — si le build échoue sur ces packages,
+        # des stubs conditionnels (kIsWeb) seront nécessaires dans le code.
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
