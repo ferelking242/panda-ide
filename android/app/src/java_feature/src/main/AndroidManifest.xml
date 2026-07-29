@@ -2,7 +2,7 @@
     xmlns:dist="http://schemas.android.com/apk/distribution">
 
     <dist:module
-        dist:title="@com.roxum:string/java_feature_title"
+        dist:title="@com.panda.ide:string/java_feature_title"
         dist:instant="false">
         <dist:delivery>
             <dist:on-demand />
