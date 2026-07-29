@@ -6,7 +6,7 @@ import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
 import 'package:panda/utils/themes.dart';
 
 class ContributePage extends StatelessWidget {
-  final String repoUrl = 'https://github.com/heckmon/roxum-ide';
+  final String repoUrl = 'https://github.com/ferelking242/panda-ide';
 
   const ContributePage({super.key});
 

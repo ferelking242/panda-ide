@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.ruby"
+    namespace = "com.panda.ide.ruby"
     compileSdk = 36
 
     defaultConfig {

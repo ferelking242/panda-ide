@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.bashls"
+    namespace = "com.panda.ide.bashls"
     compileSdk = 36
 
     defaultConfig {

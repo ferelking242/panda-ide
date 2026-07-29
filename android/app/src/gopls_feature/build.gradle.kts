@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.gopls"
+    namespace = "com.panda.ide.gopls"
     compileSdk = 36
 
     defaultConfig {

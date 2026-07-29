@@ -2940,7 +2940,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                                         break;
                                       case '.go':
                                         try {
-                                          final soPath = path.join(tempDir, '.roxum-go-run.so');
+                                          final soPath = path.join(tempDir, '.panda-go-run.so');
                                 
                                           final command =
                                               'export GOROOT="$runtimesDir/go" '
@@ -2953,12 +2953,12 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                                               '&& cp "${filePath.path}" "\$go_bak" '
                                               '&& cleanup(){ '
                                               'cp "\$go_bak" "${filePath.path}"; '
-                                                'rm -f "\$go_bak" "$soPath" "${filePath.path}.roxum.tmp"; '
+                                                'rm -f "\$go_bak" "$soPath" "${filePath.path}.panda.tmp"; '
                                               '}; '
                                               'trap cleanup EXIT '
                                 
                                               '&& if ! grep -q \'import "C"\' "${filePath.path}"; then '
-                                                  'tmp_go="${filePath.path}.roxum.tmp"; '
+                                                  'tmp_go="${filePath.path}.panda.tmp"; '
                                                   'if grep -q "^import (" "${filePath.path}"; then '
                                                     "awk 'BEGIN{done=0} {print} !done && /^import \\(\$/ {print \"    \\\"C\\\"\"; done=1}' \"${filePath.path}\" > \"\$tmp_go\" && mv \"\$tmp_go\" \"${filePath.path}\"; "
                                                   'elif grep -q "^import " "${filePath.path}"; then '
@@ -3049,7 +3049,7 @@ if ! grep -Eq 'fn[[:space:]]+main' "$targetPath"; then
   echo "Error: main() not found in src/main.rs.";
   exit 1;
 fi
-generated_lib="${widget.rootDir}/src/.roxum_entry_lib.rs"
+generated_lib="${widget.rootDir}/src/.panda_entry_lib.rs"
 cat > "\$generated_lib" <<'EOF'
 include!("main.rs");
 
@@ -3061,7 +3061,7 @@ pub extern "C" fn __entry() {
 }
 EOF
 if ! grep -Eq '^[[:space:]]*[lib][[:space:]]*\$' "${cargoFile.path}"; then
-  printf '\n[lib]\npath = "src/.roxum_entry_lib.rs"\ncrate-type = ["cdylib"]\n' >> "${cargoFile.path}";
+  printf '\n[lib]\npath = "src/.panda_entry_lib.rs"\ncrate-type = ["cdylib"]\n' >> "${cargoFile.path}";
 fi
 fi
 cargo rustc --release --lib -- --crate-type=cdylib
@@ -3072,7 +3072,7 @@ rustloader "$tempDir/librustapp.so"
 ''';
                                 
                                           } else {
-                                            final soPath = path.join(tempDir, '.roxum-rust-run.so');
+                                            final soPath = path.join(tempDir, '.panda-rust-run.so');
                                 
                                             command =
 '''

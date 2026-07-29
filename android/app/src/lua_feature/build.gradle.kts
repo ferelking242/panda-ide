@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.lua"
+    namespace = "com.panda.ide.lua"
     compileSdk = 36
 
     defaultConfig {

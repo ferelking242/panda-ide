@@ -143,7 +143,7 @@ int main() {
     super.initState();
 
     sshKeygen = SshKeygen(
-      comment: "user@roxum-IDE",
+      comment: "user@panda-IDE",
     );
 
     if(SshKeygen.publicKeyFilelocation.existsSync() && SshKeygen.privateKeyFilelocation.existsSync()){
@@ -156,7 +156,7 @@ int main() {
 
   void _seedTerminalPreview() {
     terminal.write(
-      '\x1b[1;32mroxum\x1b[0m@\x1b[1;34mdevice\x1b[0m:\x1b[36m~/workspace\x1b[0m\$ '
+      '\x1b[1;32mpanda\x1b[0m@\x1b[1;34mdevice\x1b[0m:\x1b[36m~/workspace\x1b[0m\$ '
       'git status\r\n',
     );
     terminal.write('On branch playstore-version\r\n');
@@ -4457,7 +4457,7 @@ int main() {
                                               final termxFormKey = GlobalKey<FormState>();
                                               if(!termPubKey.existsSync() || !termPrivKey.existsSync()){
                                                   await SshKeygen(
-                                                  comment: "roxum@termux",
+                                                  comment: "panda@termux",
                                                   termPubKey: termPubKey,
                                                   termPrivKey: termPrivKey
                                                 ).generate();

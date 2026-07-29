@@ -966,7 +966,7 @@ class AgenticTools {
       'ROXUM_SHARED_PATH': sharedPath,
       'LD_LIBRARY_PATH': '$sharedPath:$libDir:$runtimesDir/clang',
       'LD_PRELOAD': '$sharedPath/libc++_shared.so',
-      'PREFIX': '/data/data/com.roxum',
+      'PREFIX': '/data/data/com.panda.ide',
       'JAVA_HOME': '$runtimesDir/java-21-openjdk',
       'GIT_EXEC_PATH': '$binDir/git-core',
       'GIT_SSL_CAINFO': '$certDir/cacert.pem',

@@ -1,7 +1,7 @@
 name: panda
 description: "Panda IDE — A powerful mobile IDE for Android, built with Flutter."
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.3.1+37
 
 environment:
   sdk: ^3.12.2
@@ -58,35 +58,91 @@ flutter:
     - assets/fonts/
     - assets/certificates/
   fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────────
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
     - family: broken
       fonts:
         - asset: assets/fonts/broken.ttf
     - family: broken_filled
       fonts:
         - asset: assets/fonts/broken_filled.ttf
-    # ── Code / Mono fonts ───────────────────────────────────────────────────
     - family: firaCode
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/FiraCode-Medium.ttf
     - family: cascadia
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/CascadiaCodePL-Regular.ttf
     - family: hack
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/Hack-Regular.ttf
     - family: dejaVuSansMono
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/DejaVuSansMono.ttf
     - family: inconsolata
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/Inconsolata-Regular.ttf
     - family: jetBrainsMono
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/JetBrainsMono-Medium.ttf
     - family: proggy
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/ProggyVector-Regular.ttf
     - family: sourceCodePro
       fonts:
+    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    - family: broken
+      fonts:
+        - asset: assets/fonts/broken.ttf
+    - family: broken_filled
+      fonts:
+        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/SourceCodePro-Medium.ttf
+    

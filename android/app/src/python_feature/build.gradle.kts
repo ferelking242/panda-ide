@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.python"
+    namespace = "com.panda.ide.python"
     compileSdk = 36
 
     defaultConfig {

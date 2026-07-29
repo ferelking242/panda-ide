@@ -360,7 +360,7 @@ final langpython = Language(
   command: 'python',
   icon: SvgPicture.asset('assets/material_icons/python.svg',height: 35,width: 35),
   type: 'interpreted',
-  lspExecutable: "/data/data/com.roxum/bin/ty",
+  lspExecutable: "/data/data/com.panda.ide/bin/ty",
 );
 final langjavascript = Language(
   name: 'Javascript',
@@ -371,7 +371,7 @@ final langjavascript = Language(
   command: 'node',
   icon: SvgPicture.asset('assets/material_icons/javascript.svg',height: 35,width: 35),
   type: 'interpreted',
-  lspExecutable: "/data/data/com.roxum/bin/node",
+  lspExecutable: "/data/data/com.panda.ide/bin/node",
   args: ["--stdio"]
 );
 final langjsx = Language(
@@ -383,7 +383,7 @@ final langjsx = Language(
   command: 'node',
   icon: SvgPicture.asset('assets/material_icons/react.svg',height: 35,width: 35),
   type: 'interpreted',
-  lspExecutable: "/data/data/com.roxum/bin/node",
+  lspExecutable: "/data/data/com.panda.ide/bin/node",
   args: ["--stdio"]
 );
 final langtypescript = Language(
@@ -395,7 +395,7 @@ final langtypescript = Language(
     command: 'tsc',
     icon: SvgPicture.asset('assets/material_icons/typescript.svg',height: 35,width: 35),
     type: 'interpreted',
-    lspExecutable: "/data/data/com.roxum/bin/node",
+    lspExecutable: "/data/data/com.panda.ide/bin/node",
     args: ["--stdio"]
 );
 final langtsx = Language(
@@ -407,7 +407,7 @@ final langtsx = Language(
   command: 'tsc',
   icon: SvgPicture.asset('assets/material_icons/react.svg',height: 35,width: 35),
   type: 'interpreted',
-  lspExecutable: "/data/data/com.roxum/bin/node",
+  lspExecutable: "/data/data/com.panda.ide/bin/node",
   args: ["--stdio"]
 );
 final langjava = Language(
@@ -419,7 +419,7 @@ final langjava = Language(
   icon: SvgPicture.asset('assets/material_icons/java.svg', height: 35,width: 35),
   command: 'javac',
   type: 'compiled',
-  lspExecutable: "/data/data/com.roxum/bin/kmp-lsp",
+  lspExecutable: "/data/data/com.panda.ide/bin/kmp-lsp",
 );
 final langc = Language(
   name: 'C',
@@ -430,7 +430,7 @@ final langc = Language(
   command: 'clang',
   icon: SvgPicture.asset('assets/material_icons/c.svg',height: 35,width: 35),
   type: 'compiled',
-  lspExecutable: "/data/data/com.roxum/bin/ccls",
+  lspExecutable: "/data/data/com.panda.ide/bin/ccls",
 );
 
 final langH = Language(
@@ -439,7 +439,7 @@ final langH = Language(
   details: "C/C++ header file",
   language: builtinAllLanguages['c'],
   helloWorld: "",
-  lspExecutable: "/data/data/com.roxum/bin/ccls",
+  lspExecutable: "/data/data/com.panda.ide/bin/ccls",
   icon: SvgPicture.asset('assets/material_icons/h.svg',height: 35,width: 35),
 );
 
@@ -452,7 +452,7 @@ final langcpp = Language(
   command: 'clang++',
   icon: SvgPicture.asset('assets/material_icons/cpp.svg',height: 35,width: 35),
   type: 'compiled',
-  lspExecutable: "/data/data/com.roxum/bin/ccls",
+  lspExecutable: "/data/data/com.panda.ide/bin/ccls",
 );
 
 final langdart = Language(
@@ -501,7 +501,7 @@ final langhtml = Language(
 ''',
   icon: SvgPicture.asset('assets/material_icons/html.svg',height: 35,width: 35),
   args: ["--stdio"],
-  lspExecutable: "/data/data/com.roxum/bin/node",
+  lspExecutable: "/data/data/com.panda.ide/bin/node",
 );
 final langcss = Language(
   name: 'CSS',
@@ -509,7 +509,7 @@ final langcss = Language(
   details: 'Used to style and format web pages.',
   language: builtinAllLanguages['css'],
   helloWorld: '/* Hello, World! */',
-  lspExecutable: "/data/data/com.roxum/bin/node",
+  lspExecutable: "/data/data/com.panda.ide/bin/node",
   args: ["--stdio"],
   icon: SvgPicture.asset('assets/material_icons/css.svg',height: 35,width: 35),
 );
@@ -562,7 +562,7 @@ final langswift = Language(
   command: 'swift',
   icon: SvgPicture.asset('assets/material_icons/swift.svg',height: 35,width: 35),
   type: 'compiled',
-  lspExecutable: "/data/data/com.roxum/bin/kmp-lsp",
+  lspExecutable: "/data/data/com.panda.ide/bin/kmp-lsp",
 );
 final langkotlin = Language(
   name: 'Kotlin',
@@ -573,7 +573,7 @@ final langkotlin = Language(
   command: 'kotlinc',
   icon: SvgPicture.asset('assets/material_icons/kotlin.svg',height: 35,width: 35),
   type: 'compiled',
-  lspExecutable: "/data/data/com.roxum/bin/kmp-lsp",
+  lspExecutable: "/data/data/com.panda.ide/bin/kmp-lsp",
 );
 final langcsharp = Language(
   name: 'C#',
@@ -594,7 +594,7 @@ final langrust = Language(
   command: 'rustc',
   icon: SvgPicture.asset('assets/material_icons/rust.svg',height: 35,width: 35),
   type: 'compiled',
-  lspExecutable: '/data/data/com.roxum/bin/rust-analyzer',
+  lspExecutable: '/data/data/com.panda.ide/bin/rust-analyzer',
 );
 final langgo = Language(
   name: 'Go',
@@ -605,7 +605,7 @@ final langgo = Language(
   command: 'go run',
   icon: SvgPicture.asset('assets/material_icons/go_gopher.svg',height: 35,width: 35),
   type: 'compiled(no binary)',
-  lspExecutable: '/data/data/com.roxum/bin/gopls',
+  lspExecutable: '/data/data/com.panda.ide/bin/gopls',
 );
 final langruby = Language(
   name: 'Ruby',
@@ -623,7 +623,7 @@ final langjson = Language(
   details: 'A lightweight format for data interchange.',
   language: builtinAllLanguages['json'],
   icon: SvgPicture.asset('assets/material_icons/json.svg',height: 35,width: 35),
-  lspExecutable: "/data/data/com.roxum/bin/node",
+  lspExecutable: "/data/data/com.panda.ide/bin/node",
   args: ["--stdio"],
   helloWorld: '{ "hello": "world" }',
 );
@@ -672,7 +672,7 @@ final langlua = Language(
   icon: SvgPicture.asset('assets/material_icons/lua.svg',height: 35,width: 35),
   helloWorld: 'print("Hello, World!")',
   type: 'compiled(no binary)',
-  lspExecutable: '/data/data/com.roxum/bin/emmyluals',
+  lspExecutable: '/data/data/com.panda.ide/bin/emmyluals',
 );
 final langbash = Language(
   name: 'Bash',

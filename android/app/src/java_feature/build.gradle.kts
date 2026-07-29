@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.java"
+    namespace = "com.panda.ide.java"
     compileSdk = 36
 
     defaultConfig {

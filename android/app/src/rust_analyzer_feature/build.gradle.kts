@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.rustanalyzer"
+    namespace = "com.panda.ide.rustanalyzer"
     compileSdk = 36
 
     defaultConfig {

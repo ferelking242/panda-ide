@@ -1,0 +1,86 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+# ⚠️  COMPATIBILITÉ iOS — ÉTAT ACTUEL
+# ────────────────────────────────────────────────────────────────────────────────
+# ❌ BLOQUANTS (Android-only, ne compilent PAS sur iOS) :
+#   - flutter_pty          → PTY non disponible sur iOS (sandbox Apple)
+#   - llama_flutter_android → Android NDK only, pas de port iOS
+#   - android_intent_plus   → Android-only par définition
+#
+# ⚠️  PARTIEL sur iOS :
+#   - flutter_inappwebview  → iOS OK (WKWebView) ✅
+#   - dartssh2              → iOS OK ✅
+#   - xterm                 → iOS OK ✅
+#   - flutter_pty           → BLOQUANT — doit être stubé avec kIsWeb/Platform.isIOS
+#
+# ACTION REQUISE avant de pouvoir builder iOS :
+#   1. Wrapper flutter_pty dans un check Platform.isIOS → retourner stub/null
+#   2. Retirer llama_flutter_android ou le conditionner (#if !iOS)
+#   3. Retirer android_intent_plus ou le conditionner
+#   Voir: https://docs.flutter.dev/platform-integration/platform-channels
+# ────────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    # Décommenter quand les bloquants ci-dessus sont résolus :
+    # if: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Check iOS compatibility
+        run: |
+          echo "🔍 Vérification compatibilité iOS..."
+          flutter doctor -v
+          # Lister les packages qui peuvent poser problème
+          grep -E "flutter_pty|llama_flutter_android|android_intent" pubspec.yaml \
+            && echo "⚠️  Packages Android-only détectés — build peut échouer" \
+            || echo "✅ Pas de package Android-only détecté"
+
+      - name: Build iOS (no codesign)
+        run: |
+          flutter build ios \
+            --release \
+            --no-codesign
+        # Pour une app store build avec signature:
+        # flutter build ipa --export-options-plist=ios/ExportOptions.plist
+
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: panda-ide-ios-build
+          path: build/ios/iphoneos/Runner.app
+          retention-days: 30
+
+      # Pour distribuer via App Store Connect (nécessite secrets Apple) :
+      # - name: Upload to TestFlight
+      #   uses: apple-actions/upload-testflight-build@v1
+      #   with:
+      #     app-path: build/ios/iphoneos/Runner.app
+      #     issuer-id: ${{ secrets.APPSTORE_ISSUER_ID }}
+      #     api-key-id: ${{ secrets.APPSTORE_API_KEY_ID }}
+      #     api-private-key: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}

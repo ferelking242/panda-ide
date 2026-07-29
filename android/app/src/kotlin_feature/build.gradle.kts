@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.kotlin"
+    namespace = "com.panda.ide.kotlin"
     compileSdk = 36
 
     defaultConfig {

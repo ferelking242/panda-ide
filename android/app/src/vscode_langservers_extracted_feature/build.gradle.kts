@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.vscodels"
+    namespace = "com.panda.ide.vscodels"
     compileSdk = 36
 
     defaultConfig {

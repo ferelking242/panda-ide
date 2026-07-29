@@ -176,7 +176,7 @@ List<ProjectTemplates> projTemps(BuildContext context) => [
     appendProjectName: true,
     openAfterCreate: true,
     icon: SvgPicture.asset("assets/material_icons/vitejs.svg", width: 30, height: 30),
-    command: "npm init -y && npm install -g create-vite@latest && node /data/data/com.roxum/runtimes/node/lib/node_modules/create-vite/dist/index.js"
+    command: "npm init -y && npm install -g create-vite@latest && node /data/data/com.panda.ide/runtimes/node/lib/node_modules/create-vite/dist/index.js"
   ),
 
   CLITemplates(

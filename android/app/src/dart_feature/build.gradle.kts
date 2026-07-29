@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.dart"
+    namespace = "com.panda.ide.dart"
     compileSdk = 36
 
     defaultConfig {

@@ -68,9 +68,9 @@ bool isPreviewFilePath(String filePath) {
     isPdfFilePath(filePath);
 }
 
-const String _legacyProjectDir = '/data/data/com.roxum/Roxum/Projects';
-const String _legacyTemplateDir = '/data/data/com.roxum/Roxum/Templates';
-const String _legacyFilesDir = '/data/data/com.roxum/Roxum/Files';
+const String _legacyProjectDir = '/data/data/com.panda.ide/Roxum/Projects';
+const String _legacyTemplateDir = '/data/data/com.panda.ide/Roxum/Templates';
+const String _legacyFilesDir = '/data/data/com.panda.ide/Roxum/Files';
 const String sharedStorageMigrationNoticeKey = 'panda_shared_storage_migration_notice';
 const String sharedStorageMigrationDoneKey = 'panda_shared_storage_migration_done_v1';
 
@@ -362,7 +362,7 @@ Future<void> initRepo(String workspacePath) async {
 
   await Process.run(
     "$binDir/git",
-    ["config", "--local", "user.email", "roxum@local"],
+    ["config", "--local", "user.email", "panda@local"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
@@ -1318,13 +1318,13 @@ Future<String> gitHubSignIn() async {
   final authUrl = Uri.https('github.com', '/login/oauth/authorize', {
     'client_id': clientId,
     'scope': 'repo read:user',
-    'redirect_uri': 'roxum://oauth',
+    'redirect_uri': 'panda://oauth',
   });
 
   try {
     final result = await FlutterWebAuth2.authenticate(
       url: authUrl.toString(),
-      callbackUrlScheme: 'roxum',
+      callbackUrlScheme: 'panda',
       options: const FlutterWebAuth2Options(),
     );
 
@@ -1520,7 +1520,7 @@ Future<File?> pickFile() async {
 }
 
 Future<Directory?> pickDir() async {
-  const MethodChannel saf = MethodChannel('roxum/saf');
+  const MethodChannel saf = MethodChannel('panda/saf');
   final String? treeUri = await saf.invokeMethod<String>('pickSafDir');
 
   if (treeUri == null) return null;
@@ -2226,9 +2226,9 @@ class Extractor {
 }
 
 class NativeChannel {
-  static const MethodChannel _channel = MethodChannel('com.roxum');
-  static const MethodChannel _pfdMethodChannel = MethodChannel('roxum/pfd');
-  static const EventChannel _pfdEventChannel = EventChannel('roxum/pfd_events');
+  static const MethodChannel _channel = MethodChannel('com.panda.ide');
+  static const MethodChannel _pfdMethodChannel = MethodChannel('panda/pfd');
+  static const EventChannel _pfdEventChannel = EventChannel('panda/pfd_events');
 
   static Future<String> getLibraryPath() async {
     try {

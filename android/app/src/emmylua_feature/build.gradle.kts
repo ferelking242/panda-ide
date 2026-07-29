@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.roxum.emmylua"
+    namespace = "com.panda.ide.emmylua"
     compileSdk = 36
 
     defaultConfig {
