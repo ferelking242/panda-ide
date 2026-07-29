@@ -37,6 +37,7 @@ dependencies:
   markdown_widget: ^2.3.2+8
   meta: ^1.17.0
   path: ^1.9.0
+  path_provider: ^2.1.5
   percent_indicator: ^4.2.5
   re_highlight: ^0.0.3
   shared_preferences: ^2.5.5
@@ -57,6 +58,8 @@ flutter:
     - assets/webview/
     - assets/fonts/
     - assets/certificates/
+    - assets/extension_host/
+    - assets/extension_host/api/
   fonts:
     # ── Broken (Iconsax) icon font ──────────────────────────────────────
     - family: broken
