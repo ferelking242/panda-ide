@@ -36,14 +36,18 @@ jobs:
           flutter build apk \
             --release \
             --target-platform android-arm64 \
-            --split-per-abi \
             --obfuscate \
             --split-debug-info=build/debug-info
+        # NOTE: --split-per-abi retiré intentionnellement.
+        # L'app utilise des dynamic feature modules (rust_feature, go_feature, etc.)
+        # qui sont incompatibles avec --split-per-abi : AGP échoue sur
+        # processReleaseResources avec versionCode=null.
+        # --target-platform android-arm64 seul produit un APK arm64-only identique.
 
       - name: Rename APK
         run: |
           VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+          cp build/app/outputs/flutter-apk/app-release.apk \
              build/app/outputs/flutter-apk/panda-ide-${VERSION}-arm64.apk
           echo "APK: panda-ide-${VERSION}-arm64.apk"
           ls -lh build/app/outputs/flutter-apk/*.apk
