@@ -28,10 +28,9 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-
-        ndk {
-            abiFilters.add("arm64-v8a")
-        }
+        // NOTE: ndk.abiFilters retiré intentionnellement — le workflow CI passe
+        // --target-platform android-arm64 --split-per-abi qui gère le filtrage
+        // via Flutter. Les deux en même temps causent un conflit Gradle.
     }
 
     signingConfigs {
