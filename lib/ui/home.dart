@@ -618,7 +618,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                       color: Colors.blueGrey, size: 24),
                 ),
                 drawerTile(
-                  () => _push(context, DonationPage()),
+                  () => _push(context, BuyMeCoffee()),
                   'Support the developer',
                   Icon(Broken.heart, color: Colors.redAccent, size: 24),
                 ),
@@ -1114,7 +1114,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             _WalkthroughCard(
               icon: Broken.cpu,
               title: 'Parcourir les modèles',
-              subtitle: 'Créez un projet à partir d'un modèle prêt à l'emploi.',
+              subtitle: "Créez un projet à partir d'un modèle prêt à l'emploi.",
               isDark: isDark,
               onTap: () => _push(context, const MenuScreen()),
             ),
