@@ -37,15 +37,26 @@
 
 ---
 
-## Phase 2 — vscode.window API ⬜ À FAIRE
-**Objectif :** Toutes les APIs `vscode.window.*` pleinement fonctionnelles côté Flutter.
+## Phase 2 — vscode.window API ✅ COMPLÈTE
+**Commit tag :** `ext/phase-2/window-api`
 
-### Fichiers à créer
-- [ ] `lib/extensions/extension_api_router.dart` — route les appels vscode.* → widgets Flutter
-- [ ] `lib/extensions/ui/window_api_handler.dart` — showMessage, showInputBox, showQuickPick
-- [ ] `lib/extensions/ui/output_channel_panel.dart` — panneau OutputChannel dans l'UI
-- [ ] `lib/extensions/ui/status_bar_manager.dart` — StatusBarItems dans la barre de statut
-- [ ] `lib/extensions/ui/progress_overlay.dart` — withProgress → overlay Flutter
+### Fichiers créés
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/extension_api_router.dart` | Routeur central vscode.* → handlers Flutter |
+| `lib/extensions/ui/window_api_handler.dart` | showMessage (SnackBar/Dialog), showInputBox, showQuickPick |
+| `lib/extensions/ui/output_channel_panel.dart` | Panneau Output Channel (bottom sheet style VSCode) |
+| `lib/extensions/ui/status_bar_manager.dart` | StatusBarItems + widget ExtensionStatusBarItems |
+| `lib/extensions/ui/progress_overlay.dart` | withProgress → overlay notification + WindowProgressIndicator |
+
+### Ce que Phase 2 permet
+- ✅ `vscode.window.showInformationMessage/Warning/Error` → SnackBar (sans boutons) ou Dialog (avec boutons)
+- ✅ `vscode.window.showInputBox` → Dialog avec champ texte / password
+- ✅ `vscode.window.showQuickPick` → Dialog liste filtrée, canPickMany supporté
+- ✅ `vscode.window.createOutputChannel` + append/appendLine/clear/show → bottom sheet Output
+- ✅ `vscode.window.createStatusBarItem` + text/tooltip/color/command → chips dans status bar
+- ✅ `vscode.window.withProgress` → overlay animé (indeterminate + determinate) + inline title bar
+- ✅ `ExtensionApiRouter` branché sur `ExtensionHostManager.apiCallHandler`
 
 ---
 
