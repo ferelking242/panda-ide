@@ -42,13 +42,6 @@
 | `lib/extensions/fs_bridge.dart` | stat, readDir, readFile, writeFile, delete, rename, copy |
 | `lib/extensions/config_store.dart` | getConfiguration / update — SharedPreferences |
 
-**Config à brancher depuis l'IDE :**
-```dart
-WorkspaceBridge.instance.workspaceRoot = '/path/to/project';
-WorkspaceBridge.instance.onSaveAll = () async => true;
-WorkspaceBridge.instance.onApplyEdit = (edits) async => applyEdits(edits);
-```
-
 ---
 
 ## Phase 4 — vscode.languages API ✅ COMPLÈTE
@@ -58,87 +51,209 @@ WorkspaceBridge.instance.onApplyEdit = (edits) async => applyEdits(edits);
 |---------|------|
 | `lib/extensions/language_feature_router.dart` | Providers pull model — completion, hover, definition, format, codeAction, diagnostics |
 
-**Architecture pull :** Flutter appelle `provider.<id>.invoke` directement sur Node.js.
-
-**Intégration code_forge (TODO dans editor_page.dart) :**
-```dart
-final items = await LanguageFeatureRouter.instance.requestCompletions(
-  filePath: path, languageId: 'typescript',
-  content: text, line: l, character: c, triggerCharacter: '.',
-);
-```
-
 ---
 
 ## Phase 5 — vscode.commands ✅ COMPLÈTE
-**Commit :** (en cours — batch 5+6+7)
+**Commit :** (batch 5+6+7)
 
 | Fichier | Rôle |
 |---------|------|
 | `lib/extensions/command_registry.dart` | Registre + execute + search + contributes |
 | `lib/extensions/ui/command_palette.dart` | Bottom sheet filtrable VSCode ">" style |
 
-- ✅ `vscode.commands.registerCommand` → `CommandRegistry.register()`
-- ✅ `vscode.commands.executeCommand` → local handler ou `bridge.call('command.<id>')`
-- ✅ `vscode.commands.getCommands` → liste des IDs enregistrés
-- ✅ `CommandPalette.show(context)` — DraggableScrollableSheet, filtrable, arrow keys
-- ✅ `CommandRegistry.registerContributed()` — pour contributes.commands du manifest
-
 ---
 
 ## Phase 6 — vscode.extensions ✅ COMPLÈTE
-**Commit :** (en cours — batch 5+6+7)
+**Commit :** (batch 5+6+7)
 
 | Fichier | Rôle |
 |---------|------|
 | `lib/extensions/extension_exports_registry.dart` | Stocke exports activate() par extensionId |
 
-- ✅ `vscode.extensions.getExtension(id)` → `ExtensionExportsRegistry.getExtensionJson(id)`
-- ✅ `vscode.extensions.all` → liste de toutes les extensions actives
-- ✅ `host.js` envoie automatiquement les exports via `vscode.extensions.exports.register` après activate()
-- ✅ Inter-extension access (une ext peut lire les exports d'une autre)
-
 ---
 
 ## Phase 7 — vscode.env ✅ COMPLÈTE
-**Commit :** (en cours — batch 5+6+7)
+**Commit :** (batch 5+6+7)
 
-- ✅ `vscode.env.clipboard.readText()` → `Clipboard.getData` Flutter
-- ✅ `vscode.env.clipboard.writeText(text)` → `Clipboard.setData`
-- ✅ `vscode.env.openExternal(uri)` → `url_launcher` (`launchUrl`)
-- ✅ Config proxy côté JS avec cache local + fetch asynchrone depuis Flutter
-- ✅ `onDidChangeConfiguration` event invalide le cache config
+- ✅ `vscode.env.clipboard.readText/writeText` → Clipboard Flutter
+- ✅ `vscode.env.openExternal(uri)` → url_launcher
+- ✅ Config proxy côté JS avec cache local
 
 ---
 
-## Phase 8 — Open VSX Marketplace UI ⬜ À FAIRE
-- [ ] `lib/extensions/ui/marketplace_page.dart`
-- [ ] `lib/extensions/ui/extensions_panel.dart`
+## Phase 8 — Open VSX Marketplace UI ✅ COMPLÈTE
+**Commit :** ext/phase-8/marketplace-ui
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/ui/marketplace_page.dart` | Recherche Open VSX, filtres catégorie/tri, install |
+| `lib/extensions/ui/extensions_panel.dart` | Extensions installées, enable/disable, README, désinstaller |
+
+- ✅ Barre de recherche avec debounce 350ms
+- ✅ Pagination automatique (scroll infini)
+- ✅ Filtres catégories (7 catégories) + tri (4 options)
+- ✅ Carte extension : icône, nom, publisher, version, description, downloads, rating
+- ✅ Bouton Install → VsixInstaller (progress, success, error states)
+- ✅ Panel extensions installées avec toggle enable/disable
+- ✅ Page README (local puis Open VSX fallback)
+- ✅ Détection extensions déjà installées
 
 ---
 
-## Phase 9 — WebView Panels ⬜ À FAIRE
-- [ ] `lib/extensions/ui/extension_webview.dart` (flutter_inappwebview)
-- [ ] postMessage bidirectionnel
+## Phase 9 — WebView Panels ✅ COMPLÈTE
+**Commit :** ext/phase-9/webview-panels
+
+| Fichier | Rôle |
+|---------|------|
+| `assets/extension_host/api/webview.js` | createWebviewPanel, postMessage, events lifecycle |
+| `lib/extensions/ui/extension_webview.dart` | flutter_inappwebview, WebviewPanelManager, bidirectionnel |
+
+- ✅ `vscode.window.createWebviewPanel(viewType, title, showOptions, options)`
+- ✅ `panel.webview.html = '...'` → charge le HTML dans le WebView Flutter
+- ✅ `panel.webview.postMessage(data)` → Extension → WebView (via JS handler)
+- ✅ `window.acquireVsCodeApi().postMessage(data)` → WebView → Extension (via IPC event)
+- ✅ Events: `onDidReceiveMessage`, `onDidDispose`, `onDidChangeViewState`
+- ✅ `WebviewPanelManager` singleton gère tous les panels actifs
+- ✅ `ExtensionWebviewContainer` — widget à onglets intégrable dans l'IDE
 
 ---
 
-## Phase 10 — vscode.scm ⬜ À FAIRE
+## Phase 10 — vscode.scm ✅ COMPLÈTE
+**Commit :** ext/phase-10/scm
+
+| Fichier | Rôle |
+|---------|------|
+| `assets/extension_host/api/scm.js` | createSourceControl, resourceGroups, inputBox |
+| `lib/extensions/scm_bridge.dart` | ScmBridge singleton, SourceControl, ScmResourceGroup |
+
+- ✅ `vscode.scm.createSourceControl(id, label, rootUri)`
+- ✅ `sourceControl.createResourceGroup(id, label)`
+- ✅ `group.resourceStates = [...]` → Flutter notifié
+- ✅ `inputBox.value / placeholder` bidirectionnel
+- ✅ `ChangeNotifier` pour réactivité UI Flutter
+
 ---
 
-## Phase 11 — vscode.tasks ⬜ À FAIRE
+## Phase 11 — vscode.tasks ✅ COMPLÈTE
+**Commit :** ext/phase-11/tasks
+
+| Fichier | Rôle |
+|---------|------|
+| `assets/extension_host/api/tasks.js` | registerTaskProvider, fetchTasks, executeTask |
+| `lib/extensions/tasks_bridge.dart` | TasksBridge, VsTask, TaskExecution |
+
+- ✅ `vscode.tasks.registerTaskProvider(type, provider)` → handler pull via `onCall`
+- ✅ `vscode.tasks.fetchTasks(filter?)` → agrège tous les providers
+- ✅ `vscode.tasks.executeTask(task)` → lance via `launchInTerminal` callback
+- ✅ `onDidStartTask / onDidEndTask` events
+- ✅ Hook `launchInTerminal` à brancher sur flutter_pty depuis main.dart
+
 ---
 
-## Phase 12 — vscode.debug (DAP) ⬜ À FAIRE
+## Phase 12 — vscode.debug (DAP) ✅ COMPLÈTE
+**Commit :** ext/phase-12/debug
+
+| Fichier | Rôle |
+|---------|------|
+| `assets/extension_host/api/debug.js` | registerDebugAdapterDescriptorFactory, startDebugging, breakpoints |
+| `lib/extensions/debug_bridge.dart` | DebugBridge, DebugSession (DAP TCP), protocole Content-Length |
+
+- ✅ `vscode.debug.registerDebugAdapterDescriptorFactory(type, factory)`
+- ✅ `vscode.debug.registerDebugConfigurationProvider(type, provider)`
+- ✅ `vscode.debug.startDebugging(folder, config)` → DebugBridge.startDebugging()
+- ✅ `vscode.debug.stopDebugging(session?)`
+- ✅ DAP wire format (Content-Length headers) sur TCP socket
+- ✅ `initialize / launch / pause / continue / stepOver / stepIn / stepOut`
+- ✅ `getStackTrace / getScopes / getVariables / setBreakpoints`
+- ✅ Session events (`onDidStartDebugSession`, `onDidTerminateDebugSession`)
+
 ---
 
-## Phase 13 — Contributes statiques (themes, snippets, grammars) ⬜ À FAIRE
+## Phase 13 — Contributes statiques ✅ COMPLÈTE
+**Commit :** ext/phase-13/contributes
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/contributes/theme_loader.dart` | Thèmes couleur VSCode (.json) → ThemeData Flutter |
+| `lib/extensions/contributes/snippet_loader.dart` | Snippets (.json) → completion items |
+| `lib/extensions/contributes/grammar_loader.dart` | Grammaires TextMate (.tmLanguage.json) |
+| `lib/extensions/contributes/icon_theme_loader.dart` | Thèmes d'icônes (.json) → file/folder icons |
+
+- ✅ ThemeLoader : charge `contributes.themes`, génère `ThemeData` Flutter approximatif
+- ✅ SnippetLoader : charge `contributes.snippets`, search by prefix par langage
+- ✅ GrammarLoader : charge `contributes.grammars` + `contributes.languages` (ext → languageId)
+- ✅ IconThemeLoader : charge `contributes.iconThemes`, résolution icône par nom/extension fichier
+- ✅ Tous les JSON : strip comments (`//`) avant parsing
+- ✅ Chargement lazy (par extension) ou bulk (`loadAll()`)
+
 ---
 
-## Phase 14 — Extension Settings UI ⬜ À FAIRE
+## Phase 14 — Extension Settings UI ✅ COMPLÈTE
+**Commit :** ext/phase-14/settings-ui
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/ui/extension_settings_page.dart` | Auto-génère UI depuis contributes.configuration |
+
+- ✅ Parse `contributes.configuration` (objet ou tableau de sections)
+- ✅ Génère des widgets Flutter par type : boolean → Switch, number → TextField, enum → Dropdown, string → TextField
+- ✅ Persistance via `ConfigStore.instance.updateConfiguration()`
+- ✅ Synchronisé avec `vscode.workspace.getConfiguration()` côté JS
+- ✅ Bouton "Reset" pour revenir aux valeurs par défaut
+- ✅ Affiche clé (monospace), titre, description de chaque setting
+
 ---
 
-## Phase 15 — CI/CD & Tests ⬜ À FAIRE
+## Phase 15 — CI/CD & Tests ✅ COMPLÈTE
+**Commit :** ext/phase-15/ci-tests
+
+| Fichier | Rôle |
+|---------|------|
+| `.github/workflows/test-extension-host.yml` | CI GitHub Actions — Jest sur push/PR |
+| `test/extension_host/package.json` | Config Jest |
+| `test/extension_host/mocks/ipc.js` | Mock IPC pour tests isolés |
+| `test/extension_host/ipc.test.js` | Tests format IPC wire + mock helpers |
+| `test/extension_host/vscode.window.test.js` | Tests window API |
+| `test/extension_host/vscode.workspace.test.js` | Tests workspace API |
+| `test/extension_host/vscode.languages.test.js` | Tests languages + provider pull |
+| `test/extension_host/vscode.commands.test.js` | Tests commands + command.invoke event |
+| `test/extension_host/vscode.env.test.js` | Tests env + clipboard + openExternal |
+| `test/extension_host/vscode.scm.test.js` | Tests SCM bridge |
+| `test/extension_host/vscode.tasks.test.js` | Tests tasks + provider |
+| `test/extension_host/vscode.debug.test.js` | Tests debug + DAP |
+
 ---
 
-*Dernière mise à jour : Phases 5 + 6 + 7 complétées — 2026-07-30*
+## Wiring requis depuis main.dart
+
+```dart
+// 1. Appeler après ExtensionHostManager.configure()
+ExtensionApiRouter.instance.attachToManager();
+
+// 2. Fournir le BuildContext global
+ExtensionApiRouter.instance.setContext(context);
+
+// 3. Charger les contributes statiques
+await ThemeLoader.instance.loadAll();
+await SnippetLoader.instance.loadAll();
+await GrammarLoader.instance.loadAll();
+await IconThemeLoader.instance.loadAll();
+
+// 4. Brancher le terminal pour les tâches
+TasksBridge.instance.launchInTerminal = (cmd, cwd, env) async {
+  // → flutter_pty ou terminal intégré
+};
+
+// 5. Ouvrir MarketplacePage
+Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketplacePage()));
+
+// 6. Ouvrir ExtensionsPanel
+Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtensionsPanel()));
+
+// 7. Afficher les WebViews dans le layout
+child: ExtensionWebviewContainer()
+```
+
+---
+
+*Dernière mise à jour : Phases 8 à 15 complétées — 2026-07-30*

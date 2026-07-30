@@ -23,8 +23,12 @@
 
 'use strict';
 
-const ipc   = require('./ipc.js'); // relatif à assets/extension_host/
-const types = require('./types.js');
+const ipc     = require('../ipc.js'); // ipc.js est dans assets/extension_host/, pas dans api/
+const types   = require('./types.js');
+const webview = require('./webview.js');
+const scmImpl  = require('./scm.js');
+const tasksImpl = require('./tasks.js');
+const debugImpl = require('./debug.js');
 
 // ── Helpers internes ──────────────────────────────────────────────────────
 
@@ -124,12 +128,14 @@ const window = {
   // Decorations (Phase 2)
   createTextEditorDecorationType: _stubDisposable('window', 'createTextEditorDecorationType'),
 
-  // Webview Panels (Phase 9)
-  createWebviewPanel: _stub('window', 'createWebviewPanel'),
-  registerWebviewPanelSerializer: _stubDisposable('window', 'registerWebviewPanelSerializer'),
+  // Webview Panels (Phase 9) — implémentation complète via webview.js
+  createWebviewPanel: (viewType, title, showOptions, options) =>
+    webview.createWebviewPanel(viewType, title, showOptions, options),
+  registerWebviewPanelSerializer: (viewType, serializer) =>
+    webview.registerWebviewPanelSerializer(viewType, serializer),
   createWebviewView: _stub('window', 'createWebviewView'),
 
-  // Tree views (Phase 8)
+  // Tree views (Phase 8 — stub, TreeDataProvider is pull-model via commands)
   createTreeView: _stub('window', 'createTreeView'),
   registerTreeDataProvider: _stubDisposable('window', 'registerTreeDataProvider'),
 
@@ -457,45 +463,19 @@ const env = {
 };
 
 // ── vscode.scm ────────────────────────────────────────────────────────────
-// Phase 10
+// Phase 10 — implémentation complète via scm.js
 
-const scm = {
-  createSourceControl: (id, label, rootUri) =>
-    _stub('scm', 'createSourceControl')(id, label, rootUri),
-  get inputBox() { return { value: '', placeholder: '' }; },
-};
+const scm = scmImpl;
 
 // ── vscode.tasks ──────────────────────────────────────────────────────────
-// Phase 11
+// Phase 11 — implémentation complète via tasks.js
 
-const tasks = {
-  registerTaskProvider:  _stubDisposable('tasks', 'registerTaskProvider'),
-  fetchTasks:            _stub('tasks', 'fetchTasks'),
-  executeTask:           _stub('tasks', 'executeTask'),
-  onDidStartTask:        _makeEditorEvent('onDidStartTask'),
-  onDidEndTask:          _makeEditorEvent('onDidEndTask'),
-  taskExecutions:        [],
-};
+const tasks = tasksImpl;
 
 // ── vscode.debug ──────────────────────────────────────────────────────────
-// Phase 12
+// Phase 12 — implémentation complète via debug.js
 
-const debug = {
-  registerDebugAdapterDescriptorFactory: _stubDisposable('debug', 'registerDebugAdapterDescriptorFactory'),
-  registerDebugConfigurationProvider:    _stubDisposable('debug', 'registerDebugConfigurationProvider'),
-  startDebugging: _stub('debug', 'startDebugging'),
-  stopDebugging:  _stub('debug', 'stopDebugging'),
-  activeDebugSession: null,
-  activeDebugConsole: { append: () => {}, appendLine: () => {} },
-  breakpoints: [],
-  onDidChangeActiveDebugSession: _makeEditorEvent('onDidChangeActiveDebugSession'),
-  onDidStartDebugSession:        _makeEditorEvent('onDidStartDebugSession'),
-  onDidTerminateDebugSession:    _makeEditorEvent('onDidTerminateDebugSession'),
-  onDidReceiveDebugSessionCustomEvent: _makeEditorEvent('onDidReceiveDebugSessionCustomEvent'),
-  onDidChangeBreakpoints:        _makeEditorEvent('onDidChangeBreakpoints'),
-  addBreakpoints:    _stub('debug', 'addBreakpoints'),
-  removeBreakpoints: _stub('debug', 'removeBreakpoints'),
-};
+const debug = debugImpl;
 
 // ── vscode.authentication ─────────────────────────────────────────────────
 

@@ -13,11 +13,15 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'command_registry.dart';
 import 'config_store.dart';
+import 'debug_bridge.dart';
 import 'extension_exports_registry.dart';
 import 'extension_host_manager.dart';
 import 'fs_bridge.dart';
 import 'language_feature_router.dart';
 import 'models/extension_message.dart';
+import 'scm_bridge.dart';
+import 'tasks_bridge.dart';
+import 'ui/extension_webview.dart';
 import 'ui/output_channel_panel.dart';
 import 'ui/progress_overlay.dart';
 import 'ui/status_bar_manager.dart';
@@ -69,6 +73,18 @@ class ExtensionApiRouter {
     }
     if (method.startsWith('vscode.authentication.')) {
       return _routeAuthentication(extensionId, method, params);
+    }
+    if (method.startsWith('vscode.webview.')) {
+      return _routeWebview(extensionId, method, params);
+    }
+    if (method.startsWith('vscode.scm.')) {
+      return _routeScm(extensionId, method, params);
+    }
+    if (method.startsWith('vscode.tasks.')) {
+      return _routeTasks(extensionId, method, params);
+    }
+    if (method.startsWith('vscode.debug.')) {
+      return _routeDebug(extensionId, method, params);
     }
 
     // Appel inconnu → log + retour null sûr
@@ -516,6 +532,239 @@ class ExtensionApiRouter {
     return null;
   }
 
+  // ── vscode.webview.* ─────────────────────────────────────────────────────
+  // Phase 9 — WebView Panels via flutter_inappwebview
+
+  Future<dynamic> _routeWebview(
+      String extId, String method, List<dynamic> params) async {
+    final wm = WebviewPanelManager.instance;
+
+    switch (method) {
+      case 'vscode.webview.create':
+        // params[0] = { panelId, viewType, title, showOptions, options }
+        final config = params.isNotEmpty ? params[0] as Map<String, dynamic>? : null;
+        if (config == null) return null;
+        wm.createPanel(
+          extensionId: extId,
+          panelId: config['panelId'] as String,
+          viewType: config['viewType'] as String? ?? '',
+          title: config['title'] as String? ?? '',
+          options: (config['options'] as Map<String, dynamic>?) ?? {},
+        );
+        return null;
+
+      case 'vscode.webview.setHtml':
+        final panelId = params.isNotEmpty ? params[0] as String? : null;
+        final html    = params.length > 1 ? params[1] as String? ?? '' : '';
+        if (panelId != null) {
+          await wm.getPanel(panelId)?.setHtml(html);
+        }
+        return null;
+
+      case 'vscode.webview.postMessage':
+        final panelId = params.isNotEmpty ? params[0] as String? : null;
+        final data    = params.length > 1 ? params[1] : null;
+        if (panelId != null) {
+          await wm.getPanel(panelId)?.postMessage(data);
+        }
+        return null;
+
+      case 'vscode.webview.setTitle':
+        // Panel title updates — handled via panel proxy
+        return null;
+
+      case 'vscode.webview.reveal':
+        // Bring panel to front — no-op if already visible
+        return null;
+
+      case 'vscode.webview.dispose':
+        final panelId = params.isNotEmpty ? params[0] as String? : null;
+        if (panelId != null) wm.disposePanel(panelId);
+        return null;
+
+      default:
+        debugPrint('[ExtApiRouter] Unknown webview method: $method');
+        return null;
+    }
+  }
+
+  // ── vscode.scm.* ─────────────────────────────────────────────────────────
+  // Phase 10 — Source Control Management
+
+  Future<dynamic> _routeScm(
+      String extId, String method, List<dynamic> params) async {
+    final scm = ScmBridge.instance;
+
+    switch (method) {
+      case 'vscode.scm.create':
+        final config = params.isNotEmpty ? params[0] as Map<String, dynamic>? : null;
+        if (config == null) return null;
+        return scm.createSourceControl(
+          extensionId: extId,
+          id: config['id'] as String? ?? '',
+          label: config['label'] as String? ?? '',
+          rootUri: config['rootUri'] as String?,
+        );
+
+      case 'vscode.scm.createResourceGroup':
+        final scmId   = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final groupId = params.length > 1 ? params[1] as String? ?? '' : '';
+        final label   = params.length > 2 ? params[2] as String? ?? '' : '';
+        return scm.createResourceGroup(scmId: scmId, groupId: groupId, label: label);
+
+      case 'vscode.scm.setResourceStates':
+        final scmId   = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final groupId = params.length > 1 ? params[1] as String? ?? '' : '';
+        final resources = params.length > 2 ? params[2] as List<dynamic>? ?? [] : [];
+        scm.setResourceGroupStates(scmId: scmId, groupId: groupId, resources: resources);
+        return null;
+
+      case 'vscode.scm.setInputBoxValue':
+        final scmId = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final value = params.length > 1 ? params[1] as String? ?? '' : '';
+        scm.setInputBoxValue(scmId, value);
+        return null;
+
+      case 'vscode.scm.setInputBoxPlaceholder':
+        final scmId = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final ph    = params.length > 1 ? params[1] as String? ?? '' : '';
+        scm.setInputBoxPlaceholder(scmId, ph);
+        return null;
+
+      case 'vscode.scm.update':
+      case 'vscode.scm.updateGroup':
+        return null; // handled client-side by ScmBridge notifyListeners
+
+      case 'vscode.scm.disposeGroup':
+        return null;
+
+      case 'vscode.scm.dispose':
+        final scmId = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        scm.disposeSourceControl(scmId);
+        return null;
+
+      default:
+        debugPrint('[ExtApiRouter] Unknown scm method: $method');
+        return null;
+    }
+  }
+
+  // ── vscode.tasks.* ───────────────────────────────────────────────────────
+  // Phase 11 — Task providers + execution
+
+  Future<dynamic> _routeTasks(
+      String extId, String method, List<dynamic> params) async {
+    final tb = TasksBridge.instance;
+
+    switch (method) {
+      case 'vscode.tasks.registerProvider':
+        final type = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        tb.registerTaskProvider(extId, type);
+        return null;
+
+      case 'vscode.tasks.unregisterProvider':
+        tb.unregisterProvider(extId);
+        return null;
+
+      case 'vscode.tasks.providerResult':
+        final type  = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final tasks = params.length > 1 ? params[1] as List<dynamic>? ?? [] : [];
+        tb.setProviderTasks(extId, tasks);
+        return null;
+
+      case 'vscode.tasks.fetchAll':
+        final filter = params.isNotEmpty ? params[0] as Map<String, dynamic>? : null;
+        final type   = filter?['type'] as String?;
+        return (await tb.fetchTasks(type: type))
+            .map((t) => {
+              'name': t.name,
+              'type': t.type,
+              'detail': t.detail,
+              '_taskId': t.taskId,
+            })
+            .toList();
+
+      case 'vscode.tasks.execute':
+        final taskJson = params.isNotEmpty ? params[0] as Map<String, dynamic>? : null;
+        if (taskJson == null) return null;
+        return tb.executeTask(taskJson, extId);
+
+      case 'vscode.tasks.terminate':
+        // Terminal termination — handled by flutter_pty
+        return null;
+
+      default:
+        debugPrint('[ExtApiRouter] Unknown tasks method: $method');
+        return null;
+    }
+  }
+
+  // ── vscode.debug.* ───────────────────────────────────────────────────────
+  // Phase 12 — Debug Adapter Protocol
+
+  Future<dynamic> _routeDebug(
+      String extId, String method, List<dynamic> params) async {
+    final db = DebugBridge.instance;
+
+    switch (method) {
+      case 'vscode.debug.start':
+        final config = params.length > 1 ? params[1] as Map<String, dynamic>? : null;
+        if (config == null) return null;
+        return db.startDebugging(extensionId: extId, config: config);
+
+      case 'vscode.debug.stop':
+        final sessionId = params.isNotEmpty ? params[0] as String? : null;
+        await db.stopDebugging(sessionId);
+        return null;
+
+      case 'vscode.debug.customRequest':
+        final sessionId = params.isNotEmpty ? params[0] as String? : null;
+        final command   = params.length > 1 ? params[1] as String? : null;
+        final args      = params.length > 2 ? params[2] : null;
+        if (sessionId == null || command == null) return null;
+        final session = db.getSession(sessionId);
+        if (session == null) return null;
+        final r = await session.send(command, args);
+        return r.body;
+
+      case 'vscode.debug.addBreakpoints':
+        // Forward to active session
+        final breakpoints = params.isNotEmpty ? params[0] as List<dynamic>? ?? [] : [];
+        final active = db.activeSession;
+        if (active == null) return null;
+        // Extract file/line pairs and set them via DAP
+        for (final bp in breakpoints) {
+          if (bp is Map<String, dynamic>) {
+            final loc = bp['location'] as Map<String, dynamic>?;
+            final uri = loc?['uri']?['fsPath'] as String? ??
+                        loc?['uri']?['path'] as String?;
+            final line = (loc?['range']?['start']?['line'] as num?)?.toInt() ?? 0;
+            if (uri != null) {
+              await active.setBreakpoints(uri, [line + 1]); // DAP is 1-based
+            }
+          }
+        }
+        return null;
+
+      case 'vscode.debug.removeBreakpoints':
+        return null;
+
+      case 'vscode.debug.console.append':
+      case 'vscode.debug.console.appendLine':
+        // Route to debug console output channel
+        final text = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        OutputChannelManager.instance.appendLine('Debug Console', text);
+        return null;
+
+      case 'vscode.debug.getBreakpoint':
+        return null;
+
+      default:
+        debugPrint('[ExtApiRouter] Unknown debug method: $method');
+        return null;
+    }
+  }
+
   // ── Setup ────────────────────────────────────────────────────────────────
 
   /// À appeler depuis main.dart après avoir configuré ExtensionHostManager.
@@ -524,5 +773,10 @@ class ExtensionApiRouter {
     // Wire le bridge lookup pour que LanguageFeatureRouter puisse appeler les providers
     LanguageFeatureRouter.instance.bridgeLookup =
         ExtensionHostManager.instance.getBridge;
+    // Wire the fireEvent callback for WebView panels → extension IPC events
+    WebviewPanelManager.instance.fireEvent =
+        ExtensionHostManager.instance.sendEvent;
+    // Wire DebugBridge → IPC events
+    DebugBridge.instance.fireEvent = ExtensionHostManager.instance.sendEvent;
   }
 }

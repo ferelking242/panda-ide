@@ -60,6 +60,10 @@ flutter:
     - assets/certificates/
     - assets/extension_host/
     - assets/extension_host/api/
+    - assets/extension_host/api/webview.js
+    - assets/extension_host/api/scm.js
+    - assets/extension_host/api/tasks.js
+    - assets/extension_host/api/debug.js
   fonts:
     # ── Broken (Iconsax) icon font ──────────────────────────────────────
     - family: broken
