@@ -1,7 +1,7 @@
 name: panda
 description: "Panda IDE — A powerful mobile IDE for Android, built with Flutter."
 publish_to: 'none'
-version: 2.3.1+37
+version: 2.3.2+38
 
 environment:
   sdk: ^3.12.2

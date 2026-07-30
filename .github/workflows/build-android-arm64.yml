@@ -28,6 +28,17 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Setup release keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/app/panda-ide.keystore
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          storeFile=../app/panda-ide.keystore
+          EOF
+          echo "✓ Keystore prêt ($(du -sh android/app/panda-ide.keystore | cut -f1))"
+
       - name: Get dependencies
         run: flutter pub get
 
