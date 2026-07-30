@@ -1312,8 +1312,8 @@ Future<bool> hasUpstream(String workspacePath) async {
 
 Future<String> gitHubSignIn() async {
   final secureStorage = const FlutterSecureStorage();
-  const clientId = "Ov23liYO7I8tsbftzDKc";
-  const backEndHandler = "https://gihub-auth-handler.vercel.app";
+  const clientId = "Ov23li7t3A7ZkHgtN7hl";
+  const backEndHandler = "https://panda-ide-oauth.vercel.app";
 
   final authUrl = Uri.https('github.com', '/login/oauth/authorize', {
     'client_id': clientId,
