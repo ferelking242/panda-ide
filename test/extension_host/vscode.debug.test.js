@@ -9,8 +9,6 @@ describe('vscode.debug', () => {
   beforeEach(() => {
     ipc._reset();
     ipc.callFlutter = jest.fn().mockResolvedValue(null);
-    ipc.onCall = jest.fn();
-    ipc.onEvent = jest.fn();
   });
 
   test('startDebugging sends config to Flutter and returns truthy', async () => {

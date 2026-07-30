@@ -12,12 +12,14 @@ const _eventLog = [];
 // Records of all flutter calls made (for assertions)
 const flutterCalls = [];
 
+function _defaultCallFlutter(method, params = []) {
+  flutterCalls.push({ method, params });
+  return Promise.resolve(_mockFlutterResponse(method, params));
+}
+
 const ipc = {
   // ── Called by JS modules to invoke Flutter ────────────────────────────────
-  callFlutter(method, params = []) {
-    flutterCalls.push({ method, params });
-    return Promise.resolve(_mockFlutterResponse(method, params));
-  },
+  callFlutter: _defaultCallFlutter,
 
   // ── Called by JS modules to register call handlers ────────────────────────
   onCall(method, handler) {
@@ -60,11 +62,12 @@ const ipc = {
   /** Returns all callFlutter() invocations. */
   get calls() { return flutterCalls; },
 
-  /** Clears the call log (use in beforeEach). */
+  /** Clears the call log (use in beforeEach). Restores callFlutter to default. */
   _reset() {
     flutterCalls.length = 0;
     _callHandlers.clear();
     _eventHandlers.clear();
+    ipc.callFlutter = _defaultCallFlutter;
   },
 };
 

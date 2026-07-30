@@ -9,8 +9,6 @@ describe('vscode.tasks', () => {
   beforeEach(() => {
     ipc._reset();
     ipc.callFlutter = jest.fn().mockResolvedValue(null);
-    ipc.onCall = jest.fn();
-    ipc.onEvent = jest.fn();
   });
 
   test('registerTaskProvider notifies Flutter', async () => {
