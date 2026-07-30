@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:multi_split_view/multi_split_view.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -710,39 +711,46 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                         Expanded(
                           child: Row(
                             children: [
-                              // Primary editor pane
                               Expanded(
-                                child: Column(
-                                  children: [
-                                    _buildTabBar(appTheme, isPrimary: true),
-                                    Expanded(
-                                      child: _buildActiveTab(
-                                          context, appTheme, appThemestate),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              // Secondary (split) editor pane
-                              if (_splitEditor) ...[
-                                VerticalDivider(
-                                  width: 1,
-                                  color: appTheme.isDark
-                                      ? const Color(0xff444444)
-                                      : const Color(0xffcccccc),
-                                ),
-                                Expanded(
-                                  child: Column(
-                                    children: [
-                                      _buildTabBar(appTheme, isPrimary: false),
-                                      Expanded(
-                                        child: _buildSplitActiveTab(
-                                            context, appTheme, appThemestate),
+                                child: _splitEditor
+                                    ? MultiSplitView(
+                                        children: [
+                                          Column(
+                                            children: [
+                                              _buildTabBar(appTheme,
+                                                  isPrimary: true),
+                                              Expanded(
+                                                child: _buildActiveTab(context,
+                                                    appTheme, appThemestate),
+                                              ),
+                                            ],
+                                          ),
+                                          Column(
+                                            children: [
+                                              _buildTabBar(appTheme,
+                                                  isPrimary: false),
+                                              Expanded(
+                                                child: _buildSplitActiveTab(
+                                                    context,
+                                                    appTheme,
+                                                    appThemestate),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      )
+                                    : Column(
+                                        children: [
+                                          _buildTabBar(appTheme,
+                                              isPrimary: true),
+                                          Expanded(
+                                            child: _buildActiveTab(context,
+                                                appTheme, appThemestate),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              // Panda Agent panel
+                              ),
+                              // Panda Agent panel (desktop only)
                               if (_rightPanelOpen)
                                 _buildPandaAgentPanel(context, appTheme),
                             ],
@@ -835,37 +843,6 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     });
                   },
                 )),
-
-            // ── Panda Agent (opens right panel) ───────────────────────────
-            Tooltip(
-              message: 'Panda Agent',
-              child: InkWell(
-                onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    border: _rightPanelOpen
-                        ? Border(left: BorderSide(color: selColor, width: 2))
-                        : null,
-                  ),
-                  child: Center(
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/icons/app-icon.png',
-                        width: 26,
-                        height: 26,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Text(
-                          '\u{1F43C}',
-                          style: TextStyle(fontSize: 18, color: iconColor),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
 
             const Spacer(),
 
@@ -1350,35 +1327,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Row(
           children: [
-            // ── LEFT: hamburger + logo + "Panda" ─────────────────────────
-            Tooltip(
-              message: _sidebarState == 0
-                  ? 'Afficher la barre d\'activité'
-                  : _sidebarState == 1
-                      ? 'Ouvrir le panneau latéral'
-                      : 'Réduire la barre latérale',
-              child: InkWell(
-                onTap: () => setState(_cycleHamburger),
-                borderRadius: BorderRadius.circular(4),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 8),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(height: 1.5, width: 14,
-                          color: _sidebarState > 0 ? _kAccent : fg),
-                      const SizedBox(height: 2.5),
-                      Container(height: 1.5, width: 14, color: fg),
-                      const SizedBox(height: 2.5),
-                      Container(height: 1.5, width: 14,
-                          color: _sidebarState == 2 ? _kAccent : fg),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 3),
+            // ── LEFT: logo + "Panda" ─────────────────────────
             ClipOval(
               child: Image.asset(
                 'assets/icons/app-icon.png',
@@ -1404,7 +1353,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     _hdrBtn(Broken.arrow_left_2, 'Reculer', fg, () {}),
                     const SizedBox(width: 2),
                     Builder(builder: (ctx) => GestureDetector(
-                      onTap: () => _showWorkspaceMenu(ctx, isDark),
+                      onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
                       child: Container(
                         constraints: const BoxConstraints(
                             minWidth: 140, maxWidth: 260),
@@ -1447,7 +1396,24 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             ),
 
             // ── RIGHT: 4 buttons ─────────────────────────────────────────
-            // 1 — layout disposition menu
+            // 1 — ouvrir/fermer le panneau gauche
+            _hdrBtn(
+              Broken.sidebar_left,
+              _sidebarState == 2
+                  ? 'Fermer le panneau gauche'
+                  : 'Ouvrir le panneau gauche',
+              _sidebarState == 2 ? _kAccent : fg,
+              () => setState(() {
+                if (_sidebarState == 2) {
+                  _sidebarState = 1;
+                  _activeRail = 0;
+                } else {
+                  _sidebarState = 2;
+                  if (_activeRail == 0) _activeRail = 1;
+                }
+              }),
+            ),
+            // 2 — layout disposition menu
             Builder(
               builder: (ctx) => _hdrBtn(
                 Broken.element_4,
@@ -1456,22 +1422,40 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                 () => _showLayoutMenu(ctx, isDark),
               ),
             ),
-            // 2 — terminal / bottom panel
+            // 3 — terminal / bottom panel
             _hdrBtn(
               Broken.cpu,
               'Terminal',
               _bottomPanelOpen ? _kAccent : fg,
               () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
             ),
-            // 3 — Panda Agent right panel
-            _hdrBtn(
-              Broken.message_programming,
-              'Panda Agent',
-              _rightPanelOpen ? _kAccent : fg,
-              () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+            // 4 — Panda Agent (mobile: onglet, desktop: panneau droit)
+            Builder(
+              builder: (ctx) => _hdrBtn(
+                Broken.message_programming,
+                'Panda Agent',
+                _rightPanelOpen ? _kAccent : fg,
+                () {
+                  final isMobile = MediaQuery.of(ctx).size.width < 600;
+                  if (isMobile) {
+                    setState(() {
+                      if (!_openTabs.any((t) => t.id == 'agent')) {
+                        _openTabs.add(const _TabDef(
+                            id: 'agent',
+                            title: 'Panda Agent',
+                            icon: Broken.message_programming));
+                        _activeTabIdx = _openTabs.length - 1;
+                      } else {
+                        _activeTabIdx =
+                            _openTabs.indexWhere((t) => t.id == 'agent');
+                      }
+                    });
+                  } else {
+                    setState(() => _rightPanelOpen = !_rightPanelOpen);
+                  }
+                },
+              ),
             ),
-            // 4 — fullscreen
-            _hdrBtn(Broken.maximize_3, 'Plein écran', fg, () {}),
           ],
         ),
       );
@@ -1561,7 +1545,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       }
 
       // ── Workspace picker ─────────────────────────────────────────────────────
-      void _showWorkspaceMenu(BuildContext ctx, bool isDark) {
+      void _showWorkspaceMenu(BuildContext ctx, bool isDark, AppTheme appTheme) {
         final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
         final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
         final RenderBox box = ctx.findRenderObject()! as RenderBox;
@@ -1603,11 +1587,13 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
           ],
         ).then((value) {
           if (value == null) return;
-          if (value == 'open_folder' || value == 'new_project') {
+          if (value == 'open_folder') {
+            _doOpenFolder(ctx, appTheme);
+          } else if (value == 'open_file') {
+            _doOpenFile(ctx);
+          } else if (value == 'new_project') {
             _push(ctx, const ProjectScreen());
             setState(() => _sidebarState = 0);
-          } else if (value == 'open_file') {
-            _push(ctx, const MenuScreen());
           }
         });
       }
@@ -1726,13 +1712,18 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     final activeTabBg = isDark ? _kTabActiveDark : _kTabActiveLight;
     final inactiveFg  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final activeFg    = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final sepColor    = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
 
     final tabs      = isPrimary ? _openTabs     : _splitTabs;
     final activeIdx = isPrimary ? _activeTabIdx : _splitTabIdx;
 
-    return Container(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+      Container(
       height: 35,
-      color: tabBg,
+      clipBehavior: Clip.hardEdge,
+      decoration: BoxDecoration(color: tabBg),
       child: Row(children: [
         Expanded(
           child: SingleChildScrollView(
@@ -1769,7 +1760,9 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                         onTap: () => isPrimary ? _closeTab(i) : _closeSplitTab(i),
                         child: Icon(Broken.close_circle,
                             size: 12,
-                            color: isActive ? inactiveFg : Colors.transparent),
+                            color: isActive
+                                ? inactiveFg
+                                : inactiveFg.withOpacity(0.3)),
                       ),
                     ]),
                   ),
@@ -1855,21 +1848,22 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
           ])),
         ),
       ]),
+    ),
+    Divider(height: 1, thickness: 1, color: sepColor),
+    ],
     );
   }
 
   void _closeSplitTab(int i) {
     setState(() {
       _splitTabs.removeAt(i);
-      if (_splitTabs.isEmpty) {
-        _splitTabs.add(const _TabDef(
-            id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
-        _splitTabIdx = 0;
-      } else {
+      if (_splitTabs.isNotEmpty) {
         _splitTabIdx = (_splitTabIdx >= _splitTabs.length
                 ? _splitTabs.length - 1
                 : _splitTabIdx)
             .clamp(0, _splitTabs.length - 1);
+      } else {
+        _splitTabIdx = 0;
       }
     });
   }
@@ -1898,13 +1892,9 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         setState(() {
           if (isPrimary) {
             _openTabs.clear();
-            _openTabs.add(const _TabDef(
-                id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
             _activeTabIdx = 0;
           } else {
             _splitTabs.clear();
-            _splitTabs.add(const _TabDef(
-                id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
             _splitTabIdx = 0;
           }
         });
@@ -1914,8 +1904,11 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   Widget _buildSplitActiveTab(
       BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
-    final tab = _splitTabs.isNotEmpty ? _splitTabs[_splitTabIdx] : null;
-    if (tab == null || tab.id == 'welcome') {
+    if (_splitTabs.isEmpty) {
+      return _buildEmptyEditor(context, appTheme);
+    }
+    final tab = _splitTabs[_splitTabIdx];
+    if (tab.id == 'welcome') {
       return _buildWelcomePage(context, appTheme, appThemestate);
     }
     if (tab.id == 'agent') {
@@ -1936,23 +1929,24 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   void _closeTab(int i) {
     setState(() {
       _openTabs.removeAt(i);
-      if (_openTabs.isEmpty) {
-        _openTabs.add(const _TabDef(
-            id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
-        _activeTabIdx = 0;
-      } else {
+      if (_openTabs.isNotEmpty) {
         _activeTabIdx = (_activeTabIdx >= _openTabs.length
                 ? _openTabs.length - 1
                 : _activeTabIdx)
             .clamp(0, _openTabs.length - 1);
+      } else {
+        _activeTabIdx = 0;
       }
     });
   }
 
   Widget _buildActiveTab(
       BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
-    final tab = _openTabs.isNotEmpty ? _openTabs[_activeTabIdx] : null;
-    if (tab == null || tab.id == 'welcome') {
+    if (_openTabs.isEmpty) {
+      return _buildEmptyEditor(context, appTheme);
+    }
+    final tab = _openTabs[_activeTabIdx];
+    if (tab.id == 'welcome') {
       return _buildWelcomePage(context, appTheme, appThemestate);
     }
     if (tab.id == 'agent') {
@@ -3082,6 +3076,45 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             });
           },
         );
+  }
+
+  // ── Empty editor (shown when all tabs are closed) ────────────────────────
+  Widget _buildEmptyEditor(BuildContext context, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final muted  = isDark ? Colors.grey[700]! : Colors.grey[400]!;
+    final hint   = isDark ? Colors.grey[600]! : Colors.grey[400]!;
+    return Stack(
+      children: [
+        Center(
+          child: Opacity(
+            opacity: 0.06,
+            child: Image.asset(
+              'assets/icons/app-icon.png',
+              width: 180,
+              height: 180,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  const Text('🐼', style: TextStyle(fontSize: 120)),
+            ),
+          ),
+        ),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 200),
+              Text('Ouvrir un fichier pour commencer',
+                  style: TextStyle(fontSize: 13, color: muted)),
+              const SizedBox(height: 6),
+              Text(
+                'Ctrl+O  Ouvrir un fichier   •   Ctrl+Shift+E  Explorateur',
+                style: TextStyle(fontSize: 11, color: hint),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
   // ── Welcome page ──────────────────────────────────────────────────────────
