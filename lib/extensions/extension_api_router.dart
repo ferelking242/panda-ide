@@ -8,12 +8,16 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'config_store.dart';
 import 'extension_host_manager.dart';
+import 'fs_bridge.dart';
+import 'language_feature_router.dart';
 import 'models/extension_message.dart';
 import 'ui/output_channel_panel.dart';
 import 'ui/progress_overlay.dart';
 import 'ui/status_bar_manager.dart';
 import 'ui/window_api_handler.dart';
+import 'workspace_bridge.dart';
 
 /// Route un appel vscode.* reçu d'une extension vers le handler Flutter approprié.
 ///
@@ -208,49 +212,69 @@ class ExtensionApiRouter {
   }
 
   // ── vscode.workspace.* ───────────────────────────────────────────────────
-  // Phase 3 — stubs propres pour l'instant
+  // Phase 3 — implémentation complète via WorkspaceBridge + FsBridge
 
   Future<dynamic> _routeWorkspace(
       String extId, String method, List<dynamic> params) async {
+    final wb = WorkspaceBridge.instance;
+    final fb = FsBridge.instance;
+
     switch (method) {
+      // ── Documents ──────────────────────────────────────────────────────────
       case 'vscode.workspace.openTextDocument':
-        return null; // Phase 3
+        return wb.openTextDocument(params.isNotEmpty ? params[0] : null);
 
       case 'vscode.workspace.saveAll':
-        return false; // Phase 3
+        return wb.saveAll(params.isNotEmpty ? params[0] as bool? ?? false : false);
 
       case 'vscode.workspace.applyEdit':
-        return false; // Phase 3
+        final edits = params.isNotEmpty ? params[0] : null;
+        if (edits is List) return wb.applyEdit(edits);
+        return false;
 
       case 'vscode.workspace.findFiles':
-        return []; // Phase 3
+        final include   = params.isNotEmpty  ? params[0] as String? ?? '' : '';
+        final exclude   = params.length > 1  ? params[1] as String?       : null;
+        final maxRes    = params.length > 2  ? (params[2] as num?)?.toInt() : null;
+        return wb.findFiles(include, exclude, maxRes);
+
+      // ── Configuration ──────────────────────────────────────────────────────
+      case 'vscode.workspace.configuration.get':
+        final section = params.isNotEmpty ? params[0] as String? : null;
+        return wb.getConfiguration(section);
 
       case 'vscode.workspace.configuration.update':
-        return null; // Phase 3 — config store
+        final section = params.isNotEmpty  ? params[0] as String? : null;
+        final key     = params.length > 1  ? params[1] as String? ?? '' : '';
+        final value   = params.length > 2  ? params[2] : null;
+        final target  = params.length > 3  ? (params[3] as num?)?.toInt() : null;
+        await wb.updateConfiguration(section, key, value, target);
+        return null;
 
+      // ── Workspace folders ──────────────────────────────────────────────────
+      case 'vscode.workspace.workspaceFolders.get':
+        return wb.workspaceFolders;
+
+      // ── File watchers (Phase 13 — stubs propres) ───────────────────────────
       case 'vscode.workspace.fileWatcher.create':
       case 'vscode.workspace.fileWatcher.dispose':
         return null;
 
-      // FileSystem API
+      // ── FileSystem API ─────────────────────────────────────────────────────
       case 'vscode.workspace.fs.stat':
-        return null;
       case 'vscode.workspace.fs.readDirectory':
-        return [];
       case 'vscode.workspace.fs.createDirectory':
-        return null;
       case 'vscode.workspace.fs.readFile':
-        return null;
       case 'vscode.workspace.fs.writeFile':
-        return null;
       case 'vscode.workspace.fs.delete':
-        return null;
       case 'vscode.workspace.fs.rename':
-        return null;
       case 'vscode.workspace.fs.copy':
-        return null;
+        // Extraire le nom de l'opération (ex: 'vscode.workspace.fs.stat' → 'fs.stat')
+        final op = method.substring('vscode.workspace.'.length);
+        return fb.dispatch(op, params);
+
       case 'vscode.workspace.fs.isWritable':
-        return true;
+        return true; // Tous les schémas file:// sont writables sur Android
 
       default:
         debugPrint('[ExtApiRouter] Unknown workspace method: $method');
@@ -259,29 +283,108 @@ class ExtensionApiRouter {
   }
 
   // ── vscode.languages.* ───────────────────────────────────────────────────
-  // Phase 4 — stubs propres pour l'instant
+  // Phase 4 — implémentation complète via LanguageFeatureRouter
 
   Future<dynamic> _routeLanguages(
       String extId, String method, List<dynamic> params) async {
-    switch (method) {
-      case 'vscode.languages.getLanguages':
-        return <String>[];
+    final lr = LanguageFeatureRouter.instance;
 
-      case 'vscode.languages.setLanguageConfiguration':
+    // ── Provider registration ──────────────────────────────────────────────
+    // Méthodes: 'vscode.languages.<type>.register' / '.unregister'
+    // params[0] = providerId  params[1] = selector  params[2+] = extras
+
+    if (method.endsWith('.register') && method.startsWith('vscode.languages.')) {
+      final apiMethod  = method.substring('vscode.languages.'.length, method.length - '.register'.length);
+      final providerId = params.isNotEmpty ? params[0] as String? ?? '' : '';
+      final rawSel     = params.length > 1 ? params[1] : null;
+      final selector   = rawSel is List ? rawSel : (rawSel != null ? [rawSel] : <dynamic>[]);
+
+      // Mapper apiMethod → type interne du LanguageFeatureRouter
+      final type = _apiMethodToProviderType(apiMethod);
+      if (type != null && providerId.isNotEmpty) {
+        lr.registerProvider(
+          type:        type,
+          extensionId: extId,
+          providerId:  providerId,
+          selector:    selector,
+        );
+      }
+      return providerId;
+    }
+
+    if (method.endsWith('.unregister') && method.startsWith('vscode.languages.')) {
+      final providerId = params.isNotEmpty ? params[0] as String? ?? '' : '';
+      if (providerId.isNotEmpty) lr.unregisterProvider(providerId);
+      return null;
+    }
+
+    switch (method) {
+      // ── Diagnostics (push model) ───────────────────────────────────────────
+      case 'vscode.languages.diagnostics.set':
+        final fsPath      = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final diagnostics = params.length > 1 ? (params[1] as List<dynamic>?) ?? [] : [];
+        lr.setDiagnostics(fsPath, diagnostics);
         return null;
 
-      case 'vscode.languages.diagnostics.set':
       case 'vscode.languages.diagnostics.clear':
-        return null; // Phase 4
+        lr.clearDiagnostics(extId);
+        return null;
+
+      // ── Query ──────────────────────────────────────────────────────────────
+      case 'vscode.languages.getLanguages':
+        return <String>[
+          'plaintext', 'dart', 'javascript', 'typescript', 'javascriptreact',
+          'typescriptreact', 'python', 'rust', 'go', 'java', 'kotlin', 'swift',
+          'c', 'cpp', 'csharp', 'php', 'ruby', 'html', 'css', 'scss', 'json',
+          'yaml', 'xml', 'markdown', 'shellscript', 'dockerfile', 'sql',
+        ];
+
+      case 'vscode.languages.setLanguageConfiguration':
+        return null; // Phase 13 (grammars)
+
+      case 'vscode.languages.getDiagnostics':
+        final uri = params.isNotEmpty ? params[0] : null;
+        if (uri is Map<String, dynamic>) {
+          final fp = uri['fsPath'] as String? ?? uri['path'] as String?;
+          if (fp != null) return lr.getDiagnosticsForFile(fp);
+        }
+        // null = retourne toutes les diags (toutes les clés)
+        return lr.allDiagnostics.entries
+            .map((e) => {'uri': e.key, 'diagnostics': e.value})
+            .toList();
 
       default:
-        // Enregistrements de providers (completionItemProvider.register, etc.)
-        if (method.endsWith('.register') || method.endsWith('.unregister')) {
-          return null; // Phase 4
-        }
         debugPrint('[ExtApiRouter] Unknown languages method: $method');
         return null;
     }
+  }
+
+  /// Convertit le nom d'apiMethod vscode.js → type interne LanguageFeatureRouter.
+  static String? _apiMethodToProviderType(String apiMethod) {
+    return const {
+      'completionItemProvider':    'completion',
+      'hoverProvider':             'hover',
+      'definitionProvider':        'definition',
+      'declarationProvider':       'definition',
+      'referenceProvider':         'references',
+      'formattingProvider':        'format',
+      'rangeFormattingProvider':   'format',
+      'onTypeFormattingProvider':  'format',
+      'codeActionsProvider':       'codeAction',
+      'renameProvider':            'rename',
+      'signatureHelpProvider':     'signature',
+      'documentSymbolProvider':    'symbol',
+      'workspaceSymbolProvider':   'symbol',
+      'codeLensProvider':          'codeAction',
+      'implementationProvider':    'definition',
+      'typeDefinitionProvider':    'definition',
+      'documentHighlightProvider': 'hover',
+      'inlayHintsProvider':        'hover',
+      'foldingRangeProvider':      'symbol',
+      'selectionRangeProvider':    'symbol',
+      'callHierarchyProvider':     'symbol',
+      'linkedEditingRangeProvider':'symbol',
+    }[apiMethod];
   }
 
   // ── vscode.commands.* ────────────────────────────────────────────────────
@@ -344,5 +447,8 @@ class ExtensionApiRouter {
   /// À appeler depuis main.dart après avoir configuré ExtensionHostManager.
   void attachToManager() {
     ExtensionHostManager.instance.apiCallHandler = route;
+    // Wire le bridge lookup pour que LanguageFeatureRouter puisse appeler les providers
+    LanguageFeatureRouter.instance.bridgeLookup =
+        ExtensionHostManager.instance.getBridge;
   }
 }

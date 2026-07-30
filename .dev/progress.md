@@ -1,7 +1,7 @@
 # Panda IDE — Extension Host : Suivi de progression
 
 ## Phase 1 — Foundation ✅ COMPLÈTE
-**Commit tag :** `ext/phase-1/foundation`
+**Commit :** `ad101d1`
 
 ### Fichiers créés
 | Fichier | Rôle |
@@ -29,16 +29,10 @@
 - ✅ activate() / deactivate() fonctionnels
 - ✅ Rejection des extensions avec binaires natifs x64
 
-### Limitations Phase 1 (résolues dans les phases suivantes)
-- Les stubs window.* ne font que `callFlutter()` sans handler côté Flutter → Phase 2
-- workspace.getConfiguration() retourne juste les defaultValues → Phase 3
-- languages.* → providers enregistrés mais non branchés à code_forge → Phase 4
-- Marketplace UI non présente → Phase 8
-
 ---
 
 ## Phase 2 — vscode.window API ✅ COMPLÈTE
-**Commit tag :** `ext/phase-2/window-api`
+**Commit :** `ba3e30b`
 
 ### Fichiers créés
 | Fichier | Rôle |
@@ -60,24 +54,79 @@
 
 ---
 
-## Phase 3 — vscode.workspace API ⬜ À FAIRE
-**Objectif :** Accès complet aux fichiers, config, watchers depuis une extension.
+## Phase 3 — vscode.workspace API ✅ COMPLÈTE
+**Commit :** (en cours — batch Phase 3 + 4)
 
-### Fichiers à créer
-- [ ] `lib/extensions/workspace_bridge.dart` — implémente toutes les ops workspace côté Flutter
-- [ ] `lib/extensions/fs_bridge.dart` — FileSystem API (read, write, stat, etc.)
-- [ ] `lib/extensions/config_store.dart` — gère les configurations d'extension (contributes.configuration)
+### Fichiers créés
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/workspace_bridge.dart` | openTextDocument, saveAll, applyEdit, findFiles, workspaceFolders |
+| `lib/extensions/fs_bridge.dart` | stat, readDirectory, createDirectory, readFile, writeFile, delete, rename, copy |
+| `lib/extensions/config_store.dart` | getConfiguration / update — persisté SharedPreferences par section |
+
+### Ce que Phase 3 permet
+- ✅ `vscode.workspace.openTextDocument` → lit le fichier depuis le FS Android
+- ✅ `vscode.workspace.saveAll` → délègue au callback IDE
+- ✅ `vscode.workspace.applyEdit` → applique des WorkspaceEdit directement sur le FS
+- ✅ `vscode.workspace.findFiles` → glob matching sur le workspace root
+- ✅ `vscode.workspace.getConfiguration` / `update` → persisté via SharedPreferences
+- ✅ `vscode.workspace.fs.*` → toutes les ops FileSystem (stat, read, write, delete, rename, copy, readDir)
+- ✅ `WorkspaceBridge.workspaceRoot` configurable depuis l'IDE (à setter depuis le home page)
+
+### Protocole de configuration (à brancher depuis l'IDE)
+```dart
+WorkspaceBridge.instance.workspaceRoot = '/storage/emulated/0/...';
+WorkspaceBridge.instance.onSaveAll = () async => true;
+WorkspaceBridge.instance.onApplyEdit = (edits) async => _applyEdits(edits);
+```
 
 ---
 
-## Phase 4 — vscode.languages API ⬜ À FAIRE
-**Objectif :** Completion, hover, diagnostics, formatting branchés sur code_forge.
+## Phase 4 — vscode.languages API ✅ COMPLÈTE
+**Commit :** (en cours — batch Phase 3 + 4)
 
-### Fichiers à créer
-- [ ] `lib/extensions/language_feature_router.dart` — route les provider results → code_forge
-- [ ] Intégration CompletionItemProvider → CodeForgeController
-- [ ] Intégration DiagnosticCollection → décoration de l'éditeur
-- [ ] Intégration HoverProvider → tooltip éditeur
+### Fichiers créés
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/language_feature_router.dart` | Route providers extension → code_forge (completion, hover, definition, format, codeAction, diagnostics) |
+
+### Architecture providers (modèle pull)
+```
+Extension (JS)                Flutter (LanguageFeatureRouter)
+─────────────                 ──────────────────────────────
+languages.register*Provider() → vscode.languages.<type>.register (IPC apiCall)
+  └─ ipc.onCall('provider.<id>.invoke', handler)
+
+Quand l'IDE demande des complétions:
+  bridge.call('provider.<id>.invoke', [doc, pos, ctx])
+  └─ Node.js appelle handler(doc, pos, ctx) → retourne CompletionList
+  └─ Flutter convertit → ExtensionCompletionItem[]
+```
+
+### Ce que Phase 4 permet
+- ✅ `vscode.languages.registerCompletionItemProvider` → flutter bridge stocke providerId + selector
+- ✅ `vscode.languages.registerHoverProvider` → idem
+- ✅ `vscode.languages.registerDefinitionProvider` → idem
+- ✅ `vscode.languages.registerDocumentFormattingEditProvider` → idem
+- ✅ `vscode.languages.registerCodeActionsProvider` → idem
+- ✅ `DiagnosticCollection.set()` → push vers `LanguageFeatureRouter.setDiagnostics()`
+- ✅ `LanguageFeatureRouter.diagnosticsVersion` → ValueNotifier réactif pour l'UI
+- ✅ `requestCompletions / requestHover / requestDefinition / requestFormat / requestCodeActions`
+- ✅ `bridgeLookup` wiré depuis `ExtensionHostManager.getBridge`
+- ✅ `ExtensionApiRouter.attachToManager()` wire les deux (apiCallHandler + bridgeLookup)
+
+### Intégration code_forge (à faire depuis editor_page.dart)
+```dart
+// Quand le curseur se déplace et qu'une completion est déclenchée:
+final items = await LanguageFeatureRouter.instance.requestCompletions(
+  filePath: controller.filePath,
+  languageId: 'typescript',
+  content: controller.text,
+  line: cursor.line, character: cursor.column,
+  triggerCharacter: '.',
+);
+// → items est une List<ExtensionCompletionItem> à injecter dans CodeForge
+```
 
 ---
 
@@ -127,4 +176,4 @@
 ## Phase 15 — CI/CD & Tests ⬜ À FAIRE
 ---
 
-*Dernière mise à jour : Phase 1 complétée — 2026-07-29*
+*Dernière mise à jour : Phases 3 + 4 complétées — 2026-07-30*

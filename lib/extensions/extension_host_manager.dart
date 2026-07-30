@@ -184,6 +184,9 @@ class ExtensionHostManager {
   bool isActive(String extensionId) => _hosts.containsKey(extensionId);
   ActiveExtensionHost? getHost(String extensionId) => _hosts[extensionId];
 
+  /// Retourne l'IpcBridge d'une extension active — utilisé par LanguageFeatureRouter.
+  IpcBridge? getBridge(String extensionId) => _hosts[extensionId]?.bridge;
+
   // ── Dispose ──────────────────────────────────────────────────────────────
 
   Future<void> disposeAll() async {

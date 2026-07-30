@@ -225,19 +225,25 @@ const workspace = {
 
 const _langProviderCounter = { value: 0 };
 
+/**
+ * Modèle pull : Flutter appelle 'provider.<id>.invoke' pour invoquer le provider.
+ * Toutes les invocations (completions, hover, définition, …) utilisent le même
+ * endpoint .invoke — les args différencient la méthode selon le type de provider.
+ */
 function _registerProvider(apiMethod, selector, handler, ...extraArgs) {
-  const id = `provider_${_langProviderCounter.value++}`;
-  ipc.callFlutter(`vscode.languages.${apiMethod}.register`, [id, selector, ...extraArgs]);
+  const id = `${apiMethod}_${_langProviderCounter.value++}`;
 
-  // Quand Flutter appelle le provider, on reçoit un event avec l'id
-  ipc.onEvent(`${apiMethod}.invoke.${id}`, async (params) => {
+  // Handler pull — Flutter appelle 'provider.<id>.invoke' avec les arguments sérialisés
+  ipc.onCall(`provider.${id}.invoke`, async (...args) => {
     try {
-      const result = await handler(...(params || []));
-      ipc.callFlutter(`${apiMethod}.result.${id}`, [result]);
+      return await handler(...args) ?? null;
     } catch (e) {
-      ipc.callFlutter(`${apiMethod}.error.${id}`, [e?.message ?? String(e)]);
+      throw new Error(e?.message ?? String(e));
     }
   });
+
+  // Informer Flutter du nouveau provider (selector, trigger chars, etc.)
+  ipc.callFlutter(`vscode.languages.${apiMethod}.register`, [id, selector, ...extraArgs]);
 
   return new types.Disposable(() => {
     ipc.callFlutter(`vscode.languages.${apiMethod}.unregister`, [id]);
