@@ -331,7 +331,7 @@ class _AgentSettingsState extends State<AgentSettings>
       if (_selectedProviderId == 'custom') 'url': _customUrlCtrl.text.trim(),
     };
 
-    aiBloc.add(AIConfigEvent(config: newCfg));
+    aiBloc.add(AIConfigEvent(newCfg));
     _saveAiConfig(context, newCfg);
 
     // Set as default chat model if none selected
@@ -356,7 +356,7 @@ class _AgentSettingsState extends State<AgentSettings>
     final aiBloc = context.read<AIBloc>();
     final newCfg = Map<String, dynamic>.from(aiBloc.state.config)
       ..remove(modelId);
-    aiBloc.add(AIConfigEvent(config: newCfg));
+    aiBloc.add(AIConfigEvent(newCfg));
     _saveAiConfig(context, newCfg);
     // If removed was selected, clear
     final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
@@ -823,6 +823,9 @@ class _AgentSettingsState extends State<AgentSettings>
                       updated[spec.name] = v;
                       ctx.read<AIChatUIBloc>().add(AIChatUIEvent(
                         chatMode: uiState.chatMode,
+                        promptText: uiState.promptText,
+                        scrollOffset: uiState.scrollOffset,
+                        isGenerating: uiState.isGenerating,
                         agenticToolSelections: updated,
                         selectedModelId: uiState.selectedModelId,
                       ));

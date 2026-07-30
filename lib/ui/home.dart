@@ -2876,6 +2876,64 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
+  // ── Floating agent overlay ────────────────────────────────────────────────
+  Widget _buildFloatingAgentOverlay(AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final shadowC = isDark ? Colors.black54 : Colors.black26;
+    const panelW  = 320.0;
+    const panelH  = 480.0;
+
+    return Positioned(
+      left: _agentFloatOffset.dx,
+      top:  _agentFloatOffset.dy,
+      child: GestureDetector(
+        onPanUpdate: (d) => setState(() {
+          _agentFloatOffset = Offset(
+            (_agentFloatOffset.dx + d.delta.dx).clamp(0, double.infinity),
+            (_agentFloatOffset.dy + d.delta.dy).clamp(0, double.infinity),
+          );
+        }),
+        child: Material(
+          elevation: 12,
+          shadowColor: shadowC,
+          borderRadius: BorderRadius.circular(12),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            width:  panelW,
+            height: panelH,
+            child: Stack(
+              children: [
+                _buildPandaAgentPanel(context, appTheme, asPage: true),
+                Positioned(
+                  top: 0, right: 0,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      icon: const Icon(Icons.picture_in_picture_alt, size: 14),
+                      tooltip: 'Ancrer',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                      onPressed: () => setState(() {
+                        _agentFloating  = false;
+                        _rightPanelOpen = true;
+                      }),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 14),
+                      tooltip: 'Fermer',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+                      onPressed: () => setState(() => _agentFloating = false),
+                    ),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _agentHdrBtn(
           IconData icon, String tooltip, Color color, VoidCallback onTap) =>
       Tooltip(
