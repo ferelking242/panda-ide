@@ -16,7 +16,10 @@ import 'package:panda/utils/github_language_colors.dart';
 import 'package:panda/utils/themes.dart';
 
 class GithubPage extends StatefulWidget {
-  const GithubPage({super.key});
+  /// When [embedded] is true the widget skips the outer Scaffold and renders
+  /// only the body — suitable for embedding as an editor tab.
+  final bool embedded;
+  const GithubPage({super.key, this.embedded = false});
 
   @override
   State<GithubPage> createState() => _GithubPageState();
@@ -325,9 +328,15 @@ class _GithubPageState extends State<GithubPage> {
   Widget build(BuildContext context) {
     final appTheme = context.read<AppThemeBloc>().state.appTheme;
     
+    final body = _token == null
+        ? _buildSignInPage(appTheme)
+        : _buildClientPage(appTheme);
+
+    if (widget.embedded) return body;
+
     return Scaffold(
       backgroundColor: appTheme.isDark ? const Color(0xff1a1a1a) : const Color(0xfff5f5f5),
-      body: _token == null ? _buildSignInPage(appTheme) : _buildClientPage(appTheme),
+      body: body,
     );
   }
 

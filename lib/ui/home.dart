@@ -804,6 +804,25 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                   iconColor: iconColor,
                   selColor:  selColor,
                   onTap: () {
+                    // Marketplace (idx:6) opens as an editor tab, not sidebar
+                    if (item.idx == 6) {
+                      setState(() {
+                        if (!_openTabs.any((t) => t.id == 'marketplace')) {
+                          _openTabs.add(const _TabDef(
+                              id:    'marketplace',
+                              title: 'Extensions',
+                              icon:  Broken.shop));
+                          _activeTabIdx = _openTabs.length - 1;
+                        } else {
+                          _activeTabIdx =
+                              _openTabs.indexWhere((t) => t.id == 'marketplace');
+                        }
+                        // Close sidebar if open
+                        _sidebarState = 1;
+                        _activeRail = 0;
+                      });
+                      return;
+                    }
                     setState(() {
                       if (_activeRail == item.idx && _sidebarState == 2) {
                         _sidebarState = 1;
@@ -879,7 +898,20 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               message: 'Compte GitHub',
               child: _GithubAvatarEx(
                 iconColor: iconColor,
-                onTap: () => _push(context, GithubPage()),
+                onTap: () {
+                  setState(() {
+                    if (!_openTabs.any((t) => t.id == 'github')) {
+                      _openTabs.add(const _TabDef(
+                          id:    'github',
+                          title: 'GitHub',
+                          icon:  Broken.programming_arrows));
+                      _activeTabIdx = _openTabs.length - 1;
+                    } else {
+                      _activeTabIdx =
+                          _openTabs.indexWhere((t) => t.id == 'github');
+                    }
+                  });
+                },
               ),
             ),
 
@@ -888,7 +920,20 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               selected:  false,
               iconColor: iconColor,
               selColor:  selColor,
-              onTap: () => _push(context, const Settings()),
+              onTap: () {
+                setState(() {
+                  if (!_openTabs.any((t) => t.id == 'settings')) {
+                    _openTabs.add(const _TabDef(
+                        id:    'settings',
+                        title: 'Paramètres',
+                        icon:  Broken.settings));
+                    _activeTabIdx = _openTabs.length - 1;
+                  } else {
+                    _activeTabIdx =
+                        _openTabs.indexWhere((t) => t.id == 'settings');
+                  }
+                });
+              },
             ),
             const SizedBox(height: 8),
           ],
@@ -1051,17 +1096,28 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // ── Git panel ─────────────────────────────────────────────────────────────
   Widget _sidebarGit(BuildContext ctx, AppTheme t, bool dark) {
+    void openGithubTab() => setState(() {
+          if (!_openTabs.any((tab) => tab.id == 'github')) {
+            _openTabs.add(const _TabDef(
+                id: 'github', title: 'GitHub', icon: Broken.programming_arrows));
+            _activeTabIdx = _openTabs.length - 1;
+          } else {
+            _activeTabIdx = _openTabs.indexWhere((tab) => tab.id == 'github');
+          }
+          _sidebarState = 1;
+          _activeRail = 0;
+        });
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
         _panelItem(ctx, t, Broken.programming_arrows, 'Ouvrir GitHub',
-            () => _push(ctx, GithubPage())),
+            openGithubTab),
         _panelItem(ctx, t, Broken.add_circle, 'Cloner un dépôt…',
             () => _doCloneRepo(ctx, t)),
         BlocBuilder<GithubAuthCubit, GithubAuthState>(
           builder: (_, s) => s.isSignedIn
               ? _panelItem(ctx, t, Broken.add_square, 'Créer un dépôt…',
-                  () => _push(ctx, GithubPage()))
+                  openGithubTab)
               : const SizedBox.shrink(),
         ),
         const Divider(indent: 12, endIndent: 12),
@@ -1204,8 +1260,22 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               style: _kSectionTitle.copyWith(
                   color: dark ? Colors.grey[500] : Colors.grey[500])),
         ),
-        _panelItem(ctx, t, Broken.shop, 'Parcourir les extensions',
-            () => _push(ctx, const MarketplacePage())),
+        _panelItem(ctx, t, Broken.shop, 'Parcourir les extensions', () {
+          setState(() {
+            if (!_openTabs.any((tab) => tab.id == 'marketplace')) {
+              _openTabs.add(const _TabDef(
+                  id: 'marketplace',
+                  title: 'Extensions',
+                  icon: Broken.shop));
+              _activeTabIdx = _openTabs.length - 1;
+            } else {
+              _activeTabIdx =
+                  _openTabs.indexWhere((tab) => tab.id == 'marketplace');
+            }
+            _sidebarState = 1;
+            _activeRail = 0;
+          });
+        }),
         _panelItem(ctx, t, Broken.element_3, 'Extensions installées',
             () => _push(ctx, const ExtensionsPanel())),
         const Divider(indent: 12, endIndent: 12),
@@ -1850,6 +1920,15 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     if (tab.id == 'agent') {
       return _buildPandaAgentPanel(context, appTheme, asPage: true);
     }
+    if (tab.id == 'marketplace') {
+      return const MarketplacePage(embedded: true);
+    }
+    if (tab.id == 'github') {
+      return GithubPage(embedded: true);
+    }
+    if (tab.id == 'settings') {
+      return const Settings();
+    }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
 
@@ -1877,6 +1956,15 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     }
     if (tab.id == 'agent') {
       return _buildPandaAgentPanel(context, appTheme, asPage: true);
+    }
+    if (tab.id == 'marketplace') {
+      return const MarketplacePage(embedded: true);
+    }
+    if (tab.id == 'github') {
+      return GithubPage(embedded: true);
+    }
+    if (tab.id == 'settings') {
+      return const Settings();
     }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
@@ -1933,8 +2021,20 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     _agentMessages.clear();
                     _agentAttachments.clear();
                   })),
-              _agentHdrBtn(Broken.setting_2, 'Paramètres IA', muted,
-                  () => _push(context, const Settings())),
+              _agentHdrBtn(Broken.setting_2, 'Paramètres IA', muted, () {
+                setState(() {
+                  if (!_openTabs.any((t) => t.id == 'settings')) {
+                    _openTabs.add(const _TabDef(
+                        id: 'settings',
+                        title: 'Paramètres',
+                        icon: Broken.settings));
+                    _activeTabIdx = _openTabs.length - 1;
+                  } else {
+                    _activeTabIdx =
+                        _openTabs.indexWhere((t) => t.id == 'settings');
+                  }
+                });
+              }),
               _agentHdrBtn(
                 Broken.maximize_4,
                 'Ouvrir dans un onglet',
@@ -1958,59 +2058,6 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                 _agentHdrBtn(Broken.close_square, 'Fermer', muted,
                     () => setState(() => _rightPanelOpen = false)),
             ]),
-          ),
-
-          // ── Mode selector ───────────────────────────────────────────────
-          Container(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: hdrBg,
-              border: Border(bottom: BorderSide(color: borderC)),
-            ),
-            child: Row(
-              children: [
-                for (final mode in [
-                  ('ask',    'Ask'),
-                  ('agent',  'Agent'),
-                  ('normal', 'Normal'),
-                ])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: GestureDetector(
-                      onTap: () => setState(() => _agentChatMode = mode.$1),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _agentChatMode == mode.$1
-                              ? _kAccent.withOpacity(isDark ? 0.25 : 0.15)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _agentChatMode == mode.$1
-                                ? _kAccent.withOpacity(0.6)
-                                : Colors.transparent,
-                          ),
-                        ),
-                        child: Text(
-                          mode.$2,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: _agentChatMode == mode.$1
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            color: _agentChatMode == mode.$1
-                                ? _kAccent
-                                : muted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ),
 
           // ── Chat area ──────────────────────────────────────────────────
@@ -2078,9 +2125,61 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // ── Mode selector pills (Ask / Agent / Normal) ──────────
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+                  child: Row(
+                    children: [
+                      for (final mode in [
+                        ('ask',    'Ask'),
+                        ('agent',  'Agent'),
+                        ('normal', 'Normal'),
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(right: 4),
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => _agentChatMode = mode.$1),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: _agentChatMode == mode.$1
+                                    ? _kAccent
+                                        .withOpacity(isDark ? 0.25 : 0.15)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: _agentChatMode == mode.$1
+                                      ? _kAccent.withOpacity(0.6)
+                                      : (isDark
+                                          ? const Color(0xff444444)
+                                          : const Color(0xffcccccc)),
+                                ),
+                              ),
+                              child: Text(
+                                mode.$2,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: _agentChatMode == mode.$1
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: _agentChatMode == mode.$1
+                                      ? _kAccent
+                                      : muted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
                 // Text field
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
                   child: TextField(
                     controller: _agentInputCtrl,
                     maxLines: 5,

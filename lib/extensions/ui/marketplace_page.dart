@@ -38,7 +38,10 @@ const _kSortOptions = {
 };
 
 class MarketplacePage extends StatefulWidget {
-  const MarketplacePage({super.key});
+  /// When [embedded] is true the widget skips its own Scaffold/AppBar and
+  /// renders only the body content (suitable for embedding in an editor tab).
+  final bool embedded;
+  const MarketplacePage({super.key, this.embedded = false});
 
   @override
   State<MarketplacePage> createState() => _MarketplacePageState();
@@ -221,150 +224,153 @@ class _MarketplacePageState extends State<MarketplacePage> {
     final cardColor = isDark ? const Color(0xFF252526) : Colors.white;
     final divColor = isDark ? const Color(0xFF3C3C3C) : const Color(0xFFE0E0E0);
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xFF2D2D2D) : null,
-        elevation: 0,
-        title: const Text('Extensions', style: TextStyle(fontSize: 16)),
-        actions: [
-          // Sort dropdown
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.sort, size: 20),
-            tooltip: 'Sort by',
-            onSelected: (v) {
-              setState(() => _sortBy = v);
-              _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
-            },
-            itemBuilder: (_) => _kSortOptions.entries
-                .map((e) => PopupMenuItem(
-                      value: e.value,
-                      child: Row(children: [
-                        if (_sortBy == e.value)
-                          const Icon(Icons.check, size: 16, color: Color(0xFF0066B8)),
-                        const SizedBox(width: 8),
-                        Text(e.key),
-                      ]),
-                    ))
-                .toList(),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ── Search bar ──────────────────────────────────────────────────
-          Container(
-            color: isDark ? const Color(0xFF2D2D2D) : theme.appBarTheme.backgroundColor,
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: TextField(
-              controller: _searchCtrl,
-              style: const TextStyle(fontSize: 14),
-              decoration: InputDecoration(
-                hintText: 'Rechercher des extensions…',
-                hintStyle: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.white38 : Colors.black38,
-                ),
-                prefixIcon: const Icon(Icons.search, size: 18),
-                suffixIcon: _searchCtrl.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () {
-                          _searchCtrl.clear();
-                          _loadFeatured();
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: isDark ? const Color(0xFF3C3C3C) : Colors.white,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: divColor),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: divColor),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF0066B8), width: 1.5),
+    Widget body = Column(
+      children: [
+        // ── Sort + search header bar ─────────────────────────────────────
+        Container(
+          color: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFF3F3F3),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          child: Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _searchCtrl,
+                style: const TextStyle(fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Rechercher des extensions…',
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
+                  prefixIcon: const Icon(Icons.search, size: 18),
+                  suffixIcon: _searchCtrl.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            _loadFeatured();
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: isDark ? const Color(0xFF3C3C3C) : Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: divColor),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(color: divColor),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: Color(0xFF0066B8), width: 1.5),
+                  ),
                 ),
               ),
             ),
-          ),
-
-          // ── Category chips ───────────────────────────────────────────────
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: _kCategories.length,
-              itemBuilder: (_, i) {
-                final cat = _kCategories[i];
-                final selected = cat == _selectedCategory;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: FilterChip(
-                    label: Text(cat, style: const TextStyle(fontSize: 12)),
-                    selected: selected,
-                    selectedColor: const Color(0xFF0066B8).withOpacity(0.2),
-                    checkmarkColor: const Color(0xFF0066B8),
-                    side: BorderSide(
-                      color: selected ? const Color(0xFF0066B8) : divColor,
-                    ),
-                    showCheckmark: false,
-                    onSelected: (_) {
-                      setState(() => _selectedCategory = cat);
-                      _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
-                    },
-                  ),
-                );
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.sort, size: 20,
+                  color: isDark ? Colors.white60 : Colors.black54),
+              tooltip: 'Sort by',
+              onSelected: (v) {
+                setState(() => _sortBy = v);
+                _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
               },
+              itemBuilder: (_) => _kSortOptions.entries
+                  .map((e) => PopupMenuItem(
+                        value: e.value,
+                        child: Row(children: [
+                          if (_sortBy == e.value)
+                            const Icon(Icons.check,
+                                size: 16, color: Color(0xFF0066B8)),
+                          const SizedBox(width: 8),
+                          Text(e.key),
+                        ]),
+                      ))
+                  .toList(),
             ),
+          ]),
+        ),
+
+        // ── Category chips ───────────────────────────────────────────────
+        SizedBox(
+          height: 40,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: _kCategories.length,
+            itemBuilder: (_, i) {
+              final cat = _kCategories[i];
+              final selected = cat == _selectedCategory;
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: FilterChip(
+                  label: Text(cat, style: const TextStyle(fontSize: 12)),
+                  selected: selected,
+                  selectedColor: const Color(0xFF0066B8).withOpacity(0.2),
+                  checkmarkColor: const Color(0xFF0066B8),
+                  side: BorderSide(
+                    color: selected ? const Color(0xFF0066B8) : divColor,
+                  ),
+                  showCheckmark: false,
+                  onSelected: (_) {
+                    setState(() => _selectedCategory = cat);
+                    _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
+                  },
+                ),
+              );
+            },
           ),
+        ),
 
-          const SizedBox(height: 4),
+        const SizedBox(height: 4),
 
-          // ── Results ───────────────────────────────────────────────────────
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? _ErrorView(error: _error!, onRetry: _loadFeatured)
-                    : _results.isEmpty
-                        ? Center(
-                            child: Text(
-                              'Aucune extension trouvée',
-                              style: TextStyle(
-                                color: isDark ? Colors.white38 : Colors.black38,
-                              ),
+        // ── Results ───────────────────────────────────────────────────────
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? _ErrorView(error: _error!, onRetry: _loadFeatured)
+                  : _results.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Aucune extension trouvée',
+                            style: TextStyle(
+                              color: isDark ? Colors.white38 : Colors.black38,
                             ),
-                          )
-                        : ListView.builder(
-                            controller: _scrollCtrl,
-                            padding: const EdgeInsets.all(8),
-                            itemCount: _results.length + (_loadingMore ? 1 : 0),
-                            itemBuilder: (_, i) {
-                              if (i == _results.length) {
-                                return const Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: Center(child: CircularProgressIndicator()),
-                                );
-                              }
-                              return _ExtensionCard(
-                                ext: _results[i],
-                                cardColor: cardColor,
-                                installState: _installStates[_results[i].id] ??
-                                    _InstallState.notInstalled,
-                                onInstall: () => _install(_results[i]),
-                              );
-                            },
                           ),
-          ),
-        ],
-      ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollCtrl,
+                          padding: const EdgeInsets.all(8),
+                          itemCount: _results.length + (_loadingMore ? 1 : 0),
+                          itemBuilder: (_, i) {
+                            if (i == _results.length) {
+                              return const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(child: CircularProgressIndicator()),
+                              );
+                            }
+                            return _ExtensionCard(
+                              ext: _results[i],
+                              cardColor: cardColor,
+                              installState: _installStates[_results[i].id] ??
+                                  _InstallState.notInstalled,
+                              onInstall: () => _install(_results[i]),
+                            );
+                          },
+                        ),
+        ),
+      ],
+    );
+
+    if (widget.embedded) return body;
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: body,
     );
   }
 }
