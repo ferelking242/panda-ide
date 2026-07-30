@@ -5925,7 +5925,6 @@ int main() {
                     ],
                   ),
                 ),
-              ),
             );
             if (widget.embedded) return settingsBody;
             return Scaffold(
