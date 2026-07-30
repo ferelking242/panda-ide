@@ -36,6 +36,7 @@ import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
 import 'agent_runner.dart';
+import 'agent_settings.dart';
 import 'widgets.dart';
 
 // ── VSCode colour tokens ──────────────────────────────────────────────────────
@@ -67,7 +68,8 @@ class SelectType extends StatefulWidget {
   State<SelectType> createState() => _SelectTypeState();
 }
 
-class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
+class _SelectTypeState extends State<SelectType>
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   // ── State ──────────────────────────────────────────────────────────────────
   final _scaffoldKey         = GlobalKey<ScaffoldState>();
   final createFileController = TextEditingController();
@@ -119,17 +121,38 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   String? _agentSelectedModelId;
   final List<Map<String,String>> _agentAttachments = [];
 
+  // ── Floating agent overlay ────────────────────────────────────────
+  bool   _agentFloating      = false;
+  Offset _agentFloatOffset   = const Offset(20, 100);
+  bool   _agentFloatStickLeft = false;
+
+  // ── Send button animation ─────────────────────────────────────────
+  late AnimationController _sendAnimCtrl;
+  late Animation<double>   _sendAnim;
+
+  // ── Conversation history ──────────────────────────────────────────
+  bool _showHistoryPanel = false;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _splitViewController = MultiSplitViewController(areas: [Area(), Area()]);
+    // Send button pulse animation
+    _sendAnimCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 800))
+      ..repeat();
+    _sendAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
+        CurvedAnimation(parent: _sendAnimCtrl, curve: Curves.easeInOut));
+    _sendAnimCtrl.stop();
     // Rebuild send button colour when text changes
     _agentInputCtrl.addListener(() => setState(() {}));
+    // Load chat sessions
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openPendingSharedFile();
       _maybeShowStorageMigrationNotice();
+      context.read<ChatSessionBloc>().add(LoadChatSessions());
     });
   }
 
@@ -147,6 +170,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     _agentInputCtrl.dispose();
     _agentScrollCtrl.dispose();
     _splitViewController.dispose();
+    _sendAnimCtrl.dispose();
     super.dispose();
   }
 
@@ -687,7 +711,9 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
             // ── Body ─────────────────────────────────────────────────────
             body: SafeArea(
-              child: Column(
+              child: Stack(
+                children: [
+              Column(
                 children: [
                   // ── Top bar spans full width ──────────────────────────
                   _buildTopBar(context, appTheme, appThemestate),
@@ -776,6 +802,11 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                   // ── Bottom panel ─────────────────────────────────────
                   if (_bottomPanelOpen)
                     _buildBottomPanel(),
+                ],
+              ),
+              // ── Floating agent overlay ──────────────────────────────
+              if (_agentFloating)
+                _buildFloatingAgentOverlay(appTheme),
                 ],
               ),
             ),
@@ -2031,42 +2062,21 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                       color: muted)),
               const Spacer(),
               _agentHdrBtn(Broken.add_square, 'Nouvelle conversation', muted,
-                  () => setState(() {
-                    _agentMessages.clear();
-                    _agentAttachments.clear();
-                  })),
-              _agentHdrBtn(Broken.setting_2, 'Paramètres IA', muted, () {
-                setState(() {
-                  if (!_openTabs.any((t) => t.id == 'settings')) {
-                    _openTabs.add(const _TabDef(
-                        id: 'settings',
-                        title: 'Paramètres',
-                        icon: Broken.settings));
-                    _activeTabIdx = _openTabs.length - 1;
-                  } else {
-                    _activeTabIdx =
-                        _openTabs.indexWhere((t) => t.id == 'settings');
-                  }
-                });
+                  () => _agentNewConversation()),
+              _agentHdrBtn(Broken.clock, 'Historique', muted,
+                  () => setState(() => _showHistoryPanel = !_showHistoryPanel)),
+              _agentHdrBtn(Broken.setting_2, 'Paramètres Agent', muted, () {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const AgentSettings()));
               }),
               _agentHdrBtn(
                 Broken.maximize_4,
-                'Ouvrir dans un onglet',
+                'Mode flottant',
                 muted,
-                () {
-                  if (!_openTabs.any((t) => t.id == 'agent')) {
-                    setState(() {
-                      _openTabs.add(const _TabDef(
-                          id:    'agent',
-                          title: 'Panda Agent',
-                          icon:  Broken.message_programming));
-                      _activeTabIdx = _openTabs.length - 1;
-                    });
-                  } else {
-                    setState(() => _activeTabIdx =
-                        _openTabs.indexWhere((t) => t.id == 'agent'));
-                  }
-                },
+                () => setState(() {
+                  _agentFloating = true;
+                  _rightPanelOpen = false;
+                }),
               ),
               if (!asPage)
                 _agentHdrBtn(Broken.close_square, 'Fermer', muted,
@@ -2463,19 +2473,11 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     TextButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        setState(() {
-                          if (!_openTabs.any((t) => t.id == 'settings')) {
-                            _openTabs.add(const _TabDef(
-                                id: 'settings',
-                                title: 'Settings',
-                                icon: Broken.setting_2));
-                          }
-                          _activeTabIdx =
-                              _openTabs.indexWhere((t) => t.id == 'settings');
-                        });
+                        Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => const AgentSettings()));
                       },
                       icon: Icon(Broken.setting_2, size: 15, color: _kAccent),
-                      label: const Text('Ouvrir Paramètres',
+                      label: const Text('Ouvrir Paramètres Agent',
                           style: TextStyle(color: _kAccent)),
                     ),
                   ],
@@ -2533,16 +2535,8 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  setState(() {
-                    if (!_openTabs.any((t) => t.id == 'settings')) {
-                      _openTabs.add(const _TabDef(
-                          id: 'settings',
-                          title: 'Settings',
-                          icon: Broken.setting_2));
-                    }
-                    _activeTabIdx =
-                        _openTabs.indexWhere((t) => t.id == 'settings');
-                  });
+                  Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => const AgentSettings()));
                 },
                 icon: Icon(Broken.add_circle, size: 14, color: _kAccent),
                 label: const Text('Ajouter un modèle',
@@ -2963,6 +2957,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   void _agentStop() {
     _agentRunner.cancel();
+    _sendAnimCtrl.stop();
     if (!mounted) return;
     setState(() {
       _agentGenerating = false;
@@ -2975,9 +2970,169 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     });
   }
 
+  // ── Nouvelle conversation ────────────────────────────────────────────────
+  void _agentNewConversation() {
+    // Save current conversation to ChatSessionBloc
+    if (_agentMessages.isNotEmpty) {
+      final conversations = <AIConversation>[];
+      for (var i = 0; i < _agentMessages.length - 1; i += 2) {
+        final user  = _agentMessages[i];
+        final agent = i + 1 < _agentMessages.length ? _agentMessages[i + 1] : null;
+        conversations.add(AIConversation(
+          user['text'] as String? ?? '',
+          agent?['text'] as String?,
+        ));
+      }
+      if (conversations.isNotEmpty) {
+        final title = (_agentMessages.isNotEmpty
+            ? (_agentMessages.first['text'] as String? ?? 'Chat')
+            : 'Chat');
+        context.read<ChatSessionBloc>().add(UpdateCurrentSession(
+          conversations: conversations,
+          title: title.length > 40 ? title.substring(0, 40) : title,
+        ));
+      }
+    }
+    // Create new session
+    context.read<ChatSessionBloc>().add(CreateNewSession());
+    setState(() {
+      _agentMessages.clear();
+      _agentAttachments.clear();
+      _showHistoryPanel = false;
+    });
+  }
+
+  // ── History panel ────────────────────────────────────────────────────────
+  Widget _buildHistoryPanel(AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff252526) : const Color(0xfff5f5f5);
+    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+
+    return BlocBuilder<ChatSessionBloc, ChatSessionState>(
+      builder: (ctx, sessState) {
+        final sessions = sessState.sessions;
+        return Container(
+          width: 240,
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border(left: BorderSide(color: border)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                height: 38,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                color: isDark ? const Color(0xff252526) : const Color(0xffececec),
+                child: Row(children: [
+                  Text('HISTORIQUE',
+                      style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.1,
+                          color: muted)),
+                  const Spacer(),
+                  _agentHdrBtn(Broken.close_square, 'Fermer', muted,
+                      () => setState(() => _showHistoryPanel = false)),
+                ]),
+              ),
+              if (sessions.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Broken.clock, size: 28, color: muted),
+                        const SizedBox(height: 8),
+                        Text('Aucune conversation',
+                            style: TextStyle(fontSize: 12, color: muted)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    itemCount: sessions.length,
+                    itemBuilder: (_, i) {
+                      final s = sessions[i];
+                      final isCurrent = sessState.currentSession?.id == s.id;
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          Broken.message_programming,
+                          size: 15,
+                          color: isCurrent ? _kAccent : muted,
+                        ),
+                        title: Text(
+                          s.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: isCurrent ? _kAccent : fg,
+                              fontWeight: isCurrent
+                                  ? FontWeight.w600
+                                  : FontWeight.normal),
+                        ),
+                        subtitle: Text(
+                          _relativeTime(s.createdAt),
+                          style: TextStyle(fontSize: 10, color: muted),
+                        ),
+                        selected: isCurrent,
+                        selectedTileColor: _kAccent.withOpacity(0.07),
+                        onTap: () {
+                          ctx.read<ChatSessionBloc>().add(SelectSession(s.id));
+                          final convs = s.conversations;
+                          final msgs = <Map<String, dynamic>>[];
+                          for (final c in convs) {
+                            msgs.add({'role': 'user', 'text': c.userRequest});
+                            msgs.add({
+                              'role': 'agent',
+                              'text': c.modelResponse ?? '',
+                              'thinking': '',
+                              'phase': 'done',
+                            });
+                          }
+                          setState(() {
+                            _agentMessages
+                              ..clear()
+                              ..addAll(msgs);
+                            _showHistoryPanel = false;
+                          });
+                        },
+                        trailing: IconButton(
+                          icon: Icon(Broken.trash, size: 13,
+                              color: muted.withOpacity(0.6)),
+                          onPressed: () => ctx.read<ChatSessionBloc>()
+                              .add(DeleteSession(s.id)),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _relativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'À l\'instant';
+    if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes}min';
+    if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
+    return 'Il y a ${diff.inDays}j';
+  }
+
   void _agentSend() {
     final text = _agentInputCtrl.text.trim();
     if (text.isEmpty || _agentGenerating) return;
+    _sendAnimCtrl.repeat(reverse: true);
 
     // Récupère le modèle sélectionné dans le panel (ou le chatModel par défaut)
     final aiState = context.read<AIBloc>().state;
@@ -3071,9 +3226,11 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                   _agentPhase = AgentPhase.done;
                   _agentGenerating = false;
                   _agentMessages[agentIdx]['phase'] = 'done';
+                  _sendAnimCtrl.stop();
                 case AgentPhase.error:
                   _agentPhase = AgentPhase.error;
                   _agentGenerating = false;
+                  _sendAnimCtrl.stop();
                   _agentMessages[agentIdx]['text'] =
                       _agentStreamBuf.isNotEmpty
                           ? _agentStreamBuf
