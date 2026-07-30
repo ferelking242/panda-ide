@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'bloc/repo_bloc/repo_bloc.dart';
 import 'bloc/ui_bloc/ui_bloc.dart';
+import 'extensions/extension_api_router.dart';
+import 'extensions/extension_host_setup.dart';
 import 'ui/start_screen.dart';
 import 'utils/functions.dart';
 import 'utils/themes.dart';
@@ -18,6 +20,18 @@ Future<void> main() async {
   // migrateSharedStorageRoots uses dart:io (Directory) — skip on web.
   if (!kIsWeb) {
     await migrateSharedStorageRoots();
+  }
+  // Extension Host — extraction JS + configuration + contributes statiques.
+  // Uniquement sur Android (nécessite le filesystem Android + node binary).
+  if (!kIsWeb) {
+    try {
+      final sharedPath = await NativeChannel.getLibraryPath();
+      await ExtensionHostSetup.init(sharedPath: sharedPath);
+    } catch (e) {
+      // Non-fatal : l'app fonctionne sans extensions si node n'est pas encore installé.
+      // ignore: avoid_print
+      print('[ExtensionHost] init skipped: $e');
+    }
   }
   final recent = await getRecent();
   final appTheme = await getAppTheme();
@@ -57,6 +71,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Wire ExtensionApiRouter une seule fois au démarrage (Android uniquement).
+    if (!kIsWeb) {
+      ExtensionApiRouter.instance.attachToManager();
+    }
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => ConfigBloc(codeForgeConfig: jsonDecode(codeForgeConfig))),
@@ -89,6 +107,13 @@ class MainApp extends StatelessWidget {
       ],
       child: BlocBuilder<AppThemeBloc, AppThemeState>(
         builder: (context, appThemeState) {
+          // Fournir le BuildContext live à l'ExtensionApiRouter (Android uniquement).
+          // Post-frame pour éviter les rebuilds en plein build.
+          if (!kIsWeb) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              ExtensionApiRouter.instance.setContext(context);
+            });
+          }
           context.read<GgufDownloadCubit>().onTaskCompleted = (task) async {
             final result = await GgufModel.registerGgufModelWithAI(task);
             if (context.mounted) {

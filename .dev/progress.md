@@ -224,36 +224,36 @@
 
 ---
 
-## Wiring requis depuis main.dart
+## Wiring main.dart ✅ COMPLET
+
+**Commit :** ext/wiring/main-dart
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/extension_host_setup.dart` | Extrait les assets JS, configure le manager, wire terminal, charge les contributes |
+| `lib/main.dart` | Appelle `ExtensionHostSetup.init()` au démarrage + `attachToManager()` + `setContext()` |
+
+- ✅ `ExtensionHostSetup.init(sharedPath)` appelé dans `main()` (Android uniquement, try/catch non-fatal)
+- ✅ Assets JS extraits de assets/ vers `$appDir/extension_host/` au démarrage
+- ✅ `ExtensionHostManager.configure(nodeBinPath, hostJsPath)` — node + host.js sur filesystem
+- ✅ `TasksBridge.launchInTerminal` branché sur `libbash.so` avec env Android complet
+- ✅ Contributes statiques chargés en parallèle (Theme + Snippet + Grammar + IconTheme)
+- ✅ `ExtensionApiRouter.instance.attachToManager()` appelé dans `MainApp.build()` (Android uniquement)
+- ✅ `ExtensionApiRouter.instance.setContext(context)` mis à jour via `addPostFrameCallback` à chaque rebuild
+
+### Navigation vers les UI extensions (à intégrer dans les menus/sidebar)
 
 ```dart
-// 1. Appeler après ExtensionHostManager.configure()
-ExtensionApiRouter.instance.attachToManager();
-
-// 2. Fournir le BuildContext global
-ExtensionApiRouter.instance.setContext(context);
-
-// 3. Charger les contributes statiques
-await ThemeLoader.instance.loadAll();
-await SnippetLoader.instance.loadAll();
-await GrammarLoader.instance.loadAll();
-await IconThemeLoader.instance.loadAll();
-
-// 4. Brancher le terminal pour les tâches
-TasksBridge.instance.launchInTerminal = (cmd, cwd, env) async {
-  // → flutter_pty ou terminal intégré
-};
-
-// 5. Ouvrir MarketplacePage
+// Marketplace Open VSX
 Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketplacePage()));
 
-// 6. Ouvrir ExtensionsPanel
+// Panel extensions installées
 Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtensionsPanel()));
 
-// 7. Afficher les WebViews dans le layout
+// WebViews extensions dans le layout
 child: ExtensionWebviewContainer()
 ```
 
 ---
 
-*Dernière mise à jour : Phases 8 à 15 complétées — 2026-07-30*
+*Dernière mise à jour : Wiring main.dart complété — 2026-07-30*
