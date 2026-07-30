@@ -712,7 +712,12 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
                         // ── Editor area (supports split view) ────────────
                         Expanded(
-                          child: Row(
+                          child: ClipRRect(
+                            borderRadius: _sidebarState == 2
+                                ? const BorderRadius.only(
+                                    topLeft: Radius.circular(20))
+                                : BorderRadius.zero,
+                            child: Row(
                             children: [
                               Expanded(
                                 child: _splitEditor
@@ -968,45 +973,50 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         panelBody = const SizedBox.shrink();
     }
 
-    return Container(
-      width: _kSidebarWidth,
+    return PhysicalShape(
       color: bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Panel header
-          Container(
-            height: 35,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: borderColor)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    titles[_activeRail] ?? '',
-                    style: _kSectionTitle.copyWith(color: titleColor),
-                    overflow: TextOverflow.ellipsis,
+      elevation: 6,
+      shadowColor: Colors.black38,
+      clipper: _SidebarClipper(),
+      child: SizedBox(
+        width: _kSidebarWidth,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Panel header
+            Container(
+              height: 35,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: borderColor)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      titles[_activeRail] ?? '',
+                      style: _kSectionTitle.copyWith(color: titleColor),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                InkWell(
-                  onTap: () => setState(() {
-                    _sidebarState = 1;
-                    _activeRail = 0;
-                  }),
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(Broken.close_circle,
-                        size: 14, color: titleColor),
+                  InkWell(
+                    onTap: () => setState(() {
+                      _sidebarState = 1;
+                      _activeRail = 0;
+                    }),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(Broken.close_circle,
+                          size: 14, color: titleColor),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          Expanded(child: panelBody),
-        ],
+            Expanded(child: panelBody),
+          ],
+        ),
       ),
     );
   }
@@ -3918,4 +3928,27 @@ class _MsgActionBtn extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── _SidebarClipper ────────────────────────────────────────────────────────────
+// Rounds the top-right and bottom-right corners of the sidebar panel,
+// giving it the "floating card" look from Scolaris.
+class _SidebarClipper extends CustomClipper<Path> {
+  static const double _radius = 20.0;
+
+  @override
+  Path getClip(Size size) {
+    return Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width - _radius, 0)
+      ..quadraticBezierTo(size.width, 0, size.width, _radius)
+      ..lineTo(size.width, size.height - _radius)
+      ..quadraticBezierTo(
+          size.width, size.height, size.width - _radius, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
 }
