@@ -8,7 +8,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import 'command_registry.dart';
 import 'config_store.dart';
+import 'extension_exports_registry.dart';
 import 'extension_host_manager.dart';
 import 'fs_bridge.dart';
 import 'language_feature_router.dart';
@@ -388,48 +393,117 @@ class ExtensionApiRouter {
   }
 
   // ── vscode.commands.* ────────────────────────────────────────────────────
-  // Phase 5
+  // Phase 5 — implémentation complète via CommandRegistry
 
   Future<dynamic> _routeCommands(
       String extId, String method, List<dynamic> params) async {
+    final cr = CommandRegistry.instance;
+
     switch (method) {
       case 'vscode.commands.register':
+        // params[0] = commandId   params[1] = title (optionnel)
+        final command  = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final title    = params.length > 1 ? params[1] as String? : null;
+        if (command.isNotEmpty) {
+          cr.register(
+            command:     command,
+            extensionId: extId,
+            title:       title ?? command,
+          );
+        }
+        return null;
+
       case 'vscode.commands.unregister':
+        final command = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        if (command.isNotEmpty) cr.unregister(command);
         return null;
+
       case 'vscode.commands.execute':
+        // params[0] = commandId  params[1+] = args
+        final command = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        final args    = params.length > 1 ? params.sublist(1) : <dynamic>[];
+        if (command.isNotEmpty) return cr.execute(command, args);
         return null;
+
       case 'vscode.commands.getAll':
-        return <String>[];
+        return cr.commandIds;
+
       default:
         return null;
     }
   }
 
   // ── vscode.env.* ─────────────────────────────────────────────────────────
-  // Phase 7
+  // Phase 7 — Clipboard Flutter + url_launcher
 
   Future<dynamic> _routeEnv(
       String extId, String method, List<dynamic> params) async {
     switch (method) {
       case 'vscode.env.clipboard.read':
-        // Utilise flutter_secure_storage ou Clipboard Flutter
-        return '';
+        final data = await Clipboard.getData(Clipboard.kTextPlain);
+        return data?.text ?? '';
+
       case 'vscode.env.clipboard.write':
+        final text = params.isNotEmpty ? params[0] as String? ?? '' : '';
+        await Clipboard.setData(ClipboardData(text: text));
         return null;
+
       case 'vscode.env.openExternal':
-        return false;
+        final uriArg = params.isNotEmpty ? params[0] : null;
+        String? uriStr;
+        if (uriArg is Map<String, dynamic>) {
+          uriStr = uriArg['toString'] as String? ??
+              uriArg['path'] as String?;
+        } else if (uriArg is String) {
+          uriStr = uriArg;
+        }
+        if (uriStr == null) return false;
+        try {
+          final uri = Uri.parse(uriStr);
+          return await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } catch (_) {
+          return false;
+        }
+
       default:
         return null;
     }
   }
 
   // ── vscode.extensions.* ──────────────────────────────────────────────────
+  // Phase 6 — implémentation via ExtensionExportsRegistry
 
   Future<dynamic> _routeExtensions(
       String extId, String method, List<dynamic> params) async {
+    final er = ExtensionExportsRegistry.instance;
+
     switch (method) {
       case 'vscode.extensions.get':
+        final id = params.isNotEmpty ? params[0] as String? : null;
+        if (id == null) return null;
+        return er.getExtensionJson(id);
+
+      case 'vscode.extensions.getAll':
+        return er.getAll();
+
+      case 'vscode.extensions.exports.register':
+        // Appelé par host.js après activate() — enregistre les exports
+        final exports = params.isNotEmpty ? params[0] : null;
+        final host    = ExtensionHostManager.instance.getHost(extId);
+        if (host != null) {
+          er.register(
+            extensionId:   extId,
+            version:       host.manifest.version,
+            extensionPath: host.extension.installPath,
+            exports:       exports,
+          );
+          // Met à jour le packageJSON si disponible
+          if (host.manifest.raw.isNotEmpty) {
+            er.setPackageJson(extId, host.manifest.raw);
+          }
+        }
         return null;
+
       default:
         return null;
     }

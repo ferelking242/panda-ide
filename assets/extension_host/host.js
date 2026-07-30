@@ -74,9 +74,15 @@ ipc.onCall('activate', async (context) => {
   }
 
   try {
-    const result = await extensionModule.activate(context ?? {});
+    const exports = await extensionModule.activate(context ?? {});
+
+    // Enregistre les exports côté Flutter (Phase 6 — vscode.extensions inter-ext)
+    // On ne bloque PAS sur cet appel : si Flutter ne répond pas, l'activation continue.
+    ipc.callFlutter('vscode.extensions.exports.register', [exports ?? null])
+      .catch(() => {});  // silencieux si Flutter ne supporte pas encore
+
     // Notifie Flutter que l'activation a réussi
-    return result ?? null;
+    return exports ?? null;
   } catch (err) {
     process.stderr.write(`[host][${process.env.PANDA_EXT_ID}] activate() failed:\n`);
     process.stderr.write(`[host] ${err.stack || err.message || err}\n`);

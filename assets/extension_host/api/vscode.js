@@ -565,20 +565,68 @@ function _makeWorkspaceEvent(eventName) {
 
 // ── Configuration proxy ───────────────────────────────────────────────────
 
+// Cache local de la configuration — rempli de manière asynchrone depuis Flutter
+// key: "<section>.<key>" → value
+const _configCache = new Map();
+
+// Récupère la config d'une section au premier accès
+function _fetchConfig(section) {
+  ipc.callFlutter('vscode.workspace.configuration.get', [section ?? ''])
+    .then((proxy) => {
+      if (proxy && proxy.items) {
+        const prefix = section ? `${section}.` : '';
+        for (const [k, v] of Object.entries(proxy.items)) {
+          _configCache.set(`${prefix}${k}`, v);
+        }
+      }
+    })
+    .catch(() => {});
+}
+
 function _makeConfigProxy(section, scope) {
-  // Configuration locale (synchrone) + mise à jour asynchrone depuis Flutter
-  // Pour Phase 1 : retourne un proxy qui appelle Flutter pour chaque get()
+  // Lancer un fetch asynchrone pour la section si pas encore en cache
+  if (section && !_configCache.has(`__fetched_${section}`)) {
+    _configCache.set(`__fetched_${section}`, true);
+    _fetchConfig(section);
+  }
+
   return {
     get: (key, defaultValue) => {
-      // Synchronous fallback — en Phase 3 on maintiendra un cache local
-      return defaultValue;
+      // Cherche d'abord sous "section.key", puis juste "key"
+      const fullKey  = section ? `${section}.${key}` : key;
+      const cached   = _configCache.get(fullKey) ?? _configCache.get(key);
+      return cached !== undefined ? cached : defaultValue;
     },
-    has: (key) => false,
-    inspect: (key) => ({ key, defaultValue: undefined, globalValue: undefined, workspaceValue: undefined }),
-    update: (key, value, target) =>
-      ipc.callFlutter('vscode.workspace.configuration.update', [section, key, value, target]),
+    has: (key) => {
+      const fullKey = section ? `${section}.${key}` : key;
+      return _configCache.has(fullKey) || _configCache.has(key);
+    },
+    inspect: (key) => {
+      const fullKey = section ? `${section}.${key}` : key;
+      const val = _configCache.get(fullKey);
+      return {
+        key:            fullKey,
+        defaultValue:   undefined,
+        globalValue:    val,
+        workspaceValue: val,
+      };
+    },
+    update: (key, value, target) => {
+      const fullKey = section ? `${section}.${key}` : key;
+      _configCache.set(fullKey, value);
+      return ipc.callFlutter('vscode.workspace.configuration.update',
+        [section ?? null, key, value, target ?? 1]);
+    },
   };
 }
+
+// Quand Flutter signale un changement de config (ex: l'utilisateur modifie un setting)
+ipc.onEvent('onDidChangeConfiguration', (data) => {
+  if (data?.section) {
+    // Invalider le cache de la section pour forcer un re-fetch
+    _configCache.delete(`__fetched_${data.section}`);
+  }
+});
 
 // ── Terminal proxy ────────────────────────────────────────────────────────
 

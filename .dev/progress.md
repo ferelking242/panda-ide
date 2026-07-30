@@ -3,146 +3,111 @@
 ## Phase 1 — Foundation ✅ COMPLÈTE
 **Commit :** `ad101d1`
 
-### Fichiers créés
 | Fichier | Rôle |
 |---------|------|
-| `.dev/plan.md` | Plan d'implémentation complet (toutes les phases) |
-| `lib/extensions/models/extension_manifest.dart` | Parse package.json d'une extension (.vsix) |
-| `lib/extensions/models/extension_message.dart` | Modèle IPC message (JSON-RPC) |
-| `lib/extensions/models/marketplace_extension.dart` | Modèle résultat Open VSX |
-| `lib/extensions/extension_registry.dart` | Catalogue persistant des extensions installées |
-| `lib/extensions/vsix_installer.dart` | Téléchargement + extraction .vsix |
-| `lib/extensions/ipc_bridge.dart` | Bridge JSON-RPC stdin/stdout Flutter↔Node.js |
-| `lib/extensions/open_vsx_client.dart` | Client REST Open VSX marketplace |
-| `lib/extensions/extension_host_manager.dart` | Gestionnaire du cycle de vie Node.js |
-| `assets/extension_host/ipc.js` | Bridge IPC côté Node.js |
-| `assets/extension_host/api/types.js` | Types VSCode (Uri, Range, Position, Diagnostic, etc.) |
-| `assets/extension_host/api/vscode.js` | Module `vscode` complet (tous les namespaces) |
-| `assets/extension_host/host.js` | Entry point du process Extension Host |
-
-### Ce que Phase 1 permet
-- ✅ Installer une extension depuis une URL .vsix ou un fichier local
-- ✅ Télécharger/chercher depuis Open VSX
-- ✅ Lancer un process Node.js pour une extension
-- ✅ Communiquer en JSON-RPC stdin/stdout
-- ✅ L'extension peut `require('vscode')` et accéder à tous les namespaces
-- ✅ activate() / deactivate() fonctionnels
-- ✅ Rejection des extensions avec binaires natifs x64
+| `lib/extensions/models/extension_manifest.dart` | Parse package.json (.vsix) |
+| `lib/extensions/models/extension_message.dart` | Modèle IPC JSON-RPC |
+| `lib/extensions/models/marketplace_extension.dart` | Modèle Open VSX |
+| `lib/extensions/extension_registry.dart` | Catalogue persistant |
+| `lib/extensions/vsix_installer.dart` | Download + extraction .vsix |
+| `lib/extensions/ipc_bridge.dart` | Bridge JSON-RPC stdin/stdout |
+| `lib/extensions/open_vsx_client.dart` | Client REST Open VSX |
+| `lib/extensions/extension_host_manager.dart` | Cycle de vie Node.js |
+| `assets/extension_host/ipc.js` | Bridge IPC Node.js |
+| `assets/extension_host/api/types.js` | Types VSCode |
+| `assets/extension_host/api/vscode.js` | Module vscode complet |
+| `assets/extension_host/host.js` | Entry point Extension Host |
 
 ---
 
 ## Phase 2 — vscode.window API ✅ COMPLÈTE
 **Commit :** `ba3e30b`
 
-### Fichiers créés
 | Fichier | Rôle |
 |---------|------|
-| `lib/extensions/extension_api_router.dart` | Routeur central vscode.* → handlers Flutter |
-| `lib/extensions/ui/window_api_handler.dart` | showMessage (SnackBar/Dialog), showInputBox, showQuickPick |
-| `lib/extensions/ui/output_channel_panel.dart` | Panneau Output Channel (bottom sheet style VSCode) |
-| `lib/extensions/ui/status_bar_manager.dart` | StatusBarItems + widget ExtensionStatusBarItems |
-| `lib/extensions/ui/progress_overlay.dart` | withProgress → overlay notification + WindowProgressIndicator |
-
-### Ce que Phase 2 permet
-- ✅ `vscode.window.showInformationMessage/Warning/Error` → SnackBar (sans boutons) ou Dialog (avec boutons)
-- ✅ `vscode.window.showInputBox` → Dialog avec champ texte / password
-- ✅ `vscode.window.showQuickPick` → Dialog liste filtrée, canPickMany supporté
-- ✅ `vscode.window.createOutputChannel` + append/appendLine/clear/show → bottom sheet Output
-- ✅ `vscode.window.createStatusBarItem` + text/tooltip/color/command → chips dans status bar
-- ✅ `vscode.window.withProgress` → overlay animé (indeterminate + determinate) + inline title bar
-- ✅ `ExtensionApiRouter` branché sur `ExtensionHostManager.apiCallHandler`
+| `lib/extensions/extension_api_router.dart` | Routeur central vscode.* |
+| `lib/extensions/ui/window_api_handler.dart` | showMessage, showInputBox, showQuickPick |
+| `lib/extensions/ui/output_channel_panel.dart` | Output Channel bottom sheet |
+| `lib/extensions/ui/status_bar_manager.dart` | StatusBarItems chips |
+| `lib/extensions/ui/progress_overlay.dart` | withProgress overlay |
 
 ---
 
 ## Phase 3 — vscode.workspace API ✅ COMPLÈTE
-**Commit :** (en cours — batch Phase 3 + 4)
+**Commit :** `ae5fe41`
 
-### Fichiers créés
 | Fichier | Rôle |
 |---------|------|
-| `lib/extensions/workspace_bridge.dart` | openTextDocument, saveAll, applyEdit, findFiles, workspaceFolders |
-| `lib/extensions/fs_bridge.dart` | stat, readDirectory, createDirectory, readFile, writeFile, delete, rename, copy |
-| `lib/extensions/config_store.dart` | getConfiguration / update — persisté SharedPreferences par section |
+| `lib/extensions/workspace_bridge.dart` | openTextDocument, saveAll, applyEdit, findFiles, config |
+| `lib/extensions/fs_bridge.dart` | stat, readDir, readFile, writeFile, delete, rename, copy |
+| `lib/extensions/config_store.dart` | getConfiguration / update — SharedPreferences |
 
-### Ce que Phase 3 permet
-- ✅ `vscode.workspace.openTextDocument` → lit le fichier depuis le FS Android
-- ✅ `vscode.workspace.saveAll` → délègue au callback IDE
-- ✅ `vscode.workspace.applyEdit` → applique des WorkspaceEdit directement sur le FS
-- ✅ `vscode.workspace.findFiles` → glob matching sur le workspace root
-- ✅ `vscode.workspace.getConfiguration` / `update` → persisté via SharedPreferences
-- ✅ `vscode.workspace.fs.*` → toutes les ops FileSystem (stat, read, write, delete, rename, copy, readDir)
-- ✅ `WorkspaceBridge.workspaceRoot` configurable depuis l'IDE (à setter depuis le home page)
-
-### Protocole de configuration (à brancher depuis l'IDE)
+**Config à brancher depuis l'IDE :**
 ```dart
-WorkspaceBridge.instance.workspaceRoot = '/storage/emulated/0/...';
+WorkspaceBridge.instance.workspaceRoot = '/path/to/project';
 WorkspaceBridge.instance.onSaveAll = () async => true;
-WorkspaceBridge.instance.onApplyEdit = (edits) async => _applyEdits(edits);
+WorkspaceBridge.instance.onApplyEdit = (edits) async => applyEdits(edits);
 ```
 
 ---
 
 ## Phase 4 — vscode.languages API ✅ COMPLÈTE
-**Commit :** (en cours — batch Phase 3 + 4)
+**Commit :** `ae5fe41`
 
-### Fichiers créés
 | Fichier | Rôle |
 |---------|------|
-| `lib/extensions/language_feature_router.dart` | Route providers extension → code_forge (completion, hover, definition, format, codeAction, diagnostics) |
+| `lib/extensions/language_feature_router.dart` | Providers pull model — completion, hover, definition, format, codeAction, diagnostics |
 
-### Architecture providers (modèle pull)
-```
-Extension (JS)                Flutter (LanguageFeatureRouter)
-─────────────                 ──────────────────────────────
-languages.register*Provider() → vscode.languages.<type>.register (IPC apiCall)
-  └─ ipc.onCall('provider.<id>.invoke', handler)
+**Architecture pull :** Flutter appelle `provider.<id>.invoke` directement sur Node.js.
 
-Quand l'IDE demande des complétions:
-  bridge.call('provider.<id>.invoke', [doc, pos, ctx])
-  └─ Node.js appelle handler(doc, pos, ctx) → retourne CompletionList
-  └─ Flutter convertit → ExtensionCompletionItem[]
-```
-
-### Ce que Phase 4 permet
-- ✅ `vscode.languages.registerCompletionItemProvider` → flutter bridge stocke providerId + selector
-- ✅ `vscode.languages.registerHoverProvider` → idem
-- ✅ `vscode.languages.registerDefinitionProvider` → idem
-- ✅ `vscode.languages.registerDocumentFormattingEditProvider` → idem
-- ✅ `vscode.languages.registerCodeActionsProvider` → idem
-- ✅ `DiagnosticCollection.set()` → push vers `LanguageFeatureRouter.setDiagnostics()`
-- ✅ `LanguageFeatureRouter.diagnosticsVersion` → ValueNotifier réactif pour l'UI
-- ✅ `requestCompletions / requestHover / requestDefinition / requestFormat / requestCodeActions`
-- ✅ `bridgeLookup` wiré depuis `ExtensionHostManager.getBridge`
-- ✅ `ExtensionApiRouter.attachToManager()` wire les deux (apiCallHandler + bridgeLookup)
-
-### Intégration code_forge (à faire depuis editor_page.dart)
+**Intégration code_forge (TODO dans editor_page.dart) :**
 ```dart
-// Quand le curseur se déplace et qu'une completion est déclenchée:
 final items = await LanguageFeatureRouter.instance.requestCompletions(
-  filePath: controller.filePath,
-  languageId: 'typescript',
-  content: controller.text,
-  line: cursor.line, character: cursor.column,
-  triggerCharacter: '.',
+  filePath: path, languageId: 'typescript',
+  content: text, line: l, character: c, triggerCharacter: '.',
 );
-// → items est une List<ExtensionCompletionItem> à injecter dans CodeForge
 ```
 
 ---
 
-## Phase 5 — vscode.commands ⬜ À FAIRE
-- [ ] `lib/extensions/command_registry.dart` — registre des commandes + CommandPalette Flutter
+## Phase 5 — vscode.commands ✅ COMPLÈTE
+**Commit :** (en cours — batch 5+6+7)
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/command_registry.dart` | Registre + execute + search + contributes |
+| `lib/extensions/ui/command_palette.dart` | Bottom sheet filtrable VSCode ">" style |
+
+- ✅ `vscode.commands.registerCommand` → `CommandRegistry.register()`
+- ✅ `vscode.commands.executeCommand` → local handler ou `bridge.call('command.<id>')`
+- ✅ `vscode.commands.getCommands` → liste des IDs enregistrés
+- ✅ `CommandPalette.show(context)` — DraggableScrollableSheet, filtrable, arrow keys
+- ✅ `CommandRegistry.registerContributed()` — pour contributes.commands du manifest
 
 ---
 
-## Phase 6 — vscode.extensions ⬜ À FAIRE
-- [ ] Exposer les exports des extensions aux autres extensions
+## Phase 6 — vscode.extensions ✅ COMPLÈTE
+**Commit :** (en cours — batch 5+6+7)
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/extensions/extension_exports_registry.dart` | Stocke exports activate() par extensionId |
+
+- ✅ `vscode.extensions.getExtension(id)` → `ExtensionExportsRegistry.getExtensionJson(id)`
+- ✅ `vscode.extensions.all` → liste de toutes les extensions actives
+- ✅ `host.js` envoie automatiquement les exports via `vscode.extensions.exports.register` après activate()
+- ✅ Inter-extension access (une ext peut lire les exports d'une autre)
 
 ---
 
-## Phase 7 — vscode.env ⬜ À FAIRE
-- [ ] Clipboard Flutter ↔ vscode.env.clipboard
-- [ ] url_launcher ↔ vscode.env.openExternal
+## Phase 7 — vscode.env ✅ COMPLÈTE
+**Commit :** (en cours — batch 5+6+7)
+
+- ✅ `vscode.env.clipboard.readText()` → `Clipboard.getData` Flutter
+- ✅ `vscode.env.clipboard.writeText(text)` → `Clipboard.setData`
+- ✅ `vscode.env.openExternal(uri)` → `url_launcher` (`launchUrl`)
+- ✅ Config proxy côté JS avec cache local + fetch asynchrone depuis Flutter
+- ✅ `onDidChangeConfiguration` event invalide le cache config
 
 ---
 
@@ -176,4 +141,4 @@ final items = await LanguageFeatureRouter.instance.requestCompletions(
 ## Phase 15 — CI/CD & Tests ⬜ À FAIRE
 ---
 
-*Dernière mise à jour : Phases 3 + 4 complétées — 2026-07-30*
+*Dernière mise à jour : Phases 5 + 6 + 7 complétées — 2026-07-30*
