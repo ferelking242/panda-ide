@@ -769,6 +769,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                             ],
                           ),
                         ),
+                      ),
                       ],
                     ),
                   ),
