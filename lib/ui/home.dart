@@ -31,9 +31,13 @@ import '../utils/themes.dart';
 import 'widgets.dart';
 
 // ── VSCode colour tokens ──────────────────────────────────────────────────────
-const _kActivityBg     = Color(0xff333333);
-const _kActivityIcon   = Color(0xff858585);
-const _kActivitySel    = Color(0xffffffff);
+// activity-bar colours (dark / light)
+const _kActivityBgDark    = Color(0xff333333);
+const _kActivityBgLight   = Color(0xffe8e8e8);
+const _kActivityIconDark  = Color(0xff858585);
+const _kActivityIconLight = Color(0xff616161);
+const _kActivitySelDark   = Color(0xffffffff);
+const _kActivitySelLight  = Color(0xff1a1a1a);
 const _kTabBarDark     = Color(0xff252526);
 const _kTabBarLight    = Color(0xffececec);
 const _kTabActiveDark  = Color(0xff1e1e1e);
@@ -71,6 +75,19 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   int _activeRail = 0;
   // Whether the sidebar panel is expanded (shows the 240px content area)
   bool _sidebarPanelOpen = false;
+  bool _rightPanelOpen   = false;
+  bool _bottomPanelOpen  = false;
+
+  // ── Dynamic tab system ──────────────────────────────────────────
+  int  _activeTabIdx = 0;
+  final List<_TabDef> _openTabs = [
+    const _TabDef(id: 'welcome', title: 'Welcome', icon: Broken.global_refresh),
+  ];
+
+  // ── Panda Agent chat ─────────────────────────────────────────────
+  final _agentInputCtrl  = TextEditingController();
+  final _agentScrollCtrl = ScrollController();
+  final List<Map<String,dynamic>> _agentMessages = [];
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
@@ -94,6 +111,8 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     createFileController.dispose();
+    _agentInputCtrl.dispose();
+    _agentScrollCtrl.dispose();
     super.dispose();
   }
 
@@ -656,8 +675,16 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                         _buildTopBar(context, appTheme, appThemestate),
                         _buildTabBar(appTheme),
                         Expanded(
-                          child: _buildWelcomePage(
-                              context, appTheme, appThemestate),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildActiveTab(
+                                    context, appTheme, appThemestate),
+                              ),
+                              if (_rightPanelOpen)
+                                _buildPandaAgentPanel(context, appTheme),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -681,150 +708,172 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // ── Activity bar ──────────────────────────────────────────────────────────
   Widget _buildActivityBar(BuildContext context, AppTheme appTheme) {
-    // Top items — each toggles a sidebar panel
-    final topItems = <_RailItem>[
-      _RailItem(icon: Broken.element_3,          label: 'Explorer',        idx: 1),
-      _RailItem(icon: Broken.search_normal,       label: 'Rechercher',      idx: 2),
-      _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',    idx: 3),
-      _RailItem(icon: Broken.play_circle,         label: 'Exécuter / Debug',idx: 4),
-      _RailItem(icon: Broken.cloud_connection,    label: 'Tunnel',          idx: 5),
-      _RailItem(icon: Broken.shop,               label: 'Marketplace',     idx: 6),
-    ];
+      final isDark    = appTheme.isDark;
+      final railBg    = isDark ? _kActivityBgDark    : _kActivityBgLight;
+      final iconColor = isDark ? _kActivityIconDark  : _kActivityIconLight;
+      final selColor  = isDark ? _kActivitySelDark   : _kActivitySelLight;
 
-    return Container(
-      width: 48,
-      color: _kActivityBg,
-      child: Column(
-        children: [
-          // ── Hamburger : ouvre/ferme le panneau latéral ──────────────
-          Tooltip(
-            message: _sidebarPanelOpen ? 'Fermer le panneau' : 'Ouvrir le panneau',
-            child: InkWell(
-              onTap: () {
-                setState(() {
-                  if (_sidebarPanelOpen) {
-                    _sidebarPanelOpen = false;
-                    _activeRail = 0;
-                  } else {
-                    // open to the last selected item, or Explorer by default
-                    if (_activeRail == 0) _activeRail = 1;
-                    _sidebarPanelOpen = true;
-                  }
-                });
-              },
-              child: Container(
-                width: 48,
-                height: 48,
-                child: Center(
-                  child: Icon(
-                    _sidebarPanelOpen ? Broken.close_square : Broken.menu,
-                    size: 22,
-                    color: _kActivityIcon,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const Divider(color: Color(0xff444444), height: 1),
-          const SizedBox(height: 4),
+      final topItems = <_RailItem>[
+        _RailItem(icon: Broken.element_3,          label: 'Explorateur',      idx: 1),
+        _RailItem(icon: Broken.search_normal,       label: 'Rechercher',       idx: 2),
+        _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',     idx: 3),
+        _RailItem(icon: Broken.play_circle,         label: 'Exécuter / Debug', idx: 4),
+        _RailItem(icon: Broken.cloud_connection,    label: 'Tunnel',           idx: 5),
+        _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
+      ];
 
-          // ── Sidebar items ─────────────────────────────────────────────
-          ...topItems.map((item) => _ActivityBtn(
-                item: item,
-                selected: _sidebarPanelOpen && _activeRail == item.idx,
+      return Container(
+        width: 48,
+        color: railBg,
+        child: Column(
+          children: [
+            // ── Logo + hamburger ──────────────────────────────────────────
+            Tooltip(
+              message: _sidebarPanelOpen ? 'Fermer le panneau' : 'Ouvrir le panneau',
+              child: InkWell(
                 onTap: () {
                   setState(() {
-                    if (_activeRail == item.idx && _sidebarPanelOpen) {
-                      // tap same icon → close panel
+                    if (_sidebarPanelOpen) {
                       _sidebarPanelOpen = false;
                       _activeRail = 0;
                     } else {
-                      _activeRail = item.idx;
+                      if (_activeRail == 0) _activeRail = 1;
                       _sidebarPanelOpen = true;
                     }
                   });
                 },
-              )),
-
-          // ── Panda Agent ───────────────────────────────────────────────
-          Tooltip(
-            message: 'Panda Agent',
-            child: InkWell(
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Panda Agent — bientôt disponible 🐼'),
-                    duration: Duration(seconds: 2),
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.asset(
+                          'assets/icons/app-icon.png',
+                          width: 20,
+                          height: 20,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Text('\u{1F43C}', style: TextStyle(fontSize: 14)),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Icon(Broken.align_left, size: 14, color: iconColor),
+                    ],
                   ),
-                );
-              },
-              child: Container(
-                width: 48,
-                height: 48,
-                child: Center(
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/icons/app-icon.png',
-                      width: 26,
-                      height: 26,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Text(
-                        '🐼',
-                        style: TextStyle(fontSize: 18),
+                ),
+              ),
+            ),
+
+            Divider(
+              color: isDark ? const Color(0xff444444) : const Color(0xffcccccc),
+              height: 1,
+            ),
+            const SizedBox(height: 4),
+
+            // ── Sidebar items ─────────────────────────────────────────────
+            ...topItems.map((item) => _ActivityBtnEx(
+                  item:      item,
+                  selected:  _sidebarPanelOpen && _activeRail == item.idx,
+                  iconColor: iconColor,
+                  selColor:  selColor,
+                  onTap: () {
+                    setState(() {
+                      if (_activeRail == item.idx && _sidebarPanelOpen) {
+                        _sidebarPanelOpen = false;
+                        _activeRail = 0;
+                      } else {
+                        _activeRail = item.idx;
+                        _sidebarPanelOpen = true;
+                      }
+                    });
+                  },
+                )),
+
+            // ── Panda Agent (opens right panel) ───────────────────────────
+            Tooltip(
+              message: 'Panda Agent',
+              child: InkWell(
+                onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    border: _rightPanelOpen
+                        ? Border(left: BorderSide(color: selColor, width: 2))
+                        : null,
+                  ),
+                  child: Center(
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/icons/app-icon.png',
+                        width: 26,
+                        height: 26,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Text(
+                          '\u{1F43C}',
+                          style: TextStyle(fontSize: 18, color: iconColor),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
 
-          const Spacer(),
+            const Spacer(),
 
-          // ── Bas : thème + compte GitHub + paramètres ──────────────────
-          // Theme toggle
-          BlocBuilder<AppThemeBloc, AppThemeState>(
-            builder: (context, state) => _ActivityBtn(
-              item: _RailItem(
-                  icon: state.appTheme.isDark ? Broken.sun_1 : Broken.moon,
-                  label: 'Basculer le thème',
-                  idx: 98),
-              selected: false,
-              onTap: () async {
-                final prefs = await SharedPreferences.getInstance();
-                final cur = prefs.getString('savedAppTheme');
-                if (context.mounted) {
-                  if (cur == 'dark') {
-                    context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: LightTheme()));
-                    prefs.setString('savedAppTheme', 'light');
-                  } else {
-                    context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: DarkTheme()));
-                    prefs.setString('savedAppTheme', 'dark');
+            // ── Theme toggle ───────────────────────────────────────────────
+            BlocBuilder<AppThemeBloc, AppThemeState>(
+              builder: (context, state) => _ActivityBtnEx(
+                item: _RailItem(
+                    icon:  state.appTheme.isDark ? Broken.sun_1 : Broken.moon,
+                    label: 'Basculer le theme',
+                    idx:   98),
+                selected:  false,
+                iconColor: iconColor,
+                selColor:  selColor,
+                onTap: () async {
+                  final prefs = await SharedPreferences.getInstance();
+                  final cur = prefs.getString('savedAppTheme');
+                  if (context.mounted) {
+                    if (cur == 'dark') {
+                      context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: LightTheme()));
+                      prefs.setString('savedAppTheme', 'light');
+                    } else {
+                      context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: DarkTheme()));
+                      prefs.setString('savedAppTheme', 'dark');
+                    }
                   }
-                }
-              },
+                },
+              ),
             ),
-          ),
 
-          // GitHub account avatar
-          Tooltip(
-            message: 'Compte GitHub',
-            child: _GithubAvatar(onTap: () => _push(context, GithubPage())),
-          ),
+            Tooltip(
+              message: 'Compte GitHub',
+              child: _GithubAvatarEx(
+                iconColor: iconColor,
+                onTap: () => _push(context, GithubPage()),
+              ),
+            ),
 
-          // Settings
-          _ActivityBtn(
-            item: _RailItem(icon: Broken.settings, label: 'Paramètres', idx: 99),
-            selected: false,
-            onTap: () => _push(context, const Settings()),
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
+            _ActivityBtnEx(
+              item:      _RailItem(icon: Broken.settings, label: 'Parametres', idx: 99),
+              selected:  false,
+              iconColor: iconColor,
+              selColor:  selColor,
+              onTap: () => _push(context, const Settings()),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      );
+    }
 
-  // ── Sidebar panel content ─────────────────────────────────────────────────
+    // ── Sidebar panel content ─────────────────────────────────────────────────
+      // ── Sidebar panel content ─────────────────────────────────────────────────
   Widget _buildSidebarPanel(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
     final bg = isDark ? _kSidebarBgDark : _kSidebarBgLight;
@@ -1116,149 +1165,552 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // ── Top bar (workspace breadcrumb) ────────────────────────────────────────
   Widget _buildTopBar(
-      BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
-    final isDark = appTheme.isDark;
-    return Container(
-      height: 35,
-      color: isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
-        children: [
-          // Workspace label
-          Expanded(
-            child: Row(children: [
-              Icon(Broken.folder_open,
-                  size: 14,
-                  color: isDark ? Colors.grey[400] : Colors.grey[700]),
-              const SizedBox(width: 6),
-              Text('Workspace',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color:
-                          isDark ? Colors.grey[400] : Colors.grey[700])),
-            ]),
-          ),
-          // Action icons
-          _topBarIcon(Broken.folder_open, 'File Manager', appTheme, () {
-            _push(context, const FileManagerPage());
-          }),
-          _topBarIcon(Broken.document_download, 'Downloads', appTheme, () {
-            _push(context, DownloadManager());
-          }),
-          // Download badge
-          BlocBuilder<PackageCatalogCubit, PackageCatalogState>(
-            builder: (_, state) => state.hasUpdates
-                ? Container(
-                    margin: const EdgeInsets.only(right: 4),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 5, vertical: 1),
-                    decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10)),
-                    child: Text('${state.totalUpdateCount}',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold)),
-                  )
-                : const SizedBox.shrink(),
-          ),
-          _topBarIcon(Broken.sidebar_right, 'Projects', appTheme, () {
-            _push(context, const ProjectScreen());
-          }),
-          _topBarIcon(Broken.grid_9, 'Templates', appTheme, () {
-            _push(context, const MenuScreen());
-          }),
-        ],
-      ),
-    );
-  }
+        BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
+      final isDark = appTheme.isDark;
+      final fg = isDark ? Colors.grey[400]! : Colors.grey[700]!;
 
-  Widget _topBarIcon(
-      IconData icon, String tooltip, AppTheme appTheme, VoidCallback onTap) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Icon(icon,
-              size: 16,
-              color: appTheme.isDark
-                  ? Colors.grey[400]
-                  : Colors.grey[700]),
+      return Container(
+        height: 35,
+        color: isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        child: Row(
+          children: [
+            // ── back / forward arrows ─────────────────────────────────────
+            _hdrBtn(Broken.arrow_left_2,  'Reculer',  fg, () {}),
+            _hdrBtn(Broken.arrow_right_3, 'Avancer',  fg, () {}),
+            const SizedBox(width: 4),
+
+            // ── Workspace pill ────────────────────────────────────────────
+            Flexible(
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 260),
+                height: 22,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xff2a2a2a)
+                      : const Color(0xffc8c8c8),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Broken.folder_open, size: 13, color: fg),
+                  const SizedBox(width: 5),
+                  Flexible(
+                    child: Text(
+                      'Workspace',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: fg),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+
+            const Spacer(),
+
+            // ── File Manager / Downloads / Projects / Templates ───────────
+            _hdrBtn(Broken.folder_open, 'File Manager', fg,
+                () => _push(context, const FileManagerPage())),
+            _hdrBtn(Broken.document_download, 'Downloads', fg,
+                () => _push(context, DownloadManager())),
+            BlocBuilder<PackageCatalogCubit, PackageCatalogState>(
+              builder: (_, state) => state.hasUpdates
+                  ? Container(
+                      margin: const EdgeInsets.only(right: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(8)),
+                      child: Text('${state.totalUpdateCount}',
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold)),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            _hdrBtn(Broken.sidebar_right, 'Projects', fg,
+                () => _push(context, const ProjectScreen())),
+            _hdrBtn(Broken.grid_9, 'Templates', fg,
+                () => _push(context, const MenuScreen())),
+
+            const SizedBox(width: 4),
+            Container(
+                width: 1,
+                height: 18,
+                color: isDark
+                    ? const Color(0xff555555)
+                    : const Color(0xffbbbbbb)),
+            const SizedBox(width: 4),
+
+            // ── Layout controls ───────────────────────────────────────────
+            _hdrBtn(
+              Broken.sidebar_left,
+              'Panneau lateral',
+              _sidebarPanelOpen ? _kAccent : fg,
+              () => setState(() {
+                _sidebarPanelOpen = !_sidebarPanelOpen;
+                if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
+              }),
+            ),
+            Builder(
+              builder: (ctx) => _hdrBtn(
+                Broken.element_4,
+                'Personnaliser la disposition',
+                fg,
+                () => _showLayoutMenu(ctx, isDark),
+              ),
+            ),
+            _hdrBtn(
+              Broken.minus_square,
+              'Panneau inferieur',
+              _bottomPanelOpen ? _kAccent : fg,
+              () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
+            ),
+            _hdrBtn(
+              Broken.message_programming,
+              'Panda Agent',
+              _rightPanelOpen ? _kAccent : fg,
+              () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+            ),
+          ],
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  // ── Tab bar ───────────────────────────────────────────────────────────────
+    Widget _hdrBtn(
+            IconData icon, String tooltip, Color color, VoidCallback onTap) =>
+        Tooltip(
+          message: tooltip,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+              child: Icon(icon, size: 16, color: color),
+            ),
+          ),
+        );
+
+    void _showLayoutMenu(BuildContext ctx, bool isDark) {
+      final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+      final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
+      showMenu<String>(
+        context: ctx,
+        position: const RelativeRect.fromLTRB(0, 35, 0, 0),
+        color: bg,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        items: [
+          _layoutMenuItem('sidebar_left', Broken.sidebar_left,
+              'Panneau lateral gauche', fg, bg,
+              checked: _sidebarPanelOpen),
+          _layoutMenuItem('sidebar_right', Broken.sidebar_right,
+              'Panneau lateral droit', fg, bg,
+              checked: _rightPanelOpen),
+          _layoutMenuItem('panel_bottom', Broken.minus_square,
+              'Panneau inferieur', fg, bg,
+              checked: _bottomPanelOpen),
+          PopupMenuItem<String>(
+            height: 1,
+            enabled: false,
+            child: Divider(
+                color: isDark
+                    ? const Color(0xff444444)
+                    : const Color(0xffcccccc),
+                height: 1),
+          ),
+          _layoutMenuItem(
+              'full_screen', Broken.maximize_3, 'Plein ecran', fg, bg),
+        ],
+      ).then((value) {
+        if (value == null) return;
+        setState(() {
+          if (value == 'sidebar_left') {
+            _sidebarPanelOpen = !_sidebarPanelOpen;
+            if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
+          }
+          if (value == 'sidebar_right') _rightPanelOpen = !_rightPanelOpen;
+          if (value == 'panel_bottom') _bottomPanelOpen = !_bottomPanelOpen;
+        });
+      });
+    }
+
+    PopupMenuItem<String> _layoutMenuItem(
+        String value, IconData icon, String label, Color fg, Color bg,
+        {bool checked = false}) {
+      return PopupMenuItem<String>(
+        value: value,
+        child: Row(children: [
+          Icon(checked ? Broken.tick_square : icon,
+              size: 16, color: checked ? _kAccent : fg),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(fontSize: 13, color: fg)),
+        ]),
+      );
+    }
+
+    // ── Tab bar ───────────────────────────────────────────────────────────────
+    
   Widget _buildTabBar(AppTheme appTheme) {
-    final isDark = appTheme.isDark;
-    final tabBg = isDark ? _kTabBarDark : _kTabBarLight;
+    final isDark      = appTheme.isDark;
+    final tabBg       = isDark ? _kTabBarDark    : _kTabBarLight;
     final activeTabBg = isDark ? _kTabActiveDark : _kTabActiveLight;
+    final inactiveFg  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    final activeFg    = isDark ? Colors.grey[300]! : Colors.grey[800]!;
 
     return Container(
       height: 35,
       color: tabBg,
       child: Row(children: [
-        // Active tab
-        Container(
-          height: 35,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          decoration: BoxDecoration(
-            color: activeTabBg,
-            border: Border(
-              top: const BorderSide(color: _kAccent, width: 1),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(_openTabs.length, (i) {
+                final tab      = _openTabs[i];
+                final isActive = i == _activeTabIdx;
+                return GestureDetector(
+                  onTap: () => setState(() => _activeTabIdx = i),
+                  child: Container(
+                    height: 35,
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: isActive ? activeTabBg : Colors.transparent,
+                      border: isActive
+                          ? const Border(
+                              top: BorderSide(color: _kAccent, width: 1))
+                          : null,
+                    ),
+                    child: Row(children: [
+                      Icon(tab.icon, size: 13,
+                          color: isActive ? activeFg : inactiveFg),
+                      const SizedBox(width: 6),
+                      Text(tab.title,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: isActive ? activeFg : inactiveFg)),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => _closeTab(i),
+                        child: Icon(Broken.close_circle,
+                            size: 12,
+                            color: isActive
+                                ? inactiveFg
+                                : Colors.transparent),
+                      ),
+                    ]),
+                  ),
+                );
+              }),
             ),
           ),
-          child: Row(children: [
-            Icon(Broken.global_refresh,
-                size: 13,
-                color: isDark ? Colors.grey[400] : Colors.grey[600]),
-            const SizedBox(width: 6),
-            Text('Welcome',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: isDark
-                        ? Colors.grey[300]
-                        : Colors.grey[800])),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () {},
-              child: Icon(Broken.close_circle,
-                  size: 12,
-                  color: isDark ? Colors.grey[500] : Colors.grey[600]),
-            ),
-          ]),
         ),
-        const Spacer(),
-        // Layout controls
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: Row(children: [
-            _tabIcon(Broken.sidebar_left, 'Toggle sidebar', appTheme),
-            _tabIcon(
-                Broken.element_4, 'Editor layout', appTheme),
+            Tooltip(
+              message: 'Panneau lateral',
+              child: InkWell(
+                onTap: () => setState(() {
+                  _sidebarPanelOpen = !_sidebarPanelOpen;
+                  if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
+                }),
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(Broken.sidebar_left, size: 15,
+                      color: _sidebarPanelOpen ? _kAccent : inactiveFg),
+                ),
+              ),
+            ),
+            Tooltip(
+              message: 'Panda Agent',
+              child: InkWell(
+                onTap: () =>
+                    setState(() => _rightPanelOpen = !_rightPanelOpen),
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(Broken.message_programming, size: 15,
+                      color: _rightPanelOpen ? _kAccent : inactiveFg),
+                ),
+              ),
+            ),
           ]),
         ),
       ]),
     );
   }
 
-  Widget _tabIcon(IconData icon, String tooltip, AppTheme appTheme) =>
+  void _closeTab(int i) {
+    setState(() {
+      _openTabs.removeAt(i);
+      if (_openTabs.isEmpty) {
+        _openTabs.add(const _TabDef(
+            id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
+        _activeTabIdx = 0;
+      } else {
+        _activeTabIdx = (_activeTabIdx >= _openTabs.length
+                ? _openTabs.length - 1
+                : _activeTabIdx)
+            .clamp(0, _openTabs.length - 1);
+      }
+    });
+  }
+
+  Widget _buildActiveTab(
+      BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
+    final tab = _openTabs.isNotEmpty ? _openTabs[_activeTabIdx] : null;
+    if (tab == null || tab.id == 'welcome') {
+      return _buildWelcomePage(context, appTheme, appThemestate);
+    }
+    if (tab.id == 'agent') {
+      return _buildPandaAgentPanel(context, appTheme, asPage: true);
+    }
+    return _buildWelcomePage(context, appTheme, appThemestate);
+  }
+
+  // ── Panda Agent panel ─────────────────────────────────────────────────────
+  Widget _buildPandaAgentPanel(BuildContext context, AppTheme appTheme,
+      {bool asPage = false}) {
+    final isDark  = appTheme.isDark;
+    final panelBg = isDark ? const Color(0xff1e1e1e) : const Color(0xfffafafa);
+    final hdrBg   = isDark ? const Color(0xff252526) : const Color(0xffececec);
+    final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    final fg      = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+    final inputBg = isDark ? const Color(0xff2d2d2d) : const Color(0xfff0f0f0);
+
+    return Container(
+      width: asPage ? double.infinity : 300,
+      decoration: BoxDecoration(
+        color: panelBg,
+        border: Border(left: BorderSide(color: borderC)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Header ─────────────────────────────────────────────────────
+          Container(
+            height: 35,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            color: hdrBg,
+            child: Row(children: [
+              Text('CONVERSATION',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
+                      color: muted)),
+              const Spacer(),
+              _agentHdrBtn(Broken.add_square, 'Nouvelle conversation',
+                  muted, () => setState(() => _agentMessages.clear())),
+              _agentHdrBtn(
+                  Broken.setting_2, 'Parametres agent', muted, () {}),
+              _agentHdrBtn(Broken.more_circle, 'Plus', muted, () {}),
+              _agentHdrBtn(
+                Broken.maximize_4,
+                'Ouvrir dans un onglet',
+                muted,
+                () {
+                  if (!_openTabs.any((t) => t.id == 'agent')) {
+                    setState(() {
+                      _openTabs.add(const _TabDef(
+                          id:    'agent',
+                          title: 'Panda Agent',
+                          icon:  Broken.message_programming));
+                      _activeTabIdx = _openTabs.length - 1;
+                    });
+                  } else {
+                    setState(() => _activeTabIdx =
+                        _openTabs.indexWhere((t) => t.id == 'agent'));
+                  }
+                },
+              ),
+              if (!asPage)
+                _agentHdrBtn(Broken.close_square, 'Fermer', muted,
+                    () => setState(() => _rightPanelOpen = false)),
+            ]),
+          ),
+
+          // ── Chat area ──────────────────────────────────────────────────
+          Expanded(
+            child: _agentMessages.isEmpty
+                ? _buildAgentEmptyState(isDark, muted)
+                : _buildAgentMessages(isDark, fg, muted),
+          ),
+
+          // ── Input ──────────────────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: inputBg,
+              border: Border(top: BorderSide(color: borderC)),
+            ),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _agentInputCtrl,
+                  maxLines: 3,
+                  minLines: 1,
+                  style: TextStyle(fontSize: 13, color: fg),
+                  decoration: InputDecoration(
+                    hintText: "Decrivez ce qu'il faut construire...",
+                    hintStyle: TextStyle(fontSize: 13, color: muted),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  onSubmitted: (_) => _agentSend(),
+                ),
+                const SizedBox(height: 8),
+                Row(children: [
+                  OutlinedButton.icon(
+                    onPressed: () {},
+                    icon: Icon(Broken.add_circle, size: 13, color: muted),
+                    label: Text('Agent',
+                        style: TextStyle(fontSize: 12, color: muted)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      side: BorderSide(color: borderC),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  OutlinedButton.icon(
+                    onPressed: () {},
+                    icon: Icon(Broken.cpu, size: 13, color: muted),
+                    label: Text('Modeles',
+                        style: TextStyle(fontSize: 12, color: muted)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      side: BorderSide(color: borderC),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _agentSend,
+                    icon: Icon(Broken.send_2, size: 18, color: _kAccent),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Envoyer',
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAgentEmptyState(bool isDark, Color muted) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.asset(
+              'assets/icons/app-icon.png',
+              width: 56, height: 56,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) =>
+                  const Text('panda', style: TextStyle(fontSize: 32)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text('Panda Agent',
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: muted)),
+          const SizedBox(height: 6),
+          Text(
+            'Decrivez ce que vous souhaitez\nconstruire pour commencer.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: muted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAgentMessages(bool isDark, Color fg, Color muted) {
+    return ListView.builder(
+      controller: _agentScrollCtrl,
+      padding: const EdgeInsets.all(12),
+      itemCount: _agentMessages.length,
+      itemBuilder: (_, i) {
+        final msg  = _agentMessages[i];
+        final isMe = msg['role'] == 'user';
+        return Align(
+          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            constraints: const BoxConstraints(maxWidth: 260),
+            decoration: BoxDecoration(
+              color: isMe
+                  ? _kAccent.withOpacity(0.85)
+                  : (isDark
+                      ? const Color(0xff2d2d2d)
+                      : const Color(0xffe8e8e8)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(msg['text'] as String,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isMe ? Colors.white : fg)),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _agentHdrBtn(
+          IconData icon, String tooltip, Color color, VoidCallback onTap) =>
       Tooltip(
         message: tooltip,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Icon(icon,
-              size: 16,
-              color: appTheme.isDark
-                  ? Colors.grey[500]
-                  : Colors.grey[700]),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Icon(icon, size: 15, color: color),
+          ),
         ),
       );
+
+  void _agentSend() {
+    final text = _agentInputCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() {
+      _agentMessages.add({'role': 'user', 'text': text});
+      _agentMessages.add({
+        'role': 'agent',
+        'text': 'Panda Agent arrive bientot - merci pour votre patience !'
+      });
+      _agentInputCtrl.clear();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_agentScrollCtrl.hasClients) {
+        _agentScrollCtrl.animateTo(
+          _agentScrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   // ── Welcome page ──────────────────────────────────────────────────────────
   Widget _buildWelcomePage(
@@ -1513,51 +1965,84 @@ class _RailItem {
   const _RailItem({required this.icon, required this.label, required this.idx});
 }
 
-class _ActivityBtn extends StatelessWidget {
-  final _RailItem  item;
-  final bool       selected;
-  final VoidCallback onTap;
-  const _ActivityBtn(
-      {required this.item, required this.selected, required this.onTap});
+// ── _TabDef ───────────────────────────────────────────────────────────────────
+    class _TabDef {
+    final String   id;
+    final String   title;
+    final IconData icon;
+    const _TabDef({required this.id, required this.title, required this.icon});
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: item.label,
-      preferBelow: false,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            border: selected
-                ? const Border(
-                    left: BorderSide(color: _kActivitySel, width: 2))
-                : null,
-          ),
-          child: Center(
-            child: Icon(
-              item.icon,
-              size: 22,
-              color: selected ? _kActivitySel : _kActivityIcon,
+    // ── _ActivityBtnEx (theme-aware) ──────────────────────────────────────────────
+    class _ActivityBtnEx extends StatelessWidget {
+    final _RailItem    item;
+    final bool         selected;
+    final Color        iconColor;
+    final Color        selColor;
+    final VoidCallback onTap;
+    const _ActivityBtnEx({
+      required this.item,
+      required this.selected,
+      required this.iconColor,
+      required this.selColor,
+      required this.onTap,
+    });
+
+    @override
+    Widget build(BuildContext context) {
+      return Tooltip(
+        message: item.label,
+        preferBelow: false,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              border: selected
+                  ? Border(left: BorderSide(color: selColor, width: 2))
+                  : null,
+            ),
+            child: Center(
+              child: Icon(item.icon, size: 22,
+                  color: selected ? selColor : iconColor),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
+      );
+    }
+    }
 
-class _GithubAvatar extends StatelessWidget {
-  final VoidCallback onTap;
-  const _GithubAvatar({required this.onTap});
+    // ── _ActivityBtn (legacy alias) ───────────────────────────────────────────────
+    class _ActivityBtn extends StatelessWidget {
+    final _RailItem    item;
+    final bool         selected;
+    final VoidCallback onTap;
+    const _ActivityBtn(
+        {required this.item, required this.selected, required this.onTap});
 
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<GithubAuthCubit, GithubAuthState>(
-      builder: (_, state) {
-        return GestureDetector(
+    @override
+    Widget build(BuildContext context) {
+      return _ActivityBtnEx(
+        item:      item,
+        selected:  selected,
+        iconColor: _kActivityIconDark,
+        selColor:  _kActivitySelDark,
+        onTap:     onTap,
+      );
+    }
+    }
+
+    // ── _GithubAvatarEx (theme-aware) ─────────────────────────────────────────────
+    class _GithubAvatarEx extends StatelessWidget {
+    final Color        iconColor;
+    final VoidCallback onTap;
+    const _GithubAvatarEx({required this.iconColor, required this.onTap});
+
+    @override
+    Widget build(BuildContext context) {
+      return BlocBuilder<GithubAuthCubit, GithubAuthState>(
+        builder: (_, state) => GestureDetector(
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1570,20 +2055,30 @@ class _GithubAvatar extends StatelessWidget {
                     ? Image.network(state.user!.avatarUrl,
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) =>
-                            const Icon(Broken.profile_circle,
-                                color: _kActivityIcon, size: 22))
-                    : const Icon(Broken.profile_circle,
-                        color: _kActivityIcon, size: 22),
+                            Icon(Broken.profile_circle,
+                                color: iconColor, size: 22))
+                    : Icon(Broken.profile_circle,
+                        color: iconColor, size: 22),
               ),
             ),
           ),
-        );
-      },
-    );
-  }
-}
+        ),
+      );
+    }
+    }
 
-// ── Start item ────────────────────────────────────────────────────────────────
+    // ── _GithubAvatar (legacy alias) ──────────────────────────────────────────────
+    class _GithubAvatar extends StatelessWidget {
+    final VoidCallback onTap;
+    const _GithubAvatar({required this.onTap});
+
+    @override
+    Widget build(BuildContext context) {
+      return _GithubAvatarEx(iconColor: _kActivityIconDark, onTap: onTap);
+    }
+    }
+
+    // ── Start item ────────────────────────────────────────────────────────────────
 class _StartItem extends StatefulWidget {
   final IconData?    icon;
   final String?      svgAsset;
