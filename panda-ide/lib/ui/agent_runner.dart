@@ -477,8 +477,72 @@ class AgentRunner {
         case 'runShellCommand':
           final parsedArgs = (args['args'] as List?)?.map((e) => e.toString()).toList() ?? <String>[];
           final parsedEnvs = (args['envs'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())) ?? <String, String>{};
-          final res = await tools.runShellCommand(args['command'], parsedArgs, parsedEnvs);
+          final timeout = (args['timeoutSeconds'] as num?)?.toInt() ?? 120;
+          final res = await tools.runShellCommand(args['command'], parsedArgs, parsedEnvs, timeout);
           return res.success ? jsonEncode(res.data) : (res.error ?? 'Error running command');
+        case 'fastSearch':
+          final res = await tools.fastSearch(
+            args['query']?.toString() ?? '',
+            directoryPath: args['directoryPath']?.toString(),
+            filePattern: args['filePattern']?.toString(),
+            caseSensitive: args['caseSensitive'] ?? false,
+            useRegex: args['useRegex'] ?? false,
+            matchWholeWord: args['matchWholeWord'] ?? false,
+            maxResults: (args['maxResults'] as num?)?.toInt() ?? 300,
+          );
+          return res.success
+              ? (res.data?.map((s) => '${s.filePath}:${s.lineNumber}: ${s.lineContent}').join('\n') ?? 'No results')
+              : (res.error ?? 'Error');
+        case 'getProjectTree':
+          final res = await tools.getProjectTree(
+            directoryPath: args['directoryPath']?.toString(),
+            maxDepth: (args['maxDepth'] as num?)?.toInt() ?? 4,
+            maxEntries: (args['maxEntries'] as num?)?.toInt() ?? 500,
+          );
+          return res.success ? (res.data ?? '') : (res.error ?? 'Error');
+        case 'getProjectStats':
+          final res = await tools.getProjectStats(
+            directoryPath: args['directoryPath']?.toString(),
+          );
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
+        case 'findSymbols':
+          final res = await tools.findSymbols(
+            args['symbolName']?.toString() ?? '',
+            directoryPath: args['directoryPath']?.toString(),
+            fileExtension: args['fileExtension']?.toString(),
+            caseSensitive: args['caseSensitive'] ?? false,
+            maxResults: (args['maxResults'] as num?)?.toInt() ?? 100,
+          );
+          return res.success
+              ? jsonEncode(res.data)
+              : (res.error ?? 'Error');
+        case 'getFileOutline':
+          final res = await tools.getFileOutline(args['filePath']?.toString() ?? '');
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
+        case 'httpRequest':
+          final hdrs = (args['headers'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString()));
+          final res = await tools.httpRequest(
+            args['url']?.toString() ?? '',
+            method: args['method']?.toString() ?? 'GET',
+            headers: hdrs,
+            body: args['body']?.toString(),
+          );
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
+        case 'createDirectory':
+          final res = await tools.createDirectory(args['dirPath']?.toString() ?? '');
+          return res.success ? 'Directory created' : (res.error ?? 'Error');
+        case 'copyFile':
+          final res = await tools.copyFile(
+            args['sourcePath']?.toString() ?? '',
+            args['destPath']?.toString() ?? '',
+          );
+          return res.success ? 'File copied' : (res.error ?? 'Error');
+        case 'keepAllPendingEdits':
+          final res = await tools.keepAllPendingEditsForAgent(args['filePath']?.toString() ?? '');
+          return res.success ? 'Pending edits accepted' : (res.error ?? 'Error');
+        case 'rejectAllPendingEdits':
+          final res = await tools.rejectAllPendingEditsForAgent(args['filePath']?.toString() ?? '');
+          return res.success ? 'Pending edits rejected' : (res.error ?? 'Error');
         case 'gitStatus':
           final res = await tools.gitStatus();
           return res.success ? jsonEncode(res.data?.toJson()) : (res.error ?? 'Error');

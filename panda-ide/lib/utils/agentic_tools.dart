@@ -1482,27 +1482,538 @@ class AgenticTools {
     String command, [
     List<String> args = const [],
     Map<String, String> envs = const {},
+    int timeoutSeconds = 120,
   ]) async {
     try {
       final env = await _buildAgentShellEnvironment(workspacePath);
-
       env.addAll(envs);
-      final process = await Process.run(
+
+      final process = await Process.start(
         command,
         args,
         environment: env,
         workingDirectory: workspacePath,
       );
+
+      final stdoutBuf = StringBuffer();
+      final stderrBuf = StringBuffer();
+      final stdoutDone = Completer<void>();
+      final stderrDone = Completer<void>();
+
+      process.stdout
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .listen(stdoutBuf.write, onDone: stdoutDone.complete);
+      process.stderr
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .listen(stderrBuf.write, onDone: stderrDone.complete);
+
+      int exitCode;
+      try {
+        exitCode = await process.exitCode
+            .timeout(Duration(seconds: timeoutSeconds), onTimeout: () {
+          process.kill(ProcessSignal.sigterm);
+          return -1;
+        });
+      } catch (_) {
+        exitCode = -1;
+      }
+
+      await Future.wait([stdoutDone.future, stderrDone.future])
+          .timeout(const Duration(seconds: 5), onTimeout: () => []);
+
       return ToolResult.success({
         "pid": process.pid.toString(),
-        "exitCode": process.exitCode.toString(),
-        "stdout": process.stdout.toString(),
-        "stderr": process.stderr.toString(),
+        "exitCode": exitCode.toString(),
+        "stdout": stdoutBuf.toString(),
+        "stderr": stderrBuf.toString(),
       });
     } catch (e) {
       return ToolResult.error('Error running command: $e');
     }
   }
+
+  // ── Fast parallel search (ripgrep-style, pure Dart) ───────────────────────
+  Future<ToolResult<List<SearchResult>>> fastSearch(
+    String query, {
+    String? directoryPath,
+    String? filePattern,
+    bool caseSensitive = false,
+    bool useRegex = false,
+    bool matchWholeWord = false,
+    int maxResults = 300,
+    int maxFileSizeKb = 512,
+    List<String> excludeDirs = const [
+      '.git', 'node_modules', '.dart_tool', 'build', '.gradle',
+      '.idea', '__pycache__', '.cache', 'dist', 'out', '.next',
+    ],
+  }) async {
+    try {
+      final searchDir = directoryPath != null
+          ? _canonicalFilePath(directoryPath)
+          : _canonicalWorkspacePath();
+
+      // Build regex
+      String pat = useRegex ? query : RegExp.escape(query);
+      if (matchWholeWord) pat = r'\b' + pat + r'\b';
+      final regex = RegExp(pat, caseSensitive: caseSensitive, multiLine: true);
+
+      // Collect matching files
+      final files = <File>[];
+      final dir = Directory(searchDir);
+      if (!dir.existsSync()) return ToolResult.error('Directory not found: $searchDir');
+
+      final patternRegex = filePattern != null ? _globToRegex(filePattern) : null;
+
+      await for (final entity in dir.list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final rel = path.relative(entity.path, from: searchDir);
+        final parts = rel.split(Platform.pathSeparator);
+        if (parts.any((p) => excludeDirs.contains(p))) continue;
+        if (patternRegex != null && !patternRegex.hasMatch(path.basename(entity.path))) continue;
+        try {
+          if (entity.statSync().size > maxFileSizeKb * 1024) continue;
+        } catch (_) {
+          continue;
+        }
+        files.add(entity);
+      }
+
+      // Parallel search in batches of 30
+      final results = <SearchResult>[];
+      const batchSize = 30;
+      for (var i = 0; i < files.length && results.length < maxResults; i += batchSize) {
+        final batch = files.skip(i).take(batchSize).toList();
+        final batchOut = await Future.wait(batch.map((f) async {
+          final out = <SearchResult>[];
+          try {
+            final content = await f.readAsString(
+                encoding: const Utf8Codec(allowMalformed: true));
+            final lines = content.split('\n');
+            for (var li = 0; li < lines.length; li++) {
+              if (regex.hasMatch(lines[li])) {
+                out.add(SearchResult(
+                  filePath: path.relative(f.path, from: searchDir),
+                  lineNumber: li + 1,
+                  lineContent: lines[li].trim(),
+                ));
+              }
+            }
+          } catch (_) {}
+          return out;
+        }));
+        for (final chunk in batchOut) {
+          results.addAll(chunk);
+          if (results.length >= maxResults) break;
+        }
+      }
+
+      return ToolResult.success(results.take(maxResults).toList());
+    } catch (e) {
+      return ToolResult.error('Error in fastSearch: $e');
+    }
+  }
+
+  // ── Project tree cartography ──────────────────────────────────────────────
+  Future<ToolResult<String>> getProjectTree({
+    String? directoryPath,
+    int maxDepth = 4,
+    List<String> excludeDirs = const [
+      '.git', 'node_modules', '.dart_tool', 'build', '.gradle',
+      '__pycache__', '.idea', 'dist', 'out', '.next', '.cache',
+    ],
+    int maxEntries = 500,
+  }) async {
+    try {
+      final rootDir = directoryPath != null
+          ? _canonicalFilePath(directoryPath)
+          : _canonicalWorkspacePath();
+      if (!Directory(rootDir).existsSync()) {
+        return ToolResult.error('Directory not found: $rootDir');
+      }
+
+      final buf = StringBuffer();
+      int total = 0;
+
+      void walk(String dir, String prefix, int depth) {
+        if (depth > maxDepth || total > maxEntries) return;
+        List<FileSystemEntity> entries;
+        try {
+          entries = Directory(dir).listSync()
+            ..sort((a, b) {
+              final aIsDir = a is Directory;
+              final bIsDir = b is Directory;
+              if (aIsDir != bIsDir) return aIsDir ? -1 : 1;
+              return path.basename(a.path).compareTo(path.basename(b.path));
+            });
+        } catch (_) {
+          return;
+        }
+        for (var i = 0; i < entries.length; i++) {
+          if (total > maxEntries) {
+            buf.writeln('$prefix  ... (truncated)');
+            break;
+          }
+          final e = entries[i];
+          final name = path.basename(e.path);
+          final isLast = i == entries.length - 1;
+          final connector = isLast ? '└── ' : '├── ';
+          if (e is Directory) {
+            if (excludeDirs.contains(name)) {
+              buf.writeln('$prefix$connector$name/ (skipped)');
+              continue;
+            }
+            buf.writeln('$prefix$connector$name/');
+            total++;
+            walk(e.path, '$prefix${isLast ? '    ' : '│   '}', depth + 1);
+          } else if (e is File) {
+            try {
+              final size = e.statSync().size;
+              final sizeStr = size > 1024 * 1024
+                  ? '${(size / 1024 / 1024).toStringAsFixed(1)}MB'
+                  : size > 1024
+                      ? '${(size / 1024).toStringAsFixed(1)}KB'
+                      : '${size}B';
+              buf.writeln('$prefix$connector$name  ($sizeStr)');
+            } catch (_) {
+              buf.writeln('$prefix$connector$name');
+            }
+            total++;
+          }
+        }
+      }
+
+      buf.writeln('${path.basename(rootDir)}/');
+      walk(rootDir, '', 1);
+      if (total > maxEntries) {
+        buf.writeln('\n... truncated at $maxEntries entries. Use listFiles() for specific dirs.');
+      }
+
+      return ToolResult.success(buf.toString());
+    } catch (e) {
+      return ToolResult.error('Error generating project tree: $e');
+    }
+  }
+
+  // ── Project stats (LOC, file counts by language) ─────────────────────────
+  Future<ToolResult<Map<String, dynamic>>> getProjectStats({
+    String? directoryPath,
+    List<String> excludeDirs = const [
+      '.git', 'node_modules', '.dart_tool', 'build', '.gradle',
+      '__pycache__', '.idea', 'dist', 'out', '.next',
+    ],
+  }) async {
+    try {
+      final rootDir = directoryPath != null
+          ? _canonicalFilePath(directoryPath)
+          : _canonicalWorkspacePath();
+
+      final countsByExt = <String, int>{};
+      final locByExt = <String, int>{};
+      final fileSizes = <MapEntry<String, int>>[];
+      int totalFiles = 0;
+      int totalLines = 0;
+      int totalBytes = 0;
+
+      await for (final entity in Directory(rootDir).list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final rel = path.relative(entity.path, from: rootDir);
+        final parts = rel.split(Platform.pathSeparator);
+        if (parts.any((p) => excludeDirs.contains(p))) continue;
+
+        final ext = path.extension(entity.path).toLowerCase().replaceFirst('.', '');
+        final key = ext.isEmpty ? 'no-ext' : ext;
+
+        try {
+          final stat = entity.statSync();
+          final size = stat.size;
+          totalBytes += size;
+          countsByExt[key] = (countsByExt[key] ?? 0) + 1;
+          totalFiles++;
+          fileSizes.add(MapEntry(rel, size));
+
+          // Count lines for text files < 1MB
+          if (size < 1024 * 1024 &&
+              ['dart', 'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'kt', 'go',
+               'rs', 'cpp', 'c', 'h', 'swift', 'rb', 'php', 'html', 'css',
+               'scss', 'json', 'yaml', 'yml', 'md', 'txt', 'xml'].contains(key)) {
+            final content = await entity.readAsString(
+                encoding: const Utf8Codec(allowMalformed: true));
+            final loc = content.split('\n').length;
+            locByExt[key] = (locByExt[key] ?? 0) + loc;
+            totalLines += loc;
+          }
+        } catch (_) {}
+      }
+
+      fileSizes.sort((a, b) => b.value.compareTo(a.value));
+
+      return ToolResult.success({
+        'totalFiles': totalFiles,
+        'totalLines': totalLines,
+        'totalSizeBytes': totalBytes,
+        'totalSizeMB': (totalBytes / 1024 / 1024).toStringAsFixed(2),
+        'filesByExtension': Map.fromEntries(
+          countsByExt.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
+        ),
+        'linesByExtension': Map.fromEntries(
+          locByExt.entries.toList()..sort((a, b) => b.value.compareTo(a.value)),
+        ),
+        'largest10Files': fileSizes.take(10).map((e) => {
+          'path': e.key,
+          'sizeKB': (e.value / 1024).toStringAsFixed(1),
+        }).toList(),
+      });
+    } catch (e) {
+      return ToolResult.error('Error getting project stats: $e');
+    }
+  }
+
+  // ── Symbol finder (function/class/variable definitions) ───────────────────
+  Future<ToolResult<List<Map<String, dynamic>>>> findSymbols(
+    String symbolName, {
+    String? directoryPath,
+    String? fileExtension,
+    bool caseSensitive = false,
+    int maxResults = 100,
+  }) async {
+    try {
+      final searchDir = directoryPath != null
+          ? _canonicalFilePath(directoryPath)
+          : _canonicalWorkspacePath();
+
+      // Language-aware definition patterns
+      final patterns = [
+        // Dart
+        RegExp(r'(?:class|enum|mixin|extension|typedef)\s+' + (caseSensitive ? symbolName : '(?i)$symbolName') + r'\b'),
+        RegExp(r'(?:Future|Stream|void|String|int|double|bool|List|Map|dynamic)\s+' + (caseSensitive ? symbolName : '(?i)$symbolName') + r'\s*[\(<]'),
+        // JS/TS
+        RegExp(r'(?:function|class|const|let|var|async function)\s+' + (caseSensitive ? symbolName : '(?i)$symbolName') + r'\b'),
+        RegExp(r'(?:export\s+(?:default\s+)?(?:function|class|const|async function))\s+' + (caseSensitive ? symbolName : '(?i)$symbolName') + r'\b'),
+        // Python
+        RegExp(r'(?:def|class)\s+' + (caseSensitive ? symbolName : '(?i)$symbolName') + r'\b'),
+        // Java/Kotlin/Go/Rust
+        RegExp(r'(?:fun|func|fn|def)\s+' + (caseSensitive ? symbolName : '(?i)$symbolName') + r'\b'),
+        RegExp(r'(?:public|private|protected|static|override)\s+\w+\s+' + (caseSensitive ? symbolName : '(?i)$symbolName') + r'\s*\('),
+      ];
+
+      final textExts = {
+        'dart', 'js', 'ts', 'jsx', 'tsx', 'py', 'java', 'kt', 'kts',
+        'go', 'rs', 'cpp', 'c', 'h', 'swift', 'rb', 'php',
+      };
+      final filterExt = fileExtension?.replaceFirst('.', '').toLowerCase();
+
+      final files = <File>[];
+      await for (final entity in Directory(searchDir).list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final rel = path.relative(entity.path, from: searchDir);
+        if (rel.contains('/.git/') || rel.contains('/node_modules/') ||
+            rel.contains('/build/') || rel.contains('/.dart_tool/')) continue;
+        final ext = path.extension(entity.path).toLowerCase().replaceFirst('.', '');
+        if (filterExt != null && ext != filterExt) continue;
+        if (!textExts.contains(ext)) continue;
+        files.add(entity);
+      }
+
+      final results = <Map<String, dynamic>>[];
+      const batchSize = 30;
+
+      for (var i = 0; i < files.length && results.length < maxResults; i += batchSize) {
+        final batch = files.skip(i).take(batchSize).toList();
+        final batchOut = await Future.wait(batch.map((f) async {
+          final out = <Map<String, dynamic>>[];
+          try {
+            final content = await f.readAsString(
+                encoding: const Utf8Codec(allowMalformed: true));
+            final lines = content.split('\n');
+            final ext = path.extension(f.path).toLowerCase().replaceFirst('.', '');
+            for (var li = 0; li < lines.length; li++) {
+              final line = lines[li];
+              if (patterns.any((p) => p.hasMatch(line))) {
+                out.add({
+                  'file': path.relative(f.path, from: searchDir),
+                  'line': li + 1,
+                  'content': line.trim(),
+                  'language': ext,
+                });
+              }
+            }
+          } catch (_) {}
+          return out;
+        }));
+        for (final chunk in batchOut) {
+          results.addAll(chunk);
+          if (results.length >= maxResults) break;
+        }
+      }
+
+      return ToolResult.success(results.take(maxResults).toList());
+    } catch (e) {
+      return ToolResult.error('Error finding symbols: $e');
+    }
+  }
+
+  // ── File outline (all symbols in one file) ────────────────────────────────
+  Future<ToolResult<List<Map<String, dynamic>>>> getFileOutline(
+    String filePath,
+  ) async {
+    try {
+      final canonicalPath = _canonicalFilePath(filePath);
+      if (!File(canonicalPath).existsSync()) {
+        return ToolResult.error('File not found: $filePath');
+      }
+
+      final content = await File(canonicalPath)
+          .readAsString(encoding: const Utf8Codec(allowMalformed: true));
+      final lines = content.split('\n');
+      final ext = path.extension(canonicalPath).toLowerCase().replaceFirst('.', '');
+
+      final patterns = <Map<String, RegExp>>{};
+
+      // Dart
+      if (['dart'].contains(ext)) {
+        patterns.addAll({
+          'class':     RegExp(r'^\s*(?:abstract\s+)?(?:class|mixin|enum|extension|typedef)\s+(\w+)'),
+          'function':  RegExp(r'^\s*(?:Future|Stream|void|String|int|double|bool|List|Map|dynamic)\s+(\w+)\s*[(<]'),
+          'function2': RegExp(r'^\s*(?:static\s+)?(?:Future|Stream|void|String|int|double|bool)\s+(\w+)\s*[(<]'),
+        });
+      }
+      // JS/TS
+      if (['js', 'ts', 'jsx', 'tsx'].contains(ext)) {
+        patterns.addAll({
+          'function': RegExp(r'^\s*(?:export\s+)?(?:async\s+)?function\s+(\w+)'),
+          'arrow':    RegExp(r'^\s*(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?\('),
+          'class':    RegExp(r'^\s*(?:export\s+)?class\s+(\w+)'),
+        });
+      }
+      // Python
+      if (ext == 'py') {
+        patterns.addAll({
+          'class':    RegExp(r'^\s*class\s+(\w+)'),
+          'function': RegExp(r'^\s*(?:async\s+)?def\s+(\w+)'),
+        });
+      }
+      // Java/Kotlin
+      if (['java', 'kt', 'kts'].contains(ext)) {
+        patterns.addAll({
+          'class':    RegExp(r'^\s*(?:(?:public|private|protected|abstract|open|data|sealed)\s+)*(?:class|interface|object|enum)\s+(\w+)'),
+          'function': RegExp(r'^\s*(?:(?:public|private|protected|override|suspend|fun)\s+)*fun\s+(\w+)'),
+          'method':   RegExp(r'^\s*(?:public|private|protected|static)\s+\w+\s+(\w+)\s*\('),
+        });
+      }
+      // Go
+      if (ext == 'go') {
+        patterns.addAll({
+          'function': RegExp(r'^\s*func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\('),
+          'type':     RegExp(r'^\s*type\s+(\w+)\s+(?:struct|interface)'),
+        });
+      }
+      // Rust
+      if (ext == 'rs') {
+        patterns.addAll({
+          'function': RegExp(r'^\s*(?:pub\s+)?(?:async\s+)?fn\s+(\w+)'),
+          'struct':   RegExp(r'^\s*(?:pub\s+)?struct\s+(\w+)'),
+          'enum':     RegExp(r'^\s*(?:pub\s+)?enum\s+(\w+)'),
+          'impl':     RegExp(r'^\s*impl(?:<[^>]+>)?\s+(\w+)'),
+        });
+      }
+
+      final symbols = <Map<String, dynamic>>[];
+      for (var li = 0; li < lines.length; li++) {
+        final line = lines[li];
+        for (final entry in patterns.entries) {
+          final match = entry.value.firstMatch(line);
+          if (match != null) {
+            symbols.add({
+              'kind': entry.key,
+              'name': match.groupCount >= 1 ? match.group(1) : line.trim(),
+              'line': li + 1,
+              'preview': line.trim(),
+            });
+            break;
+          }
+        }
+      }
+
+      return ToolResult.success(symbols);
+    } catch (e) {
+      return ToolResult.error('Error getting file outline: $e');
+    }
+  }
+
+  // ── Custom HTTP request ───────────────────────────────────────────────────
+  Future<ToolResult<Map<String, dynamic>>> httpRequest(
+    String url, {
+    String method = 'GET',
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    try {
+      final uri = Uri.parse(url);
+      final client = http.Client();
+      try {
+        final request = http.Request(method.toUpperCase(), uri);
+        if (headers != null) request.headers.addAll(headers);
+        if (body != null) request.body = body;
+
+        final streamed = await client.send(request);
+        final responseBody = await streamed.stream
+            .transform(const Utf8Decoder(allowMalformed: true))
+            .join();
+
+        return ToolResult.success({
+          'statusCode': streamed.statusCode.toString(),
+          'headers': streamed.headers.map((k, v) => MapEntry(k, v)),
+          'body': responseBody.length > 20000
+              ? '${responseBody.substring(0, 20000)}\n... (truncated)'
+              : responseBody,
+        });
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      return ToolResult.error('Error making HTTP request: $e');
+    }
+  }
+
+  // ── Create directory ──────────────────────────────────────────────────────
+  Future<ToolResult<void>> createDirectory(String dirPath) async {
+    try {
+      final canonicalPath = _canonicalFilePath(dirPath);
+      if (!_isInsideWorkspace(canonicalPath)) {
+        return ToolResult.error('Permission denied: Path is outside workspace.');
+      }
+      await Directory(canonicalPath).create(recursive: true);
+      return ToolResult.success(null);
+    } catch (e) {
+      return ToolResult.error('Error creating directory: $e');
+    }
+  }
+
+  // ── Copy file ─────────────────────────────────────────────────────────────
+  Future<ToolResult<void>> copyFile(String sourcePath, String destPath) async {
+    try {
+      final canonicalSrc = _canonicalFilePath(sourcePath);
+      final canonicalDst = _canonicalFilePath(destPath);
+      if (!_isInsideWorkspace(canonicalSrc) || !_isInsideWorkspace(canonicalDst)) {
+        return ToolResult.error('Permission denied: Path is outside workspace.');
+      }
+      if (!File(canonicalSrc).existsSync()) {
+        return ToolResult.error('Source file not found: $sourcePath');
+      }
+      await Directory(path.dirname(canonicalDst)).create(recursive: true);
+      await File(canonicalSrc).copy(canonicalDst);
+      return ToolResult.success(null);
+    } catch (e) {
+      return ToolResult.error('Error copying file: $e');
+    }
+  }
+
+  // ── Keep / Reject pending edits (expose existing logic) ───────────────────
+  Future<ToolResult<void>> keepAllPendingEditsForAgent(String filePath) =>
+      keepAllPendingEdits(filePath);
+
+  Future<ToolResult<void>> rejectAllPendingEditsForAgent(String filePath) =>
+      rejectAllPendingEdits(filePath);
 
   WebPageContent _parseWebContent(String htmlString, String url) {
     final document = html.parse(htmlString);
@@ -2323,27 +2834,286 @@ class AgenticTools {
           "function": {
             "name": "runShellCommand",
             "description":
-                "Runs a shell command from the workspace directory and returns stdout/stderr and exit code. IMPORTANT: This app runs on Android, not a full Linux desktop/server environment, so full Linux access is limited. Prefer bundled binaries first. Bundled commands include: clang, clang++, clangloader, node, python, python3, npm, npx, pip, pip3, tsc, kotlinc, git, jar, jarsigner, java, javac, javadoc, javap, jcmd, jconsole, jdb, jdeprscan, jdeps, jfr, jhsdb, jimage, jinfo, jlink, jmap, jmod, jpackage, jps, jrunscript, jstack, jstat, jstatd, jwebserver, keytool, rmiregistry, serialver, bash, sh, ccls, less, pager, git-remote-https, git-remote-http. Basic commands like cd, ls, grep, etc may come from Android PATH and can vary by device. Always plan commands with Android limitations in mind.",
+                "Runs a shell command from the workspace directory and returns stdout/stderr and exit code. Has a configurable timeout (default 120s). IMPORTANT: This app runs on Android. Bundled binaries: clang, clang++, node, python3, npm, npx, pip3, tsc, kotlinc, git, java, javac, bash, sh, ccls, grep, ls, find, tar, curl. Basic POSIX commands available from Android PATH.",
             "parameters": {
               "type": "object",
               "properties": {
                 "command": {
                   "type": "string",
-                  "description":
-                      "Executable to run. Prefer the bundled Android app binaries listed in this tool description.",
+                  "description": "Executable to run.",
                 },
                 "args": {
                   "type": "array",
-                  "description": "Optional command arguments",
+                  "description": "Command arguments",
                   "items": {"type": "string"},
                 },
                 "envs": {
                   "type": "object",
-                  "description": "Optional environment variables",
+                  "description": "Extra environment variables",
                   "additionalProperties": {"type": "string"},
+                },
+                "timeoutSeconds": {
+                  "type": "integer",
+                  "description": "Max seconds to wait before killing the process (default 120). Use higher values for builds.",
                 },
               },
               "required": ["command"],
+            },
+          },
+        },
+
+      // ── Fast parallel search ──────────────────────────────────────────────
+      {
+        "type": "function",
+        "function": {
+          "name": "fastSearch",
+          "description":
+              "High-speed parallel file search (ripgrep-style). Searches all files in the workspace simultaneously — 10-50x faster than searchInFiles for large codebases. Supports regex, whole-word, case options.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "Text or regex pattern to search for",
+              },
+              "directoryPath": {
+                "type": "string",
+                "description": "Directory to search in (default: workspace root)",
+              },
+              "filePattern": {
+                "type": "string",
+                "description": "Glob pattern to filter files, e.g. '*.dart', '*.ts'",
+              },
+              "caseSensitive": {
+                "type": "boolean",
+                "description": "Case-sensitive search (default false)",
+              },
+              "useRegex": {
+                "type": "boolean",
+                "description": "Treat query as a regex (default false)",
+              },
+              "matchWholeWord": {
+                "type": "boolean",
+                "description": "Match whole words only (default false)",
+              },
+              "maxResults": {
+                "type": "integer",
+                "description": "Maximum results to return (default 300)",
+              },
+            },
+            "required": ["query"],
+          },
+        },
+      },
+
+      // ── Project tree ──────────────────────────────────────────────────────
+      {
+        "type": "function",
+        "function": {
+          "name": "getProjectTree",
+          "description":
+              "Returns a visual tree of the project directory structure with file sizes. Great for understanding a new project at a glance. Automatically skips .git, node_modules, build, etc.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "directoryPath": {
+                "type": "string",
+                "description": "Root directory (default: workspace root)",
+              },
+              "maxDepth": {
+                "type": "integer",
+                "description": "Maximum depth to traverse (default 4)",
+              },
+              "maxEntries": {
+                "type": "integer",
+                "description": "Maximum total entries (default 500)",
+              },
+            },
+          },
+        },
+      },
+
+      // ── Project stats ─────────────────────────────────────────────────────
+      {
+        "type": "function",
+        "function": {
+          "name": "getProjectStats",
+          "description":
+              "Returns project statistics: total files, lines of code, file counts and LOC by language/extension, and the 10 largest files. Use this to understand the size and composition of a codebase.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "directoryPath": {
+                "type": "string",
+                "description": "Root directory (default: workspace root)",
+              },
+            },
+          },
+        },
+      },
+
+      // ── Find symbols ──────────────────────────────────────────────────────
+      {
+        "type": "function",
+        "function": {
+          "name": "findSymbols",
+          "description":
+              "Finds function/class/variable definitions by name across the codebase. Language-aware — understands Dart, JS/TS, Python, Java, Kotlin, Go, Rust. Essential for code navigation and understanding architecture.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "symbolName": {
+                "type": "string",
+                "description": "Name of the symbol (function, class, variable) to find",
+              },
+              "directoryPath": {
+                "type": "string",
+                "description": "Directory to search in (default: workspace root)",
+              },
+              "fileExtension": {
+                "type": "string",
+                "description": "Limit to a specific extension, e.g. 'dart', 'ts'",
+              },
+              "caseSensitive": {
+                "type": "boolean",
+                "description": "Case-sensitive match (default false)",
+              },
+              "maxResults": {
+                "type": "integer",
+                "description": "Max results (default 100)",
+              },
+            },
+            "required": ["symbolName"],
+          },
+        },
+      },
+
+      // ── File outline ──────────────────────────────────────────────────────
+      {
+        "type": "function",
+        "function": {
+          "name": "getFileOutline",
+          "description":
+              "Returns all symbols (classes, functions, methods) defined in a single file with their line numbers. Supports Dart, JS/TS, Python, Java/Kotlin, Go, Rust.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filePath": {
+                "type": "string",
+                "description": "Path to the file",
+              },
+            },
+            "required": ["filePath"],
+          },
+        },
+      },
+
+      // ── HTTP request ──────────────────────────────────────────────────────
+      {
+        "type": "function",
+        "function": {
+          "name": "httpRequest",
+          "description":
+              "Makes an HTTP request (GET, POST, PUT, DELETE, PATCH) to any URL. Returns status code, headers, and response body. Use for testing APIs, fetching data, or interacting with web services.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": "Full URL to request",
+              },
+              "method": {
+                "type": "string",
+                "description": "HTTP method: GET, POST, PUT, DELETE, PATCH (default GET)",
+              },
+              "headers": {
+                "type": "object",
+                "description": "Request headers as key-value pairs",
+                "additionalProperties": {"type": "string"},
+              },
+              "body": {
+                "type": "string",
+                "description": "Request body (for POST/PUT/PATCH)",
+              },
+            },
+            "required": ["url"],
+          },
+        },
+      },
+
+      // ── Create directory ──────────────────────────────────────────────────
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
+            "name": "createDirectory",
+            "description": "Creates a directory (and all parent directories) at the given path inside the workspace.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "dirPath": {
+                  "type": "string",
+                  "description": "Path to the directory to create",
+                },
+              },
+              "required": ["dirPath"],
+            },
+          },
+        },
+
+      // ── Copy file ─────────────────────────────────────────────────────────
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
+            "name": "copyFile",
+            "description": "Copies a file from sourcePath to destPath within the workspace.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "sourcePath": {
+                  "type": "string",
+                  "description": "Path to the source file",
+                },
+                "destPath": {
+                  "type": "string",
+                  "description": "Destination path",
+                },
+              },
+              "required": ["sourcePath", "destPath"],
+            },
+          },
+        },
+
+      // ── Keep / Reject pending edits ───────────────────────────────────────
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
+            "name": "keepAllPendingEdits",
+            "description": "Accepts all pending AI-generated edits in a file, removing the diff markers and confirming the changes.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "filePath": {"type": "string", "description": "Path to the file"},
+              },
+              "required": ["filePath"],
+            },
+          },
+        },
+
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
+            "name": "rejectAllPendingEdits",
+            "description": "Rejects all pending AI-generated edits in a file, reverting to the original content.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "filePath": {"type": "string", "description": "Path to the file"},
+              },
+              "required": ["filePath"],
             },
           },
         },
