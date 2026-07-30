@@ -660,33 +660,35 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
             // ── Body ─────────────────────────────────────────────────────
             body: SafeArea(
-              child: Row(
+              child: Column(
                 children: [
-                  // ── Activity bar ──────────────────────────────────────
-                  _buildActivityBar(context, appTheme),
+                  // ── Top bar spans full width ──────────────────────────
+                  _buildTopBar(context, appTheme, appThemestate),
 
-                  // ── Sliding sidebar panel (rounded right corners) ─────
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    width: _sidebarPanelOpen ? _kSidebarWidth : 0,
-                    child: _sidebarPanelOpen
-                        ? ClipRRect(
-                            borderRadius: const BorderRadius.only(
-                              topRight:    Radius.circular(12),
-                              bottomRight: Radius.circular(12),
-                            ),
-                            child: _buildSidebarPanel(context, appTheme),
-                          )
-                        : null,
-                  ),
-
-                  // ── Main content ──────────────────────────────────────
+                  // ── Below top bar: activity bar + sidebar + editor ────
                   Expanded(
-                    child: Column(
+                    child: Row(
                       children: [
-                        _buildTopBar(context, appTheme, appThemestate),
-                        // Editor area — supports split view
+                        // ── Activity bar ────────────────────────────────
+                        _buildActivityBar(context, appTheme),
+
+                        // ── Sliding sidebar (rounded right corners) ──────
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeInOut,
+                          width: _sidebarPanelOpen ? _kSidebarWidth : 0,
+                          child: _sidebarPanelOpen
+                              ? ClipRRect(
+                                  borderRadius: const BorderRadius.only(
+                                    topRight:    Radius.circular(12),
+                                    bottomRight: Radius.circular(12),
+                                  ),
+                                  child: _buildSidebarPanel(context, appTheme),
+                                )
+                              : null,
+                        ),
+
+                        // ── Editor area (supports split view) ────────────
                         Expanded(
                           child: Row(
                             children: [
@@ -1177,32 +1179,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Row(
           children: [
-            // ── Left: hamburger + icon + name + nav arrows ────────────────
-            _hdrBtn(Broken.menu, 'Menu lateral', fg, () => setState(() {
-              _sidebarPanelOpen = !_sidebarPanelOpen;
-              if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
-            })),
-            const SizedBox(width: 2),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Image.asset(
-                'assets/icons/app-icon.png',
-                width: 16,
-                height: 16,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    const Text('\u{1F43C}', style: TextStyle(fontSize: 12)),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'Panda',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: fg),
-            ),
-            const SizedBox(width: 4),
+            // ── Left: nav arrows only ─────────────────────────────────────
             _hdrBtn(Broken.arrow_left_2,  'Reculer',  fg, () {}),
             _hdrBtn(Broken.arrow_right_3, 'Avancer',  fg, () {}),
 
@@ -1210,7 +1187,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             Expanded(
               child: Center(
                 child: Container(
-                  constraints: const BoxConstraints(maxWidth: 260),
+                  constraints: const BoxConstraints(maxWidth: 320),
                   height: 22,
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   decoration: BoxDecoration(
@@ -1224,7 +1201,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     const SizedBox(width: 5),
                     Flexible(
                       child: Text(
-                        'Workspace',
+                        'Espace de travail',
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 12, color: fg),
                       ),
@@ -1234,43 +1211,16 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               ),
             ),
 
-            // ── Right: file manager / downloads / projects / templates ─────
-            _hdrBtn(Broken.folder_open, 'File Manager', fg,
-                () => _push(context, const FileManagerPage())),
-            _hdrBtn(Broken.document_download, 'Downloads', fg,
-                () => _push(context, DownloadManager())),
-            BlocBuilder<PackageCatalogCubit, PackageCatalogState>(
-              builder: (_, state) => state.hasUpdates
-                  ? Container(
-                      margin: const EdgeInsets.only(right: 2),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(8)),
-                      child: Text('${state.totalUpdateCount}',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold)),
-                    )
-                  : const SizedBox.shrink(),
+            // ── Right: exactly 4 layout buttons ──────────────────────────
+            _hdrBtn(
+              Broken.sidebar_left,
+              'Panneau lateral',
+              _sidebarPanelOpen ? _kAccent : fg,
+              () => setState(() {
+                _sidebarPanelOpen = !_sidebarPanelOpen;
+                if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
+              }),
             ),
-            _hdrBtn(Broken.sidebar_right, 'Projects', fg,
-                () => _push(context, const ProjectScreen())),
-            _hdrBtn(Broken.grid_9, 'Templates', fg,
-                () => _push(context, const MenuScreen())),
-
-            const SizedBox(width: 4),
-            Container(
-                width: 1,
-                height: 18,
-                color: isDark
-                    ? const Color(0xff555555)
-                    : const Color(0xffbbbbbb)),
-            const SizedBox(width: 4),
-
-            // ── Layout controls (no Panda Agent here — it's in tab bar) ───
             Builder(
               builder: (ctx) => _hdrBtn(
                 Broken.element_4,
@@ -1284,6 +1234,12 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               'Panneau inferieur',
               _bottomPanelOpen ? _kAccent : fg,
               () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
+            ),
+            _hdrBtn(
+              Broken.maximize_3,
+              'Plein ecran',
+              fg,
+              () {},
             ),
           ],
         ),
