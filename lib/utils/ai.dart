@@ -900,6 +900,14 @@ class Grok extends OpenAiCompatible {
   Grok({required this.apiKey, required this.model});
 }
 
+class Groq extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://api.groq.com/openai/v1";
+  @override
+  final String apiKey, model;
+  Groq({required this.apiKey, required this.model});
+}
+
 class DeepSeek extends OpenAiCompatible {
   @override
   String get baseUrl => "https://api.deepseek.com";

@@ -159,6 +159,7 @@ Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
     case 'Claude': return Claude(apiKey: apiKey, model: modelName);
     case 'OpenAI': return OpenAI(apiKey: apiKey, model: modelName);
     case 'Grok': return Grok(apiKey: apiKey, model: modelName);
+    case 'Gorq': return Groq(apiKey: apiKey, model: modelName);
     case 'DeepSeek':return DeepSeek(apiKey: apiKey, model: modelName);
     case 'TogetherAI': return TogetherAi(apiKey: apiKey, model: modelName);
     case 'Perplexity': return Perplexity(apiKey: apiKey, model: modelName);

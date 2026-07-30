@@ -3025,8 +3025,22 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
     final agentIdx = _agentMessages.length - 1;
 
+    // Récupère le workspacePath depuis les entrées récentes (premier projet ouvert)
+    String workspacePath = '';
+    try {
+      final recentState = context.read<RecentBloc>().state;
+      final recentEntry = recentState.recent.firstWhere(
+        (e) => (e as Map?)?['type'] == 'project',
+        orElse: () => recentState.recent.isNotEmpty ? recentState.recent.first : null,
+      );
+      if (recentEntry != null) {
+        workspacePath = (recentEntry as Map)['rootDir']?.toString() ??
+            recentEntry['path']?.toString() ?? '';
+      }
+    } catch (_) {}
+
     _agentRunner
-        .run(model: model, messages: messages)
+        .run(model: model, messages: messages, context: context, workspacePath: workspacePath)
         .listen(
           (chunk) {
             if (!mounted) return;

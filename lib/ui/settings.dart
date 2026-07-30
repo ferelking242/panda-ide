@@ -1082,6 +1082,44 @@ int main() {
     );
   }
 
+  /// Returns a brand color for the given provider name.
+  Color _providerColor(String? provider) {
+    switch (provider) {
+      case 'Gemini':    return const Color(0xFF4285F4);
+      case 'Claude':    return const Color(0xFFD4875C);
+      case 'OpenAI':    return const Color(0xFF10A37F);
+      case 'Grok':      return const Color(0xFF1D9BF0);
+      case 'Gorq':      return const Color(0xFFF55036);
+      case 'DeepSeek':  return const Color(0xFF4A6CF7);
+      case 'TogetherAI':return const Color(0xFF7C3AED);
+      case 'Perplexity':return const Color(0xFF20B2AA);
+      case 'OpenRouter':return const Color(0xFFFF6B35);
+      case 'FireWorks': return const Color(0xFFFF4500);
+      case 'Custom':    return const Color(0xFF6B7280);
+      case 'LocalLlama':return const Color(0xFF059669);
+      default:          return Colors.lightBlue;
+    }
+  }
+
+  /// Returns an icon for the given provider name.
+  IconData _providerIcon(String? provider) {
+    switch (provider) {
+      case 'Gemini':    return Icons.auto_awesome;
+      case 'Claude':    return Icons.psychology;
+      case 'OpenAI':    return Icons.bubble_chart;
+      case 'Grok':      return Icons.flash_on;
+      case 'Gorq':      return Icons.speed;
+      case 'DeepSeek':  return Icons.search;
+      case 'TogetherAI':return Icons.group;
+      case 'Perplexity':return Icons.travel_explore;
+      case 'OpenRouter':return Icons.route;
+      case 'FireWorks': return Icons.local_fire_department;
+      case 'Custom':    return Icons.tune;
+      case 'LocalLlama':return Icons.computer;
+      default:          return Icons.smart_toy_outlined;
+    }
+  }
+
   void _clearModelDialogControllers() {
     apiController.clear();
     modelNameController.clear();
@@ -1340,27 +1378,71 @@ int main() {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.smart_toy, color: Colors.lightBlue, size: 30),
-                          const SizedBox(width: 10),
-                          Text(
-                            isEditing ? 'Edit AI model' : 'Create a completion model',
-                            style: TextStyle(
-                              color: appThemeState.appTheme.selectScreenCardTextColor,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                      // ── Animated header ────────────────────────────────────
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          gradient: LinearGradient(
+                            colors: [
+                              _providerColor(provider).withAlpha(40),
+                              _providerColor(provider).withAlpha(10),
+                            ],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
                           ),
-                        ],
+                          border: Border.all(
+                            color: _providerColor(provider).withAlpha(60),
+                            width: 1,
+                          ),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        child: Row(
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              child: Icon(
+                                _providerIcon(provider),
+                                key: ValueKey(provider),
+                                color: _providerColor(provider),
+                                size: 28,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isEditing ? 'Edit AI model' : 'Add AI model',
+                                  style: TextStyle(
+                                    color: appThemeState.appTheme.selectScreenCardTextColor,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (provider != null)
+                                  Text(
+                                    provider!,
+                                    style: TextStyle(
+                                      color: _providerColor(provider),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 20),
                       Form(
                         key: _formKey,
+                        autovalidateMode: AutovalidateMode.disabled,
                         child: Column(
                           children: [
                             DropdownButtonFormField<String>(
-                              initialValue: provider,
+                              value: provider,
                               dropdownColor: appThemeState.appTheme.isDark
                                   ? const Color(0xff181A26)
                                   : Colors.white,
@@ -1371,15 +1453,32 @@ int main() {
                                 ),
                               ),
                               decoration: InputDecoration(
-                                prefixIcon: Icon(Icons.business, color: Colors.lightBlue),
+                                prefixIcon: provider != null
+                                    ? Padding(
+                                        padding: const EdgeInsets.all(10),
+                                        child: Icon(
+                                          _providerIcon(provider),
+                                          color: _providerColor(provider),
+                                          size: 22,
+                                        ),
+                                      )
+                                    : Icon(Icons.smart_toy_outlined, color: Colors.lightBlue),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(15),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(15),
                                   borderSide: BorderSide(
-                                    color: Colors.lightBlue,
+                                    color: _providerColor(provider),
                                     width: 2,
+                                  ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                  borderSide: BorderSide(
+                                    color: provider != null
+                                        ? _providerColor(provider).withAlpha(100)
+                                        : Colors.grey.withAlpha(80),
                                   ),
                                 ),
                               ),
@@ -1387,11 +1486,21 @@ int main() {
                                 models.length,
                                 (index) => DropdownMenuItem(
                                   value: models[index],
-                                  child: Text(
-                                    models[index],
-                                    style: TextStyle(
-                                      color: appThemeState.appTheme.selectScreenCardTextColor,
-                                    ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _providerIcon(models[index]),
+                                        color: _providerColor(models[index]),
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        models[index],
+                                        style: TextStyle(
+                                          color: appThemeState.appTheme.selectScreenCardTextColor,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
