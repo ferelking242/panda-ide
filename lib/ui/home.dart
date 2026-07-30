@@ -99,6 +99,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   final List<_TabDef> _splitTabs = [
     const _TabDef(id: 'welcome', title: 'Welcome', icon: Broken.global_refresh),
   ];
+  late final MultiSplitViewController _splitViewController;
 
   // ── Panda Agent chat ─────────────────────────────────────────────
   final _agentInputCtrl  = TextEditingController();
@@ -123,6 +124,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _splitViewController = MultiSplitViewController(areas: [Area(), Area()]);
     // Rebuild send button colour when text changes
     _agentInputCtrl.addListener(() => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -144,6 +146,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     createFileController.dispose();
     _agentInputCtrl.dispose();
     _agentScrollCtrl.dispose();
+    _splitViewController.dispose();
     super.dispose();
   }
 
@@ -714,18 +717,23 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                               Expanded(
                                 child: _splitEditor
                                     ? MultiSplitView(
-                                        children: [
-                                          Column(
-                                            children: [
-                                              _buildTabBar(appTheme,
-                                                  isPrimary: true),
-                                              Expanded(
-                                                child: _buildActiveTab(context,
-                                                    appTheme, appThemestate),
-                                              ),
-                                            ],
-                                          ),
-                                          Column(
+                                        controller: _splitViewController,
+                                        builder: (context, area) {
+                                          if (area.index == 0) {
+                                            return Column(
+                                              children: [
+                                                _buildTabBar(appTheme,
+                                                    isPrimary: true),
+                                                Expanded(
+                                                  child: _buildActiveTab(
+                                                      context,
+                                                      appTheme,
+                                                      appThemestate),
+                                                ),
+                                              ],
+                                            );
+                                          }
+                                          return Column(
                                             children: [
                                               _buildTabBar(appTheme,
                                                   isPrimary: false),
@@ -736,8 +744,8 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                                                     appThemestate),
                                               ),
                                             ],
-                                          ),
-                                        ],
+                                          );
+                                        },
                                       )
                                     : Column(
                                         children: [
