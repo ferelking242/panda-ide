@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:http/http.dart' as http;
 import 'package:code_forge/code_forge.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
@@ -1086,6 +1088,193 @@ int main() {
     modelIdController.clear();
   }
 
+  /// Returns a per-provider placeholder hint for the model name text field.
+  String _modelNameHintForProvider(String? provider) {
+    switch (provider) {
+      case 'Gemini':
+        return 'e.g. gemini-2.5-flash';
+      case 'Claude':
+        return 'e.g. claude-opus-4-5';
+      case 'OpenAI':
+        return 'e.g. gpt-4o';
+      case 'Grok':
+        return 'e.g. grok-3';
+      case 'DeepSeek':
+        return 'e.g. deepseek-chat';
+      case 'Gorq':
+        return 'e.g. llama-3.3-70b-versatile';
+      case 'TogetherAI':
+        return 'e.g. meta-llama/Llama-3-70b-chat-hf';
+      case 'Perplexity':
+        return 'e.g. llama-3.1-sonar-large-128k-online';
+      case 'OpenRouter':
+        return 'e.g. anthropic/claude-3.5-sonnet';
+      case 'FireWorks':
+        return 'e.g. accounts/fireworks/models/llama-v3p1-70b-instruct';
+      default:
+        return "model name as per the provider's api";
+    }
+  }
+
+  /// Guesses the provider from the API key format.
+  String? _detectProviderFromKey(String key) {
+    if (key.isEmpty) return null;
+    if (key.startsWith('AIza') || key.startsWith('AQ.')) return 'Gemini';
+    if (key.startsWith('sk-ant-')) return 'Claude';
+    if (key.startsWith('xai-')) return 'Grok';
+    if (key.startsWith('pplx-')) return 'Perplexity';
+    if (key.startsWith('gsk_')) return 'Gorq';
+    if (key.startsWith('together_')) return 'TogetherAI';
+    if (key.startsWith('fw_')) return 'FireWorks';
+    if (key.startsWith('sk-or-')) return 'OpenRouter';
+    if (key.startsWith('sk-')) return 'OpenAI';
+    return null;
+  }
+
+  /// Fetches the list of available model IDs from the provider's API.
+  Future<List<String>> _fetchModelsForProvider(
+      String provider, String apiKey) async {
+    try {
+      http.Response response;
+      switch (provider) {
+        case 'Gemini':
+          response = await http.get(
+            Uri.parse(
+                'https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey&pageSize=100'),
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['models'] as List? ?? []);
+            return list
+                .map((m) => (m['name'] as String).replaceFirst('models/', ''))
+                .where((n) => !n.contains('embedding') && !n.contains('aqa'))
+                .toList()
+              ..sort();
+          }
+          break;
+        case 'Claude':
+          response = await http.get(
+            Uri.parse('https://api.anthropic.com/v1/models?limit=100'),
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+            },
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['data'] as List? ?? []);
+            return list.map((m) => m['id'] as String).toList()..sort();
+          }
+          break;
+        case 'OpenAI':
+          response = await http.get(
+            Uri.parse('https://api.openai.com/v1/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['data'] as List? ?? []);
+            final ids = list.map((m) => m['id'] as String).toList()..sort();
+            // Prefer gpt/o- models first
+            return ids
+                .where((id) =>
+                    id.startsWith('gpt-') ||
+                    id.startsWith('o1') ||
+                    id.startsWith('o3') ||
+                    id.startsWith('o4'))
+                .toList()
+              ..addAll(ids
+                  .where((id) =>
+                      !id.startsWith('gpt-') &&
+                      !id.startsWith('o1') &&
+                      !id.startsWith('o3') &&
+                      !id.startsWith('o4'))
+                  .toList());
+          }
+          break;
+        case 'Grok':
+          response = await http.get(
+            Uri.parse('https://api.x.ai/v1/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['data'] as List? ?? []);
+            return list.map((m) => m['id'] as String).toList()..sort();
+          }
+          break;
+        case 'DeepSeek':
+          response = await http.get(
+            Uri.parse('https://api.deepseek.com/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['data'] as List? ?? []);
+            return list.map((m) => m['id'] as String).toList()..sort();
+          }
+          break;
+        case 'Gorq':
+          response = await http.get(
+            Uri.parse('https://api.groq.com/openai/v1/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['data'] as List? ?? []);
+            return list.map((m) => m['id'] as String).toList()..sort();
+          }
+          break;
+        case 'TogetherAI':
+          response = await http.get(
+            Uri.parse('https://api.together.xyz/v1/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final list = jsonDecode(response.body) as List? ?? [];
+            return list.map((m) => m['id'] as String).toList()..sort();
+          }
+          break;
+        case 'Perplexity':
+          // Perplexity doesn't have a public /models endpoint; return known models
+          return [
+            'llama-3.1-sonar-small-128k-online',
+            'llama-3.1-sonar-large-128k-online',
+            'llama-3.1-sonar-huge-128k-online',
+            'llama-3.1-sonar-small-128k-chat',
+            'llama-3.1-sonar-large-128k-chat',
+          ];
+        case 'OpenRouter':
+          response = await http.get(
+            Uri.parse('https://openrouter.ai/api/v1/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['data'] as List? ?? []);
+            return list.map((m) => m['id'] as String).toList()..sort();
+          }
+          break;
+        case 'FireWorks':
+          response = await http.get(
+            Uri.parse('https://api.fireworks.ai/inference/v1/models'),
+            headers: {'Authorization': 'Bearer $apiKey'},
+          ).timeout(const Duration(seconds: 15));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final list = (data['data'] as List? ?? []);
+            return list.map((m) => m['id'] as String).toList()..sort();
+          }
+          break;
+        default:
+          break;
+      }
+    } catch (_) {
+      // network or parse error — caller shows message
+    }
+    return [];
+  }
+
   Future<void> _showModelDialog({
     required BuildContext context,
     required AIState aiState,
@@ -1113,6 +1302,13 @@ int main() {
     final customUrlController = TextEditingController(
       text: isEditing ? (existingConfig['url']?.toString() ?? '') : '',
     );
+
+    // Fetched model list — declared here so StatefulBuilder can call setDialogState on them.
+    List<String> fetchedModels = isEditing
+        ? [existingConfig?['modelName']?.toString() ?? existingConfig?['model']?.toString() ?? ''].where((s) => s.isNotEmpty).toList()
+        : [];
+    bool isFetchingModels = false;
+    String? fetchError;
 
     try {
       await showDialog(
@@ -1202,43 +1398,16 @@ int main() {
                               onChanged: (val) {
                                 setDialogState(() {
                                   provider = val;
+                                  fetchedModels = [];
+                                  fetchError = null;
+                                  modelNameController.clear();
                                 });
                               },
                               validator: (value) =>
                                   value == null ? 'Select a valid provider' : null,
                             ),
                             const SizedBox(height: 15),
-                            TextFormField(
-                              style: TextStyle(
-                                color: appThemeState.appTheme.selectScreenCardTextColor,
-                              ),
-                              controller: modelNameController,
-                              cursorColor: Colors.lightBlue,
-                              decoration: InputDecoration(
-                                prefixIcon: Icon(Icons.label, color: Colors.lightBlue),
-                                hintText: "model name as per the provider's api",
-                                hintStyle: TextStyle(color: Colors.grey, fontSize: 12),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                  borderSide: BorderSide(
-                                    color: Colors.lightBlue,
-                                    width: 2,
-                                  ),
-                                ),
-                                labelText: 'Model Name',
-                                labelStyle: TextStyle(
-                                  color: appThemeState.appTheme.selectScreenCardTextColor.withAlpha(150),
-                                  fontSize: 15,
-                                ),
-                              ),
-                              validator: (value) => value == null || value.isEmpty
-                                  ? 'Enter a valid model name'
-                                  : null,
-                            ),
-                            const SizedBox(height: 15),
+                            // API Key field with auto-detect + load-models button
                             TextFormField(
                               style: TextStyle(
                                 color: appThemeState.appTheme.selectScreenCardTextColor,
@@ -1246,6 +1415,17 @@ int main() {
                               controller: apiController,
                               cursorColor: Colors.lightBlue,
                               obscureText: true,
+                              onChanged: (val) {
+                                final detected = _detectProviderFromKey(val.trim());
+                                if (detected != null && provider != detected) {
+                                  setDialogState(() {
+                                    provider = detected;
+                                    fetchedModels = [];
+                                    fetchError = null;
+                                    modelNameController.clear();
+                                  });
+                                }
+                              },
                               decoration: InputDecoration(
                                 prefixIcon: Icon(Icons.key, color: Colors.lightBlue),
                                 border: OutlineInputBorder(
@@ -1277,6 +1457,188 @@ int main() {
                                     : null;
                               },
                             ),
+                            // Load Models button (hidden for Custom/LocalLlama)
+                            if (provider != null &&
+                                provider != 'Custom' &&
+                                provider != 'LocalLlama') ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: isFetchingModels
+                                          ? null
+                                          : () async {
+                                              final key = apiController.text.trim();
+                                              if (key.isEmpty) {
+                                                setDialogState(() {
+                                                  fetchError = 'Enter your API key first.';
+                                                });
+                                                return;
+                                              }
+                                              setDialogState(() {
+                                                isFetchingModels = true;
+                                                fetchError = null;
+                                              });
+                                              final result =
+                                                  await _fetchModelsForProvider(
+                                                      provider!, key);
+                                              setDialogState(() {
+                                                isFetchingModels = false;
+                                                if (result.isNotEmpty) {
+                                                  fetchedModels = result;
+                                                  fetchError = null;
+                                                  if (!result.contains(
+                                                      modelNameController.text)) {
+                                                    modelNameController.text =
+                                                        result.first;
+                                                  }
+                                                } else {
+                                                  fetchError =
+                                                      'Could not load models. Check your key.';
+                                                }
+                                              });
+                                            },
+                                      icon: isFetchingModels
+                                          ? const SizedBox(
+                                              width: 14,
+                                              height: 14,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.lightBlue,
+                                              ),
+                                            )
+                                          : const Icon(Icons.cloud_download_outlined,
+                                              color: Colors.lightBlue, size: 18),
+                                      label: Text(
+                                        isFetchingModels
+                                            ? 'Loading models…'
+                                            : 'Load models from API',
+                                        style: const TextStyle(
+                                            color: Colors.lightBlue, fontSize: 13),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        side: const BorderSide(
+                                            color: Colors.lightBlue),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 8, horizontal: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (fetchError != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    fetchError!,
+                                    style: const TextStyle(
+                                        color: Colors.redAccent, fontSize: 12),
+                                  ),
+                                ),
+                            ],
+                            const SizedBox(height: 15),
+                            // Model Name: dropdown when models fetched, text field otherwise
+                            if (fetchedModels.isNotEmpty)
+                              DropdownButtonFormField<String>(
+                                value: fetchedModels
+                                        .contains(modelNameController.text)
+                                    ? modelNameController.text
+                                    : fetchedModels.first,
+                                dropdownColor: appThemeState.appTheme.isDark
+                                    ? const Color(0xff181A26)
+                                    : Colors.white,
+                                decoration: InputDecoration(
+                                  prefixIcon: Icon(Icons.smart_toy_outlined,
+                                      color: Colors.lightBlue),
+                                  labelText: 'Select Model',
+                                  labelStyle: TextStyle(
+                                    color: appThemeState.appTheme
+                                        .selectScreenCardTextColor
+                                        .withAlpha(150),
+                                    fontSize: 15,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                    borderSide: const BorderSide(
+                                        color: Colors.lightBlue, width: 2),
+                                  ),
+                                ),
+                                isExpanded: true,
+                                items: fetchedModels
+                                    .map(
+                                      (m) => DropdownMenuItem(
+                                        value: m,
+                                        child: Text(
+                                          m,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: appThemeState.appTheme
+                                                .selectScreenCardTextColor,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setDialogState(() {
+                                      modelNameController.text = val;
+                                    });
+                                  }
+                                },
+                                validator: (v) =>
+                                    v == null ? 'Select a model' : null,
+                              )
+                            else
+                              TextFormField(
+                                style: TextStyle(
+                                  color: appThemeState.appTheme
+                                      .selectScreenCardTextColor,
+                                ),
+                                controller: modelNameController,
+                                cursorColor: Colors.lightBlue,
+                                decoration: InputDecoration(
+                                  prefixIcon: Icon(Icons.label,
+                                      color: Colors.lightBlue),
+                                  hintText: _modelNameHintForProvider(provider),
+                                  hintStyle: TextStyle(
+                                      color: Colors.grey, fontSize: 12),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(15),
+                                    borderSide: const BorderSide(
+                                        color: Colors.lightBlue, width: 2),
+                                  ),
+                                  labelText: 'Model Name',
+                                  helperText: provider != null &&
+                                          provider != 'Custom' &&
+                                          provider != 'LocalLlama'
+                                      ? 'Tap "Load models from API" to pick from a list'
+                                      : null,
+                                  helperStyle: const TextStyle(
+                                      color: Colors.grey, fontSize: 11),
+                                  labelStyle: TextStyle(
+                                    color: appThemeState.appTheme
+                                        .selectScreenCardTextColor
+                                        .withAlpha(150),
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                validator: (value) =>
+                                    value == null || value.isEmpty
+                                        ? 'Enter a valid model name'
+                                        : null,
+                              ),
                             if (isCustomProvider) ...[
                               const SizedBox(height: 15),
                               TextFormField(
