@@ -79,10 +79,11 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // Active activity-bar item (0 = none/welcome)
   int _activeRail = 0;
-  // Whether the sidebar panel is expanded (shows the 240px content area)
-  bool _sidebarPanelOpen = false;
+  // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
+  int  _sidebarState     = 1;
   bool _rightPanelOpen   = false;
   bool _bottomPanelOpen  = false;
+  int  _bottomPanelTab   = 0; // 0=Terminal 1=Problems 2=Output 3=Debug
 
   // ── Dynamic tab system ──────────────────────────────────────────
   int  _activeTabIdx = 0;
@@ -690,22 +691,17 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                   Expanded(
                     child: Row(
                       children: [
-                        // ── Activity bar ────────────────────────────────
-                        _buildActivityBar(context, appTheme),
+                        // Activity bar visible in state 1 (icons only) or 2 (full panel)
+                        if (_sidebarState >= 1)
+                          _buildActivityBar(context, appTheme),
 
-                        // ── Sliding sidebar (rounded right corners) ──────
+                        // Sliding sidebar (square corners)
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           curve: Curves.easeInOut,
-                          width: _sidebarPanelOpen ? _kSidebarWidth : 0,
-                          child: _sidebarPanelOpen
-                              ? ClipRRect(
-                                  borderRadius: const BorderRadius.only(
-                                    topRight:    Radius.circular(12),
-                                    bottomRight: Radius.circular(12),
-                                  ),
-                                  child: _buildSidebarPanel(context, appTheme),
-                                )
+                          width: _sidebarState == 2 ? _kSidebarWidth : 0,
+                          child: _sidebarState == 2
+                              ? _buildSidebarPanel(context, appTheme)
                               : null,
                         ),
 
@@ -758,6 +754,9 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               ),
             ),
           ),
+          // ── Bottom panel ─────────────────────────────────────────────
+          if (_bottomPanelOpen)
+            _buildBottomPanel(),
         );
       },
     );
@@ -801,17 +800,17 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             // ── Sidebar items ─────────────────────────────────────────────
             ...topItems.map((item) => _ActivityBtnEx(
                   item:      item,
-                  selected:  _sidebarPanelOpen && _activeRail == item.idx,
+                  selected:  _sidebarState == 2 && _activeRail == item.idx,
                   iconColor: iconColor,
                   selColor:  selColor,
                   onTap: () {
                     setState(() {
-                      if (_activeRail == item.idx && _sidebarPanelOpen) {
-                        _sidebarPanelOpen = false;
+                      if (_activeRail == item.idx && _sidebarState == 2) {
+                        _sidebarState = 1;
                         _activeRail = 0;
                       } else {
                         _activeRail = item.idx;
-                        _sidebarPanelOpen = true;
+                        _sidebarState = 2;
                       }
                     });
                   },
@@ -962,7 +961,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                 ),
                 InkWell(
                   onTap: () => setState(() {
-                    _sidebarPanelOpen = false;
+                    _sidebarState = 1;
                     _activeRail = 0;
                   }),
                   borderRadius: BorderRadius.circular(4),
@@ -1264,60 +1263,120 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     );
   }
 
-  // ── Top bar (workspace breadcrumb) ────────────────────────────────────────
+  // ── Top bar ───────────────────────────────────────────────────────────────
   Widget _buildTopBar(
         BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
       final isDark = appTheme.isDark;
-      final fg = isDark ? Colors.grey[400]! : Colors.grey[700]!;
+      final fg     = isDark ? Colors.grey[400]! : Colors.grey[700]!;
+      final bg     = isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede);
+      final boxBg  = isDark ? const Color(0xff3a3a3a) : const Color(0xfff5f5f5);
+      final boxBdr = isDark ? const Color(0xff666666) : const Color(0xffbbbbbb);
+      final nameFg = isDark ? Colors.grey[200]! : Colors.grey[800]!;
 
       return Container(
         height: 35,
-        color: isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
+        color: bg,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Row(
           children: [
-            // ── Left: nav arrows only ─────────────────────────────────────
-            _hdrBtn(Broken.arrow_left_2,  'Reculer',  fg, () {}),
-            _hdrBtn(Broken.arrow_right_3, 'Avancer',  fg, () {}),
+            // ── LEFT: hamburger + logo + "Panda" ─────────────────────────
+            Tooltip(
+              message: _sidebarState == 0
+                  ? 'Afficher la barre d\'activité'
+                  : _sidebarState == 1
+                      ? 'Ouvrir le panneau latéral'
+                      : 'Réduire la barre latérale',
+              child: InkWell(
+                onTap: () => setState(_cycleHamburger),
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 6, vertical: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(height: 1.5, width: 14,
+                          color: _sidebarState > 0 ? _kAccent : fg),
+                      const SizedBox(height: 2.5),
+                      Container(height: 1.5, width: 14, color: fg),
+                      const SizedBox(height: 2.5),
+                      Container(height: 1.5, width: 14,
+                          color: _sidebarState == 2 ? _kAccent : fg),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 3),
+            ClipOval(
+              child: Image.asset(
+                'assets/icons/app-icon.png',
+                width: 18, height: 18, fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    const Text('🐼', style: TextStyle(fontSize: 14)),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text('Panda',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: nameFg)),
+            const SizedBox(width: 4),
 
-            // ── Center: workspace pill (truly centered) ───────────────────
+            // ── CENTER: ← [workspace box] → ──────────────────────────────
             Expanded(
               child: Center(
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 320),
-                  height: 22,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xff2a2a2a)
-                        : const Color(0xffc8c8c8),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Broken.folder_open, size: 13, color: fg),
-                    const SizedBox(width: 5),
-                    Flexible(
-                      child: Text(
-                        'Espace de travail',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: fg),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _hdrBtn(Broken.arrow_left_2, 'Reculer', fg, () {}),
+                    const SizedBox(width: 2),
+                    Builder(builder: (ctx) => GestureDetector(
+                      onTap: () => _showWorkspaceMenu(ctx, isDark),
+                      child: Container(
+                        constraints: const BoxConstraints(
+                            minWidth: 140, maxWidth: 260),
+                        height: 24,
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: boxBg,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: boxBdr, width: 1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Broken.folder_open, size: 13, color: fg),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                'Espace de travail',
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark
+                                        ? Colors.grey[300]!
+                                        : Colors.grey[700]!),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Icon(Icons.keyboard_arrow_down,
+                                size: 14, color: fg),
+                          ],
+                        ),
                       ),
-                    ),
-                  ]),
+                    )),
+                    const SizedBox(width: 2),
+                    _hdrBtn(Broken.arrow_right_3, 'Avancer', fg, () {}),
+                  ],
                 ),
               ),
             ),
 
-            // ── Right: exactly 4 layout buttons ──────────────────────────
-            _hdrBtn(
-              Broken.sidebar_left,
-              'Panneau lateral',
-              _sidebarPanelOpen ? _kAccent : fg,
-              () => setState(() {
-                _sidebarPanelOpen = !_sidebarPanelOpen;
-                if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
-              }),
-            ),
+            // ── RIGHT: 4 buttons ─────────────────────────────────────────
+            // 1 — layout disposition menu
             Builder(
               builder: (ctx) => _hdrBtn(
                 Broken.element_4,
@@ -1326,18 +1385,22 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                 () => _showLayoutMenu(ctx, isDark),
               ),
             ),
+            // 2 — terminal / bottom panel
             _hdrBtn(
-              Broken.minus_square,
-              'Panneau inferieur',
+              Broken.cpu,
+              'Terminal',
               _bottomPanelOpen ? _kAccent : fg,
               () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
             ),
+            // 3 — Panda Agent right panel
             _hdrBtn(
-              Broken.maximize_3,
-              'Plein ecran',
-              fg,
-              () {},
+              Broken.message_programming,
+              'Panda Agent',
+              _rightPanelOpen ? _kAccent : fg,
+              () => setState(() => _rightPanelOpen = !_rightPanelOpen),
             ),
+            // 4 — fullscreen
+            _hdrBtn(Broken.maximize_3, 'Plein écran', fg, () {}),
           ],
         ),
       );
@@ -1369,7 +1432,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         items: [
           _layoutMenuItem('sidebar_left', Broken.sidebar_left,
               'Panneau lateral gauche', fg, bg,
-              checked: _sidebarPanelOpen),
+              checked: _sidebarState == 2),
           _layoutMenuItem('sidebar_right', Broken.sidebar_right,
               'Panneau lateral droit', fg, bg,
               checked: _rightPanelOpen),
@@ -1392,8 +1455,12 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         if (value == null) return;
         setState(() {
           if (value == 'sidebar_left') {
-            _sidebarPanelOpen = !_sidebarPanelOpen;
-            if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
+            if (_sidebarState == 2) {
+              _sidebarState = 1; _activeRail = 0;
+            } else {
+              _sidebarState = 2;
+              if (_activeRail == 0) _activeRail = 1;
+            }
           }
           if (value == 'sidebar_right') _rightPanelOpen = !_rightPanelOpen;
           if (value == 'panel_bottom') _bottomPanelOpen = !_bottomPanelOpen;
@@ -1415,9 +1482,174 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       );
     }
 
-    // ── Tab bar ───────────────────────────────────────────────────────────────
+    // ── Hamburger cycle ──────────────────────────────────────────────────────
+      void _cycleHamburger() {
+        _sidebarState = (_sidebarState + 1) % 3;
+        if (_sidebarState == 2 && _activeRail == 0) _activeRail = 1;
+        if (_sidebarState == 0) _activeRail = 0;
+      }
 
-  Widget _buildTabBar(AppTheme appTheme, {bool isPrimary = true}) {
+      // ── Workspace picker ─────────────────────────────────────────────────────
+      void _showWorkspaceMenu(BuildContext ctx, bool isDark) {
+        final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+        final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
+        final RenderBox box = ctx.findRenderObject()! as RenderBox;
+        final Offset off = box.localToGlobal(Offset.zero);
+        final pos = RelativeRect.fromLTRB(
+            off.dx, off.dy + box.size.height, off.dx + box.size.width, 0);
+        showMenu<String>(
+          context: ctx,
+          position: pos,
+          color: bg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          items: [
+            PopupMenuItem<String>(
+              enabled: false, height: 28,
+              child: Text('ESPACE DE TRAVAIL',
+                  style: TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: isDark ? Colors.grey[500]! : Colors.grey[600]!)),
+            ),
+            PopupMenuItem<String>(value: 'open_folder', height: 32,
+              child: Row(children: [
+                Icon(Broken.folder_open, size: 15, color: fg),
+                const SizedBox(width: 8),
+                Text('Ouvrir un dossier…', style: TextStyle(fontSize: 13, color: fg)),
+              ])),
+            PopupMenuItem<String>(value: 'open_file', height: 32,
+              child: Row(children: [
+                Icon(Broken.document, size: 15, color: fg),
+                const SizedBox(width: 8),
+                Text('Ouvrir un fichier…', style: TextStyle(fontSize: 13, color: fg)),
+              ])),
+            PopupMenuItem<String>(value: 'new_project', height: 32,
+              child: Row(children: [
+                Icon(Broken.folder_add, size: 15, color: fg),
+                const SizedBox(width: 8),
+                Text('Nouveau projet…', style: TextStyle(fontSize: 13, color: fg)),
+              ])),
+          ],
+        ).then((value) {
+          if (value == null) return;
+          if (value == 'open_folder' || value == 'new_project') {
+            _push(ctx, const ProjectScreen());
+            setState(() => _sidebarState = 0);
+          } else if (value == 'open_file') {
+            _push(ctx, const MenuScreen());
+          }
+        });
+      }
+
+      // ── Bottom panel (terminal / problems / output / debug) ──────────────────
+      Widget _buildBottomPanel() {
+        return BlocBuilder<AppThemeBloc, AppThemeState>(
+          builder: (context, ts) {
+            final isDark = ts.appTheme.isDark;
+            final bg     = isDark ? const Color(0xff1e1e1e) : const Color(0xfffefefe);
+            final tabBg  = isDark ? const Color(0xff252526) : const Color(0xffececec);
+            final fg     = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+            final selFg  = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+            final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
+            const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
+            return Container(
+              height: 220,
+              decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: border))),
+              child: Column(children: [
+                // Tab strip
+                Container(
+                  height: 30,
+                  color: tabBg,
+                  child: Row(children: [
+                    ...List.generate(tabNames.length, (i) {
+                      final active = _bottomPanelTab == i;
+                      return GestureDetector(
+                        onTap: () => setState(() => _bottomPanelTab = i),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: active ? bg : Colors.transparent,
+                            border: Border(
+                              top: BorderSide(
+                                  color: active ? _kAccent : Colors.transparent,
+                                  width: 1),
+                            ),
+                          ),
+                          child: Text(tabNames[i],
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: active
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                  color: active ? selFg : fg)),
+                        ),
+                      );
+                    }),
+                    const Spacer(),
+                    InkWell(
+                      onTap: () => setState(() => _bottomPanelOpen = false),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        child: Icon(Broken.close_circle, size: 14, color: fg),
+                      ),
+                    ),
+                  ]),
+                ),
+                Expanded(
+                  child: Container(
+                    color: bg,
+                    child: _buildBottomPanelContent(context, ts.appTheme, isDark),
+                  ),
+                ),
+              ]),
+            );
+          },
+        );
+      }
+
+      Widget _buildBottomPanelContent(
+          BuildContext context, AppTheme appTheme, bool isDark) {
+        final fg = isDark ? const Color(0xffcfcfcf) : const Color(0xff333333);
+        switch (_bottomPanelTab) {
+          case 0: // Terminal
+            if (kIsWeb) {
+              return Center(
+                child: Text(
+                  'Le terminal n\'est pas disponible dans la version web.',
+                  style: TextStyle(fontSize: 12, color: fg),
+                ),
+              );
+            }
+            return EmbeddedTerminal(
+              projectDir: '/',
+              showKeyboardMenu: true,
+            );
+          case 1: // Problems
+            return ListView(padding: const EdgeInsets.all(12), children: [
+              Text('Aucun problème détecté.',
+                  style: TextStyle(fontSize: 12, color: fg)),
+            ]);
+          case 2: // Output
+            return ListView(padding: const EdgeInsets.all(12), children: [
+              Text('Pas de sortie.', style: TextStyle(fontSize: 12, color: fg)),
+            ]);
+          case 3: // Debug Console
+            return ListView(padding: const EdgeInsets.all(12), children: [
+              Text('Console de débogage vide.',
+                  style: TextStyle(fontSize: 12, color: fg)),
+            ]);
+          default:
+            return const SizedBox.shrink();
+        }
+      }
+
+      // ── Tab bar ───────────────────────────────────────────────────────────────
+
+    Widget _buildTabBar(AppTheme appTheme, {bool isPrimary = true}) {
     final isDark      = appTheme.isDark;
     final tabBg       = isDark ? _kTabBarDark    : _kTabBarLight;
     final activeTabBg = isDark ? _kTabActiveDark : _kTabActiveLight;
