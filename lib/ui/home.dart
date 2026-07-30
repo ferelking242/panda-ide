@@ -750,13 +750,13 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                       ],
                     ),
                   ),
+                  // ── Bottom panel ─────────────────────────────────────
+                  if (_bottomPanelOpen)
+                    _buildBottomPanel(),
                 ],
               ),
             ),
           ),
-          // ── Bottom panel ─────────────────────────────────────────────
-          if (_bottomPanelOpen)
-            _buildBottomPanel(),
         );
       },
     );
@@ -2111,7 +2111,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                       message: 'Joindre un fichier',
                       child: InkWell(
                         onTap: () async {
-                          final res = await FilePicker.platform.pickFiles(
+                          final res = await FilePicker.pickFiles(
                             allowMultiple: true,
                             type: FileType.any,
                           );
