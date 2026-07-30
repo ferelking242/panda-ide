@@ -1312,8 +1312,8 @@ Future<bool> hasUpstream(String workspacePath) async {
 
 Future<String> gitHubSignIn() async {
   final secureStorage = const FlutterSecureStorage();
-  const clientId = "Ov23li7t3A7ZkHgtN7hl";
-  const backEndHandler = "https://panda-ide-oauth.vercel.app";
+  const clientId     = "Ov23li7t3A7ZkHgtN7hl";
+  const clientSecret = "1d4d1ec47b757082e0497938b593c352a7200db7";
 
   final authUrl = Uri.https('github.com', '/login/oauth/authorize', {
     'client_id': clientId,
@@ -1334,28 +1334,39 @@ Future<String> gitHubSignIn() async {
       return 'No authorization code received';
     }
 
+    // Échange direct — pas de backend nécessaire sur mobile
     final response = await http
       .post(
-        Uri.parse('$backEndHandler/github/oauth'),
-        headers: {'Content-Type': 'application/json; charset=utf-8'},
-        body: jsonEncode({'code': code}),
+        Uri.https('github.com', '/login/oauth/access_token'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'client_id': clientId,
+          'client_secret': clientSecret,
+          'code': code,
+        }),
       )
       .timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          return http.Response('Backend connection timeout', 408);
-        },
+        const Duration(seconds: 15),
+        onTimeout: () => http.Response('Timeout', 408),
       );
 
     if (response.statusCode != 200) {
-      return ('${response.statusCode}: ${response.body}');
+      return '${response.statusCode}: ${response.body}';
     }
 
     final data = jsonDecode(response.body);
-    final accessToken = data['access_token'];
+
+    if (data['error'] != null) {
+      return data['error_description'] ?? data['error'];
+    }
+
+    final accessToken = data['access_token'] as String?;
 
     if (accessToken == null || accessToken.isEmpty) {
-      return 'No access token in backend response';
+      return 'No access token received';
     }
 
     await secureStorage.write(key: 'github_access_token', value: accessToken);
