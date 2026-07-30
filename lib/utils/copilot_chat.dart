@@ -468,7 +468,7 @@ class CopilotChat {
 
   String _toolEditMarker(String filePath, int added, int removed) {
     final fileEncoded = base64Encode(utf8.encode(filePath));
-    return '[[ROXUM_EDIT:$fileEncoded|$added|$removed]]\n';
+    return '[[PANDA_EDIT:$fileEncoded|$added|$removed]]\n';
   }
 
   String _toolTerminalMarker(
@@ -484,11 +484,11 @@ class CopilotChat {
       'exitCode': exitCode,
     });
     final encoded = base64Encode(utf8.encode(payload));
-    return '[[ROXUM_TERMINAL:$encoded]]\n';
+    return '[[PANDA_TERMINAL:$encoded]]\n';
   }
 
   String _toolStatusMarker(String status) {
-    return '[[ROXUM_STATUS:$status]]\n';
+    return '[[PANDA_STATUS:$status]]\n';
   }
 
   String _toolStatusForFunction(String functionName) {
@@ -632,7 +632,7 @@ class CopilotChat {
               if (reasoningDelta != null && reasoningDelta.isNotEmpty) {
                 if (!emittingThinking) {
                   emittingThinking = true;
-                  const openMarker = '[[ROXUM_THINK_START]]\n';
+                  const openMarker = '[[PANDA_THINK_START]]\n';
                   finalMessage['content'] += openMarker;
                   pushPartial(openMarker);
                 }
@@ -644,7 +644,7 @@ class CopilotChat {
               if (deltaText != null && deltaText.isNotEmpty) {
                 if (emittingThinking) {
                   emittingThinking = false;
-                  const closeMarker = '\n[[ROXUM_THINK_END]]\n';
+                  const closeMarker = '\n[[PANDA_THINK_END]]\n';
                   finalMessage['content'] += closeMarker;
                   pushPartial(closeMarker);
                 }
@@ -695,7 +695,7 @@ class CopilotChat {
               if (reasoningDelta != null && reasoningDelta.isNotEmpty) {
                 if (!emittingThinking) {
                   emittingThinking = true;
-                  const openMarker = '[[ROXUM_THINK_START]]\n';
+                  const openMarker = '[[PANDA_THINK_START]]\n';
                   finalMessage['content'] += openMarker;
                   pushPartial(openMarker);
                 }
@@ -707,7 +707,7 @@ class CopilotChat {
               if (deltaText != null && deltaText.isNotEmpty) {
                 if (emittingThinking) {
                   emittingThinking = false;
-                  const closeMarker = '\n[[ROXUM_THINK_END]]\n';
+                  const closeMarker = '\n[[PANDA_THINK_END]]\n';
                   finalMessage['content'] += closeMarker;
                   pushPartial(closeMarker);
                 }
@@ -730,7 +730,7 @@ class CopilotChat {
 
       if (emittingThinking) {
         emittingThinking = false;
-        const closeMarker = '\n[[ROXUM_THINK_END]]\n';
+        const closeMarker = '\n[[PANDA_THINK_END]]\n';
         finalMessage['content'] += closeMarker;
         pushPartial(closeMarker);
       }

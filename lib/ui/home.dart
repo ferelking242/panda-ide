@@ -1914,6 +1914,7 @@ class _SelectTypeState extends State<SelectType>
             .clamp(0, _splitTabs.length - 1);
       } else {
         _splitTabIdx = 0;
+        _splitEditor = false; // ferme le split quand plus aucun onglet
       }
     });
   }
@@ -1946,6 +1947,7 @@ class _SelectTypeState extends State<SelectType>
           } else {
             _splitTabs.clear();
             _splitTabIdx = 0;
+            _splitEditor = false; // ferme le split quand tous les onglets sont fermés
           }
         });
       }

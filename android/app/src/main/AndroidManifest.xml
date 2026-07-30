@@ -4,7 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
-        android:label="Roxum IDE"
+        android:label="Panda IDE"
         android:allowBackup="false"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"

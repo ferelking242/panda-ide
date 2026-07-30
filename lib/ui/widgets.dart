@@ -9432,11 +9432,11 @@ class _ModelOption {
 }
 
 class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
-  static final RegExp _toolEditPattern = RegExp(r'^\[\[ROXUM_EDIT:([^|\]]+)\|(\d+)\|(\d+)\]\]$');
-  static final RegExp _toolTerminalPattern = RegExp(r'^\[\[ROXUM_TERMINAL:([^\]]+)\]\]$');
-  static final RegExp _toolStatusPattern = RegExp(r'^\[\[ROXUM_STATUS:([^\]]+)\]\]$');
-  static const String _thinkingStartMarker = '[[ROXUM_THINK_START]]';
-  static const String _thinkingEndMarker = '[[ROXUM_THINK_END]]';
+  static final RegExp _toolEditPattern = RegExp(r'^\[\[PANDA_EDIT:([^|\]]+)\|(\d+)\|(\d+)\]\]$');
+  static final RegExp _toolTerminalPattern = RegExp(r'^\[\[PANDA_TERMINAL:([^\]]+)\]\]$');
+  static final RegExp _toolStatusPattern = RegExp(r'^\[\[PANDA_STATUS:([^\]]+)\]\]$');
+  static const String _thinkingStartMarker = '[[PANDA_THINK_START]]';
+  static const String _thinkingEndMarker = '[[PANDA_THINK_END]]';
 
   final TextEditingController _promptController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -10585,7 +10585,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
   String _toolEditMarker(String filePath, int added, int removed) {
     final fileEncoded = base64Encode(utf8.encode(filePath));
-    return '[[ROXUM_EDIT:$fileEncoded|$added|$removed]]\n';
+    return '[[PANDA_EDIT:$fileEncoded|$added|$removed]]\n';
   }
 
   String _toolTerminalMarker(
@@ -10601,11 +10601,11 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       'exitCode': exitCode,
     });
     final encoded = base64Encode(utf8.encode(payload));
-    return '[[ROXUM_TERMINAL:$encoded]]\n';
+    return '[[PANDA_TERMINAL:$encoded]]\n';
   }
 
   String _toolStatusMarker(String status) {
-    return '[[ROXUM_STATUS:$status]]\n';
+    return '[[PANDA_STATUS:$status]]\n';
   }
 
   String _toolStatusForFunction(String functionName) {
@@ -10969,7 +10969,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     if (chatMode == ChatMode.agent) {
       conversationMessages.insert(0, {
         'role': 'system',
-        'content': 'You are running in Roxum IDE with workspace tool access. Use available tools to inspect, edit, and run commands when asked for code changes. Do not claim missing permissions unless a tool call fails with an explicit permission error.',
+        'content': 'You are running in Panda IDE with workspace tool access. Use available tools to inspect, edit, and run commands when asked for code changes. Do not claim missing permissions unless a tool call fails with an explicit permission error.',
       });
     }
     conversationMessages.add({'role': 'user', 'content': prompt});
@@ -11526,7 +11526,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       if (chatMode == ChatMode.agent) {
         messages.insert(0, {
           'role': 'system',
-          'content': 'You are running in Roxum IDE with workspace tool access. Use available tools to inspect, edit, and run commands when asked for code changes. Do not claim missing permissions unless a tool call fails with an explicit permission error.',
+          'content': 'You are running in Panda IDE with workspace tool access. Use available tools to inspect, edit, and run commands when asked for code changes. Do not claim missing permissions unless a tool call fails with an explicit permission error.',
         });
       }
       messages.add({'role': 'user', 'content': prompt});
@@ -11664,7 +11664,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
 
         messages.insert(0, ChatMessage(
           role: 'system',
-          content: '''You are a code completion agent in Roxum IDE.
+          content: '''You are a code completion agent in Panda IDE.
 
   When you need to use a tool, respond with a JSON block like:
   {"type": "tool_call", "function": "toolName", "arguments": {"key": "value"}}
