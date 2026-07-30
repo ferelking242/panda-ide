@@ -28,6 +28,10 @@ import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 import '../utils/themes.dart';
+import '../extensions/ui/marketplace_page.dart';
+import '../extensions/ui/extensions_panel.dart';
+import '../extensions/ui/extension_webview.dart';
+import 'agent_runner.dart';
 import 'widgets.dart';
 
 // ── VSCode colour tokens ──────────────────────────────────────────────────────
@@ -95,6 +99,13 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   final _agentInputCtrl  = TextEditingController();
   final _agentScrollCtrl = ScrollController();
   final List<Map<String,dynamic>> _agentMessages = [];
+
+  // ── Agent AI state ────────────────────────────────────────────────
+  AgentPhase _agentPhase        = AgentPhase.idle;
+  bool       _agentGenerating   = false;
+  String     _agentThinkingBuf  = '';
+  String     _agentStreamBuf    = '';
+  final      _agentRunner       = AgentRunner();
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
@@ -1118,10 +1129,86 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   // ── Marketplace panel ─────────────────────────────────────────────────────
   Widget _sidebarMarketplace(BuildContext ctx, AppTheme t, bool dark) {
+    final bool nodeAvailable = kIsWeb
+        ? true
+        : () {
+            try {
+              // Vérifie si node est accessible via Termux ou le chemin standard
+              final paths = [
+                '/data/data/com.termux.app/files/usr/bin/node',
+                '/usr/bin/node',
+                '/usr/local/bin/node',
+              ];
+              return paths.any((p) {
+                try { return File(p).existsSync(); } catch (_) { return false; }
+              });
+            } catch (_) {
+              return false;
+            }
+          }();
+
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        _panelItem(ctx, t, Broken.shop, 'Parcourir les modèles',
+        // ── Bannière Node.js si absent ────────────────────────────────
+        if (!nodeAvailable) ...[
+          Container(
+            margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(dark ? 0.15 : 0.10),
+              border: Border.all(
+                  color: Colors.orange.withOpacity(0.5), width: 1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(children: [
+              const Icon(Broken.warning_2, size: 14, color: Colors.orange),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Runtime Node.js absent. Installez-le pour activer les extensions.',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color:
+                          dark ? Colors.orange[300] : Colors.orange[800]),
+                ),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: () => _push(ctx, DownloadManager()),
+                child: Text('Installer',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.orange[400],
+                        decoration: TextDecoration.underline)),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 4),
+        ],
+
+        // ── Section Extensions VSCode ─────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Text('EXTENSIONS VSCODE',
+              style: _kSectionTitle.copyWith(
+                  color: dark ? Colors.grey[500] : Colors.grey[500])),
+        ),
+        _panelItem(ctx, t, Broken.shop, 'Parcourir les extensions',
+            () => _push(ctx, const MarketplacePage())),
+        _panelItem(ctx, t, Broken.element_3, 'Extensions installées',
+            () => _push(ctx, const ExtensionsPanel())),
+        const Divider(indent: 12, endIndent: 12),
+
+        // ── Section Modèles & runtimes ────────────────────────────────
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: Text('MODÈLES & RUNTIMES',
+              style: _kSectionTitle.copyWith(
+                  color: dark ? Colors.grey[500] : Colors.grey[500])),
+        ),
+        _panelItem(ctx, t, Broken.cpu, 'Parcourir les modèles IA',
             () => _push(ctx, const MenuScreen())),
         _panelItem(ctx, t, Broken.document_download, 'Téléchargements / Paquets',
             () => _push(ctx, DownloadManager())),
@@ -1676,13 +1763,23 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     ),
                   ),
                   const Spacer(),
-                  IconButton(
-                    onPressed: _agentSend,
-                    icon: Icon(Broken.send_2, size: 18, color: _kAccent),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    tooltip: 'Envoyer',
-                  ),
+                  if (_agentGenerating)
+                    IconButton(
+                      onPressed: _agentStop,
+                      icon: Icon(Broken.stop_circle, size: 18,
+                          color: Colors.red[400]),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Arrêter la génération',
+                    )
+                  else
+                    IconButton(
+                      onPressed: _agentSend,
+                      icon: Icon(Broken.send_2, size: 18, color: _kAccent),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: 'Envoyer',
+                    ),
                 ]),
               ],
             ),
@@ -1730,26 +1827,93 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       padding: const EdgeInsets.all(12),
       itemCount: _agentMessages.length,
       itemBuilder: (_, i) {
-        final msg  = _agentMessages[i];
-        final isMe = msg['role'] == 'user';
+        final msg    = _agentMessages[i];
+        final isMe   = msg['role'] == 'user';
+        final phase  = msg['phase'] as String? ?? 'done';
+        final text   = msg['text'] as String? ?? '';
+        final think  = msg['thinking'] as String? ?? '';
+        final isStreaming = phase == 'streaming';
+        final isError     = phase == 'error';
+
+        if (isMe) {
+          return Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              constraints: const BoxConstraints(maxWidth: 260),
+              decoration: BoxDecoration(
+                color: _kAccent.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(text,
+                  style:
+                      const TextStyle(fontSize: 13, color: Colors.white)),
+            ),
+          );
+        }
+
+        // ── Message agent ─────────────────────────────────────────────
         return Align(
-          alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+          alignment: Alignment.centerLeft,
           child: Container(
             margin: const EdgeInsets.symmetric(vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            constraints: const BoxConstraints(maxWidth: 260),
-            decoration: BoxDecoration(
-              color: isMe
-                  ? _kAccent.withOpacity(0.85)
-                  : (isDark
-                      ? const Color(0xff2d2d2d)
-                      : const Color(0xffe8e8e8)),
-              borderRadius: BorderRadius.circular(8),
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Phase chip (thinking / streaming)
+                if (isStreaming && think.isNotEmpty)
+                  _AgentPhaseChip(
+                      phase: AgentPhase.thinking, isDark: isDark),
+                if (isStreaming && think.isEmpty)
+                  _AgentPhaseChip(
+                      phase: AgentPhase.streaming, isDark: isDark),
+
+                // Thinking block (collapsible)
+                if (think.isNotEmpty)
+                  _ThinkingBlock(
+                      thinking: think, isDark: isDark, fg: fg, muted: muted),
+
+                // Bulle réponse
+                if (text.isNotEmpty || isStreaming)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isError
+                          ? Colors.red.withOpacity(isDark ? 0.2 : 0.1)
+                          : (isDark
+                              ? const Color(0xff2d2d2d)
+                              : const Color(0xffe8e8e8)),
+                      borderRadius: BorderRadius.circular(8),
+                      border: isError
+                          ? Border.all(
+                              color: Colors.red.withOpacity(0.4), width: 1)
+                          : null,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            text.isEmpty && isStreaming ? ' ' : text,
+                            style: TextStyle(
+                                fontSize: 13,
+                                color: isError ? Colors.red[400] : fg),
+                          ),
+                        ),
+                        if (isStreaming) ...[
+                          const SizedBox(width: 2),
+                          _BlinkingCursor(color: fg),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
             ),
-            child: Text(msg['text'] as String,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: isMe ? Colors.white : fg)),
           ),
         );
       },
@@ -1770,17 +1934,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         ),
       );
 
-  void _agentSend() {
-    final text = _agentInputCtrl.text.trim();
-    if (text.isEmpty) return;
-    setState(() {
-      _agentMessages.add({'role': 'user', 'text': text});
-      _agentMessages.add({
-        'role': 'agent',
-        'text': 'Panda Agent arrive bientot - merci pour votre patience !'
-      });
-      _agentInputCtrl.clear();
-    });
+  void _agentScrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_agentScrollCtrl.hasClients) {
         _agentScrollCtrl.animateTo(
@@ -1790,6 +1944,118 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         );
       }
     });
+  }
+
+  void _agentStop() {
+    _agentRunner.cancel();
+    if (!mounted) return;
+    setState(() {
+      _agentGenerating = false;
+      _agentPhase = AgentPhase.idle;
+      if (_agentMessages.isNotEmpty &&
+          _agentMessages.last['role'] == 'agent' &&
+          _agentMessages.last['phase'] == 'streaming') {
+        _agentMessages.last['phase'] = 'done';
+      }
+    });
+  }
+
+  void _agentSend() {
+    final text = _agentInputCtrl.text.trim();
+    if (text.isEmpty || _agentGenerating) return;
+
+    // Récupère le chatModel configuré dans AIBloc
+    final aiState = context.read<AIBloc>().state;
+    final model   = aiState.chatModel;
+
+    if (model == null) {
+      setState(() {
+        _agentMessages.add({'role': 'user', 'text': text});
+        _agentMessages.add({
+          'role': 'agent',
+          'text':
+              'Aucun modèle IA configuré. Allez dans Paramètres → IA pour en configurer un.',
+          'thinking': '',
+          'phase': 'error',
+        });
+        _agentInputCtrl.clear();
+      });
+      _agentScrollToBottom();
+      return;
+    }
+
+    // Construit l'historique au format OpenAI
+    final history = _agentMessages
+        .where((m) =>
+            (m['role'] == 'user' || m['role'] == 'agent') &&
+            (m['text'] as String).isNotEmpty)
+        .map((m) => {
+              'role': m['role'] == 'user' ? 'user' : 'assistant',
+              'content': m['text'] as String,
+            })
+        .toList();
+    final messages = [...history, {'role': 'user', 'content': text}];
+
+    setState(() {
+      _agentMessages.add({'role': 'user', 'text': text});
+      _agentMessages.add({
+        'role': 'agent',
+        'text': '',
+        'thinking': '',
+        'phase': 'streaming',
+      });
+      _agentInputCtrl.clear();
+      _agentGenerating  = true;
+      _agentPhase       = AgentPhase.streaming;
+      _agentThinkingBuf = '';
+      _agentStreamBuf   = '';
+    });
+
+    final agentIdx = _agentMessages.length - 1;
+
+    _agentRunner
+        .run(model: model, messages: messages)
+        .listen(
+          (chunk) {
+            if (!mounted) return;
+            setState(() {
+              switch (chunk.phase) {
+                case AgentPhase.thinking:
+                  _agentPhase = AgentPhase.thinking;
+                  _agentThinkingBuf += chunk.text;
+                  _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
+                case AgentPhase.streaming:
+                  _agentPhase = AgentPhase.streaming;
+                  _agentStreamBuf += chunk.text;
+                  _agentMessages[agentIdx]['text'] = _agentStreamBuf;
+                case AgentPhase.done:
+                  _agentPhase = AgentPhase.done;
+                  _agentGenerating = false;
+                  _agentMessages[agentIdx]['phase'] = 'done';
+                case AgentPhase.error:
+                  _agentPhase = AgentPhase.error;
+                  _agentGenerating = false;
+                  _agentMessages[agentIdx]['text'] =
+                      _agentStreamBuf.isNotEmpty
+                          ? _agentStreamBuf
+                          : 'Erreur : ${chunk.text}';
+                  _agentMessages[agentIdx]['phase'] = 'error';
+                case AgentPhase.idle:
+                  break;
+              }
+            });
+            _agentScrollToBottom();
+          },
+          onError: (e) {
+            if (!mounted) return;
+            setState(() {
+              _agentGenerating = false;
+              _agentPhase      = AgentPhase.error;
+              _agentMessages[agentIdx]['text'] = 'Erreur : $e';
+              _agentMessages[agentIdx]['phase'] = 'error';
+            });
+          },
+        );
   }
 
   // ── Welcome page ──────────────────────────────────────────────────────────
@@ -2387,6 +2653,165 @@ class _WalkthroughCardState extends State<_WalkthroughCard> {
                     ? Colors.grey[600]
                     : Colors.grey[400]),
           ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Panda Agent — helper widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Bloc de pensée collapsible (extended thinking / reasoning).
+class _ThinkingBlock extends StatefulWidget {
+  final String  thinking;
+  final bool    isDark;
+  final Color   fg;
+  final Color   muted;
+  const _ThinkingBlock({
+    required this.thinking,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  State<_ThinkingBlock> createState() => _ThinkingBlockState();
+}
+
+class _ThinkingBlockState extends State<_ThinkingBlock> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark
+        ? const Color(0xff2a2a3a)
+        : const Color(0xfff0f0ff);
+    final border = widget.isDark
+        ? const Color(0xff4a4a6a)
+        : const Color(0xffbbbbdd);
+
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: bg,
+          border: Border.all(color: border, width: 1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Broken.message_tick,
+                  size: 12, color: widget.muted),
+              const SizedBox(width: 6),
+              Text('Réflexion interne',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: widget.muted)),
+              const Spacer(),
+              Icon(
+                _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                size: 12,
+                color: widget.muted,
+              ),
+            ]),
+            if (_expanded) ...[
+              const SizedBox(height: 6),
+              Text(widget.thinking,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: widget.fg.withOpacity(0.7))),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Indicateur de phase (thinking / streaming) affiché au-dessus de la bulle.
+class _AgentPhaseChip extends StatelessWidget {
+  final AgentPhase phase;
+  final bool       isDark;
+  const _AgentPhaseChip({required this.phase, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final (String label, IconData icon, Color color) = switch (phase) {
+      AgentPhase.thinking  => ('Réflexion\u2026',  Broken.cpu,        Colors.purple),
+      AgentPhase.streaming => ('Génération\u2026', Broken.edit_2,     _kAccent),
+      AgentPhase.error     => ('Erreur',            Broken.danger,     Colors.red),
+      _                    => ('',                  Broken.tick_circle, Colors.green),
+    };
+    if (label.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 11, color: color),
+        const SizedBox(width: 4),
+        Text(label,
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color)),
+      ]),
+    );
+  }
+}
+
+/// Curseur clignotant animé pendant le streaming.
+class _BlinkingCursor extends StatefulWidget {
+  final Color color;
+  const _BlinkingCursor({required this.color});
+
+  @override
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
+}
+
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double>    _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0, end: 1).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _anim,
+      child: Container(
+        width: 2,
+        height: 13,
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(1),
         ),
       ),
     );
