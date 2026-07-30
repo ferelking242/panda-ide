@@ -84,6 +84,13 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     const _TabDef(id: 'welcome', title: 'Welcome', icon: Broken.global_refresh),
   ];
 
+  // ── Split editor ─────────────────────────────────────────────
+  bool _splitEditor = false;
+  int  _splitTabIdx = 0;
+  final List<_TabDef> _splitTabs = [
+    const _TabDef(id: 'welcome', title: 'Welcome', icon: Broken.global_refresh),
+  ];
+
   // ── Panda Agent chat ─────────────────────────────────────────────
   final _agentInputCtrl  = TextEditingController();
   final _agentScrollCtrl = ScrollController();
@@ -658,13 +665,19 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                   // ── Activity bar ──────────────────────────────────────
                   _buildActivityBar(context, appTheme),
 
-                  // ── Sliding sidebar panel ─────────────────────────────
+                  // ── Sliding sidebar panel (rounded right corners) ─────
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     curve: Curves.easeInOut,
                     width: _sidebarPanelOpen ? _kSidebarWidth : 0,
                     child: _sidebarPanelOpen
-                        ? _buildSidebarPanel(context, appTheme)
+                        ? ClipRRect(
+                            borderRadius: const BorderRadius.only(
+                              topRight:    Radius.circular(12),
+                              bottomRight: Radius.circular(12),
+                            ),
+                            child: _buildSidebarPanel(context, appTheme),
+                          )
                         : null,
                   ),
 
@@ -673,14 +686,43 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     child: Column(
                       children: [
                         _buildTopBar(context, appTheme, appThemestate),
-                        _buildTabBar(appTheme),
+                        // Editor area — supports split view
                         Expanded(
                           child: Row(
                             children: [
+                              // Primary editor pane
                               Expanded(
-                                child: _buildActiveTab(
-                                    context, appTheme, appThemestate),
+                                child: Column(
+                                  children: [
+                                    _buildTabBar(appTheme, isPrimary: true),
+                                    Expanded(
+                                      child: _buildActiveTab(
+                                          context, appTheme, appThemestate),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              // Secondary (split) editor pane
+                              if (_splitEditor) ...[
+                                VerticalDivider(
+                                  width: 1,
+                                  color: appTheme.isDark
+                                      ? const Color(0xff444444)
+                                      : const Color(0xffcccccc),
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    children: [
+                                      _buildTabBar(appTheme, isPrimary: false),
+                                      Expanded(
+                                        child: _buildSplitActiveTab(
+                                            context, appTheme, appThemestate),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              // Panda Agent panel
                               if (_rightPanelOpen)
                                 _buildPandaAgentPanel(context, appTheme),
                             ],
@@ -727,47 +769,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         color: railBg,
         child: Column(
           children: [
-            // ── Logo + hamburger ──────────────────────────────────────────
-            Tooltip(
-              message: _sidebarPanelOpen ? 'Fermer le panneau' : 'Ouvrir le panneau',
-              child: InkWell(
-                onTap: () {
-                  setState(() {
-                    if (_sidebarPanelOpen) {
-                      _sidebarPanelOpen = false;
-                      _activeRail = 0;
-                    } else {
-                      if (_activeRail == 0) _activeRail = 1;
-                      _sidebarPanelOpen = true;
-                    }
-                  });
-                },
-                child: SizedBox(
-                  width: 48,
-                  height: 48,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Image.asset(
-                          'assets/icons/app-icon.png',
-                          width: 20,
-                          height: 20,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const Text('\u{1F43C}', style: TextStyle(fontSize: 14)),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Icon(Broken.align_left, size: 14, color: iconColor),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            Divider(
+                Divider(
               color: isDark ? const Color(0xff444444) : const Color(0xffcccccc),
               height: 1,
             ),
@@ -1175,40 +1177,64 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Row(
           children: [
-            // ── back / forward arrows ─────────────────────────────────────
+            // ── Left: hamburger + icon + name + nav arrows ────────────────
+            _hdrBtn(Broken.menu, 'Menu lateral', fg, () => setState(() {
+              _sidebarPanelOpen = !_sidebarPanelOpen;
+              if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
+            })),
+            const SizedBox(width: 2),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.asset(
+                'assets/icons/app-icon.png',
+                width: 16,
+                height: 16,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) =>
+                    const Text('\u{1F43C}', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Panda',
+              style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: fg),
+            ),
+            const SizedBox(width: 4),
             _hdrBtn(Broken.arrow_left_2,  'Reculer',  fg, () {}),
             _hdrBtn(Broken.arrow_right_3, 'Avancer',  fg, () {}),
-            const SizedBox(width: 4),
 
-            // ── Workspace pill ────────────────────────────────────────────
-            Flexible(
-              child: Container(
-                constraints: const BoxConstraints(maxWidth: 260),
-                height: 22,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xff2a2a2a)
-                      : const Color(0xffc8c8c8),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Broken.folder_open, size: 13, color: fg),
-                  const SizedBox(width: 5),
-                  Flexible(
-                    child: Text(
-                      'Workspace',
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: fg),
-                    ),
+            // ── Center: workspace pill (truly centered) ───────────────────
+            Expanded(
+              child: Center(
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  height: 22,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xff2a2a2a)
+                        : const Color(0xffc8c8c8),
+                    borderRadius: BorderRadius.circular(4),
                   ),
-                ]),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Broken.folder_open, size: 13, color: fg),
+                    const SizedBox(width: 5),
+                    Flexible(
+                      child: Text(
+                        'Workspace',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: fg),
+                      ),
+                    ),
+                  ]),
+                ),
               ),
             ),
 
-            const Spacer(),
-
-            // ── File Manager / Downloads / Projects / Templates ───────────
+            // ── Right: file manager / downloads / projects / templates ─────
             _hdrBtn(Broken.folder_open, 'File Manager', fg,
                 () => _push(context, const FileManagerPage())),
             _hdrBtn(Broken.document_download, 'Downloads', fg,
@@ -1244,16 +1270,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     : const Color(0xffbbbbbb)),
             const SizedBox(width: 4),
 
-            // ── Layout controls ───────────────────────────────────────────
-            _hdrBtn(
-              Broken.sidebar_left,
-              'Panneau lateral',
-              _sidebarPanelOpen ? _kAccent : fg,
-              () => setState(() {
-                _sidebarPanelOpen = !_sidebarPanelOpen;
-                if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
-              }),
-            ),
+            // ── Layout controls (no Panda Agent here — it's in tab bar) ───
             Builder(
               builder: (ctx) => _hdrBtn(
                 Broken.element_4,
@@ -1267,12 +1284,6 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               'Panneau inferieur',
               _bottomPanelOpen ? _kAccent : fg,
               () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
-            ),
-            _hdrBtn(
-              Broken.message_programming,
-              'Panda Agent',
-              _rightPanelOpen ? _kAccent : fg,
-              () => setState(() => _rightPanelOpen = !_rightPanelOpen),
             ),
           ],
         ),
@@ -1352,13 +1363,16 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     }
 
     // ── Tab bar ───────────────────────────────────────────────────────────────
-    
-  Widget _buildTabBar(AppTheme appTheme) {
+
+  Widget _buildTabBar(AppTheme appTheme, {bool isPrimary = true}) {
     final isDark      = appTheme.isDark;
     final tabBg       = isDark ? _kTabBarDark    : _kTabBarLight;
     final activeTabBg = isDark ? _kTabActiveDark : _kTabActiveLight;
     final inactiveFg  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final activeFg    = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+
+    final tabs      = isPrimary ? _openTabs     : _splitTabs;
+    final activeIdx = isPrimary ? _activeTabIdx : _splitTabIdx;
 
     return Container(
       height: 35,
@@ -1368,11 +1382,14 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: List.generate(_openTabs.length, (i) {
-                final tab      = _openTabs[i];
-                final isActive = i == _activeTabIdx;
+              children: List.generate(tabs.length, (i) {
+                final tab      = tabs[i];
+                final isActive = i == activeIdx;
                 return GestureDetector(
-                  onTap: () => setState(() => _activeTabIdx = i),
+                  onTap: () => setState(() {
+                    if (isPrimary) _activeTabIdx = i;
+                    else _splitTabIdx = i;
+                  }),
                   child: Container(
                     height: 35,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1393,12 +1410,10 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                               color: isActive ? activeFg : inactiveFg)),
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: () => _closeTab(i),
+                        onTap: () => isPrimary ? _closeTab(i) : _closeSplitTab(i),
                         child: Icon(Broken.close_circle,
                             size: 12,
-                            color: isActive
-                                ? inactiveFg
-                                : Colors.transparent),
+                            color: isActive ? inactiveFg : Colors.transparent),
                       ),
                     ]),
                   ),
@@ -1407,41 +1422,150 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             ),
           ),
         ),
+        // ── Right-side buttons ─────────────────────────────────────────────
         Padding(
           padding: const EdgeInsets.only(right: 8),
-          child: Row(children: [
+          child: Builder(builder: (ctx) => Row(children: [
+            // Split button — primary editor only, when not yet split
+            if (isPrimary && !_splitEditor)
+              Tooltip(
+                message: "Diviser l'éditeur",
+                child: InkWell(
+                  onTap: () => setState(() => _splitEditor = true),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(Broken.element_2, size: 15, color: inactiveFg),
+                  ),
+                ),
+              ),
+            // 3-dot menu
             Tooltip(
-              message: 'Panneau lateral',
+              message: "Plus d'actions",
               child: InkWell(
-                onTap: () => setState(() {
-                  _sidebarPanelOpen = !_sidebarPanelOpen;
-                  if (_sidebarPanelOpen && _activeRail == 0) _activeRail = 1;
-                }),
+                onTap: () => _showEditorMenu(ctx, isDark, isPrimary),
                 borderRadius: BorderRadius.circular(4),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Icon(Broken.sidebar_left, size: 15,
-                      color: _sidebarPanelOpen ? _kAccent : inactiveFg),
+                  child: Icon(Broken.more_circle, size: 15, color: inactiveFg),
                 ),
               ),
             ),
-            Tooltip(
-              message: 'Panda Agent',
-              child: InkWell(
-                onTap: () =>
-                    setState(() => _rightPanelOpen = !_rightPanelOpen),
-                borderRadius: BorderRadius.circular(4),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Icon(Broken.message_programming, size: 15,
-                      color: _rightPanelOpen ? _kAccent : inactiveFg),
+            // Close-split button — secondary editor only
+            if (!isPrimary)
+              Tooltip(
+                message: 'Fermer la division',
+                child: InkWell(
+                  onTap: () => setState(() => _splitEditor = false),
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(Broken.close_circle, size: 15, color: inactiveFg),
+                  ),
                 ),
               ),
-            ),
-          ]),
+            // Panda Agent button — primary editor only
+            if (isPrimary)
+              Tooltip(
+                message: 'Panda Agent',
+                child: InkWell(
+                  onTap: () {
+                    final isMobile = MediaQuery.of(ctx).size.width < 600;
+                    if (isMobile) {
+                      setState(() {
+                        if (!_openTabs.any((t) => t.id == 'agent')) {
+                          _openTabs.add(const _TabDef(
+                              id:    'agent',
+                              title: 'Panda Agent',
+                              icon:  Broken.message_programming));
+                          _activeTabIdx = _openTabs.length - 1;
+                        } else {
+                          _activeTabIdx =
+                              _openTabs.indexWhere((t) => t.id == 'agent');
+                        }
+                      });
+                    } else {
+                      setState(() => _rightPanelOpen = !_rightPanelOpen);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(Broken.message_programming, size: 15,
+                        color: _rightPanelOpen ? _kAccent : inactiveFg),
+                  ),
+                ),
+              ),
+          ])),
         ),
       ]),
     );
+  }
+
+  void _closeSplitTab(int i) {
+    setState(() {
+      _splitTabs.removeAt(i);
+      if (_splitTabs.isEmpty) {
+        _splitTabs.add(const _TabDef(
+            id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
+        _splitTabIdx = 0;
+      } else {
+        _splitTabIdx = (_splitTabIdx >= _splitTabs.length
+                ? _splitTabs.length - 1
+                : _splitTabIdx)
+            .clamp(0, _splitTabs.length - 1);
+      }
+    });
+  }
+
+  void _showEditorMenu(BuildContext ctx, bool isDark, bool isPrimary) {
+    final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
+    showMenu<String>(
+      context: ctx,
+      position: const RelativeRect.fromLTRB(0, 35, 0, 0),
+      color: bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+      items: [
+        PopupMenuItem<String>(
+          value: 'close_all',
+          child: Text('Tout fermer',
+              style: TextStyle(fontSize: 13, color: fg))),
+        PopupMenuItem<String>(
+          value: 'reopen',
+          child: Text("Réouvrir l'éditeur",
+              style: TextStyle(fontSize: 13, color: fg))),
+      ],
+    ).then((value) {
+      if (value == null) return;
+      if (value == 'close_all') {
+        setState(() {
+          if (isPrimary) {
+            _openTabs.clear();
+            _openTabs.add(const _TabDef(
+                id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
+            _activeTabIdx = 0;
+          } else {
+            _splitTabs.clear();
+            _splitTabs.add(const _TabDef(
+                id: 'welcome', title: 'Welcome', icon: Broken.global_refresh));
+            _splitTabIdx = 0;
+          }
+        });
+      }
+    });
+  }
+
+  Widget _buildSplitActiveTab(
+      BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
+    final tab = _splitTabs.isNotEmpty ? _splitTabs[_splitTabIdx] : null;
+    if (tab == null || tab.id == 'welcome') {
+      return _buildWelcomePage(context, appTheme, appThemestate);
+    }
+    if (tab.id == 'agent') {
+      return _buildPandaAgentPanel(context, appTheme, asPage: true);
+    }
+    return _buildWelcomePage(context, appTheme, appThemestate);
   }
 
   void _closeTab(int i) {
