@@ -22,7 +22,10 @@ import 'downloads.dart';
 import 'widgets.dart';
 
 class Settings extends StatefulWidget {
-  const Settings({super.key});
+  /// When [embedded] is true, the widget skips its own Scaffold/AppBar
+  /// so it can be displayed inside an editor tab without a nested navigation bar.
+  final bool embedded;
+  const Settings({super.key, this.embedded = false});
 
   @override
   State<Settings> createState() => _SettingsState();
@@ -2289,24 +2292,13 @@ int main() {
         final selectedTerminalThemePreset = terminalThemePresetById(terminalThemeId);
         return BlocBuilder<AppThemeBloc, AppThemeState>(
           builder: (context, appThemeState) {
-            return Scaffold(
-              appBar: AppBar(
-                backgroundColor: Colors.transparent,
-                title: Text(
-                  "Settings",
-                  style: TextStyle(
-                    fontSize: 28,
-                    color: appThemeState.appTheme.selectScreenCardTextColor
-                  )
-                )
-              ),
-              body: Padding(
-                padding: const EdgeInsets.only(left: 3, top: 5),
-                child: Scrollbar(
+            final settingsBody = Padding(
+              padding: const EdgeInsets.only(left: 3, top: 5),
+              child: Scrollbar(
+                controller: scrollController,
+                child: ListView(
                   controller: scrollController,
-                  child: ListView(
-                    controller: scrollController,
-                    children: [
+                  children: [
                       settingsType("General", appThemeState.appTheme.isDark),
                       settingsTile(
                         null,
@@ -5934,6 +5926,20 @@ int main() {
                   ),
                 ),
               ),
+            );
+            if (widget.embedded) return settingsBody;
+            return Scaffold(
+              appBar: AppBar(
+                backgroundColor: Colors.transparent,
+                title: Text(
+                  "Settings",
+                  style: TextStyle(
+                    fontSize: 28,
+                    color: appThemeState.appTheme.selectScreenCardTextColor,
+                  ),
+                ),
+              ),
+              body: settingsBody,
             );
           },
         );

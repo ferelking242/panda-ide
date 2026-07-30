@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -1927,7 +1928,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       return GithubPage(embedded: true);
     }
     if (tab.id == 'settings') {
-      return const Settings();
+      return const Settings(embedded: true);
     }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
@@ -1964,7 +1965,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       return GithubPage(embedded: true);
     }
     if (tab.id == 'settings') {
-      return const Settings();
+      return const Settings(embedded: true);
     }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
@@ -2125,58 +2126,6 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Mode selector pills (Ask / Agent / Normal) ──────────
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
-                  child: Row(
-                    children: [
-                      for (final mode in [
-                        ('ask',    'Ask'),
-                        ('agent',  'Agent'),
-                        ('normal', 'Normal'),
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: GestureDetector(
-                            onTap: () =>
-                                setState(() => _agentChatMode = mode.$1),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: _agentChatMode == mode.$1
-                                    ? _kAccent
-                                        .withOpacity(isDark ? 0.25 : 0.15)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: _agentChatMode == mode.$1
-                                      ? _kAccent.withOpacity(0.6)
-                                      : (isDark
-                                          ? const Color(0xff444444)
-                                          : const Color(0xffcccccc)),
-                                ),
-                              ),
-                              child: Text(
-                                mode.$2,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: _agentChatMode == mode.$1
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                  color: _agentChatMode == mode.$1
-                                      ? _kAccent
-                                      : muted,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-
                 // Text field
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
@@ -2253,6 +2202,42 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                           padding: const EdgeInsets.all(6),
                           child: Icon(Broken.microphone, size: 16, color: muted),
                         ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 4),
+
+                    // ── Mode selector pill ─────────────────────────────
+                    GestureDetector(
+                      onTap: () => _showModeSheet(context, appTheme),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xff3a3a3a)
+                              : const Color(0xffe0e0e0),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                          Icon(Broken.category, size: 11, color: muted),
+                          const SizedBox(width: 4),
+                          Text(
+                            _agentChatMode == 'ask'
+                                ? 'Ask'
+                                : _agentChatMode == 'agent'
+                                    ? 'Agent'
+                                    : 'Normal',
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: muted,
+                                fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(Broken.arrow_down_2, size: 10, color: muted),
+                        ]),
                       ),
                     ),
 
@@ -2337,6 +2322,74 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     );
   }
 
+  /// Bottom sheet — choose mode (Ask / Agent / Normal).
+  void _showModeSheet(BuildContext context, AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff252526) : const Color(0xfffafafa);
+    final fg      = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Center(
+            child: Container(
+              width: 36, height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 8),
+              decoration: BoxDecoration(
+                color: muted.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Text('Choisir le mode',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: fg)),
+          ),
+          const Divider(height: 1),
+          for (final mode in [
+            ('ask',    'Ask',    'Questions & réponses rapides',   Broken.message_question),
+            ('agent',  'Agent',  'Tâches complexes étape par étape', Broken.cpu),
+            ('normal', 'Normal', 'Conversation libre',              Broken.message_text),
+          ])
+            ListTile(
+              dense: true,
+              leading: Icon(mode.$4, size: 18,
+                  color: _agentChatMode == mode.$1 ? _kAccent : muted),
+              title: Text(mode.$2,
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: fg,
+                      fontWeight: _agentChatMode == mode.$1
+                          ? FontWeight.w600
+                          : FontWeight.normal)),
+              subtitle: Text(mode.$3,
+                  style: TextStyle(fontSize: 11, color: muted)),
+              trailing: _agentChatMode == mode.$1
+                  ? Icon(Broken.tick_circle, size: 16, color: _kAccent)
+                  : null,
+              onTap: () {
+                setState(() => _agentChatMode = mode.$1);
+                Navigator.pop(context);
+              },
+            ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
   /// Bottom sheet — choose AI model for this conversation.
   void _showAgentModelSheet(
     BuildContext context,
@@ -2397,7 +2450,16 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                     TextButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        _push(context, const Settings());
+                        setState(() {
+                          if (!_openTabs.any((t) => t.id == 'settings')) {
+                            _openTabs.add(const _TabDef(
+                                id: 'settings',
+                                title: 'Settings',
+                                icon: Broken.setting_2));
+                          }
+                          _activeTabIdx =
+                              _openTabs.indexWhere((t) => t.id == 'settings');
+                        });
                       },
                       icon: Icon(Broken.setting_2, size: 15, color: _kAccent),
                       label: const Text('Ouvrir Paramètres',
@@ -2458,7 +2520,16 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  _push(context, const Settings());
+                  setState(() {
+                    if (!_openTabs.any((t) => t.id == 'settings')) {
+                      _openTabs.add(const _TabDef(
+                          id: 'settings',
+                          title: 'Settings',
+                          icon: Broken.setting_2));
+                    }
+                    _activeTabIdx =
+                        _openTabs.indexWhere((t) => t.id == 'settings');
+                  });
                 },
                 icon: Icon(Broken.add_circle, size: 14, color: _kAccent),
                 label: const Text('Ajouter un modèle',
@@ -2624,23 +2695,54 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         if (isMe) {
           return Align(
             alignment: Alignment.centerRight,
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 4),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              constraints: const BoxConstraints(maxWidth: 260),
-              decoration: BoxDecoration(
-                color: _kAccent.withOpacity(0.85),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(text,
-                  style:
-                      const TextStyle(fontSize: 13, color: Colors.white)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 4, bottom: 2),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  constraints: const BoxConstraints(maxWidth: 260),
+                  decoration: BoxDecoration(
+                    color: _kAccent.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(text,
+                      style: const TextStyle(
+                          fontSize: 13, color: Colors.white)),
+                ),
+                // Copy action row
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _MsgActionBtn(
+                      icon: Broken.copy,
+                      label: 'Copier',
+                      onTap: () {
+                        Clipboard.setData(ClipboardData(text: text));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Copié !',
+                                style: TextStyle(fontSize: 12)),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      },
+                      muted: muted,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+              ],
             ),
           );
         }
 
         // ── Message agent ─────────────────────────────────────────────
+        // Find index of the user message that triggered this response
+        final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user')
+            ? i - 1
+            : -1;
         return Align(
           alignment: Alignment.centerLeft,
           child: Container(
@@ -2660,7 +2762,10 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                 // Thinking block (collapsible)
                 if (think.isNotEmpty)
                   _ThinkingBlock(
-                      thinking: think, isDark: isDark, fg: fg, muted: muted),
+                      thinking: think,
+                      isDark: isDark,
+                      fg: fg,
+                      muted: muted),
 
                 // Bulle réponse
                 if (text.isNotEmpty || isStreaming)
@@ -2695,6 +2800,59 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                           const SizedBox(width: 2),
                           _BlinkingCursor(color: fg),
                         ],
+                      ],
+                    ),
+                  ),
+
+                // Action row (copy + retry) — shown after generation
+                if (!isStreaming && (text.isNotEmpty || isError))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (text.isNotEmpty)
+                          _MsgActionBtn(
+                            icon: Broken.copy,
+                            label: 'Copier',
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Copié !',
+                                      style: TextStyle(fontSize: 12)),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            muted: muted,
+                          ),
+                        if (userMsgIdx >= 0)
+                          _MsgActionBtn(
+                            icon: Broken.refresh,
+                            label: 'Réessayer',
+                            onTap: () {
+                              final userText =
+                                  _agentMessages[userMsgIdx]['text']
+                                          as String? ??
+                                      '';
+                              if (userText.isEmpty || _agentGenerating) {
+                                return;
+                              }
+                              // Remove agent message + user message then resend
+                              setState(() {
+                                if (i < _agentMessages.length) {
+                                  _agentMessages.removeAt(i);
+                                }
+                                if (userMsgIdx < _agentMessages.length) {
+                                  _agentMessages.removeAt(userMsgIdx);
+                                }
+                                _agentInputCtrl.text = userText;
+                              });
+                              _agentSend();
+                            },
+                            muted: muted,
+                          ),
                       ],
                     ),
                   ),
@@ -2734,21 +2892,22 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
 
   /// Builds a [Models] instance from a raw AI config map (mirrors ui_state.dart logic).
   Models? _modelFromAiConfig(Map<String, dynamic> cfg) {
-    final provider  = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
-    final apiKey    = (cfg['apiKey'] ?? '').toString();
-    final modelName = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
+    final providerRaw = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
+    final provider    = providerRaw.toLowerCase();
+    final apiKey      = (cfg['apiKey'] ?? '').toString();
+    final modelName   = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
 
     switch (provider) {
-      case 'Gemini':    return Gemini(apiKey: apiKey, model: modelName);
-      case 'Claude':    return Claude(apiKey: apiKey, model: modelName);
-      case 'OpenAI':    return OpenAI(apiKey: apiKey, model: modelName);
-      case 'Grok':      return Grok(apiKey: apiKey, model: modelName);
-      case 'DeepSeek':  return DeepSeek(apiKey: apiKey, model: modelName);
-      case 'TogetherAI':return TogetherAi(apiKey: apiKey, model: modelName);
-      case 'Perplexity':return Perplexity(apiKey: apiKey, model: modelName);
-      case 'OpenRouter':return OpenRouter(apiKey: apiKey, model: modelName);
-      case 'FireWorks': return FireWorks(apiKey: apiKey, model: modelName);
-      case 'LocalLlama':
+      case 'gemini':     return Gemini(apiKey: apiKey, model: modelName);
+      case 'claude':     return Claude(apiKey: apiKey, model: modelName);
+      case 'openai':     return OpenAI(apiKey: apiKey, model: modelName);
+      case 'grok':       return Grok(apiKey: apiKey, model: modelName);
+      case 'deepseek':   return DeepSeek(apiKey: apiKey, model: modelName);
+      case 'togetherai': return TogetherAi(apiKey: apiKey, model: modelName);
+      case 'perplexity': return Perplexity(apiKey: apiKey, model: modelName);
+      case 'openrouter': return OpenRouter(apiKey: apiKey, model: modelName);
+      case 'fireworks':  return FireWorks(apiKey: apiKey, model: modelName);
+      case 'localllama':
         final mp = (cfg['modelPath'] ?? '').toString().trim();
         if (mp.isEmpty) return null;
         return LocalLlama(
@@ -2758,7 +2917,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
           contextSize: (cfg['contextSize'] as num?)?.toInt() ?? 4096,
           gpuLayers: (cfg['gpuLayers'] as num?)?.toInt() ?? 0,
         );
-      case 'Custom':
+      case 'custom':
         final url = (cfg['url'] ?? '').toString().trim();
         if (url.isEmpty) return null;
         final parsedHeaders = <String, String>{};
@@ -3666,6 +3825,41 @@ class _BlinkingCursorState extends State<_BlinkingCursor>
           color: widget.color,
           borderRadius: BorderRadius.circular(1),
         ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _MsgActionBtn — small icon+label action button for message bubbles
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MsgActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String   label;
+  final VoidCallback onTap;
+  final Color    muted;
+
+  const _MsgActionBtn({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.muted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 12, color: muted),
+          const SizedBox(width: 3),
+          Text(label,
+              style: TextStyle(fontSize: 11, color: muted)),
+        ]),
       ),
     );
   }
