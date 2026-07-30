@@ -18,6 +18,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_archive: ^6.3.1
+  provider: ^6.1.2
   flutter_bloc: ^9.1.1
   flutter_colorpicker: ^1.1.0
   flutter_file_downloader: ^2.1.1
@@ -65,6 +66,7 @@ flutter:
     - assets/extension_host/api/scm.js
     - assets/extension_host/api/tasks.js
     - assets/extension_host/api/debug.js
+    - assets/gateway/
   fonts:
     # ── Broken (Iconsax) icon font ──────────────────────────────────────
     - family: broken

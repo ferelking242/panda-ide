@@ -35,6 +35,7 @@ import '../utils/themes.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
+import '../ui/gateway_panel.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import 'widgets.dart';
@@ -841,6 +842,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.play_circle,         label: 'Exécuter / Debug', idx: 4),
         _RailItem(icon: Broken.cloud_connection,    label: 'Tunnel',           idx: 5),
         _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
+        _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
       ];
 
       return Container(
@@ -874,7 +876,24 @@ class _SelectTypeState extends State<SelectType>
                           _activeTabIdx =
                               _openTabs.indexWhere((t) => t.id == 'marketplace');
                         }
-                        // Close sidebar if open
+                        _sidebarState = 1;
+                        _activeRail = 0;
+                      });
+                      return;
+                    }
+                    // Gateway AI (idx:7) opens as an editor tab, not sidebar
+                    if (item.idx == 7) {
+                      setState(() {
+                        if (!_openTabs.any((t) => t.id == 'gateway')) {
+                          _openTabs.add(const _TabDef(
+                              id:    'gateway',
+                              title: 'Gateway AI',
+                              icon:  Broken.cpu));
+                          _activeTabIdx = _openTabs.length - 1;
+                        } else {
+                          _activeTabIdx =
+                              _openTabs.indexWhere((t) => t.id == 'gateway');
+                        }
                         _sidebarState = 1;
                         _activeRail = 0;
                       });
@@ -1972,6 +1991,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
     }
+    if (tab.id == 'gateway') {
+      return const GatewayPanel();
+    }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);
     }
@@ -2009,6 +2031,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
+    }
+    if (tab.id == 'gateway') {
+      return const GatewayPanel();
     }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);
