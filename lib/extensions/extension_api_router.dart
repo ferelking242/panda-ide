@@ -193,7 +193,7 @@ class ExtensionApiRouter {
 
       case 'vscode.window.statusBarItem.dispose':
         if (params.isNotEmpty) {
-          StatusBarManager.instance.dispose(params[0] as String);
+          StatusBarManager.instance.removeItem(params[0] as String);
         }
         return null;
 

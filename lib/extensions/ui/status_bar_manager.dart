@@ -74,7 +74,7 @@ class StatusBarManager extends ChangeNotifier {
     notifyListeners();
   }
 
-  void dispose(String id) {
+  void removeItem(String id) {
     _items.remove(id);
     notifyListeners();
   }

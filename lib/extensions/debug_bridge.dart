@@ -119,7 +119,7 @@ class DebugSession {
     final buffer = StringBuffer();
     int? expectedLength;
 
-    _sub = _socket!.transform(utf8.decoder).listen((chunk) {
+    _sub = _socket!.cast<List<int>>().transform(utf8.decoder).listen((chunk) {
       buffer.write(chunk);
       _processBuffer(buffer, (msg) {
         _handleMessage(msg);
