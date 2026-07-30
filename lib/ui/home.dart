@@ -674,7 +674,7 @@ class _SelectTypeState extends State<SelectType>
           child: Scaffold(
             key: _scaffoldKey,
             resizeToAvoidBottomInset: false,
-            backgroundColor: appTheme.scaffoldBg,
+            backgroundColor: appTheme.isDark ? _kActivityBgDark : _kActivityBgLight,
 
             // ── Drawer (unchanged behaviour) ──────────────────────────────
             drawer: Drawer(
@@ -739,10 +739,12 @@ class _SelectTypeState extends State<SelectType>
                         // ── Editor area (supports split view) ────────────
                         Expanded(
                           child: ClipRRect(
-                            borderRadius: _sidebarState == 2
+                            borderRadius: _sidebarState >= 1
                                 ? const BorderRadius.only(
-                                    topLeft: Radius.circular(20))
+                                    topLeft: Radius.circular(22))
                                 : BorderRadius.zero,
+                            child: Container(
+                            color: appTheme.scaffoldBg,
                             child: Row(
                             children: [
                               Expanded(
@@ -794,6 +796,7 @@ class _SelectTypeState extends State<SelectType>
                                 _buildPandaAgentPanel(context, appTheme),
                             ],
                           ),
+                        ),
                         ),
                       ),
                       ],
