@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:percent_indicator/percent_indicator.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
 import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
@@ -22,6 +23,7 @@ import 'downloads.dart';
 import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
+import '../utils/ai.dart';
 import '../ui/contribute.dart';
 import '../ui/github_page.dart';
 import '../utils/constants.dart';
@@ -107,11 +109,19 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
   String     _agentStreamBuf    = '';
   final      _agentRunner       = AgentRunner();
 
+  // ── Agent UI state ───────────────────────────────────────────────
+  /// 'ask' | 'agent' | 'normal'
+  String _agentChatMode      = 'ask';
+  String? _agentSelectedModelId;
+  final List<Map<String,String>> _agentAttachments = [];
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Rebuild send button colour when text changes
+    _agentInputCtrl.addListener(() => setState(() {}));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openPendingSharedFile();
       _maybeShowStorageMigrationNotice();
@@ -1648,7 +1658,21 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
     final fg      = isDark ? Colors.grey[300]! : Colors.grey[800]!;
     final muted   = isDark ? Colors.grey[500]! : Colors.grey[500]!;
-    final inputBg = isDark ? const Color(0xff2d2d2d) : const Color(0xfff0f0f0);
+    final inputBg = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
+    final inputBorder = isDark ? const Color(0xff404040) : const Color(0xffdddddd);
+
+    // Resolve display name for selected model
+    final aiState = context.watch<AIBloc>().state;
+    final allModelIds = aiState.config.keys.toList();
+    final effectiveModelId = _agentSelectedModelId != null &&
+            aiState.config.containsKey(_agentSelectedModelId)
+        ? _agentSelectedModelId!
+        : (aiState.modelSelected['chat'] as String? ?? '');
+    final modelDisplayName = effectiveModelId.isNotEmpty &&
+            aiState.config.containsKey(effectiveModelId)
+        ? (aiState.config[effectiveModelId]?['modelName'] as String? ??
+            effectiveModelId)
+        : 'Choisir modèle';
 
     return Container(
       width: asPage ? double.infinity : 300,
@@ -1661,22 +1685,24 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         children: [
           // ── Header ─────────────────────────────────────────────────────
           Container(
-            height: 35,
+            height: 38,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             color: hdrBg,
             child: Row(children: [
-              Text('CONVERSATION',
+              Text('PANDA AGENT',
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 1.1,
                       color: muted)),
               const Spacer(),
-              _agentHdrBtn(Broken.add_square, 'Nouvelle conversation',
-                  muted, () => setState(() => _agentMessages.clear())),
-              _agentHdrBtn(
-                  Broken.setting_2, 'Parametres agent', muted, () {}),
-              _agentHdrBtn(Broken.more_circle, 'Plus', muted, () {}),
+              _agentHdrBtn(Broken.add_square, 'Nouvelle conversation', muted,
+                  () => setState(() {
+                    _agentMessages.clear();
+                    _agentAttachments.clear();
+                  })),
+              _agentHdrBtn(Broken.setting_2, 'Paramètres IA', muted,
+                  () => _push(context, const Settings())),
               _agentHdrBtn(
                 Broken.maximize_4,
                 'Ouvrir dans un onglet',
@@ -1702,85 +1728,276 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
             ]),
           ),
 
+          // ── Mode selector ───────────────────────────────────────────────
+          Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: hdrBg,
+              border: Border(bottom: BorderSide(color: borderC)),
+            ),
+            child: Row(
+              children: [
+                for (final mode in [
+                  ('ask',    'Ask'),
+                  ('agent',  'Agent'),
+                  ('normal', 'Normal'),
+                ])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _agentChatMode = mode.$1),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _agentChatMode == mode.$1
+                              ? _kAccent.withOpacity(isDark ? 0.25 : 0.15)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _agentChatMode == mode.$1
+                                ? _kAccent.withOpacity(0.6)
+                                : Colors.transparent,
+                          ),
+                        ),
+                        child: Text(
+                          mode.$2,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: _agentChatMode == mode.$1
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                            color: _agentChatMode == mode.$1
+                                ? _kAccent
+                                : muted,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
           // ── Chat area ──────────────────────────────────────────────────
           Expanded(
             child: _agentMessages.isEmpty
-                ? _buildAgentEmptyState(isDark, muted)
+                ? _buildAgentEmptyState(isDark, muted, fg)
                 : _buildAgentMessages(isDark, fg, muted),
           ),
 
-          // ── Input ──────────────────────────────────────────────────────
+          // ── Attachments strip ──────────────────────────────────────────
+          if (_agentAttachments.isNotEmpty)
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: inputBg,
+                border: Border(top: BorderSide(color: borderC)),
+              ),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: _agentAttachments.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 6),
+                itemBuilder: (_, i) {
+                  final att = _agentAttachments[i];
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xff3a3a3a)
+                          : const Color(0xffe0e0e0),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Broken.document, size: 12, color: muted),
+                      const SizedBox(width: 4),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 80),
+                        child: Text(
+                          att['name'] ?? '',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: fg),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => setState(
+                            () => _agentAttachments.removeAt(i)),
+                        child: Icon(Broken.close_square,
+                            size: 11, color: muted),
+                      ),
+                    ]),
+                  );
+                },
+              ),
+            ),
+
+          // ── Input box ──────────────────────────────────────────────────
           Container(
+            margin: const EdgeInsets.all(10),
             decoration: BoxDecoration(
               color: inputBg,
-              border: Border(top: BorderSide(color: borderC)),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: inputBorder),
             ),
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(
-                  controller: _agentInputCtrl,
-                  maxLines: 3,
-                  minLines: 1,
-                  style: TextStyle(fontSize: 13, color: fg),
-                  decoration: InputDecoration(
-                    hintText: "Decrivez ce qu'il faut construire...",
-                    hintStyle: TextStyle(fontSize: 13, color: muted),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
+                // Text field
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                  child: TextField(
+                    controller: _agentInputCtrl,
+                    maxLines: 5,
+                    minLines: 1,
+                    style: TextStyle(fontSize: 13, color: fg),
+                    decoration: InputDecoration(
+                      hintText: _agentChatMode == 'agent'
+                          ? 'Décrivez la tâche à réaliser…'
+                          : _agentChatMode == 'ask'
+                              ? 'Posez votre question…'
+                              : 'Écrivez un message…',
+                      hintStyle: TextStyle(fontSize: 13, color: muted),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _agentSend(),
                   ),
-                  onSubmitted: (_) => _agentSend(),
                 ),
-                const SizedBox(height: 8),
-                Row(children: [
-                  OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: Icon(Broken.add_circle, size: 13, color: muted),
-                    label: Text('Agent',
-                        style: TextStyle(fontSize: 12, color: muted)),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      side: BorderSide(color: borderC),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+
+                // Bottom toolbar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+                  child: Row(children: [
+                    // ── Attachment button ──────────────────────────────
+                    Tooltip(
+                      message: 'Joindre un fichier',
+                      child: InkWell(
+                        onTap: () async {
+                          final res = await FilePicker.platform.pickFiles(
+                            allowMultiple: true,
+                            type: FileType.any,
+                          );
+                          if (res != null && res.files.isNotEmpty) {
+                            setState(() {
+                              for (final f in res.files) {
+                                _agentAttachments.add({
+                                  'name': f.name,
+                                  'path': f.path ?? '',
+                                });
+                              }
+                            });
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(Broken.paperclip, size: 16, color: muted),
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  OutlinedButton.icon(
-                    onPressed: () {},
-                    icon: Icon(Broken.cpu, size: 13, color: muted),
-                    label: Text('Modeles',
-                        style: TextStyle(fontSize: 12, color: muted)),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      side: BorderSide(color: borderC),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+
+                    // ── Voice button ───────────────────────────────────
+                    Tooltip(
+                      message: 'Dicter (micro)',
+                      child: InkWell(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Dictée vocale — bientôt disponible.',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: Icon(Broken.microphone, size: 16, color: muted),
+                        ),
+                      ),
                     ),
-                  ),
-                  const Spacer(),
-                  if (_agentGenerating)
-                    IconButton(
-                      onPressed: _agentStop,
-                      icon: Icon(Broken.stop_circle, size: 18,
-                          color: Colors.red[400]),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: 'Arrêter la génération',
-                    )
-                  else
-                    IconButton(
-                      onPressed: _agentSend,
-                      icon: Icon(Broken.send_2, size: 18, color: _kAccent),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: 'Envoyer',
+
+                    const SizedBox(width: 4),
+
+                    // ── Model selector pill ────────────────────────────
+                    GestureDetector(
+                      onTap: () => _showAgentModelSheet(
+                          context, appTheme, allModelIds, aiState),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xff3a3a3a)
+                              : const Color(0xffe0e0e0),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Broken.cpu, size: 11, color: muted),
+                          const SizedBox(width: 4),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 90),
+                            child: Text(
+                              modelDisplayName,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: muted,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(Broken.arrow_down_2, size: 10, color: muted),
+                        ]),
+                      ),
                     ),
-                ]),
+
+                    const Spacer(),
+
+                    // ── Send / Stop ────────────────────────────────────
+                    if (_agentGenerating)
+                      GestureDetector(
+                        onTap: _agentStop,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Broken.stop_circle,
+                              size: 18, color: Colors.red[400]),
+                        ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: _agentSend,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: _agentInputCtrl.text.trim().isEmpty
+                                ? Colors.transparent
+                                : _kAccent.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Broken.send_2,
+                            size: 18,
+                            color: _agentInputCtrl.text.trim().isEmpty
+                                ? muted
+                                : Colors.white,
+                          ),
+                        ),
+                      ),
+                  ]),
+                ),
               ],
             ),
           ),
@@ -1789,35 +2006,273 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildAgentEmptyState(bool isDark, Color muted) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.asset(
-              'assets/icons/app-icon.png',
-              width: 56, height: 56,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) =>
-                  const Text('panda', style: TextStyle(fontSize: 32)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text('Panda Agent',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: muted)),
-          const SizedBox(height: 6),
-          Text(
-            'Decrivez ce que vous souhaitez\nconstruire pour commencer.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: muted),
-          ),
-        ],
+  /// Bottom sheet — choose AI model for this conversation.
+  void _showAgentModelSheet(
+    BuildContext context,
+    AppTheme appTheme,
+    List<String> modelIds,
+    AIState aiState,
+  ) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff252526) : const Color(0xfffafafa);
+    final fg      = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+    final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 8),
+                decoration: BoxDecoration(
+                  color: muted.withOpacity(0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text('Choisir un modèle',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: fg)),
+            ),
+            const Divider(height: 1),
+            if (modelIds.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Icon(Broken.cpu, size: 28, color: muted),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Aucun modèle configuré.\nOuvrez Paramètres → IA pour en ajouter un.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: muted),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _push(context, const Settings());
+                      },
+                      icon: Icon(Broken.setting_2, size: 15, color: _kAccent),
+                      label: const Text('Ouvrir Paramètres',
+                          style: TextStyle(color: _kAccent)),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: modelIds.length,
+                  itemBuilder: (_, i) {
+                    final id = modelIds[i];
+                    final cfg = aiState.config[id] as Map<String, dynamic>?;
+                    final name = cfg?['modelName'] as String? ?? id;
+                    final provider = cfg?['provider'] as String? ?? '';
+                    final isSelected = (_agentSelectedModelId == id) ||
+                        (_agentSelectedModelId == null &&
+                            aiState.modelSelected['chat'] == id);
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(
+                        _providerIcon(provider),
+                        size: 18,
+                        color: isSelected ? _kAccent : muted,
+                      ),
+                      title: Text(name,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: fg,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.normal)),
+                      subtitle: provider.isNotEmpty
+                          ? Text(provider,
+                              style:
+                                  TextStyle(fontSize: 11, color: muted))
+                          : null,
+                      trailing: isSelected
+                          ? Icon(Broken.tick_circle,
+                              size: 16, color: _kAccent)
+                          : null,
+                      onTap: () {
+                        setState(() => _agentSelectedModelId = id);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+            // Add model shortcut
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _push(context, const Settings());
+                },
+                icon: Icon(Broken.add_circle, size: 14, color: _kAccent),
+                label: const Text('Ajouter un modèle',
+                    style: TextStyle(color: _kAccent, fontSize: 13)),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: borderC),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Returns a representative icon for a given provider string.
+  IconData _providerIcon(String provider) {
+    final p = provider.toLowerCase();
+    if (p.contains('openai') || p.contains('gpt')) return Broken.global;
+    if (p.contains('claude') || p.contains('anthropic')) return Broken.cpu;
+    if (p.contains('gemini') || p.contains('google')) return Broken.global_search;
+    if (p.contains('grok')) return Broken.code_circle;
+    if (p.contains('deepseek')) return Broken.search_normal;
+    if (p.contains('mistral')) return Broken.wind;
+    if (p.contains('local') || p.contains('llama')) return Broken.cpu_setting;
+    return Broken.cpu;
+  }
+
+  Widget _buildAgentEmptyState(bool isDark, Color muted, Color fg) {
+    const suggestions = [
+      'Explique ce code',
+      'Crée un fichier Flutter',
+      'Optimise cette fonction',
+      'Écris des tests unitaires',
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      children: [
+        // Logo + title
+        Center(
+          child: Column(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Image.asset(
+                  'assets/icons/app-icon.png',
+                  width: 52, height: 52, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 52, height: 52,
+                    decoration: BoxDecoration(
+                      color: _kAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(Broken.message_programming,
+                        color: _kAccent, size: 28),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text('Panda Agent',
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: fg)),
+              const SizedBox(height: 6),
+              Text(
+                'Comment puis-je vous aider ?',
+                style: TextStyle(fontSize: 12, color: muted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Mode description
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _kAccent.withOpacity(isDark ? 0.08 : 0.05),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: _kAccent.withOpacity(0.2)),
+          ),
+          child: Row(children: [
+            Icon(
+              _agentChatMode == 'agent'
+                  ? Broken.cpu_setting
+                  : _agentChatMode == 'ask'
+                      ? Broken.message_question
+                      : Broken.message_text,
+              size: 16, color: _kAccent,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _agentChatMode == 'agent'
+                    ? 'Mode Agent — exécute des tâches de code autonomes.'
+                    : _agentChatMode == 'ask'
+                        ? 'Mode Ask — répond à vos questions sur le code.'
+                        : 'Mode Normal — conversation libre avec le modèle.',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? Colors.grey[300]! : Colors.grey[700]!),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 20),
+
+        // Suggestion chips
+        Text('SUGGESTIONS',
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.1,
+                color: muted)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: suggestions.map((s) => GestureDetector(
+            onTap: () {
+              _agentInputCtrl.text = s;
+              _agentSend();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xff2d2d2d)
+                    : const Color(0xffe8e8e8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: isDark
+                        ? const Color(0xff3a3a3a)
+                        : const Color(0xffdddddd)),
+              ),
+              child: Text(s,
+                  style: TextStyle(fontSize: 12, color: fg)),
+            ),
+          )).toList(),
+        ),
+      ],
     );
   }
 
@@ -1946,6 +2401,63 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     });
   }
 
+  /// Builds a [Models] instance from a raw AI config map (mirrors ui_state.dart logic).
+  Models? _modelFromAiConfig(Map<String, dynamic> cfg) {
+    final provider  = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
+    final apiKey    = (cfg['apiKey'] ?? '').toString();
+    final modelName = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
+
+    switch (provider) {
+      case 'Gemini':    return Gemini(apiKey: apiKey, model: modelName);
+      case 'Claude':    return Claude(apiKey: apiKey, model: modelName);
+      case 'OpenAI':    return OpenAI(apiKey: apiKey, model: modelName);
+      case 'Grok':      return Grok(apiKey: apiKey, model: modelName);
+      case 'DeepSeek':  return DeepSeek(apiKey: apiKey, model: modelName);
+      case 'TogetherAI':return TogetherAi(apiKey: apiKey, model: modelName);
+      case 'Perplexity':return Perplexity(apiKey: apiKey, model: modelName);
+      case 'OpenRouter':return OpenRouter(apiKey: apiKey, model: modelName);
+      case 'FireWorks': return FireWorks(apiKey: apiKey, model: modelName);
+      case 'LocalLlama':
+        final mp = (cfg['modelPath'] ?? '').toString().trim();
+        if (mp.isEmpty) return null;
+        return LocalLlama(
+          modelPath: mp,
+          displayName: modelName.isNotEmpty ? modelName : mp.split('/').last,
+          threads: (cfg['threads'] as num?)?.toInt() ?? 4,
+          contextSize: (cfg['contextSize'] as num?)?.toInt() ?? 4096,
+          gpuLayers: (cfg['gpuLayers'] as num?)?.toInt() ?? 0,
+        );
+      case 'Custom':
+        final url = (cfg['url'] ?? '').toString().trim();
+        if (url.isEmpty) return null;
+        final parsedHeaders = <String, String>{};
+        final hdrs = cfg['headers'];
+        if (hdrs is Map) {
+          hdrs.forEach((k, v) {
+            if (k != null && v != null) parsedHeaders[k.toString()] = v.toString();
+          });
+        }
+        if (apiKey.isNotEmpty && !parsedHeaders.containsKey('Authorization')) {
+          parsedHeaders['Authorization'] = 'Bearer $apiKey';
+        }
+        return CustomModel(
+          url: url,
+          httpMethod: (cfg['httpMethod'] ?? 'POST').toString(),
+          toolCallingMethod: ToolCallingMethod.openAiCompatible,
+          customHeaders: parsedHeaders,
+          requestBuilder: (code, instruction) => {
+            if (modelName.isNotEmpty) 'model': modelName,
+            'messages': [
+              {'role': 'system', 'content': instruction},
+              {'role': 'user', 'content': code},
+            ],
+          },
+          customParser: (resp) => resp?.toString() ?? '',
+        );
+    }
+    return null;
+  }
+
   void _agentStop() {
     _agentRunner.cancel();
     if (!mounted) return;
@@ -1964,9 +2476,19 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     final text = _agentInputCtrl.text.trim();
     if (text.isEmpty || _agentGenerating) return;
 
-    // Récupère le chatModel configuré dans AIBloc
+    // Récupère le modèle sélectionné dans le panel (ou le chatModel par défaut)
     final aiState = context.read<AIBloc>().state;
-    final model   = aiState.chatModel;
+
+    // Priorité : modèle choisi dans le panel > chatModel de l'AIBloc
+    Models? model;
+    if (_agentSelectedModelId != null &&
+        aiState.config.containsKey(_agentSelectedModelId)) {
+      final cfg = aiState.config[_agentSelectedModelId!];
+      if (cfg is Map<String, dynamic>) {
+        model = _modelFromAiConfig(cfg);
+      }
+    }
+    model ??= aiState.chatModel;
 
     if (model == null) {
       setState(() {
@@ -1974,7 +2496,7 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
         _agentMessages.add({
           'role': 'agent',
           'text':
-              'Aucun modèle IA configuré. Allez dans Paramètres → IA pour en configurer un.',
+              'Aucun modèle IA configuré. Ouvrez Paramètres (⚙) pour en ajouter un.',
           'thinking': '',
           'phase': 'error',
         });
