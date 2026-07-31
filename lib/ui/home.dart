@@ -840,10 +840,11 @@ class _SelectTypeState extends State<SelectType>
     final bg     = isDark ? const Color(0xff007acc) : const Color(0xff005a9e);
     final fg     = Colors.white;
 
-    return BlocBuilder<RepoBloc, RepoState>(
+    return BlocBuilder<RepoStatusBloc, RepoStatusState>(
       builder: (_, repoState) {
-        final branch = repoState.currentBranch.isNotEmpty
-            ? repoState.currentBranch
+        final branch = (repoState is RepoStatusLoaded &&
+                (repoState.currentBranch?.isNotEmpty ?? false))
+            ? repoState.currentBranch!
             : 'main';
 
         final int errors   = 0;
