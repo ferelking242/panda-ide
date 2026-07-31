@@ -875,6 +875,115 @@ class _AgentSettingsState extends State<AgentSettings>
             letterSpacing: 1.1,
             color: muted),
       );
+
+  // ── TAB 4 — Apparence du chat ──────────────────────────────────────────────
+  Widget _buildAppearanceTab(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _SettingsCard(
+          isDark: isDark,
+          card: card,
+          border: border,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Messages utilisateur',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              const SizedBox(height: 12),
+              Text('Couleur des bulles',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, children: [
+                for (final c in [
+                  const Color(0xff4f8ef7),
+                  const Color(0xff5856d6),
+                  const Color(0xff34c759),
+                  const Color(0xffff2d55),
+                  const Color(0xffff9500),
+                  const Color(0xff636366),
+                ])
+                  _ColorSwatch(
+                    color: c,
+                    selected: false,
+                    onTap: () {},
+                  ),
+              ]),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SettingsCard(
+          isDark: isDark,
+          card: card,
+          border: border,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Messages agent',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              const SizedBox(height: 12),
+              Text('Affichage du markdown',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text('Rendu Markdown',
+                    style: TextStyle(fontSize: 12, color: fg)),
+                value: true,
+                activeColor: _kAccent,
+                onChanged: (_) {},
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SettingsCard(
+          isDark: isDark,
+          card: card,
+          border: border,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Mise en page',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              const SizedBox(height: 12),
+              Text('Taille de police',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Slider(
+                min: 10,
+                max: 18,
+                value: 13,
+                divisions: 8,
+                activeColor: _kAccent,
+                label: '13',
+                onChanged: (_) {},
+              ),
+              const SizedBox(height: 8),
+              Text('Rayon des bulles',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Slider(
+                min: 0,
+                max: 20,
+                value: 8,
+                divisions: 4,
+                activeColor: _kAccent,
+                label: '8',
+                onChanged: (_) {},
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1235,114 +1344,45 @@ class _ModelCard extends StatelessWidget {
       ]),
     );
   }
-  // ── TAB 4 — Apparence du chat ──────────────────────────────────────────────
-  Widget _buildAppearanceTab(BuildContext context, bool isDark, Color bg,
-      Color card, Color fg, Color muted, Color border) {
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        _SettingsCard(
-          isDark: isDark,
-          card: card,
-          border: border,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Messages utilisateur',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
-              const SizedBox(height: 12),
-              Text('Couleur des bulles',
-                  style: TextStyle(fontSize: 12, color: muted)),
-              const SizedBox(height: 6),
-              Wrap(spacing: 8, children: [
-                for (final c in [
-                  const Color(0xff4f8ef7),
-                  const Color(0xff5856d6),
-                  const Color(0xff34c759),
-                  const Color(0xffff2d55),
-                  const Color(0xffff9500),
-                  const Color(0xff636366),
-                ])
-                  _ColorSwatch(
-                    color: c,
-                    selected: false,
-                    onTap: () {},
-                  ),
-              ]),
-            ],
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _ColorSwatch — clickable color dot for theme colour picker
+// ─────────────────────────────────────────────────────────────────────────────
+class _ColorSwatch extends StatelessWidget {
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ColorSwatch({
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: color,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: selected ? Colors.white : Colors.transparent,
+            width: 2.5,
           ),
+          boxShadow: selected
+              ? [BoxShadow(color: color.withOpacity(0.6), blurRadius: 6, spreadRadius: 1)]
+              : [],
         ),
-        const SizedBox(height: 12),
-        _SettingsCard(
-          isDark: isDark,
-          card: card,
-          border: border,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Messages agent',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
-              const SizedBox(height: 12),
-              Text('Affichage du markdown',
-                  style: TextStyle(fontSize: 12, color: muted)),
-              const SizedBox(height: 6),
-              SwitchListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text('Rendu Markdown',
-                    style: TextStyle(fontSize: 12, color: fg)),
-                value: true,
-                activeColor: _kAccent,
-                onChanged: (_) {},
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        _SettingsCard(
-          isDark: isDark,
-          card: card,
-          border: border,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Mise en page',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
-              const SizedBox(height: 12),
-              Text('Taille de police',
-                  style: TextStyle(fontSize: 12, color: muted)),
-              const SizedBox(height: 6),
-              Slider(
-                min: 10,
-                max: 18,
-                value: 13,
-                divisions: 8,
-                activeColor: _kAccent,
-                label: '13',
-                onChanged: (_) {},
-              ),
-              const SizedBox(height: 8),
-              Text('Rayon des bulles',
-                  style: TextStyle(fontSize: 12, color: muted)),
-              const SizedBox(height: 6),
-              Slider(
-                min: 0,
-                max: 20,
-                value: 8,
-                divisions: 4,
-                activeColor: _kAccent,
-                label: '8',
-                onChanged: (_) {},
-              ),
-            ],
-          ),
-        ),
-      ],
+        child: selected
+            ? const Icon(Icons.check, size: 14, color: Colors.white)
+            : null,
+      ),
     );
   }
-
-
 }

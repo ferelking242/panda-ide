@@ -4344,6 +4344,8 @@ class _SidebarClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
+
 /// Minimal clickable item for the VSCode-style status bar.
 class _StatusBarItem extends StatelessWidget {
   final IconData      icon;
@@ -4375,6 +4377,4 @@ class _StatusBarItem extends StatelessWidget {
       ),
     );
   }
-}
-
 }

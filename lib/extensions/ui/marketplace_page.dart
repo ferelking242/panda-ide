@@ -449,7 +449,7 @@ class _RuntimesTab extends StatelessWidget {
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
                 color: isDark ? Colors.white : Colors.black87)),
         const SizedBox(height: 4),
-        Text('Gérez les environnements d'exécution installés dans Panda IDE.',
+        Text('Gérez les environnements d\'exécution installés dans Panda IDE.',
             style: TextStyle(fontSize: 12, color: sub)),
         const SizedBox(height: 12),
         for (final r in _runtimes)
@@ -527,7 +527,7 @@ class _InstalledTab extends StatelessWidget {
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
                     color: isDark ? Colors.white70 : Colors.black54)),
             const SizedBox(height: 4),
-            Text('Parcourez l'onglet "Extensions VSCode" pour en installer.',
+            Text('Parcourez l\'onglet "Extensions VSCode" pour en installer.',
                 style: TextStyle(fontSize: 12, color: sub),
                 textAlign: TextAlign.center),
           ],
