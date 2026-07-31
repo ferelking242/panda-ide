@@ -110,6 +110,9 @@ class ExtensionRegistry {
 
   bool isInstalled(String id) => _extensions.containsKey(id);
 
+  /// Returns the ids of all installed extensions.
+  List<String> allInstalled() => _extensions.keys.toList();
+
   // ── Mutations ────────────────────────────────────────────────────────────
 
   Future<void> register(InstalledExtension ext) async {

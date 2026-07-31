@@ -147,7 +147,9 @@ class AgentRunner {
         Uri.parse(model.url),
         headers: model.headers,
         body: jsonEncode(body),
-      );
+      ).timeout(const Duration(seconds: 90), onTimeout: () {
+        throw TimeoutException('La requête Gemini a dépassé 90 secondes.');
+      });
 
       if (resp.statusCode >= 400) {
         ctrl.add(AgentChunk(
@@ -269,7 +271,9 @@ class AgentRunner {
         final req = http.Request('POST', Uri.parse(model.url))
           ..headers.addAll(model.headers)
           ..body = jsonEncode(body);
-        final streamed = await _client!.send(req);
+        final streamed = await _client!.send(req).timeout(const Duration(seconds: 90), onTimeout: () {
+          throw TimeoutException('La connexion SSE a dépassé 90 secondes.');
+        });
         final lines = streamed.stream
             .transform(const Utf8Decoder())
             .transform(const LineSplitter());

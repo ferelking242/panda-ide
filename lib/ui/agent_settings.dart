@@ -153,7 +153,8 @@ const _providers = <_ProviderDef>[
 
 // ─────────────────────────────────────────────────────────────────────────────
 class AgentSettings extends StatefulWidget {
-  const AgentSettings({super.key});
+  final bool embedded;
+  const AgentSettings({super.key, this.embedded = false});
 
   @override
   State<AgentSettings> createState() => _AgentSettingsState();
@@ -186,7 +187,7 @@ class _AgentSettingsState extends State<AgentSettings>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    _tab = TabController(length: 4, vsync: this);
     _selectedModelId = _providers.first.models.isNotEmpty
         ? _providers.first.models.first
         : '';
@@ -395,52 +396,76 @@ class _AgentSettingsState extends State<AgentSettings>
     final muted  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final border = isDark ? const Color(0xff3a3a3a) : const Color(0xffe0e0e0);
 
+    final body = Column(
+      children: [
+        // ── Tab bar header (always shown) ────────────────────────────────
+        Container(
+          color: isDark ? const Color(0xff252526) : Colors.white,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!widget.embedded)
+                AppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  leading: IconButton(
+                    icon: Icon(Broken.arrow_left_2, color: fg),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  title: Row(children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _kAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Broken.cpu_setting, color: _kAccent, size: 18),
+                    ),
+                    const SizedBox(width: 10),
+                    Text('Panda Agent — Paramètres',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: fg)),
+                  ]),
+                ),
+              TabBar(
+                controller: _tab,
+                labelColor: _kAccent,
+                unselectedLabelColor: muted,
+                indicatorColor: _kAccent,
+                indicatorSize: TabBarIndicatorSize.label,
+                tabs: const [
+                  Tab(text: 'Providers IA'),
+                  Tab(text: 'Mémoire'),
+                  Tab(text: 'Outils'),
+                  Tab(text: 'Apparence'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tab,
+            children: [
+              _buildProvidersTab(context, isDark, bg, card, fg, muted, border),
+              _buildMemoryTab(context, isDark, bg, card, fg, muted, border),
+              _buildToolsTab(context, isDark, bg, card, fg, muted, border),
+              _buildAppearanceTab(context, isDark, bg, card, fg, muted, border),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (widget.embedded) {
+      return Container(color: bg, child: body);
+    }
+
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: isDark ? const Color(0xff252526) : Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Broken.arrow_left_2, color: fg),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: _kAccent.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Broken.cpu_setting, color: _kAccent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Text('Panda Agent — Paramètres',
-              style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: fg)),
-        ]),
-        bottom: TabBar(
-          controller: _tab,
-          labelColor: _kAccent,
-          unselectedLabelColor: muted,
-          indicatorColor: _kAccent,
-          indicatorSize: TabBarIndicatorSize.label,
-          tabs: const [
-            Tab(text: 'Providers IA'),
-            Tab(text: 'Mémoire'),
-            Tab(text: 'Outils'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tab,
-        children: [
-          _buildProvidersTab(context, isDark, bg, card, fg, muted, border),
-          _buildMemoryTab(context, isDark, bg, card, fg, muted, border),
-          _buildToolsTab(context, isDark, bg, card, fg, muted, border),
-        ],
-      ),
+      body: body,
     );
   }
 
@@ -1210,4 +1235,114 @@ class _ModelCard extends StatelessWidget {
       ]),
     );
   }
+  // ── TAB 4 — Apparence du chat ──────────────────────────────────────────────
+  Widget _buildAppearanceTab(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _SettingsCard(
+          isDark: isDark,
+          card: card,
+          border: border,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Messages utilisateur',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              const SizedBox(height: 12),
+              Text('Couleur des bulles',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, children: [
+                for (final c in [
+                  const Color(0xff4f8ef7),
+                  const Color(0xff5856d6),
+                  const Color(0xff34c759),
+                  const Color(0xffff2d55),
+                  const Color(0xffff9500),
+                  const Color(0xff636366),
+                ])
+                  _ColorSwatch(
+                    color: c,
+                    selected: false,
+                    onTap: () {},
+                  ),
+              ]),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SettingsCard(
+          isDark: isDark,
+          card: card,
+          border: border,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Messages agent',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              const SizedBox(height: 12),
+              Text('Affichage du markdown',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              SwitchListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text('Rendu Markdown',
+                    style: TextStyle(fontSize: 12, color: fg)),
+                value: true,
+                activeColor: _kAccent,
+                onChanged: (_) {},
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        _SettingsCard(
+          isDark: isDark,
+          card: card,
+          border: border,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Mise en page',
+                  style: TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              const SizedBox(height: 12),
+              Text('Taille de police',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Slider(
+                min: 10,
+                max: 18,
+                value: 13,
+                divisions: 8,
+                activeColor: _kAccent,
+                label: '13',
+                onChanged: (_) {},
+              ),
+              const SizedBox(height: 8),
+              Text('Rayon des bulles',
+                  style: TextStyle(fontSize: 12, color: muted)),
+              const SizedBox(height: 6),
+              Slider(
+                min: 0,
+                max: 20,
+                value: 8,
+                divisions: 4,
+                activeColor: _kAccent,
+                label: '8',
+                onChanged: (_) {},
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+
 }

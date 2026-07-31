@@ -719,93 +719,106 @@ class _SelectTypeState extends State<SelectType>
                   // ── Top bar spans full width ──────────────────────────
                   _buildTopBar(context, appTheme, appThemestate),
 
-                  // ── Below top bar: activity bar + sidebar + editor ────
+                  // ── Below top bar: activity bar + sidebar overlay + editor ─
                   Expanded(
-                    child: Row(
+                    child: Stack(
                       children: [
-                        // Activity bar visible in state 1 (icons only) or 2 (full panel)
-                        if (_sidebarState >= 1)
-                          _buildActivityBar(context, appTheme),
+                        // ── Main row: activity bar + full-width editor ──────
+                        Row(
+                          children: [
+                            if (_sidebarState >= 1)
+                              _buildActivityBar(context, appTheme),
 
-                        // Sliding sidebar (square corners)
-                        AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          curve: Curves.easeInOut,
-                          width: _sidebarState == 2 ? _kSidebarWidth : 0,
-                          child: _sidebarState == 2
-                              ? _buildSidebarPanel(context, appTheme)
-                              : null,
-                        ),
-
-                        // ── Editor area (supports split view) ────────────
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: _sidebarState >= 1
-                                ? const BorderRadius.only(
-                                    topLeft: Radius.circular(22))
-                                : BorderRadius.zero,
-                            child: Container(
-                            color: appTheme.scaffoldBg,
-                            child: Row(
-                            children: [
-                              Expanded(
-                                child: _splitEditor
-                                    ? MultiSplitView(
-                                        controller: _splitViewController,
-                                        builder: (context, area) {
-                                          if (area.index == 0) {
-                                            return Column(
-                                              children: [
-                                                _buildTabBar(appTheme,
-                                                    isPrimary: true),
-                                                Expanded(
-                                                  child: _buildActiveTab(
-                                                      context,
-                                                      appTheme,
-                                                      appThemestate),
-                                                ),
-                                              ],
-                                            );
-                                          }
-                                          return Column(
+                            // ── Editor area ────────────────────────────────
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: _sidebarState >= 1
+                                    ? const BorderRadius.only(
+                                        topLeft: Radius.circular(22))
+                                    : BorderRadius.zero,
+                                child: Container(
+                                color: appTheme.scaffoldBg,
+                                child: Row(
+                                children: [
+                                  Expanded(
+                                    child: _splitEditor
+                                        ? MultiSplitView(
+                                            controller: _splitViewController,
+                                            builder: (context, area) {
+                                              if (area.index == 0) {
+                                                return Column(
+                                                  children: [
+                                                    _buildTabBar(appTheme,
+                                                        isPrimary: true),
+                                                    Expanded(
+                                                      child: _buildActiveTab(
+                                                          context,
+                                                          appTheme,
+                                                          appThemestate),
+                                                    ),
+                                                  ],
+                                                );
+                                              }
+                                              return Column(
+                                                children: [
+                                                  _buildTabBar(appTheme,
+                                                      isPrimary: false),
+                                                  Expanded(
+                                                    child: _buildSplitActiveTab(
+                                                        context,
+                                                        appTheme,
+                                                        appThemestate),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          )
+                                        : Column(
                                             children: [
                                               _buildTabBar(appTheme,
-                                                  isPrimary: false),
+                                                  isPrimary: true),
                                               Expanded(
-                                                child: _buildSplitActiveTab(
-                                                    context,
-                                                    appTheme,
-                                                    appThemestate),
+                                                child: _buildActiveTab(context,
+                                                    appTheme, appThemestate),
                                               ),
                                             ],
-                                          );
-                                        },
-                                      )
-                                    : Column(
-                                        children: [
-                                          _buildTabBar(appTheme,
-                                              isPrimary: true),
-                                          Expanded(
-                                            child: _buildActiveTab(context,
-                                                appTheme, appThemestate),
                                           ),
-                                        ],
-                                      ),
+                                  ),
+                                  // Panda Agent panel
+                                  if (_rightPanelOpen)
+                                    _buildPandaAgentPanel(context, appTheme),
+                                ],
                               ),
-                              // Panda Agent panel (desktop only)
-                              if (_rightPanelOpen)
-                                _buildPandaAgentPanel(context, appTheme),
-                            ],
+                            ),
+                            ),
+                            ),
+                          ],
+                        ),
+
+                        // ── Sidebar overlay (no layout push) ───────────────
+                        if (_sidebarState == 2)
+                          Positioned(
+                            left: 48,
+                            top: 0,
+                            bottom: 0,
+                            child: Material(
+                              elevation: 6,
+                              shadowColor: Colors.black45,
+                              child: SizedBox(
+                                width: _kSidebarWidth,
+                                child: _buildSidebarPanel(context, appTheme),
+                              ),
+                            ),
                           ),
-                        ),
-                        ),
-                      ),
                       ],
                     ),
                   ),
                   // ── Bottom panel ─────────────────────────────────────
                   if (_bottomPanelOpen)
                     _buildBottomPanel(),
+
+                  // ── Status bar ────────────────────────────────────────
+                  _buildStatusBar(context, appTheme),
                 ],
               ),
               // ── Floating agent overlay ──────────────────────────────
@@ -820,6 +833,83 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
+
+  // ── VSCode-style status bar ────────────────────────────────────────────────
+  Widget _buildStatusBar(BuildContext context, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final bg     = isDark ? const Color(0xff007acc) : const Color(0xff005a9e);
+    final fg     = Colors.white;
+
+    return BlocBuilder<RepoBloc, RepoState>(
+      builder: (_, repoState) {
+        final branch = repoState.currentBranch.isNotEmpty
+            ? repoState.currentBranch
+            : 'main';
+
+        final int errors   = 0;
+        final int warnings = 0;
+        return Container(
+              height: 22,
+              color: bg,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(children: [
+                // ── Left: branch ──────────────────────────────────────
+                _StatusBarItem(
+                  icon: Icons.call_split_rounded,
+                  label: branch,
+                  fg: fg,
+                  onTap: () {},
+                ),
+                // ── Left: errors & warnings ───────────────────────────
+                if (errors > 0 || warnings > 0) ...[
+                  const SizedBox(width: 8),
+                  _StatusBarItem(
+                    icon: Icons.error_outline,
+                    label: '$errors',
+                    fg: errors > 0 ? Colors.red[200]! : fg,
+                    onTap: () => setState(() => _bottomPanelOpen = true),
+                  ),
+                  const SizedBox(width: 4),
+                  _StatusBarItem(
+                    icon: Icons.warning_amber_outlined,
+                    label: '$warnings',
+                    fg: warnings > 0 ? Colors.orange[200]! : fg,
+                    onTap: () => setState(() => _bottomPanelOpen = true),
+                  ),
+                ],
+                const Spacer(),
+                // ── Right: terminal shortcut ──────────────────────────
+                _StatusBarItem(
+                  icon: Icons.terminal,
+                  label: 'Terminal',
+                  fg: fg,
+                  onTap: () => setState(() {
+                    _bottomPanelOpen = true;
+                    _bottomPanelTab  = 0;
+                  }),
+                ),
+                const SizedBox(width: 8),
+                // ── Right: Panda Agent ────────────────────────────────
+                _StatusBarItem(
+                  icon: Broken.cpu,
+                  label: 'Agent',
+                  fg: fg,
+                  onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+                ),
+                const SizedBox(width: 8),
+                // ── Right: notifications ──────────────────────────────
+                _StatusBarItem(
+                  icon: Icons.notifications_none,
+                  label: '',
+                  fg: fg,
+                  onTap: () {},
+                ),
+              ]),
+            );
+      },
+    );
+  }
+
   void _push(BuildContext context, Widget page) {
     Navigator.of(context).push(PageRouteBuilder(
       pageBuilder: (_, __, ___) => page,
@@ -827,6 +917,20 @@ class _SelectTypeState extends State<SelectType>
           SizeTransition(sizeFactor: a, child: child),
     ));
   }
+
+  void _openAgentSettingsTab() {
+    setState(() {
+      if (!_openTabs.any((t) => t.id == 'agent-settings')) {
+        _openTabs.add(const _TabDef(
+          id:    'agent-settings',
+          title: 'Paramètres Agent',
+          icon:  Broken.cpu_setting,
+        ));
+      }
+      _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'agent-settings');
+    });
+  }
+
 
   // ── Activity bar ──────────────────────────────────────────────────────────
   Widget _buildActivityBar(BuildContext context, AppTheme appTheme) {
@@ -2000,6 +2104,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'settings') {
       return const Settings(embedded: true);
     }
+    if (tab.id == 'agent-settings') {
+      return const AgentSettings(embedded: true);
+    }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
 
@@ -2040,6 +2147,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'settings') {
       return const Settings(embedded: true);
+    }
+    if (tab.id == 'agent-settings') {
+      return const AgentSettings(embedded: true);
     }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
@@ -2096,8 +2206,7 @@ class _SelectTypeState extends State<SelectType>
               _agentHdrBtn(Broken.clock, 'Historique', muted,
                   () => setState(() => _showHistoryPanel = !_showHistoryPanel)),
               _agentHdrBtn(Broken.setting_2, 'Paramètres Agent', muted, () {
-                Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const AgentSettings()));
+                _openAgentSettingsTab();
               }),
               _agentHdrBtn(
                 Broken.maximize_4,
@@ -2503,8 +2612,7 @@ class _SelectTypeState extends State<SelectType>
                     TextButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
-                        Navigator.of(context).push(MaterialPageRoute(
-                            builder: (_) => const AgentSettings()));
+                        _openAgentSettingsTab();
                       },
                       icon: Icon(Broken.setting_2, size: 15, color: _kAccent),
                       label: const Text('Ouvrir Paramètres Agent',
@@ -2565,8 +2673,7 @@ class _SelectTypeState extends State<SelectType>
               child: OutlinedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => const AgentSettings()));
+                  _openAgentSettingsTab();
                 },
                 icon: Icon(Broken.add_circle, size: 14, color: _kAccent),
                 label: const Text('Ajouter un modèle',
@@ -4059,36 +4166,76 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
   }
 }
 
-/// Indicateur de phase (thinking / streaming) affiché au-dessus de la bulle.
-class _AgentPhaseChip extends StatelessWidget {
+/// Animated spinning indicator for agent thinking / streaming states.
+class _AgentPhaseChip extends StatefulWidget {
   final AgentPhase phase;
   final bool       isDark;
   const _AgentPhaseChip({required this.phase, required this.isDark});
 
   @override
+  State<_AgentPhaseChip> createState() => _AgentPhaseChipState();
+}
+
+class _AgentPhaseChipState extends State<_AgentPhaseChip>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double>    _spin;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1000))
+      ..repeat();
+    _spin = Tween<double>(begin: 0, end: 1).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final (String label, IconData icon, Color color) = switch (phase) {
-      AgentPhase.thinking  => ('Réflexion\u2026',  Broken.cpu,        Colors.purple),
-      AgentPhase.streaming => ('Génération\u2026', Broken.edit_2,     _kAccent),
-      AgentPhase.error     => ('Erreur',            Broken.danger,     Colors.red),
-      _                    => ('',                  Broken.tick_circle, Colors.green),
+    final (String label, Color color) = switch (widget.phase) {
+      AgentPhase.thinking  => ('Réflexion\u2026',  Colors.purple),
+      AgentPhase.streaming => ('Génération\u2026', _kAccent),
+      AgentPhase.error     => ('Erreur',            Colors.red),
+      _                    => ('',                  Colors.green),
     };
     if (label.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.15 : 0.08),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withOpacity(widget.isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.25)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 11, color: color),
-        const SizedBox(width: 4),
+        // Spinning square — inspired by Replit Agent cube
+        AnimatedBuilder(
+          animation: _spin,
+          builder: (_, __) => Transform.rotate(
+            angle: _spin.value * 6.2832,
+            child: Container(
+              width: 11,
+              height: 11,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
         Text(label,
             style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
                 color: color)),
       ]),
     );
@@ -4197,4 +4344,37 @@ class _SidebarClipper extends CustomClipper<Path> {
 
   @override
   bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+/// Minimal clickable item for the VSCode-style status bar.
+class _StatusBarItem extends StatelessWidget {
+  final IconData      icon;
+  final String        label;
+  final Color         fg;
+  final VoidCallback  onTap;
+
+  const _StatusBarItem({
+    required this.icon,
+    required this.label,
+    required this.fg,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(3),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: fg),
+          if (label.isNotEmpty) ...[
+            const SizedBox(width: 3),
+            Text(label, style: TextStyle(fontSize: 11, color: fg, height: 1)),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
 }

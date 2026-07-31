@@ -3040,7 +3040,7 @@ if ! grep -q "fn __entry" "$targetPath"; then
   if grep -Eq 'fn[[:space:]]+main' "$targetPath"; then
     printf '\n#[unsafe(no_mangle)]\npub extern "C" fn __entry() {\n    let _ = std::panic::catch_unwind(|| {\n        let _ = main();\n    });\n}\n' >> "$targetPath";
   else
-    echo "Error: src/lib.rs needs either __entry() or main() for Roxum run.";
+    echo "Error: src/lib.rs needs either __entry() or main() for Panda run.";
     exit 1;
   fi
 fi
@@ -3192,7 +3192,7 @@ rustloader "$soPath"
                                           )
                                           : null,
                                         child: Text(
-                                          "Roxum",
+                                          "Panda",
                                           style: TextStyle(
                                             color: appTheme.selectScreenCardTextColor
                                           )
@@ -3488,7 +3488,7 @@ rustloader "$soPath"
                                             padding:
                                               const EdgeInsets.only(left: 15,top: 8, bottom: 8),
                                             child: Text(
-                                              "Note: This is a clone of the selected folder in Roxum's private directory. Modifications here will not affect the original folder.",
+                                              "Note: This is a clone of the selected folder in Panda's private directory. Modifications here will not affect the original folder.",
                                               style: TextStyle(
                                                 color: Colors.grey[appTheme.isDark ? 500 : 600],
                                               ),
