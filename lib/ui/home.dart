@@ -104,6 +104,9 @@ class _SelectTypeState extends State<SelectType>
   final List<_TabDef> _splitTabs = [
     const _TabDef(id: 'welcome', title: 'Welcome', icon: Broken.global_refresh),
   ];
+
+  // ── Editor tabs data (file/folder/project content for tabs) ──
+  final Map<String, _EditorTabConfig> _editorTabs = {};
   late final MultiSplitViewController _splitViewController;
 
   // ── Panda Agent chat ─────────────────────────────────────────────
@@ -205,16 +208,12 @@ class _SelectTypeState extends State<SelectType>
         orElse: () => languages[0],
       );
       if (!mounted) return;
-      Navigator.of(context).push(PageRouteBuilder(
-        pageBuilder: (_, __, ___) => EditorPage(
-          languageDetails: language,
-          rootDir: imported.parent.path,
-          file: imported,
-          isProject: false,
-        ),
-        transitionsBuilder: (_, a, __, child) =>
-            SizeTransition(sizeFactor: a, child: child),
-      ));
+      _openEditorTab(
+        file:            imported,
+        rootDir:         imported.parent.path,
+        languageDetails: language,
+        isProject:       false,
+      );
     } finally {
       _checkingPendingSharedFile = false;
     }
@@ -273,16 +272,11 @@ class _SelectTypeState extends State<SelectType>
         ));
         await Future.delayed(const Duration(milliseconds: 500));
         if (context.mounted) {
-          Navigator.of(context).push(PageRouteBuilder(
-            pageBuilder: (_, __, ___) => EditorPage(
-              rootDir: targetDir.path,
-              isCloned: true,
-              isProject: true,
-              languageDetails: null,
-            ),
-            transitionsBuilder: (_, a, __, child) =>
-                SizeTransition(sizeFactor: a, child: child),
-          ));
+          _openEditorTab(
+            rootDir:   targetDir.path,
+            isProject: true,
+            isCloned:  true,
+          );
         }
       }
       return;
@@ -295,16 +289,11 @@ class _SelectTypeState extends State<SelectType>
       );
       if (context.mounted) {
         Navigator.of(context).pop();
-        Navigator.of(context).push(PageRouteBuilder(
-          pageBuilder: (_, __, ___) => EditorPage(
-            rootDir: targetDir.path,
-            isCloned: true,
-            isProject: true,
-            languageDetails: null,
-          ),
-          transitionsBuilder: (_, a, __, child) =>
-              SizeTransition(sizeFactor: a, child: child),
-        ));
+        _openEditorTab(
+          rootDir:   targetDir.path,
+          isProject: true,
+          isCloned:  true,
+        );
       }
     } catch (e) {
       if (context.mounted) {
@@ -384,16 +373,12 @@ class _SelectTypeState extends State<SelectType>
                               path.extension(file.path).replaceFirst('.', '')),
                           orElse: () => languages[0],
                         );
-                        Navigator.of(context).push(PageRouteBuilder(
-                          pageBuilder: (_, __, ___) => EditorPage(
-                            rootDir: file.parent.path,
-                            file: file,
-                            isProject: false,
-                            languageDetails: lang,
-                          ),
-                          transitionsBuilder: (_, a, __, child) =>
-                              SizeTransition(sizeFactor: a, child: child),
-                        ));
+                        _openEditorTab(
+                          file:            file,
+                          rootDir:         file.parent.path,
+                          languageDetails: lang,
+                          isProject:       false,
+                        );
                       }
                     },
                     child: const Text('Create',
@@ -417,16 +402,12 @@ class _SelectTypeState extends State<SelectType>
           path.extension(file.path).replaceFirst('.', '')),
       orElse: () => languages[0],
     );
-    Navigator.of(context).push(PageRouteBuilder(
-      pageBuilder: (_, __, ___) => EditorPage(
-        languageDetails: lang,
-        rootDir: file.parent.path,
-        file: file,
-        isProject: false,
-      ),
-      transitionsBuilder: (_, a, __, child) =>
-          SizeTransition(sizeFactor: a, child: child),
-    ));
+    _openEditorTab(
+      file:            file,
+      rootDir:         file.parent.path,
+      languageDetails: lang,
+      isProject:       false,
+    );
   }
 
   Future<void> _doOpenFolder(BuildContext context, AppTheme appTheme) async {
@@ -453,16 +434,11 @@ class _SelectTypeState extends State<SelectType>
       return;
     }
     if (context.mounted) {
-      Navigator.of(context).push(PageRouteBuilder(
-        pageBuilder: (_, __, ___) => EditorPage(
-          rootDir: dir.path,
-          isCloned: false,
-          isProject: true,
-          languageDetails: null,
-        ),
-        transitionsBuilder: (_, a, __, child) =>
-            SizeTransition(sizeFactor: a, child: child),
-      ));
+      _openEditorTab(
+        rootDir:   dir.path,
+        isProject: true,
+        isCloned:  false,
+      );
     }
   }
 
@@ -933,6 +909,42 @@ class _SelectTypeState extends State<SelectType>
         ));
       }
       _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'agent-settings');
+    });
+  }
+
+  // ── Open a file / folder / project as a tab in the new Panda IDE UI ──────
+  // This replaces all Navigator.push(EditorPage(...)) calls so that files and
+  // projects open inside the tab system instead of the old full-screen Roxum UI.
+  void _openEditorTab({
+    File?     file,
+    required String    rootDir,
+    Language? languageDetails,
+    bool      isProject = false,
+    bool      isCloned  = false,
+  }) {
+    final tabId = isProject
+        ? 'editor:dir:$rootDir'
+        : 'editor:file:${file?.path ?? rootDir}';
+    final tabTitle = isProject
+        ? path.basename(rootDir)
+        : (file != null ? path.basename(file.path) : path.basename(rootDir));
+    const tabIcon = Broken.document_text;
+
+    setState(() {
+      if (!_openTabs.any((t) => t.id == tabId)) {
+        _openTabs.add(_TabDef(id: tabId, title: tabTitle, icon: tabIcon));
+        _editorTabs[tabId] = _EditorTabConfig(
+          file:            file,
+          rootDir:         rootDir,
+          languageDetails: languageDetails,
+          isProject:       isProject,
+          isCloned:        isCloned,
+        );
+      }
+      _activeTabIdx = _openTabs.indexWhere((t) => t.id == tabId);
+      // Make sure the sidebar collapses so the editor gets full width.
+      if (_sidebarState == 2) _sidebarState = 1;
+      _activeRail = 0;
     });
   }
 
@@ -2092,6 +2104,7 @@ class _SelectTypeState extends State<SelectType>
       if (value == 'close_all') {
         setState(() {
           if (isPrimary) {
+            _editorTabs.clear(); // clean up all editor tab configs
             _openTabs.clear();
             _activeTabIdx = 0;
           } else {
@@ -2134,12 +2147,26 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'agent-settings') {
       return const AgentSettings(embedded: true);
     }
+    // ── Editor tab: file / folder / project ──────────────────────────────────
+    final editorCfg = _editorTabs[tab.id];
+    if (editorCfg != null) {
+      return EditorPage(
+        key:             ValueKey(tab.id),
+        file:            editorCfg.file,
+        rootDir:         editorCfg.rootDir,
+        languageDetails: editorCfg.languageDetails,
+        isProject:       editorCfg.isProject,
+        isCloned:        editorCfg.isCloned,
+      );
+    }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
 
   void _closeTab(int i) {
     setState(() {
+      final removedId = _openTabs[i].id;
       _openTabs.removeAt(i);
+      _editorTabs.remove(removedId); // clean up editor config if any
       if (_openTabs.isNotEmpty) {
         _activeTabIdx = (_activeTabIdx >= _openTabs.length
                 ? _openTabs.length - 1
@@ -2180,6 +2207,18 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'agent-settings') {
       return const AgentSettings(embedded: true);
+    }
+    // ── Editor tab: file / folder / project ──────────────────────────────────
+    final editorCfg = _editorTabs[tab.id];
+    if (editorCfg != null) {
+      return EditorPage(
+        key:             ValueKey(tab.id),
+        file:            editorCfg.file,
+        rootDir:         editorCfg.rootDir,
+        languageDetails: editorCfg.languageDetails,
+        isProject:       editorCfg.isProject,
+        isCloned:        editorCfg.isCloned,
+      );
     }
     return _buildWelcomePage(context, appTheme, appThemestate);
   }
@@ -3674,16 +3713,11 @@ class _SelectTypeState extends State<SelectType>
                           return;
                         }
                         if (isProject) {
-                          Navigator.of(context).push(PageRouteBuilder(
-                            pageBuilder: (_, __, ___) => EditorPage(
-                              rootDir: entryPath,
-                              isCloned: true,
-                              isProject: true,
-                              languageDetails: null,
-                            ),
-                            transitionsBuilder: (_, a, __, child) =>
-                                SizeTransition(sizeFactor: a, child: child),
-                          ));
+                          _openEditorTab(
+                            rootDir:   entryPath,
+                            isProject: true,
+                            isCloned:  true,
+                          );
                           return;
                         }
                         final matchingLang = languages
@@ -3692,24 +3726,20 @@ class _SelectTypeState extends State<SelectType>
                                     .toLowerCase()
                                     .replaceFirst('.', '')))
                             .toList();
-                        Navigator.of(context).push(PageRouteBuilder(
-                          pageBuilder: (_, __, ___) => EditorPage(
-                            file: File(entryPath),
-                            rootDir: rootDir,
-                            languageDetails: matchingLang.isNotEmpty
-                                ? matchingLang[0]
-                                : Language(
-                                    name: 'Unknown',
-                                    extension: ['null'],
-                                    details: 'Unknown language',
-                                    language: unknown,
-                                    helloWorld: 'Unknown type of file',
-                                    icon: null),
-                            isProject: false,
-                          ),
-                          transitionsBuilder: (_, a, __, child) =>
-                              SizeTransition(sizeFactor: a, child: child),
-                        ));
+                        _openEditorTab(
+                          file:            File(entryPath),
+                          rootDir:         rootDir,
+                          languageDetails: matchingLang.isNotEmpty
+                              ? matchingLang[0]
+                              : Language(
+                                  name: 'Unknown',
+                                  extension: ['null'],
+                                  details: 'Unknown language',
+                                  language: unknown,
+                                  helloWorld: 'Unknown type of file',
+                                  icon: null),
+                          isProject: false,
+                        );
                       },
                     );
                   }).toList(),
@@ -3778,6 +3808,24 @@ class _RailItem {
     final IconData icon;
     const _TabDef({required this.id, required this.title, required this.icon});
     }
+
+// ── _EditorTabConfig ──────────────────────────────────────────────────────────
+// Holds the data needed to render an EditorPage inside a tab.
+class _EditorTabConfig {
+  final File?     file;
+  final String    rootDir;
+  final Language? languageDetails;
+  final bool      isProject;
+  final bool      isCloned;
+
+  _EditorTabConfig({
+    this.file,
+    required this.rootDir,
+    this.languageDetails,
+    this.isProject = false,
+    this.isCloned  = false,
+  });
+}
 
     // ── _ActivityBtnEx (theme-aware) ──────────────────────────────────────────────
     class _ActivityBtnEx extends StatelessWidget {
