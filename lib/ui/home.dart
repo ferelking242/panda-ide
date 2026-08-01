@@ -733,12 +733,13 @@ class _SelectTypeState extends State<SelectType>
 
                             // ── Editor area ────────────────────────────────
                             Expanded(
-                              child: SmoothClipRRect(
-                                smoothness: 0.6,
-                                borderRadius: _sidebarState >= 1
-                                    ? const BorderRadius.only(
-                                        topLeft: Radius.circular(22))
-                                    : BorderRadius.zero,
+                              child: ClipSmoothRect(
+                                radius: _sidebarState >= 1
+                                    ? SmoothBorderRadius.only(
+                                        topLeft: SmoothRadius(
+                                            cornerRadius: 22,
+                                            cornerSmoothing: 0.6))
+                                    : SmoothBorderRadius.zero,
                                 child: Container(
                                 color: appTheme.scaffoldBg,
                                 child: Row(

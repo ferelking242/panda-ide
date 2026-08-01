@@ -47,7 +47,7 @@ dependencies:
   multi_split_view: ^3.2.0
   vector_math: ^2.2.0
   xterm: ^4.0.0
-  figma_squircle: ^0.5.3
+  figma_squircle: ^0.6.3
 
 dev_dependencies:
   flutter_lints: ^6.0.0
