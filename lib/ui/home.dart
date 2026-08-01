@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:figma_squircle/figma_squircle.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:file_picker/file_picker.dart';
@@ -732,7 +733,8 @@ class _SelectTypeState extends State<SelectType>
 
                             // ── Editor area ────────────────────────────────
                             Expanded(
-                              child: ClipRRect(
+                              child: SmoothClipRRect(
+                                smoothness: 0.6,
                                 borderRadius: _sidebarState >= 1
                                     ? const BorderRadius.only(
                                         topLeft: Radius.circular(22))
@@ -838,8 +840,8 @@ class _SelectTypeState extends State<SelectType>
   // ── VSCode-style status bar ────────────────────────────────────────────────
   Widget _buildStatusBar(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
-    final bg     = isDark ? const Color(0xff007acc) : const Color(0xff005a9e);
-    final fg     = Colors.white;
+    final bg     = isDark ? _kActivityBgDark : _kActivityBgLight;
+    final fg     = isDark ? _kActivitySelDark : _kActivitySelLight;
 
     return BlocBuilder<RepoStatusBloc, RepoStatusState>(
       builder: (_, repoState) {
