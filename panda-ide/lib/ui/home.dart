@@ -774,115 +774,102 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
     ));
   }
 
-  // ── Detect display language from active tab title (filename) ─────────────
-  String _langFromTabTitle(String title) {
-    final ext = title.contains('.')
-        ? title.split('.').last.toLowerCase()
-        : '';
-    const map = <String, String>{
-      'dart': 'Dart',       'py': 'Python',       'js': 'JavaScript',
-      'ts': 'TypeScript',   'jsx': 'JSX',          'tsx': 'TSX',
-      'html': 'HTML',       'css': 'CSS',          'scss': 'SCSS',
-      'json': 'JSON',       'yaml': 'YAML',        'yml': 'YAML',
-      'md': 'Markdown',     'kt': 'Kotlin',        'java': 'Java',
-      'swift': 'Swift',     'cpp': 'C++',          'c': 'C',
-      'rs': 'Rust',         'go': 'Go',            'rb': 'Ruby',
-      'php': 'PHP',         'sh': 'Shell',         'xml': 'XML',
-      'toml': 'TOML',       'sql': 'SQL',          'gradle': 'Gradle',
-      'h': 'C Header',      'cs': 'C#',            'lua': 'Lua',
-      'r': 'R',             'vue': 'Vue',          'svelte': 'Svelte',
-      'graphql': 'GraphQL', 'proto': 'Protobuf',   'lock': 'Lock',
-    };
-    return map[ext] ?? '';
-  }
+  // ══════════════════════════════════════════════════════════════════════════
+  // STATUS BAR
+  // ══════════════════════════════════════════════════════════════════════════
 
-  // ── VSCode-style status bar ───────────────────────────────────────────────
   Widget _buildStatusBar(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
-    // Matches the tab bar surface — blends with the rest of the UI (not blue)
-    final bg = isDark ? _kTabBarDark  : _kTabBarLight;
-    final fg = isDark ? const Color(0xffbbbbbb) : const Color(0xff555555);
+    final bg     = isDark ? _kTabBarDark  : _kTabBarLight;
+    final fg     = isDark ? const Color(0xffbbbbbb) : const Color(0xff555555);
 
-    // Language inferred from active tab filename
-    final activeTitle = _activeTabIdx < _openTabs.length
-        ? _openTabs[_activeTabIdx].title
-        : '';
-    final lang = _langFromTabTitle(activeTitle);
+    // Error / warning counts — wire to a diagnostics bloc when available
+    const int errors   = 0;
+    const int warnings = 0;
 
-    final barContent = Container(
+    final barContent = SizedBox(
       height: 22,
-      color: bg,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(children: [
-        // ── Left: Git branch ───────────────────────────────────────────
-        _StatusBarItem(
-          icon: Icons.call_split_rounded,
-          label: 'main',
-          fg: fg,
-          onTap: () {},
+      child: ColoredBox(
+        color: bg,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(children: [
+
+            // ── LEFT ─────────────────────────────────────────────────────────
+
+            // Connexion distante  (icône ><)
+            Builder(builder: (ctx) => _StatusBarItem(
+              icon: Icons.compare_arrows,
+              label: '',
+              fg: fg,
+              onTap: () => _showRemoteMenu(ctx, appTheme),
+            )),
+            const SizedBox(width: 2),
+
+            // Problèmes  (cercle ⊗ + compte)
+            Builder(builder: (ctx) => _StatusBarCountItem(
+              icon: Icons.cancel_outlined,
+              count: errors,
+              activeColor: Colors.red[300]!,
+              fg: fg,
+              onTap: () => setState(() {
+                _bottomPanelOpen = true;
+                _bottomPanelTab  = 1;
+              }),
+            )),
+            const SizedBox(width: 2),
+
+            // Avertissements  (⚠️ + compte)
+            Builder(builder: (ctx) => _StatusBarCountItem(
+              icon: Icons.warning_amber_outlined,
+              count: warnings,
+              activeColor: Colors.orange[300]!,
+              fg: fg,
+              onTap: () => setState(() {
+                _bottomPanelOpen = true;
+                _bottomPanelTab  = 1;
+              }),
+            )),
+
+            const Spacer(),
+
+            // ── RIGHT (far end) ───────────────────────────────────────────────
+
+            // Panda Agent
+            _StatusBarItem(
+              icon: Broken.cpu,
+              label: '',
+              fg: _rightPanelOpen ? _kAccent : fg,
+              onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+            ),
+            const SizedBox(width: 2),
+
+            // Layout / Clavier
+            _StatusBarItem(
+              icon: Icons.keyboard_outlined,
+              label: '',
+              fg: fg,
+              onTap: () {},
+            ),
+            const SizedBox(width: 2),
+
+            // Notifications
+            _StatusBarItem(
+              icon: Icons.notifications_none,
+              label: '',
+              fg: fg,
+              onTap: () {},
+            ),
+            const SizedBox(width: 2),
+          ]),
         ),
-        const Spacer(),
-        // ── Right: Copilot ─────────────────────────────────────────────
-        _StatusBarItem(
-          icon: Icons.auto_awesome,
-          label: 'Copilot',
-          fg: fg,
-          onTap: () {},
-        ),
-        const SizedBox(width: 6),
-        // ── Right: Language mode ───────────────────────────────────────
-        if (lang.isNotEmpty) ...[
-          _StatusBarItem(
-            icon: Icons.code,
-            label: lang,
-            fg: fg,
-            onTap: () {},
-          ),
-          const SizedBox(width: 6),
-        ],
-        // ── Right: Keyboard shortcuts ──────────────────────────────────
-        _StatusBarItem(
-          icon: Icons.keyboard_outlined,
-          label: '',
-          fg: fg,
-          onTap: () {},
-        ),
-        const SizedBox(width: 6),
-        // ── Right: Terminal ────────────────────────────────────────────
-        _StatusBarItem(
-          icon: Icons.terminal,
-          label: 'Terminal',
-          fg: fg,
-          onTap: () => setState(() {
-            _bottomPanelOpen = true;
-            _bottomPanelTab  = 0;
-          }),
-        ),
-        const SizedBox(width: 6),
-        // ── Right: Panda Agent ─────────────────────────────────────────
-        _StatusBarItem(
-          icon: Broken.cpu,
-          label: 'Agent',
-          fg: fg,
-          onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
-        ),
-        const SizedBox(width: 6),
-        // ── Right: Notifications ───────────────────────────────────────
-        _StatusBarItem(
-          icon: Icons.notifications_none,
-          label: '',
-          fg: fg,
-          onTap: () {},
-        ),
-      ]),
+      ),
     );
 
-    // When the activity bar is visible, indent the status bar to match the
-    // editor surface and apply a bottom-left rounded corner — mirroring the
-    // top-left rounded corner that the editor area uses.
+    // ── Arrondi bas-gauche miroir du coin haut-gauche de l'éditeur ─────────
     if (_sidebarState >= 1) {
       return Row(children: [
-        const SizedBox(width: 48), // spacer under the activity bar
+        const SizedBox(width: 48), // sous la barre d'activité (48 px)
         Expanded(
           child: ClipRRect(
             borderRadius: const BorderRadius.only(
@@ -894,6 +881,108 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       ]);
     }
     return barContent;
+  }
+
+  // ── Menu Connexion Distante ────────────────────────────────────────────────
+  void _showRemoteMenu(BuildContext ctx, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final RenderBox box = ctx.findRenderObject()! as RenderBox;
+    final Offset    off = box.localToGlobal(Offset.zero);
+    // Positionné au-dessus du bouton (barre tout en bas)
+    final pos = RelativeRect.fromLTRB(
+        off.dx, off.dy, off.dx + box.size.width, 0);
+
+    final bg     = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
+    final fg     = isDark ? const Color(0xffcccccc) : const Color(0xff333333);
+    final header = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+
+    // ignore: avoid_function_literals_in_foreach_calls
+    PopupMenuItem<String> section(String label) => PopupMenuItem<String>(
+      enabled: false, height: 26,
+      child: Text(label,
+          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
+              letterSpacing: 1.0, color: header)),
+    );
+    PopupMenuItem<String> entry(String value, IconData icon, String label,
+        {Color? color}) =>
+        PopupMenuItem<String>(
+          value: value, height: 32,
+          child: Row(children: [
+            Icon(icon, size: 14, color: color ?? header),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(fontSize: 13, color: color ?? fg)),
+          ]),
+        );
+
+    showMenu<String>(
+      context: ctx,
+      position: pos,
+      color: bg,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 8,
+      items: [
+        // ── Section: Dépôts distants ──────────────────────────────────────
+        section('DÉPÔTS DISTANTS'),
+        entry('open_remote',   Icons.folder_open_outlined,          'Ouvrir un dépôt distant…'),
+        entry('clone_remote',  Icons.download_for_offline_outlined, 'Cloner un référentiel distant…'),
+        entry('access_repo',   Icons.link_rounded,                  'Accéder au dépôt'),
+        const PopupMenuDivider(height: 6),
+
+        // ── Section: Hébergeurs ───────────────────────────────────────────
+        section('HÉBERGEURS'),
+        entry('github',     Icons.code,                  'GitHub — Ouvrir un référentiel…'),
+        entry('gitlab',     Broken.programming_arrows,   'GitLab — Connexion…'),
+        entry('gitea',      Icons.router_outlined,       'Gitea — Connexion…'),
+        entry('bitbucket',  Icons.cloud_outlined,        'Bitbucket — Connexion…'),
+        const PopupMenuDivider(height: 6),
+
+        // ── Section: Connexion ────────────────────────────────────────────
+        section('CONNEXION'),
+        entry('ssh',           Icons.terminal,              'Connexion SSH…'),
+        entry('tunnel',        Icons.vpn_key_outlined,      'Tunnel distant'),
+        entry('dev_container', Icons.inventory_2_outlined,  'Dev Container'),
+        const PopupMenuDivider(height: 6),
+
+        // ── Fermer ────────────────────────────────────────────────────────
+        entry('close_workspace', Icons.close, 'Fermer l\'espace de travail',
+            color: isDark ? Colors.grey[400] : Colors.grey[600]),
+      ],
+    ).then((value) {
+      if (value == null) return;
+      switch (value) {
+        case 'github':
+          setState(() {
+            if (!_openTabs.any((t) => t.id == 'github')) {
+              _openTabs.add(const _TabDef(
+                  id: 'github', title: 'GitHub',
+                  icon: Broken.programming_arrows));
+              _activeTabIdx = _openTabs.length - 1;
+            } else {
+              _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'github');
+            }
+          });
+          break;
+        case 'clone_remote':
+        case 'open_remote':
+          _push(ctx, const ProjectScreen());
+          break;
+        case 'ssh':
+          setState(() {
+            if (!_openTabs.any((t) => t.id == 'gateway')) {
+              _openTabs.add(const _TabDef(
+                  id: 'gateway', title: 'Gateway',
+                  icon: Broken.cloud_connection));
+              _activeTabIdx = _openTabs.length - 1;
+            } else {
+              _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'gateway');
+            }
+          });
+          break;
+        // tunnel, gitea, bitbucket, dev_container → fonctionnalités futures
+        default:
+          break;
+      }
+    });
   }
 
   // ── Activity bar ──────────────────────────────────────────────────────────
@@ -4005,7 +4094,7 @@ class _MsgActionBtn extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _StatusBarItem — clickable item in the VSCode-style status bar
+// _StatusBarItem — icône seule ou icône + libellé dans la barre de statut
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatusBarItem extends StatelessWidget {
@@ -4034,6 +4123,44 @@ class _StatusBarItem extends StatelessWidget {
             const SizedBox(width: 3),
             Text(label, style: TextStyle(fontSize: 11, color: fg, height: 1)),
           ],
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _StatusBarCountItem — icône + compteur (problems / warnings)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatusBarCountItem extends StatelessWidget {
+  final IconData     icon;
+  final int          count;
+  final Color        activeColor; // couleur quand count > 0
+  final Color        fg;          // couleur par défaut
+  final VoidCallback onTap;
+
+  const _StatusBarCountItem({
+    required this.icon,
+    required this.count,
+    required this.activeColor,
+    required this.fg,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = count > 0 ? activeColor : fg;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(3),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 3),
+          Text('$count',
+              style: TextStyle(fontSize: 11, color: color, height: 1)),
         ]),
       ),
     );
