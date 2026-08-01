@@ -82,15 +82,10 @@ class _BrowserPanelContent extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// WebView isolé par profil via [dataDirectoryIdentifier].
+/// WebView isolé par profil.
 ///
 /// Chaque [BrowserTab] a un `id` unique → [ValueKey] distinct →
 /// Flutter recrée le widget (et donc le WebView natif) si le profil change.
-///
-/// Sur Android 9+ (API 28+), `dataDirectoryIdentifier` partitionne les données
-/// WebView (cookies, localStorage, IndexedDB, Cache) par profil.
-/// Sur Android 8 (API 26-27), les WebViews partagent le storage mais chaque
-/// profil reste visuellement distinct.
 class _IsolatedWebView extends StatefulWidget {
   final BrowserTab      tab;
   final BrowserProfile  profile;
@@ -123,8 +118,6 @@ class _IsolatedWebViewState extends State<_IsolatedWebView> {
         supportZoom:                     true,
         builtInZoomControls:             true,
         displayZoomControls:             false,
-        // ── Isolation native par profil (Android 9+ / iOS) ──────────
-        dataDirectoryIdentifier: widget.profile.dataDirectoryIdentifier,
         // ── User-Agent personnalisé si défini ────────────────────────
         userAgent: widget.profile.userAgent,
       ),
