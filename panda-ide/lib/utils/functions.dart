@@ -355,7 +355,7 @@ Future<void> initRepo(String workspacePath) async {
 
   await Process.run(
     "$binDir/git",
-    ["config", "--local", "user.name", "Roxum user"],
+    ["config", "--local", "user.name", "Panda user"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
@@ -393,7 +393,7 @@ Future<void> createGitignoreIfNeeded(String workspacePath) async {
 
     if (patternsToAdd.isNotEmpty) {
       await gitignoreFile.writeAsString(
-        '$existingContent\n\n# Auto-added by Roxum\n${patternsToAdd.join('\n')}\n',
+        '$existingContent\n\n# Auto-added by Panda\n${patternsToAdd.join('\n')}\n',
         mode: FileMode.append,
       );
     }
@@ -404,7 +404,7 @@ Future<void> createGitignoreIfNeeded(String workspacePath) async {
 
 List<String> _getGitignorePatterns() {
   return [
-    '# Roxum and Editor files',
+    '# Panda and Editor files',
     '.vscode/',
     '.idea/',
     '*.swp',

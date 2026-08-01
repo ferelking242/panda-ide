@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="node_feature_title">Node Feature</string>
+    <string name="python_feature_title">Python Feature</string>
+    <string name="java_feature_title">Java Feature</string>
+    <string name="kotlin_feature_title">Kotlin Feature</string>
+    <string name="clang_feature_title">Clang Feature</string>
+    <string name="dart_feature_title">Dart Feature</string>
+    <string name="ty_feature_title">Ty Feature</string>
+    <string name="rust_analyzer_feature_title">Rust Analyzer Feature</string>
+    <string name="gopls_feature_title">Gopls Feature</string>
+    <string name="emmylua_feature_title">EmmyLuaLs Feature</string>
+    <string name="bash_language_server_feature_title">Bash Language Server Feature</string>
+    <string name="copilot_language_server_feature_title">GitHub Copilot Feature</string>
+    <string name="kmp_lsp_feature_title">Kmp LSP Feature</string>
+    <string name="vscode_langservers_extracted_feature_title">VSCode Langservers Extracted Feature</string>
+    <string name="ruby_feature_title">Ruby Feature</string>
+    <string name="lua_feature_title">Lua Feature</string>
+    <string name="title_java_feature">Java Feature</string>
+    <string name="rust_feature_title">Rust Feature</string>
+    <string name="go_feature_title">Go Feature</string>
+    <string name="title_clang_feature">Clang Feature</string>
+</resources>
