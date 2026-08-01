@@ -1,10 +1,10 @@
-/// Page Marketplace Open VSX — Phase 8.
+/// Page Marketplace — Panda IDE
 ///
-/// Permet de chercher, filtrer et installer des extensions depuis open-vsx.org.
-/// Utilise OpenVsxClient pour les requêtes et VsixInstaller pour l'installation.
-///
-/// Usage :
-///   Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketplacePage()));
+/// Header fixe (icône + titre + loupe + 3-points).
+/// Barre de recherche + category pills collapsibles au scroll.
+/// Navigation par pills en bas (3 onglets).
+/// Tap sur une extension → fiche détail (bottom sheet).
+/// Tap sur un runtime  → fiche détail avec paramètres.
 library;
 
 import 'dart:async';
@@ -16,20 +16,15 @@ import '../open_vsx_client.dart';
 import '../extension_registry.dart';
 import '../vsix_installer.dart';
 
-/// Catégories Open VSX affichées comme filtres.
+// ── Constantes ────────────────────────────────────────────────────────────────
+
+const _kAccent = Color(0xFF0078D4);
+
 const _kCategories = [
-  'All',
-  'Programming Languages',
-  'Snippets',
-  'Linters',
-  'Themes',
-  'Debuggers',
-  'Formatters',
-  'Keymaps',
-  'Other',
+  'All', 'Programming Languages', 'Snippets', 'Linters',
+  'Themes', 'Debuggers', 'Formatters', 'Keymaps', 'Other',
 ];
 
-/// Tris disponibles.
 const _kSortOptions = {
   'Relevance': 'relevance',
   'Downloads': 'downloadCount',
@@ -37,9 +32,11 @@ const _kSortOptions = {
   'Recent': 'timestamp',
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MarketplacePage
+// ─────────────────────────────────────────────────────────────────────────────
+
 class MarketplacePage extends StatefulWidget {
-  /// When [embedded] is true the widget skips its own Scaffold/AppBar and
-  /// renders only the body content (suitable for embedding in an editor tab).
   final bool embedded;
   const MarketplacePage({super.key, this.embedded = false});
 
@@ -49,30 +46,34 @@ class MarketplacePage extends StatefulWidget {
 
 class _MarketplacePageState extends State<MarketplacePage>
     with SingleTickerProviderStateMixin {
-  final _client = OpenVsxClient();
-  final _searchCtrl = TextEditingController();
-  late TabController _sectionTab;
 
-  List<MarketplaceExtension> _results = [];
-  bool _loading = false;
+  final _client      = OpenVsxClient();
+  final _searchCtrl  = TextEditingController();
+  final _scrollCtrl  = ScrollController();
+  late  TabController _tabCtrl;
+
+  // Extensions tab state
+  List<MarketplaceExtension> _results     = [];
+  bool   _loading     = false;
   String? _error;
-  int _offset = 0;
-  int _totalSize = 0;
-  bool _loadingMore = false;
-
+  int    _offset      = 0;
+  int    _totalSize   = 0;
+  bool   _loadingMore = false;
   String _selectedCategory = 'All';
-  String _sortBy = 'relevance';
-
-  // Install state per extension id
+  String _sortBy           = 'relevance';
   final Map<String, _InstallState> _installStates = {};
 
+  // Header collapse state
+  bool _headerExpanded = true; // true = search bar + pills visible
+
   Timer? _debounce;
-  final _scrollCtrl = ScrollController();
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-    _sectionTab = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 3, vsync: this);
     _searchCtrl.addListener(_onSearchChanged);
     _scrollCtrl.addListener(_onScroll);
     _loadFeatured();
@@ -80,7 +81,7 @@ class _MarketplacePageState extends State<MarketplacePage>
 
   @override
   void dispose() {
-    _sectionTab.dispose();
+    _tabCtrl.dispose();
     _debounce?.cancel();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
@@ -91,45 +92,27 @@ class _MarketplacePageState extends State<MarketplacePage>
   // ── Data loading ───────────────────────────────────────────────────────────
 
   Future<void> _loadFeatured() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-      _offset = 0;
-    });
+    setState(() { _loading = true; _error = null; _offset = 0; });
     try {
-      final result = await _client.featured(size: 20);
+      final r = await _client.featured(size: 20);
       if (!mounted) return;
-      setState(() {
-        _results = result.extensions;
-        _totalSize = result.totalSize;
-        _loading = false;
-      });
+      setState(() { _results = r.extensions; _totalSize = r.totalSize; _loading = false; });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-      });
+      setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
   Future<void> _search({bool reset = true}) async {
-    final query = _searchCtrl.text.trim();
     if (reset) {
-      setState(() {
-        _loading = true;
-        _error = null;
-        _offset = 0;
-        _results = [];
-      });
+      setState(() { _loading = true; _error = null; _offset = 0; _results = []; });
     } else {
       setState(() => _loadingMore = true);
     }
-
     try {
       final category = _selectedCategory == 'All' ? null : _selectedCategory;
-      final result = await _client.search(
-        query: query,
+      final r = await _client.search(
+        query: _searchCtrl.text.trim(),
         offset: _offset,
         size: 20,
         category: category,
@@ -137,40 +120,32 @@ class _MarketplacePageState extends State<MarketplacePage>
       );
       if (!mounted) return;
       setState(() {
-        if (reset) {
-          _results = result.extensions;
-        } else {
-          _results = [..._results, ...result.extensions];
-        }
-        _totalSize = result.totalSize;
-        _offset += result.extensions.length;
-        _loading = false;
-        _loadingMore = false;
+        _results   = reset ? r.extensions : [..._results, ...r.extensions];
+        _totalSize = r.totalSize;
+        _offset   += r.extensions.length;
+        _loading = _loadingMore = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _error = e.toString();
-        _loading = false;
-        _loadingMore = false;
-      });
+      setState(() { _error = e.toString(); _loading = _loadingMore = false; });
     }
   }
 
   void _onSearchChanged() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), () {
-      if (_searchCtrl.text.trim().isEmpty) {
-        _loadFeatured();
-      } else {
-        _search();
-      }
+      _searchCtrl.text.trim().isEmpty ? _loadFeatured() : _search();
     });
   }
 
   void _onScroll() {
-    if (_loadingMore || _loading) return;
-    if (_offset >= _totalSize) return;
+    // Collapse / expand collapsible header zone
+    final collapsed = _scrollCtrl.hasClients && _scrollCtrl.offset > 56;
+    if (collapsed == _headerExpanded) {
+      setState(() => _headerExpanded = !collapsed);
+    }
+    // Infinite scroll
+    if (_loadingMore || _loading || _offset >= _totalSize) return;
     if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200) {
       _offset = _results.length;
       _search(reset: false);
@@ -181,18 +156,11 @@ class _MarketplacePageState extends State<MarketplacePage>
 
   Future<void> _install(MarketplaceExtension ext) async {
     setState(() => _installStates[ext.id] = _InstallState.installing);
-
-    final installer = VsixInstaller(
-      onProgress: (p, msg) {
-        // Could update progress UI here if needed
-      },
-    );
-
+    final installer = VsixInstaller(onProgress: (_, __) {});
     try {
-      final url = ext.buildDownloadUrl();
+      final url    = ext.buildDownloadUrl();
       final result = await installer.installFromUrl(url);
       if (!mounted) return;
-
       switch (result) {
         case InstallSuccess():
           setState(() => _installStates[ext.id] = _InstallState.installed);
@@ -209,11 +177,32 @@ class _MarketplacePageState extends State<MarketplacePage>
   }
 
   void _showSnack(String msg, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: isError ? Colors.red[700] : null,
-        behavior: SnackBarBehavior.floating,
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
+
+  // ── Detail sheets ──────────────────────────────────────────────────────────
+
+  void _openExtensionDetail(MarketplaceExtension ext) {
+    final installState = ExtensionRegistry.instance.isInstalled(ext.id)
+        ? _InstallState.installed
+        : _installStates[ext.id] ?? _InstallState.notInstalled;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ExtensionDetailSheet(
+        ext: ext,
+        installState: installState,
+        onInstall: () async {
+          Navigator.pop(context);
+          await _install(ext);
+        },
       ),
     );
   }
@@ -222,401 +211,500 @@ class _MarketplacePageState extends State<MarketplacePage>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF1E1E1E) : theme.scaffoldBackgroundColor;
-    final cardColor = isDark ? const Color(0xFF252526) : Colors.white;
-    final divColor = isDark ? const Color(0xFF3C3C3C) : const Color(0xFFE0E0E0);
-    final accent   = const Color(0xFF0066B8);
+    final cs = Theme.of(context).colorScheme;
 
-    Widget body = Column(
+    final body = Column(
       children: [
-        // ── Section tab bar: Extensions / Runtimes / Installées ──────────
-        Container(
-          color: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFF3F3F3),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+        // ── Fixed header ──────────────────────────────────────────────────
+        _MarketplaceHeader(
+          expanded: _headerExpanded,
+          searchCtrl: _searchCtrl,
+          sortBy: _sortBy,
+          selectedCategory: _selectedCategory,
+          onSearchIconTap: () {
+            if (!_headerExpanded) setState(() => _headerExpanded = true);
+            if (_scrollCtrl.hasClients) {
+              _scrollCtrl.animateTo(0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut);
+            }
+          },
+          onSortChanged: (v) {
+            setState(() => _sortBy = v);
+            _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
+          },
+          onClearSearch: () {
+            _searchCtrl.clear();
+            _loadFeatured();
+          },
+          onCategoryChanged: (cat) {
+            setState(() => _selectedCategory = cat);
+            _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
+          },
+        ),
+
+        // ── Tab content ───────────────────────────────────────────────────
+        Expanded(
+          child: TabBarView(
+            controller: _tabCtrl,
             children: [
-              TabBar(
-                controller: _sectionTab,
-                labelColor: accent,
-                unselectedLabelColor: isDark ? Colors.white54 : Colors.black54,
-                indicatorColor: accent,
-                indicatorWeight: 2,
-                labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                tabs: const [
-                  Tab(text: 'Extensions VSCode'),
-                  Tab(text: 'Runtimes'),
-                  Tab(text: 'Installées'),
-                ],
+              // Tab 0 — Extensions
+              _ExtensionsTab(
+                results: _results,
+                loading: _loading,
+                loadingMore: _loadingMore,
+                error: _error,
+                scrollCtrl: _scrollCtrl,
+                installStates: _installStates,
+                onInstall: _install,
+                onTap: _openExtensionDetail,
+                onRetry: _loadFeatured,
               ),
+
+              // Tab 1 — Runtimes
+              const _RuntimesTab(),
+
+              // Tab 2 — Installed
+              const _InstalledTab(),
             ],
           ),
         ),
 
-        Expanded(
-          child: TabBarView(
-            controller: _sectionTab,
-            children: [
-              // ── TAB 1: Open VSX Extensions ─────────────────────────────
-              Column(
-      children: [
-        // ── Sort + search header bar ─────────────────────────────────────
-        Container(
-          color: isDark ? const Color(0xFF2D2D2D) : const Color(0xFFF3F3F3),
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-          child: Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _searchCtrl,
-                style: const TextStyle(fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Rechercher des extensions…',
-                  hintStyle: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? Colors.white38 : Colors.black38,
+        // ── Bottom pill navigation ────────────────────────────────────────
+        _BottomPillNav(
+          controller: _tabCtrl,
+          onSelect: (i) => _tabCtrl.animateTo(i),
+        ),
+      ],
+    );
+
+    if (widget.embedded) return body;
+    return Scaffold(backgroundColor: cs.surface, body: body);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Header with collapsible search + chips
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _MarketplaceHeader extends StatelessWidget {
+  final bool expanded;
+  final TextEditingController searchCtrl;
+  final String sortBy;
+  final String selectedCategory;
+  final VoidCallback onSearchIconTap;
+  final ValueChanged<String> onSortChanged;
+  final VoidCallback onClearSearch;
+  final ValueChanged<String> onCategoryChanged;
+
+  const _MarketplaceHeader({
+    required this.expanded,
+    required this.searchCtrl,
+    required this.sortBy,
+    required this.selectedCategory,
+    required this.onSearchIconTap,
+    required this.onSortChanged,
+    required this.onClearSearch,
+    required this.onCategoryChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs  = Theme.of(context).colorScheme;
+    final top = MediaQuery.paddingOf(context).top;
+
+    return Container(
+      color: cs.surfaceContainerLow,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── Fixed row: icon / title / actions ────────────────────────
+          SizedBox(
+            height: top + 52,
+            child: Padding(
+              padding: EdgeInsets.only(top: top, left: 4, right: 4),
+              child: Row(
+                children: [
+                  // Store icon
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Icon(Icons.store_rounded, size: 22,
+                        color: cs.onSurfaceVariant),
                   ),
-                  prefixIcon: const Icon(Icons.search, size: 18),
-                  suffixIcon: _searchCtrl.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.close, size: 18),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            _loadFeatured();
-                          },
-                        )
-                      : null,
-                  filled: true,
-                  fillColor: isDark ? const Color(0xFF3C3C3C) : Colors.white,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: divColor),
+                  // Title
+                  Text('Marketplace',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface,
+                      letterSpacing: -0.3,
+                    ),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: divColor),
+                  const Spacer(),
+                  // Search icon (visible when collapsed, or always tappable)
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: expanded
+                        ? const SizedBox(width: 40)
+                        : IconButton(
+                            key: const ValueKey('search_icon'),
+                            icon: Icon(Icons.search_rounded, color: cs.onSurfaceVariant),
+                            tooltip: 'Rechercher',
+                            onPressed: onSearchIconTap,
+                          ),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: Color(0xFF0066B8), width: 1.5),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            PopupMenuButton<String>(
-              icon: Icon(Icons.sort, size: 20,
-                  color: isDark ? Colors.white60 : Colors.black54),
-              tooltip: 'Sort by',
-              onSelected: (v) {
-                setState(() => _sortBy = v);
-                _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
-              },
-              itemBuilder: (_) => _kSortOptions.entries
-                  .map((e) => PopupMenuItem(
+                  // Sort menu
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.sort_rounded, size: 20,
+                        color: cs.onSurfaceVariant),
+                    tooltip: 'Trier par',
+                    onSelected: onSortChanged,
+                    itemBuilder: (_) => _kSortOptions.entries.map((e) =>
+                      PopupMenuItem(
                         value: e.value,
                         child: Row(children: [
-                          if (_sortBy == e.value)
-                            const Icon(Icons.check,
-                                size: 16, color: Color(0xFF0066B8)),
-                          const SizedBox(width: 8),
+                          Icon(sortBy == e.value ? Icons.check : Icons.radio_button_unchecked,
+                              size: 16, color: sortBy == e.value ? _kAccent : null),
+                          const SizedBox(width: 10),
                           Text(e.key),
                         ]),
-                      ))
-                  .toList(),
-            ),
-          ]),
-        ),
-
-        // ── Category chips ───────────────────────────────────────────────
-        SizedBox(
-          height: 40,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: _kCategories.length,
-            itemBuilder: (_, i) {
-              final cat = _kCategories[i];
-              final selected = cat == _selectedCategory;
-              return Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: FilterChip(
-                  label: Text(cat, style: const TextStyle(fontSize: 12)),
-                  selected: selected,
-                  selectedColor: const Color(0xFF0066B8).withOpacity(0.2),
-                  checkmarkColor: const Color(0xFF0066B8),
-                  side: BorderSide(
-                    color: selected ? const Color(0xFF0066B8) : divColor,
+                      ),
+                    ).toList(),
                   ),
-                  showCheckmark: false,
-                  onSelected: (_) {
-                    setState(() => _selectedCategory = cat);
-                    _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
-                  },
-                ),
-              );
-            },
+                  // 3-dot menu
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.more_vert_rounded, size: 20,
+                        color: cs.onSurfaceVariant),
+                    tooltip: 'Plus',
+                    onSelected: (_) {},
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'refresh',
+                          child: Text('Actualiser')),
+                      PopupMenuItem(value: 'about',
+                          child: Text('À propos')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
-        ),
 
-        const SizedBox(height: 4),
-
-        // ── Results ───────────────────────────────────────────────────────
-        Expanded(
-          child: _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _error != null
-                  ? _ErrorView(error: _error!, onRetry: _loadFeatured)
-                  : _results.isEmpty
-                      ? Center(
-                          child: Text(
-                            'Aucune extension trouvée',
-                            style: TextStyle(
-                              color: isDark ? Colors.white38 : Colors.black38,
+          // ── Collapsible: search bar + category chips ──────────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeInOut,
+            child: expanded
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Search bar
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                        child: TextField(
+                          controller: searchCtrl,
+                          style: TextStyle(fontSize: 14, color: cs.onSurface),
+                          decoration: InputDecoration(
+                            hintText: 'Rechercher des extensions…',
+                            hintStyle: TextStyle(
+                                fontSize: 14, color: cs.onSurfaceVariant),
+                            prefixIcon: Icon(Icons.search_rounded, size: 20,
+                                color: cs.onSurfaceVariant),
+                            suffixIcon: searchCtrl.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.close_rounded,
+                                        size: 18),
+                                    onPressed: onClearSearch,
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: cs.surfaceContainerHigh,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                  color: cs.outlineVariant, width: 0.8),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(
+                                  color: cs.outlineVariant, width: 0.8),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: const BorderSide(
+                                  color: _kAccent, width: 1.5),
                             ),
                           ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollCtrl,
-                          padding: const EdgeInsets.all(8),
-                          itemCount: _results.length + (_loadingMore ? 1 : 0),
+                        ),
+                      ),
+
+                      // Category chips
+                      SizedBox(
+                        height: 36,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+                          itemCount: _kCategories.length,
                           itemBuilder: (_, i) {
-                            if (i == _results.length) {
-                              return const Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Center(child: CircularProgressIndicator()),
-                              );
-                            }
-                            return _ExtensionCard(
-                              ext: _results[i],
-                              cardColor: cardColor,
-                              installState: _installStates[_results[i].id] ??
-                                  _InstallState.notInstalled,
-                              onInstall: () => _install(_results[i]),
+                            final cat      = _kCategories[i];
+                            final selected = cat == selectedCategory;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: ChoiceChip(
+                                label: Text(cat,
+                                    style: const TextStyle(fontSize: 11)),
+                                selected: selected,
+                                onSelected: (_) => onCategoryChanged(cat),
+                                selectedColor: _kAccent.withOpacity(0.15),
+                                checkmarkColor: _kAccent,
+                                labelStyle: TextStyle(
+                                  color: selected ? _kAccent : cs.onSurfaceVariant,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.normal,
+                                ),
+                                side: BorderSide(
+                                  color: selected
+                                      ? _kAccent.withOpacity(0.6)
+                                      : cs.outlineVariant,
+                                ),
+                                showCheckmark: false,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 0),
+                                visualDensity: VisualDensity.compact,
+                              ),
                             );
                           },
                         ),
-        ),
-              ],
-            ),  // close TAB 1 Column
-
-              // ── TAB 2: Runtimes ──────────────────────────────────────
-              _RuntimesTab(isDark: isDark, bgColor: bgColor, cardColor: cardColor, accent: accent),
-
-              // ── TAB 3: Installées ─────────────────────────────────────
-              _InstalledTab(isDark: isDark, bgColor: bgColor, cardColor: cardColor, accent: accent),
-            ],
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                  )
+                : const SizedBox.shrink(),
           ),
-        ),
-      ],
-    );  // end body Column
 
-    if (widget.embedded) return body;
-
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: body,
+          // Bottom border
+          Divider(height: 1, thickness: 0.5, color: cs.outlineVariant),
+        ],
+      ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom pill navigation bar
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Runtimes tab ─────────────────────────────────────────────────────────────
-class _RuntimesTab extends StatelessWidget {
-  final bool  isDark;
-  final Color bgColor;
-  final Color cardColor;
-  final Color accent;
-  const _RuntimesTab({required this.isDark, required this.bgColor, required this.cardColor, required this.accent});
+class _BottomPillNav extends StatefulWidget {
+  final TabController controller;
+  final ValueChanged<int> onSelect;
+  const _BottomPillNav({required this.controller, required this.onSelect});
 
-  static const _runtimes = [
-    _Runtime('Node.js', 'JavaScript / TypeScript runtime', Icons.terminal, '22.x LTS'),
-    _Runtime('Python', 'Python 3 interpreter & pip', Icons.code, '3.12'),
-    _Runtime('Dart', 'Dart SDK & Flutter', Icons.flutter_dash, '3.x'),
-    _Runtime('Go',   'Go toolchain', Icons.speed, '1.22'),
-    _Runtime('Rust', 'Rust toolchain (rustup)', Icons.build_outlined, 'stable'),
-    _Runtime('Java', 'JDK 21 (Temurin)', Icons.coffee, '21 LTS'),
+  @override
+  State<_BottomPillNav> createState() => _BottomPillNavState();
+}
+
+class _BottomPillNavState extends State<_BottomPillNav> {
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onTabChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTabChanged);
+    super.dispose();
+  }
+
+  void _onTabChanged() {
+    if (mounted) setState(() => _index = widget.controller.index);
+  }
+
+  static const _tabs = [
+    (Icons.extension_rounded, 'Extensions'),
+    (Icons.settings_applications_rounded, 'Runtimes'),
+    (Icons.check_circle_rounded, 'Installées'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final sub = isDark ? Colors.white54 : Colors.black54;
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        Text('Runtimes disponibles',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black87)),
-        const SizedBox(height: 4),
-        Text('Gérez les environnements d\'exécution installés dans Panda IDE.',
-            style: TextStyle(fontSize: 12, color: sub)),
-        const SizedBox(height: 12),
-        for (final r in _runtimes)
-          _RuntimeCard(r: r, isDark: isDark, cardColor: cardColor, accent: accent),
-      ],
+    final cs = Theme.of(context).colorScheme;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        border: Border(top: BorderSide(color: cs.outlineVariant, width: 0.5)),
+      ),
+      padding: EdgeInsets.fromLTRB(16, 10, 16, bottom + 10),
+      child: Row(
+        children: List.generate(_tabs.length, (i) {
+          final (icon, label) = _tabs[i];
+          final selected = i == _index;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => widget.onSelect(i),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeInOut,
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: selected ? _kAccent.withOpacity(0.12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(40),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon,
+                      size: 18,
+                      color: selected ? _kAccent : cs.onSurfaceVariant,
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeInOut,
+                      child: selected
+                          ? Padding(
+                              padding: const EdgeInsets.only(left: 6),
+                              child: Text(label,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _kAccent,
+                                ),
+                              ),
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+      ),
     );
   }
 }
 
-class _Runtime {
-  final String name, description, version;
-  final IconData icon;
-  const _Runtime(this.name, this.description, this.icon, this.version);
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 0 — Extensions
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _RuntimeCard extends StatelessWidget {
-  final _Runtime r;
-  final bool isDark;
-  final Color cardColor, accent;
-  const _RuntimeCard({required this.r, required this.isDark, required this.cardColor, required this.accent});
+class _ExtensionsTab extends StatelessWidget {
+  final List<MarketplaceExtension> results;
+  final bool loading;
+  final bool loadingMore;
+  final String? error;
+  final ScrollController scrollCtrl;
+  final Map<String, _InstallState> installStates;
+  final Future<void> Function(MarketplaceExtension) onInstall;
+  final void Function(MarketplaceExtension) onTap;
+  final VoidCallback onRetry;
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: cardColor,
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: isDark ? const Color(0xFF3C3C3C) : const Color(0xFFE0E0E0)),
-      ),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: accent.withOpacity(0.12),
-          child: Icon(r.icon, color: accent, size: 20),
-        ),
-        title: Text(r.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : Colors.black87)),
-        subtitle: Text(r.description, style: TextStyle(fontSize: 11,
-            color: isDark ? Colors.white54 : Colors.black54)),
-        trailing: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-          decoration: BoxDecoration(
-            color: accent.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(r.version, style: TextStyle(fontSize: 11, color: accent, fontWeight: FontWeight.w600)),
-        ),
-      ),
-    );
-  }
-}
-
-// ── Installed extensions tab ──────────────────────────────────────────────────
-class _InstalledTab extends StatelessWidget {
-  final bool  isDark;
-  final Color bgColor;
-  final Color cardColor;
-  final Color accent;
-  const _InstalledTab({required this.isDark, required this.bgColor, required this.cardColor, required this.accent});
+  const _ExtensionsTab({
+    required this.results,
+    required this.loading,
+    required this.loadingMore,
+    required this.error,
+    required this.scrollCtrl,
+    required this.installStates,
+    required this.onInstall,
+    required this.onTap,
+    required this.onRetry,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final installed = ExtensionRegistry.instance.allInstalled();
-    final sub = isDark ? Colors.white54 : Colors.black54;
+    final cs = Theme.of(context).colorScheme;
 
-    if (installed.isEmpty) {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (error != null) {
+      return _ErrorView(error: error!, onRetry: onRetry);
+    }
+    if (results.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.extension_outlined, size: 48, color: sub),
+            Icon(Icons.search_off_rounded, size: 48,
+                color: cs.onSurfaceVariant.withOpacity(0.4)),
             const SizedBox(height: 12),
-            Text('Aucune extension installée',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white70 : Colors.black54)),
-            const SizedBox(height: 4),
-            Text('Parcourez l\'onglet "Extensions VSCode" pour en installer.',
-                style: TextStyle(fontSize: 12, color: sub),
-                textAlign: TextAlign.center),
+            Text('Aucune extension trouvée',
+                style: TextStyle(color: cs.onSurfaceVariant)),
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: installed.length,
+    return ListView.separated(
+      controller: scrollCtrl,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: results.length + (loadingMore ? 1 : 0),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, indent: 68, endIndent: 16,
+              color: cs.outlineVariant.withOpacity(0.5)),
       itemBuilder: (_, i) {
-        final ext = installed[i];
-        return Card(
-          color: cardColor,
-          elevation: 0,
-          margin: const EdgeInsets.only(bottom: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-            side: BorderSide(color: isDark ? const Color(0xFF3C3C3C) : const Color(0xFFE0E0E0)),
-          ),
-          child: ListTile(
-            leading: const _DefaultExtIcon(size: 40),
-            title: Text(ext, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : Colors.black87)),
-            subtitle: Text('Installée', style: TextStyle(fontSize: 11, color: sub)),
-            trailing: Icon(Icons.check_circle, color: accent, size: 18),
-          ),
+        if (i == results.length) {
+          return const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final ext = results[i];
+        final state = ExtensionRegistry.instance.isInstalled(ext.id)
+            ? _InstallState.installed
+            : installStates[ext.id] ?? _InstallState.notInstalled;
+        return _ExtensionRow(
+          ext: ext,
+          installState: state,
+          onInstall: () => onInstall(ext),
+          onTap: () => onTap(ext),
         );
       },
     );
   }
 }
 
-// ── Extension card widget ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Extension row (list item)
+// ─────────────────────────────────────────────────────────────────────────────
 
-enum _InstallState { notInstalled, installing, installed, error }
-
-class _ExtensionCard extends StatelessWidget {
+class _ExtensionRow extends StatelessWidget {
   final MarketplaceExtension ext;
-  final Color cardColor;
   final _InstallState installState;
   final VoidCallback onInstall;
+  final VoidCallback onTap;
 
-  const _ExtensionCard({
+  const _ExtensionRow({
     required this.ext,
-    required this.cardColor,
     required this.installState,
     required this.onInstall,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final subColor = isDark ? Colors.white54 : Colors.black54;
+    final cs  = Theme.of(context).colorScheme;
+    final sub = cs.onSurfaceVariant;
 
-    // Check if already installed in local registry
-    final alreadyInstalled = ExtensionRegistry.instance.isInstalled(ext.id) ||
-        installState == _InstallState.installed;
-
-    return Card(
-      color: cardColor,
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: isDark ? const Color(0xFF3C3C3C) : const Color(0xFFE0E0E0),
-        ),
-      ),
+    return InkWell(
+      onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Icon
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: ext.iconUrl != null
-                  ? Image.network(
-                      ext.iconUrl!,
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const _DefaultExtIcon(size: 40),
-                    )
-                  : const _DefaultExtIcon(size: 40),
-            ),
+            _ExtIcon(url: ext.iconUrl, size: 44),
             const SizedBox(width: 12),
 
             // Info
@@ -629,68 +717,49 @@ class _ExtensionCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                          style: const TextStyle(
-                            fontSize: 13,
+                          style: TextStyle(
+                            fontSize: 13.5,
                             fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Text(
-                        'v${ext.version}',
-                        style: TextStyle(fontSize: 10, color: subColor),
-                      ),
+                      Text('v${ext.version}',
+                          style: TextStyle(fontSize: 10, color: sub)),
                     ],
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    ext.namespace,
-                    style: TextStyle(fontSize: 11, color: subColor),
-                  ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 1),
+                  Text(ext.namespace,
+                      style: TextStyle(fontSize: 11, color: _kAccent)),
+                  const SizedBox(height: 3),
                   Text(
                     ext.description,
-                    style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87),
+                    style: TextStyle(fontSize: 12, color: sub),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 5),
+                  // Stats row
                   Row(
                     children: [
                       if (ext.averageRating != null) ...[
-                        const Icon(Icons.star, size: 12, color: Colors.amber),
+                        const Icon(Icons.star_rounded,
+                            size: 12, color: Colors.amber),
                         const SizedBox(width: 2),
-                        Text(
-                          ext.averageRating!.toStringAsFixed(1),
-                          style: TextStyle(fontSize: 11, color: subColor),
-                        ),
+                        Text(ext.averageRating!.toStringAsFixed(1),
+                            style: TextStyle(fontSize: 10, color: sub)),
                         const SizedBox(width: 8),
                       ],
                       if (ext.downloadCount > 0) ...[
-                        Icon(Icons.download, size: 12, color: subColor),
+                        Icon(Icons.download_rounded, size: 12, color: sub),
                         const SizedBox(width: 2),
-                        Text(
-                          _formatCount(ext.downloadCount),
-                          style: TextStyle(fontSize: 11, color: subColor),
-                        ),
-                      ],
-                      if (ext.categories.isNotEmpty) ...[
+                        Text(_fmt(ext.downloadCount),
+                            style: TextStyle(fontSize: 10, color: sub)),
                         const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0066B8).withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            ext.categories.first,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: Color(0xFF0066B8),
-                            ),
-                          ),
-                        ),
                       ],
+                      if (ext.categories.isNotEmpty)
+                        _Tag(ext.categories.first),
                     ],
                   ),
                 ],
@@ -698,10 +767,216 @@ class _ExtensionCard extends StatelessWidget {
             ),
             const SizedBox(width: 8),
 
+            // Install / status button
+            _InstallBtn(state: installState, onPressed: onInstall),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _fmt(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(0)}K';
+    return n.toString();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extension detail bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ExtensionDetailSheet extends StatelessWidget {
+  final MarketplaceExtension ext;
+  final _InstallState installState;
+  final VoidCallback onInstall;
+
+  const _ExtensionDetailSheet({
+    required this.ext,
+    required this.installState,
+    required this.onInstall,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs  = Theme.of(context).colorScheme;
+    final sub = cs.onSurfaceVariant;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      minChildSize: 0.4,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Header row
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _ExtIcon(url: ext.iconUrl, size: 56),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(ext.namespace,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: _kAccent,
+                              fontWeight: FontWeight.w500,
+                            )),
+                        const SizedBox(height: 4),
+                        Row(children: [
+                          if (ext.averageRating != null) ...[
+                            Row(
+                              children: List.generate(5, (i) => Icon(
+                                i < ext.averageRating!.round()
+                                    ? Icons.star_rounded
+                                    : Icons.star_outline_rounded,
+                                size: 14,
+                                color: Colors.amber,
+                              )),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(ext.averageRating!.toStringAsFixed(1),
+                                style: TextStyle(fontSize: 12, color: sub)),
+                            Text(' (${ext.reviewCount})',
+                                style: TextStyle(fontSize: 12, color: sub)),
+                            const SizedBox(width: 10),
+                          ],
+                          if (ext.downloadCount > 0)
+                            Row(children: [
+                              Icon(Icons.download_rounded, size: 13, color: sub),
+                              const SizedBox(width: 2),
+                              Text(_fmtCount(ext.downloadCount),
+                                  style: TextStyle(fontSize: 12, color: sub)),
+                            ]),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // Install button
-            _InstallButton(
-              state: alreadyInstalled ? _InstallState.installed : installState,
-              onPressed: alreadyInstalled ? null : onInstall,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: SizedBox(
+                width: double.infinity,
+                child: _DetailInstallBtn(
+                  state: installState,
+                  onPressed: installState == _InstallState.notInstalled
+                      ? onInstall : null,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Divider(height: 1, color: cs.outlineVariant),
+
+            // Scrollable details
+            Expanded(
+              child: ListView(
+                controller: scrollCtrl,
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                children: [
+                  // Description
+                  _DetailSection(
+                    title: 'Description',
+                    child: Text(
+                      ext.description.isNotEmpty
+                          ? ext.description
+                          : 'Aucune description disponible.',
+                      style: TextStyle(fontSize: 13.5, color: cs.onSurface,
+                          height: 1.5),
+                    ),
+                  ),
+
+                  // Meta info
+                  _DetailSection(
+                    title: 'Informations',
+                    child: Column(
+                      children: [
+                        _InfoRow('Identifiant',  ext.id),
+                        _InfoRow('Version',      'v${ext.version}'),
+                        _InfoRow('Éditeur',      ext.namespace),
+                        if (ext.license != null)
+                          _InfoRow('Licence', ext.license!),
+                        if (ext.timestamp != null)
+                          _InfoRow('Mis à jour',
+                              _fmtDate(ext.timestamp!)),
+                        _InfoRow('Source', 'open-vsx.org'),
+                      ],
+                    ),
+                  ),
+
+                  // Categories & tags
+                  if (ext.categories.isNotEmpty || ext.tags.isNotEmpty)
+                    _DetailSection(
+                      title: 'Catégories & Tags',
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          for (final c in ext.categories) _Tag(c),
+                          for (final t in ext.tags.take(8))
+                            _Tag(t, muted: true),
+                        ],
+                      ),
+                    ),
+
+                  // Repository
+                  if (ext.repository != null)
+                    _DetailSection(
+                      title: 'Dépôt',
+                      child: Row(children: [
+                        Icon(Icons.open_in_new_rounded, size: 14,
+                            color: _kAccent),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(ext.repository!,
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: _kAccent,
+                              decoration: TextDecoration.underline,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ]),
+                    ),
+                ],
+              ),
             ),
           ],
         ),
@@ -709,102 +984,797 @@ class _ExtensionCard extends StatelessWidget {
     );
   }
 
-  static String _formatCount(int n) {
+  static String _fmtCount(int n) {
     if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(0)}K';
+    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(0)}K';
     return n.toString();
   }
+
+  static String _fmtDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/'
+      '${d.year}';
 }
 
-class _InstallButton extends StatelessWidget {
-  final _InstallState state;
-  final VoidCallback? onPressed;
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 1 — Runtimes
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _InstallButton({required this.state, this.onPressed});
+class _RuntimesTab extends StatelessWidget {
+  const _RuntimesTab();
+
+  static const _runtimes = [
+    _RuntimeInfo(
+      name: 'Node.js',
+      description: 'Runtime JavaScript / TypeScript côté serveur',
+      icon: Icons.javascript_rounded,
+      version: '22.x LTS',
+      source: 'nodejs.org/dist (binaire officiel)',
+      longDesc:
+          'Node.js est un environnement d\'exécution JavaScript construit '
+          'sur le moteur V8 de Chrome. Il permet d\'exécuter du JavaScript '
+          'en dehors du navigateur, côté serveur.',
+      features: ['npm / npx', 'ESModules', 'TypeScript (via ts-node)', 'WASM'],
+      parameters: [
+        _Param('--max-old-space-size', 'Limite la mémoire heap V8 (en Mo)'),
+        _Param('NODE_ENV', 'Environnement (development / production)'),
+        _Param('--experimental-fetch', 'Active l\'API Fetch native'),
+      ],
+    ),
+    _RuntimeInfo(
+      name: 'Python',
+      description: 'Interpréteur Python 3 + pip + venv',
+      icon: Icons.code_rounded,
+      version: '3.12',
+      source: 'python.org/ftp (CPython officiel)',
+      longDesc:
+          'Python est un langage de programmation polyvalent et lisible. '
+          'La distribution CPython inclut pip, venv et la bibliothèque standard complète.',
+      features: ['pip / pip3', 'venv', 'jupyter', 'asyncio', 'type hints'],
+      parameters: [
+        _Param('PYTHONPATH', 'Chemins de recherche des modules'),
+        _Param('PYTHONDONTWRITEBYTECODE', 'Désactive les fichiers .pyc'),
+        _Param('-O', 'Mode optimisé (supprime les assertions)'),
+      ],
+    ),
+    _RuntimeInfo(
+      name: 'Dart',
+      description: 'Dart SDK + Flutter toolkit',
+      icon: Icons.flutter_dash,
+      version: '3.x stable',
+      source: 'storage.googleapis.com/dart-archive',
+      longDesc:
+          'Dart est le langage de Google optimisé pour le développement '
+          'cross-platform. Inclut Flutter, pub, dart:core et dart:async.',
+      features: ['Flutter', 'pub get/run', 'AOT/JIT', 'FFI', 'null safety'],
+      parameters: [
+        _Param('PUB_CACHE', 'Dossier cache des packages pub'),
+        _Param('--sound-null-safety', 'Force le null safety strict'),
+        _Param('FLUTTER_ROOT', 'Chemin vers le SDK Flutter'),
+      ],
+    ),
+    _RuntimeInfo(
+      name: 'Go',
+      description: 'Toolchain Go — compilateur + modules',
+      icon: Icons.speed_rounded,
+      version: '1.22',
+      source: 'go.dev/dl (archive officielle)',
+      longDesc:
+          'Go (Golang) est un langage compilé, concurrent et statiquement typé '
+          'conçu par Google. Il produit des binaires autonomes sans dépendances.',
+      features: ['go build/run/test', 'go modules', 'goroutines', 'CGO'],
+      parameters: [
+        _Param('GOPATH', 'Espace de travail Go'),
+        _Param('GOFLAGS', 'Flags passés à toutes les commandes go'),
+        _Param('CGO_ENABLED', '0 = compilation pure Go, 1 = CGO activé'),
+      ],
+    ),
+    _RuntimeInfo(
+      name: 'Rust',
+      description: 'Rustup + cargo + compilateur stable',
+      icon: Icons.build_rounded,
+      version: 'stable',
+      source: 'sh.rustup.rs (rustup officiel)',
+      longDesc:
+          'Rust est un langage système axé sur la sécurité mémoire sans '
+          'ramasse-miettes. Cargo gère les projets et les dépendances (crates).',
+      features: ['cargo build/run/test', 'crates.io', 'wasm-pack', 'clippy', 'rustfmt'],
+      parameters: [
+        _Param('CARGO_HOME', 'Répertoire d\'installation de cargo'),
+        _Param('RUSTFLAGS', 'Flags passés au compilateur rustc'),
+        _Param('--release', 'Compilation optimisée (mode release)'),
+      ],
+    ),
+    _RuntimeInfo(
+      name: 'Java',
+      description: 'JDK 21 LTS (Temurin / Eclipse Adoptium)',
+      icon: Icons.coffee_rounded,
+      version: '21 LTS',
+      source: 'adoptium.net (Eclipse Temurin)',
+      longDesc:
+          'Java est un langage orienté objet à compilation intermédiaire (bytecode). '
+          'Le JDK Temurin est la distribution open-source de référence.',
+      features: ['javac / java', 'Maven / Gradle', 'JVM tunning', 'JShell', 'modules JPMS'],
+      parameters: [
+        _Param('JAVA_HOME', 'Chemin racine du JDK'),
+        _Param('-Xmx', 'Mémoire heap maximale (ex: -Xmx512m)'),
+        _Param('-Xms', 'Mémoire heap initiale'),
+      ],
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    switch (state) {
-      case _InstallState.notInstalled:
-        return SizedBox(
-          height: 30,
-          child: TextButton(
-            onPressed: onPressed,
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              backgroundColor: const Color(0xFF0066B8).withOpacity(0.1),
-              foregroundColor: const Color(0xFF0066B8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-            child: const Text('Install', style: TextStyle(fontSize: 12)),
-          ),
-        );
-      case _InstallState.installing:
-        return const SizedBox(
-          width: 24,
-          height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        );
-      case _InstallState.installed:
-        return const Icon(Icons.check_circle, color: Colors.green, size: 24);
-      case _InstallState.error:
-        return const Icon(Icons.error_outline, color: Colors.red, size: 24);
-    }
-  }
-}
+    final cs = Theme.of(context).colorScheme;
 
-class _DefaultExtIcon extends StatelessWidget {
-  final double size;
-  const _DefaultExtIcon({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: const Color(0xFF0066B8).withOpacity(0.15),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Icon(Icons.extension, size: size * 0.6, color: const Color(0xFF0066B8)),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      children: [
+        Text('Environnements d\'exécution',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
+              color: cs.onSurface)),
+        const SizedBox(height: 4),
+        Text('Installez et gérez les runtimes disponibles dans Panda IDE.',
+          style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+        const SizedBox(height: 14),
+        for (final r in _runtimes)
+          _RuntimeRow(runtime: r),
+      ],
     );
   }
 }
 
-class _ErrorView extends StatelessWidget {
-  final String error;
-  final VoidCallback onRetry;
+class _RuntimeInfo {
+  final String name, description, version, source, longDesc;
+  final IconData icon;
+  final List<String> features;
+  final List<_Param> parameters;
 
+  const _RuntimeInfo({
+    required this.name,
+    required this.description,
+    required this.icon,
+    required this.version,
+    required this.source,
+    required this.longDesc,
+    required this.features,
+    required this.parameters,
+  });
+}
+
+class _Param {
+  final String name, desc;
+  const _Param(this.name, this.desc);
+}
+
+class _RuntimeRow extends StatelessWidget {
+  final _RuntimeInfo runtime;
+  const _RuntimeRow({required this.runtime});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Card(
+      color: cs.surfaceContainerLow,
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant, width: 0.8),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openRuntimeDetail(context),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: _kAccent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(runtime.icon, color: _kAccent, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(runtime.name,
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                          color: cs.onSurface)),
+                    const SizedBox(height: 2),
+                    Text(runtime.description,
+                      style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _kAccent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(runtime.version,
+                      style: const TextStyle(fontSize: 11, color: _kAccent,
+                          fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(height: 6),
+                  Icon(Icons.arrow_forward_ios_rounded, size: 12,
+                      color: cs.onSurfaceVariant),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openRuntimeDetail(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RuntimeDetailSheet(runtime: runtime),
+    );
+  }
+}
+
+// ── Runtime detail sheet ──────────────────────────────────────────────────────
+
+class _RuntimeDetailSheet extends StatefulWidget {
+  final _RuntimeInfo runtime;
+  const _RuntimeDetailSheet({required this.runtime});
+
+  @override
+  State<_RuntimeDetailSheet> createState() => _RuntimeDetailSheetState();
+}
+
+class _RuntimeDetailSheetState extends State<_RuntimeDetailSheet>
+    with SingleTickerProviderStateMixin {
+  late TabController _tab;
+
+  @override
+  void initState() {
+    super.initState();
+    _tab = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tab.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final r  = widget.runtime;
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.75,
+      minChildSize: 0.45,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scrollCtrl) => Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              width: 36, height: 4,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52, height: 52,
+                    decoration: BoxDecoration(
+                      color: _kAccent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(r.icon, color: _kAccent, size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(r.name,
+                          style: TextStyle(fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                              color: cs.onSurface)),
+                        Text(r.version,
+                          style: const TextStyle(fontSize: 13,
+                              color: _kAccent,
+                              fontWeight: FontWeight.w500)),
+                      ],
+                    ),
+                  ),
+                  // Install button
+                  FilledButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Installation de ${r.name}…'),
+                            behavior: SnackBarBehavior.floating),
+                      );
+                    },
+                    icon: const Icon(Icons.download_rounded, size: 16),
+                    label: const Text('Installer'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _kAccent,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Tab bar
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: cs.outlineVariant, width: 0.5),
+                ),
+              ),
+              child: TabBar(
+                controller: _tab,
+                labelColor: _kAccent,
+                unselectedLabelColor: cs.onSurfaceVariant,
+                indicatorColor: _kAccent,
+                indicatorWeight: 2,
+                tabs: const [
+                  Tab(text: 'Détails'),
+                  Tab(text: 'Paramètres'),
+                ],
+              ),
+            ),
+
+            // Tab views
+            Expanded(
+              child: TabBarView(
+                controller: _tab,
+                children: [
+                  // Détails
+                  ListView(
+                    controller: scrollCtrl,
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                    children: [
+                      _DetailSection(
+                        title: 'Description',
+                        child: Text(r.longDesc,
+                          style: TextStyle(fontSize: 13.5,
+                              color: cs.onSurface, height: 1.6)),
+                      ),
+                      _DetailSection(
+                        title: 'Source',
+                        child: Row(children: [
+                          Icon(Icons.link_rounded, size: 14, color: _kAccent),
+                          const SizedBox(width: 6),
+                          Expanded(child: Text(r.source,
+                            style: const TextStyle(fontSize: 13,
+                                color: _kAccent),
+                            overflow: TextOverflow.ellipsis)),
+                        ]),
+                      ),
+                      _DetailSection(
+                        title: 'Fonctionnalités incluses',
+                        child: Wrap(
+                          spacing: 6, runSpacing: 6,
+                          children: [
+                            for (final f in r.features) _Tag(f),
+                          ],
+                        ),
+                      ),
+                      _DetailSection(
+                        title: 'Infos',
+                        child: Column(children: [
+                          _InfoRow('Version', r.version),
+                          _InfoRow('Source', r.source),
+                        ]),
+                      ),
+                    ],
+                  ),
+
+                  // Paramètres
+                  ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                    children: [
+                      Text('Variables et flags disponibles',
+                        style: TextStyle(fontSize: 13,
+                            color: cs.onSurfaceVariant)),
+                      const SizedBox(height: 12),
+                      for (final p in r.parameters)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: cs.outlineVariant, width: 0.8),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: _kAccent.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(p.name,
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    color: _kAccent,
+                                    fontWeight: FontWeight.w600,
+                                    fontFamily: 'monospace',
+                                  )),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(p.desc,
+                                  style: TextStyle(fontSize: 12.5,
+                                      color: cs.onSurface)),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 2 — Installed
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InstalledTab extends StatelessWidget {
+  const _InstalledTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs        = Theme.of(context).colorScheme;
+    final installed = ExtensionRegistry.instance.allInstalled();
+
+    if (installed.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.extension_off_rounded, size: 56,
+                  color: cs.onSurfaceVariant.withOpacity(0.3)),
+              const SizedBox(height: 16),
+              Text('Aucune extension installée',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+                    color: cs.onSurface)),
+              const SizedBox(height: 6),
+              Text('Parcourez l\'onglet Extensions pour en installer.',
+                style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      itemCount: installed.length,
+      separatorBuilder: (_, __) => Divider(
+        height: 1, indent: 68, endIndent: 16,
+        color: cs.outlineVariant.withOpacity(0.5)),
+      itemBuilder: (_, i) {
+        final id = installed[i];
+        return ListTile(
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: const _ExtIcon(url: null, size: 44),
+          title: Text(id,
+            style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600,
+                color: cs.onSurface),
+            overflow: TextOverflow.ellipsis),
+          subtitle: Text('Installée',
+            style: TextStyle(fontSize: 11.5, color: cs.onSurfaceVariant)),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_circle_rounded,
+                  color: Colors.green.shade400, size: 18),
+              const SizedBox(width: 4),
+              Icon(Icons.more_vert_rounded, size: 18,
+                  color: cs.onSurfaceVariant),
+            ],
+          ),
+          onTap: () {},
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared small widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Extension icon with network fallback.
+class _ExtIcon extends StatelessWidget {
+  final String? url;
+  final double  size;
+  const _ExtIcon({required this.url, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (url != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          url!,
+          width: size, height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _fallback(cs),
+        ),
+      );
+    }
+    return _fallback(cs);
+  }
+
+  Widget _fallback(ColorScheme cs) => Container(
+    width: size, height: size,
+    decoration: BoxDecoration(
+      color: _kAccent.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Icon(Icons.extension_rounded,
+        size: size * 0.55, color: _kAccent),
+  );
+}
+
+// Install button — compact icon style for list
+enum _InstallState { notInstalled, installing, installed, error }
+
+class _InstallBtn extends StatelessWidget {
+  final _InstallState state;
+  final VoidCallback? onPressed;
+  const _InstallBtn({required this.state, this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return switch (state) {
+      _InstallState.notInstalled => SizedBox(
+        width: 36, height: 36,
+        child: Material(
+          color: _kAccent.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: onPressed,
+            child: const Icon(Icons.download_rounded,
+                size: 18, color: _kAccent),
+          ),
+        ),
+      ),
+      _InstallState.installing => SizedBox(
+        width: 22, height: 22,
+        child: CircularProgressIndicator(
+          strokeWidth: 2, color: _kAccent)),
+      _InstallState.installed => Icon(Icons.check_circle_rounded,
+          color: Colors.green.shade400, size: 22),
+      _InstallState.error => Icon(Icons.error_outline_rounded,
+          color: cs.error, size: 22),
+    };
+  }
+}
+
+// Install button — full width for detail sheet
+class _DetailInstallBtn extends StatelessWidget {
+  final _InstallState state;
+  final VoidCallback? onPressed;
+  const _DetailInstallBtn({required this.state, this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (state) {
+      _InstallState.notInstalled => FilledButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.download_rounded, size: 18),
+        label: const Text('Installer'),
+        style: FilledButton.styleFrom(
+          backgroundColor: _kAccent,
+          padding: const EdgeInsets.symmetric(vertical: 13),
+          textStyle: const TextStyle(fontSize: 14,
+              fontWeight: FontWeight.w600),
+        ),
+      ),
+      _InstallState.installing => const Center(
+        child: SizedBox(width: 26, height: 26,
+          child: CircularProgressIndicator(strokeWidth: 2,
+              color: _kAccent))),
+      _InstallState.installed => FilledButton.icon(
+        onPressed: null,
+        icon: const Icon(Icons.check_circle_rounded, size: 18),
+        label: const Text('Installée'),
+        style: FilledButton.styleFrom(
+          backgroundColor: Colors.green.shade600,
+          disabledBackgroundColor: Colors.green.shade600,
+          disabledForegroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 13),
+        ),
+      ),
+      _InstallState.error => FilledButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.refresh_rounded, size: 18),
+        label: const Text('Réessayer'),
+        style: FilledButton.styleFrom(
+          backgroundColor: Colors.red.shade600,
+          padding: const EdgeInsets.symmetric(vertical: 13),
+        ),
+      ),
+    };
+  }
+}
+
+/// A small tag/chip label.
+class _Tag extends StatelessWidget {
+  final String  label;
+  final bool    muted;
+  const _Tag(this.label, {this.muted = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: muted
+            ? Theme.of(context).colorScheme.surfaceContainerHighest
+            : _kAccent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+        style: TextStyle(
+          fontSize: 10.5,
+          color: muted
+              ? Theme.of(context).colorScheme.onSurfaceVariant
+              : _kAccent,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+/// Section title + content block in detail sheet.
+class _DetailSection extends StatelessWidget {
+  final String  title;
+  final Widget  child;
+  const _DetailSection({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurfaceVariant,
+              letterSpacing: 0.8,
+            ),
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+/// Key/value info row.
+class _InfoRow extends StatelessWidget {
+  final String key, value;
+  const _InfoRow(this.key, this.value);
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(key,
+              style: TextStyle(fontSize: 12.5, color: cs.onSurfaceVariant)),
+          ),
+          Expanded(
+            child: Text(value,
+              style: TextStyle(fontSize: 12.5, color: cs.onSurface,
+                  fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Error view
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ErrorView extends StatelessWidget {
+  final String   error;
+  final VoidCallback onRetry;
   const _ErrorView({required this.error, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 48, color: Colors.grey),
-            const SizedBox(height: 12),
-            Text(
-              'Impossible de charger les extensions',
-              style: Theme.of(context).textTheme.titleSmall,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Icon(Icons.cloud_off_rounded, size: 52,
+                color: cs.onSurfaceVariant.withOpacity(0.4)),
             const SizedBox(height: 16),
+            Text('Impossible de charger les extensions',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
+                  color: cs.onSurface),
+              textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(error,
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+              textAlign: TextAlign.center,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 16),
+              icon: const Icon(Icons.refresh_rounded, size: 16),
               label: const Text('Réessayer'),
+              style: FilledButton.styleFrom(backgroundColor: _kAccent),
             ),
           ],
         ),
