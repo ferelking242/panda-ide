@@ -36,6 +36,7 @@ import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
 import '../ui/gateway_panel.dart';
+import '../ui/browser/browser_panel.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import 'widgets.dart';
@@ -948,6 +949,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.cloud_connection,    label: 'Tunnel',           idx: 5),
         _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
+        _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
       ];
 
       return Container(
@@ -998,6 +1000,24 @@ class _SelectTypeState extends State<SelectType>
                         } else {
                           _activeTabIdx =
                               _openTabs.indexWhere((t) => t.id == 'gateway');
+                        }
+                        _sidebarState = 1;
+                        _activeRail = 0;
+                      });
+                      return;
+                    }
+                    // Navigateur (idx:8) opens as an editor tab, not sidebar
+                    if (item.idx == 8) {
+                      setState(() {
+                        if (!_openTabs.any((t) => t.id == 'browser')) {
+                          _openTabs.add(const _TabDef(
+                              id:    'browser',
+                              title: 'Navigateur',
+                              icon:  Broken.global));
+                          _activeTabIdx = _openTabs.length - 1;
+                        } else {
+                          _activeTabIdx =
+                              _openTabs.indexWhere((t) => t.id == 'browser');
                         }
                         _sidebarState = 1;
                         _activeRail = 0;
@@ -2099,6 +2119,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'gateway') {
       return const GatewayPanel();
     }
+    if (tab.id == 'browser') {
+      return const BrowserPanel();
+    }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);
     }
@@ -2142,6 +2165,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'gateway') {
       return const GatewayPanel();
+    }
+    if (tab.id == 'browser') {
+      return const BrowserPanel();
     }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);

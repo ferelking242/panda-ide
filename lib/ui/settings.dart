@@ -20,6 +20,7 @@ import '../bloc/ui_bloc/ui_bloc.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 import '../utils/themes.dart';
+import 'browser/settings/browser_settings_page.dart';
 import 'downloads.dart';
 import 'widgets.dart';
 
@@ -6389,6 +6390,23 @@ int main() {
                           return "$totalDisabled features disabled across $langsWithDisabled language${langsWithDisabled > 1 ? 's' : ''}";
                         }()
                       ),
+                      settingsDivider,
+                      settingsType("Navigateur", appThemeState.appTheme.isDark),
+                      settingsTile(
+                        () {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (_) => const _BrowserSettingsRoute(),
+                          ));
+                        },
+                        "Paramètres du navigateur",
+                        Icon(
+                          Icons.public_outlined,
+                          color: appThemeState.appTheme.selectScreenCardTextColor,
+                          size: 20,
+                        ),
+                        appThemeState.appTheme.isDark,
+                        subTitle: "Profils, moteur de recherche, isolation des onglets",
+                      ),
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: settingsDivider,
@@ -6416,4 +6434,13 @@ int main() {
       },
     );
   }
+}
+
+/// Wrapper sans-Provider pour afficher BrowserSettingsPage depuis Settings.
+/// BrowserSettingsPage gère sa propre persistence via ProfileStore.
+class _BrowserSettingsRoute extends StatelessWidget {
+  const _BrowserSettingsRoute();
+
+  @override
+  Widget build(BuildContext context) => const BrowserSettingsPage();
 }
