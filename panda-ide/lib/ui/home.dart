@@ -754,6 +754,9 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
                   // ── Bottom panel ─────────────────────────────────────
                   if (_bottomPanelOpen)
                     _buildBottomPanel(),
+
+                  // ── Status bar ────────────────────────────────────────
+                  _buildStatusBar(context, appTheme),
                 ],
               ),
             ),
@@ -769,6 +772,128 @@ class _SelectTypeState extends State<SelectType> with WidgetsBindingObserver {
       transitionsBuilder: (_, a, __, child) =>
           SizeTransition(sizeFactor: a, child: child),
     ));
+  }
+
+  // ── Detect display language from active tab title (filename) ─────────────
+  String _langFromTabTitle(String title) {
+    final ext = title.contains('.')
+        ? title.split('.').last.toLowerCase()
+        : '';
+    const map = <String, String>{
+      'dart': 'Dart',       'py': 'Python',       'js': 'JavaScript',
+      'ts': 'TypeScript',   'jsx': 'JSX',          'tsx': 'TSX',
+      'html': 'HTML',       'css': 'CSS',          'scss': 'SCSS',
+      'json': 'JSON',       'yaml': 'YAML',        'yml': 'YAML',
+      'md': 'Markdown',     'kt': 'Kotlin',        'java': 'Java',
+      'swift': 'Swift',     'cpp': 'C++',          'c': 'C',
+      'rs': 'Rust',         'go': 'Go',            'rb': 'Ruby',
+      'php': 'PHP',         'sh': 'Shell',         'xml': 'XML',
+      'toml': 'TOML',       'sql': 'SQL',          'gradle': 'Gradle',
+      'h': 'C Header',      'cs': 'C#',            'lua': 'Lua',
+      'r': 'R',             'vue': 'Vue',          'svelte': 'Svelte',
+      'graphql': 'GraphQL', 'proto': 'Protobuf',   'lock': 'Lock',
+    };
+    return map[ext] ?? '';
+  }
+
+  // ── VSCode-style status bar ───────────────────────────────────────────────
+  Widget _buildStatusBar(BuildContext context, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    // Matches the tab bar surface — blends with the rest of the UI (not blue)
+    final bg = isDark ? _kTabBarDark  : _kTabBarLight;
+    final fg = isDark ? const Color(0xffbbbbbb) : const Color(0xff555555);
+
+    // Language inferred from active tab filename
+    final activeTitle = _activeTabIdx < _openTabs.length
+        ? _openTabs[_activeTabIdx].title
+        : '';
+    final lang = _langFromTabTitle(activeTitle);
+
+    final barContent = Container(
+      height: 22,
+      color: bg,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(children: [
+        // ── Left: Git branch ───────────────────────────────────────────
+        _StatusBarItem(
+          icon: Icons.call_split_rounded,
+          label: 'main',
+          fg: fg,
+          onTap: () {},
+        ),
+        const Spacer(),
+        // ── Right: Copilot ─────────────────────────────────────────────
+        _StatusBarItem(
+          icon: Icons.auto_awesome,
+          label: 'Copilot',
+          fg: fg,
+          onTap: () {},
+        ),
+        const SizedBox(width: 6),
+        // ── Right: Language mode ───────────────────────────────────────
+        if (lang.isNotEmpty) ...[
+          _StatusBarItem(
+            icon: Icons.code,
+            label: lang,
+            fg: fg,
+            onTap: () {},
+          ),
+          const SizedBox(width: 6),
+        ],
+        // ── Right: Keyboard shortcuts ──────────────────────────────────
+        _StatusBarItem(
+          icon: Icons.keyboard_outlined,
+          label: '',
+          fg: fg,
+          onTap: () {},
+        ),
+        const SizedBox(width: 6),
+        // ── Right: Terminal ────────────────────────────────────────────
+        _StatusBarItem(
+          icon: Icons.terminal,
+          label: 'Terminal',
+          fg: fg,
+          onTap: () => setState(() {
+            _bottomPanelOpen = true;
+            _bottomPanelTab  = 0;
+          }),
+        ),
+        const SizedBox(width: 6),
+        // ── Right: Panda Agent ─────────────────────────────────────────
+        _StatusBarItem(
+          icon: Broken.cpu,
+          label: 'Agent',
+          fg: fg,
+          onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+        ),
+        const SizedBox(width: 6),
+        // ── Right: Notifications ───────────────────────────────────────
+        _StatusBarItem(
+          icon: Icons.notifications_none,
+          label: '',
+          fg: fg,
+          onTap: () {},
+        ),
+      ]),
+    );
+
+    // When the activity bar is visible, indent the status bar to match the
+    // editor surface and apply a bottom-left rounded corner — mirroring the
+    // top-left rounded corner that the editor area uses.
+    if (_sidebarState >= 1) {
+      return Row(children: [
+        const SizedBox(width: 48), // spacer under the activity bar
+        Expanded(
+          child: ClipRRect(
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(22),
+            ),
+            child: barContent,
+          ),
+        ),
+      ]);
+    }
+    return barContent;
   }
 
   // ── Activity bar ──────────────────────────────────────────────────────────
@@ -3873,6 +3998,42 @@ class _MsgActionBtn extends StatelessWidget {
           const SizedBox(width: 3),
           Text(label,
               style: TextStyle(fontSize: 11, color: muted)),
+        ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _StatusBarItem — clickable item in the VSCode-style status bar
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StatusBarItem extends StatelessWidget {
+  final IconData     icon;
+  final String       label;
+  final Color        fg;
+  final VoidCallback onTap;
+
+  const _StatusBarItem({
+    required this.icon,
+    required this.label,
+    required this.fg,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(3),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 13, color: fg),
+          if (label.isNotEmpty) ...[
+            const SizedBox(width: 3),
+            Text(label, style: TextStyle(fontSize: 11, color: fg, height: 1)),
+          ],
         ]),
       ),
     );
