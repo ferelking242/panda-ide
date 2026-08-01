@@ -16,6 +16,7 @@ import 'package:http/http.dart' as http;
 
 import '../utils/ai.dart';
 import '../utils/agentic_tools.dart';
+import '../utils/panda_log.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AgentPhase — machine à états de l'agent
@@ -97,6 +98,7 @@ class AgentRunner {
     final agenticTools = (context != null)
         ? AgenticTools(workspacePath: workspacePath, context: context)
         : null;
+    PandaLog.i('AgentRunner', 'Starting run — provider=${model.runtimeType} tools=${agenticTools != null}');
     try {
       if (model is Gemini) {
         await _runGemini(model, messages, systemPrompt, ctrl, agenticTools);
@@ -110,12 +112,14 @@ class AgentRunner {
       }
       ctrl.add(const AgentChunk(phase: AgentPhase.done));
     } catch (e) {
+      PandaLog.e('AgentRunner', 'Uncaught error in _run', error: e);
       if (!ctrl.isClosed) {
         ctrl.add(AgentChunk(phase: AgentPhase.error, text: e.toString()));
       }
     } finally {
       _client?.close();
       _client = null;
+      PandaLog.d('AgentRunner', 'Run complete');
       await ctrl.close();
     }
   }
@@ -143,6 +147,9 @@ class AgentRunner {
         stream: false,
       );
 
+      PandaLog.httpRequest('Gemini', 'POST', model.url,
+          body: 'turn=$turn messages=${conversationMessages.length} tools=${toolSchemas.length}');
+
       final resp = await _client!.post(
         Uri.parse(model.url),
         headers: model.headers,
@@ -150,6 +157,8 @@ class AgentRunner {
       ).timeout(const Duration(seconds: 90), onTimeout: () {
         throw TimeoutException('La requête Gemini a dépassé 90 secondes.');
       });
+
+      PandaLog.httpResponse('Gemini', resp.statusCode, model.url, body: resp.body);
 
       if (resp.statusCode >= 400) {
         ctrl.add(AgentChunk(
@@ -221,8 +230,10 @@ class AgentRunner {
             : <String, dynamic>{};
 
         ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $name\n'));
+        PandaLog.toolCall('Gemini', name, args);
 
         final result = await _dispatchTool(tools, name, args);
+        PandaLog.toolResult('Gemini', name, result);
         toolResults.add({
           'tool_call_id': name,
           'role': 'tool',
@@ -267,13 +278,19 @@ class AgentRunner {
       );
 
       // If streaming with no tools, use the old SSE path
+      // NOTE: use chatUrl (not url) — for OpenAI, url→/v1/responses,
+      //       chatUrl→/v1/chat/completions (correct Chat Completions format).
       if (toolSchemas.isEmpty) {
-        final req = http.Request('POST', Uri.parse(model.url))
+        final chatUrl = model.chatUrl;
+        PandaLog.httpRequest('SSE', 'POST', chatUrl,
+            body: 'turn=$turn messages=${conversationMessages.length} stream=true');
+        final req = http.Request('POST', Uri.parse(chatUrl))
           ..headers.addAll(model.headers)
           ..body = jsonEncode(body);
         final streamed = await _client!.send(req).timeout(const Duration(seconds: 90), onTimeout: () {
           throw TimeoutException('La connexion SSE a dépassé 90 secondes.');
         });
+        int chunkCount = 0;
         final lines = streamed.stream
             .transform(const Utf8Decoder())
             .transform(const LineSplitter());
@@ -286,20 +303,29 @@ class AgentRunner {
           Map<String, dynamic> obj;
           try {
             obj = jsonDecode(data) as Map<String, dynamic>;
-          } catch (_) {
+          } catch (parseErr) {
+            PandaLog.w('SSE', 'Failed to parse chunk: $parseErr', body: data);
             continue;
           }
+          chunkCount++;
           _parseChunk(obj, ctrl);
         }
+        PandaLog.d('SSE', 'Stream done — $chunkCount chunks received');
         return;
       }
 
       // Non-streaming for tool calling
+      // NOTE: use chatUrl — same reason as above.
+      final chatUrl = model.chatUrl;
+      PandaLog.httpRequest('SSE', 'POST', chatUrl,
+          body: 'turn=$turn messages=${conversationMessages.length} tools=${toolSchemas.length} stream=false');
       final resp = await _client!.post(
-        Uri.parse(model.url),
+        Uri.parse(chatUrl),
         headers: model.headers,
         body: jsonEncode(body),
       );
+
+      PandaLog.httpResponse('SSE', resp.statusCode, chatUrl, body: resp.body);
 
       if (resp.statusCode >= 400) {
         ctrl.add(AgentChunk(
@@ -312,6 +338,7 @@ class AgentRunner {
       final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
       final assistantText = model.parseChatMessage(decoded);
       final toolCalls = model.parseToolCalls(decoded);
+      PandaLog.d('SSE', 'Parsed response — text=${assistantText.length} chars toolCalls=${toolCalls.length}');
 
       if (assistantText.isNotEmpty) {
         ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: assistantText));
@@ -350,7 +377,9 @@ class AgentRunner {
         }
 
         ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $functionName\n'));
+        PandaLog.toolCall('SSE', functionName, args);
         final result = await _dispatchTool(tools, functionName, args);
+        PandaLog.toolResult('SSE', functionName, result);
         toolResults.add(result);
       }
 
