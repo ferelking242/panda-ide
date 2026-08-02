@@ -1,0 +1,12 @@
+{
+  "name": "panda-browser-gateway",
+  "displayName": "Panda Browser Gateway",
+  "description": "AI browser gateway — OpenAI-compatible API bridging ChatGPT and Claude via browser automation.",
+  "version": "1.0.0",
+  "pandaGateway": {
+    "apiPort": 8000,
+    "bridgePort": 9221,
+    "githubRepo": "ferelking242/panda-browser-gateway"
+  },
+  "license": "GPL-3.0"
+}
