@@ -356,11 +356,11 @@ class CopilotLsp {
         },
         'initializationOptions': {
           'editorInfo': {
-            'name': 'Roxum',
+            'name': 'Panda',
             'version': '2.3.0',
           },
           'editorPluginInfo': {
-            'name': 'GitHub Copilot for Roxum',
+            'name': 'GitHub Copilot for Panda',
             'version': '1.0.0',
           },
         },

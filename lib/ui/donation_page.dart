@@ -18,7 +18,7 @@ class BuyMeCoffee extends StatelessWidget {
   }
 
   void _launchUPI(){
-    const upiUrl = 'upi://pay?pa=athulas2005@oksbi&pn=HECKMON&tn=Support%20ROXUM&cu=INR';
+    const upiUrl = 'upi://pay?pa=athulas2005@oksbi&pn=HECKMON&tn=Support%20Panda&cu=INR';
     final intent = AndroidIntent(
       action: 'action_view',
       data: upiUrl,
@@ -62,7 +62,7 @@ class BuyMeCoffee extends StatelessWidget {
                     children: [
                       const SizedBox(height: 24),
                       Text(
-                        'Enjoying Roxum?',
+                        'Enjoying Panda?',
                         style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: appThemeState.appTheme.selectScreenCardTextColor

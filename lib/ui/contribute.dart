@@ -71,7 +71,7 @@ class ContributePage extends StatelessWidget {
                         ),
                         const SizedBox(height: 18),
                         Text(
-                          'Contribute to Roxum!',
+                          'Contribute to Panda!',
                           style: TextStyle(
                             color: theme.selectScreenCardTextColor,
                             fontSize: 24,
@@ -81,7 +81,7 @@ class ContributePage extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Roxum is a powerful, open-source code editor and IDE built with Flutter, designed for developers on the go.',
+                          'Panda is a powerful, open-source code editor and IDE built with Flutter, designed for developers on the go.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,

@@ -53,4 +53,4 @@ bundletool-all-*.jar
 app.apks
 app-debug.apks
 .prebuilt/
-output.apks
+output.apksattached_assets/

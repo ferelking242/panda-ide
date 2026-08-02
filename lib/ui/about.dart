@@ -12,7 +12,7 @@ class AboutPage extends StatelessWidget {
     final color = context.read<AppThemeBloc>().state.appTheme.selectScreenCardTextColor;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('About Roxum'),
+        title: const Text('About Panda'),
         titleTextStyle: TextStyle(
           color: color,
           fontWeight: FontWeight.bold,
@@ -33,7 +33,7 @@ class AboutPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                'Roxum',
+                'Panda',
                 style: TextStyle(
                   color: color,
                   fontSize: 28,
@@ -47,7 +47,7 @@ class AboutPage extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               Text(
-                'Roxum is an open-source IDE for android with built in runtimes and features similar to VSCode.\nBuilt with Flutter, it aims to provide a seamless experience for developers on the go.\n\nIf you\'d like to support this project, please visit the donation page and consider making a contribution of any amount',
+                'Panda is an open-source IDE for android with built in runtimes and features similar to VSCode.\nBuilt with Flutter, it aims to provide a seamless experience for developers on the go.\n\nIf you\'d like to support this project, please visit the donation page and consider making a contribution of any amount',
                 style: TextStyle(
                   color: color,
                   fontWeight: FontWeight.w600,

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -136,6 +136,10 @@ class _SelectTypeState extends State<SelectType>
   late AnimationController _sendAnimCtrl;
   late Animation<double>   _sendAnim;
 
+  // ── Theme fade animation ──────────────────────────────────────────
+  late AnimationController _themeAnimCtrl;
+  late Animation<double>   _themeAnim;
+
   // ── Conversation history ──────────────────────────────────────────
   bool _showHistoryPanel = false;
 
@@ -152,6 +156,11 @@ class _SelectTypeState extends State<SelectType>
     _sendAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
         CurvedAnimation(parent: _sendAnimCtrl, curve: Curves.easeInOut));
     _sendAnimCtrl.stop();
+    // Theme fade animation
+    _themeAnimCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 250))
+      ..value = 1.0;
+    _themeAnim = CurvedAnimation(parent: _themeAnimCtrl, curve: Curves.easeInOut);
     // Rebuild send button colour when text changes
     _agentInputCtrl.addListener(() => setState(() {}));
     // Load chat sessions
@@ -177,6 +186,7 @@ class _SelectTypeState extends State<SelectType>
     _agentScrollCtrl.dispose();
     _splitViewController.dispose();
     _sendAnimCtrl.dispose();
+    _themeAnimCtrl.dispose();
     super.dispose();
   }
 
@@ -635,10 +645,14 @@ class _SelectTypeState extends State<SelectType>
   @override
   Widget build(BuildContext context) {
     context.read<GithubAuthCubit>().refresh();
-    return BlocBuilder<AppThemeBloc, AppThemeState>(
+    return BlocConsumer<AppThemeBloc, AppThemeState>(
+      listenWhen: (prev, cur) => prev.appTheme != cur.appTheme,
+      listener: (context, state) => _themeAnimCtrl.forward(from: 0.0),
       builder: (context, appThemestate) {
         final appTheme = appThemestate.appTheme;
-        return BlocListener<PackageCatalogCubit, PackageCatalogState>(
+        return FadeTransition(
+          opacity: _themeAnim,
+          child: BlocListener<PackageCatalogCubit, PackageCatalogState>(
           listenWhen: (prev, cur) =>
               !_didShowPackageUpdateToast &&
               !prev.hasUpdates &&
@@ -650,10 +664,16 @@ class _SelectTypeState extends State<SelectType>
                   '${state.totalUpdateCount} package update(s) available in Downloads.'),
             ));
           },
-          child: Scaffold(
+          child: AnnotatedRegion<SystemUiOverlayStyle>(
+            value: SystemUiOverlayStyle(
+              statusBarColor: Colors.transparent,
+              statusBarIconBrightness:
+                  appTheme.isDark ? Brightness.light : Brightness.dark,
+            ),
+            child: Scaffold(
             key: _scaffoldKey,
             resizeToAvoidBottomInset: false,
-            backgroundColor: appTheme.isDark ? _kActivityBgDark : _kActivityBgLight,
+            backgroundColor: appTheme.isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
 
             // ── Drawer (unchanged behaviour) ──────────────────────────────
             drawer: Drawer(
@@ -758,8 +778,14 @@ class _SelectTypeState extends State<SelectType>
                                               _buildTabBar(appTheme,
                                                   isPrimary: true),
                                               Expanded(
-                                                child: _buildActiveTab(context,
-                                                    appTheme, appThemestate),
+                                                child: AnimatedSwitcher(
+                                                  duration: const Duration(milliseconds: 150),
+                                                  child: KeyedSubtree(
+                                                    key: ValueKey(_activeTabIdx),
+                                                    child: _buildActiveTab(context,
+                                                        appTheme, appThemestate),
+                                                  ),
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -806,6 +832,8 @@ class _SelectTypeState extends State<SelectType>
                 _buildFloatingAgentOverlay(appTheme),
                 ],
               ),
+            ),
+          ),
             ),
           ),
         );
@@ -870,14 +898,6 @@ class _SelectTypeState extends State<SelectType>
                   }),
                 ),
                 const SizedBox(width: 8),
-                // ── Right: Panda Agent ────────────────────────────────
-                _StatusBarItem(
-                  icon: Broken.cpu,
-                  label: 'Agent',
-                  fg: fg,
-                  onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
-                ),
-                const SizedBox(width: 8),
                 // ── Right: notifications ──────────────────────────────
                 _StatusBarItem(
                   icon: Icons.notifications_none,
@@ -914,7 +934,7 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Open a file / folder / project as a tab in the new Panda IDE UI ──────
   // This replaces all Navigator.push(EditorPage(...)) calls so that files and
-  // projects open inside the tab system instead of the old full-screen Roxum UI.
+  // projects open inside the tab system instead of the old full-screen Panda UI.
   void _openEditorTab({
     File?     file,
     required String    rootDir,
@@ -1636,37 +1656,10 @@ class _SelectTypeState extends State<SelectType>
             ),
             // 3 — terminal / bottom panel
             _hdrBtn(
-              Broken.cpu,
+              Icons.terminal,
               'Terminal',
               _bottomPanelOpen ? _kAccent : fg,
               () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
-            ),
-            // 4 — Panda Agent (mobile: onglet, desktop: panneau droit)
-            Builder(
-              builder: (ctx) => _hdrBtn(
-                Broken.message_programming,
-                'Panda Agent',
-                _rightPanelOpen ? _kAccent : fg,
-                () {
-                  final isMobile = MediaQuery.of(ctx).size.width < 600;
-                  if (isMobile) {
-                    setState(() {
-                      if (!_openTabs.any((t) => t.id == 'agent')) {
-                        _openTabs.add(const _TabDef(
-                            id: 'agent',
-                            title: 'Panda Agent',
-                            icon: Broken.message_programming));
-                        _activeTabIdx = _openTabs.length - 1;
-                      } else {
-                        _activeTabIdx =
-                            _openTabs.indexWhere((t) => t.id == 'agent');
-                      }
-                    });
-                  } else {
-                    setState(() => _rightPanelOpen = !_rightPanelOpen);
-                  }
-                },
-              ),
             ),
           ],
         ),
@@ -1954,10 +1947,6 @@ class _SelectTypeState extends State<SelectType>
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
                       color: isActive ? activeTabBg : Colors.transparent,
-                      border: isActive
-                          ? const Border(
-                              top: BorderSide(color: _kAccent, width: 1))
-                          : null,
                     ),
                     child: Row(children: [
                       Icon(tab.icon, size: 13,
@@ -2022,38 +2011,6 @@ class _SelectTypeState extends State<SelectType>
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Icon(Broken.close_circle, size: 15, color: inactiveFg),
-                  ),
-                ),
-              ),
-            // Panda Agent button — primary editor only
-            if (isPrimary)
-              Tooltip(
-                message: 'Panda Agent',
-                child: InkWell(
-                  onTap: () {
-                    final isMobile = MediaQuery.of(ctx).size.width < 600;
-                    if (isMobile) {
-                      setState(() {
-                        if (!_openTabs.any((t) => t.id == 'agent')) {
-                          _openTabs.add(const _TabDef(
-                              id:    'agent',
-                              title: 'Panda Agent',
-                              icon:  Broken.message_programming));
-                          _activeTabIdx = _openTabs.length - 1;
-                        } else {
-                          _activeTabIdx =
-                              _openTabs.indexWhere((t) => t.id == 'agent');
-                        }
-                      });
-                    } else {
-                      setState(() => _rightPanelOpen = !_rightPanelOpen);
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(4),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(Broken.message_programming, size: 15,
-                        color: _rightPanelOpen ? _kAccent : inactiveFg),
                   ),
                 ),
               ),
@@ -2166,14 +2123,15 @@ class _SelectTypeState extends State<SelectType>
     setState(() {
       final removedId = _openTabs[i].id;
       _openTabs.removeAt(i);
-      _editorTabs.remove(removedId); // clean up editor config if any
-      if (_openTabs.isNotEmpty) {
-        _activeTabIdx = (_activeTabIdx >= _openTabs.length
-                ? _openTabs.length - 1
-                : _activeTabIdx)
-            .clamp(0, _openTabs.length - 1);
-      } else {
+      _editorTabs.remove(removedId);
+      if (_openTabs.isEmpty) {
         _activeTabIdx = 0;
+      } else if (i < _activeTabIdx) {
+        // Tab before active closed: shift active index down
+        _activeTabIdx = (_activeTabIdx - 1).clamp(0, _openTabs.length - 1);
+      } else {
+        // Tab at or after active: clamp to valid range
+        _activeTabIdx = _activeTabIdx.clamp(0, _openTabs.length - 1);
       }
     });
   }
