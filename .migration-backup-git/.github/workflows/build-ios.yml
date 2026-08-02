@@ -1,0 +1,68 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+# ⚠️  COMPATIBILITÉ iOS — ÉTAT ACTUEL
+# ────────────────────────────────────────────────────────────────────────────────
+# ❌ BLOQUANTS connus (Android-only) :
+#   - flutter_pty          → PTY non disponible sur iOS (sandbox Apple)
+#   - llama_flutter_android → Android NDK only, pas de port iOS
+#   - android_intent_plus   → Android-only par définition
+#
+# Le build échouera jusqu'à ce que ces packages soient wrappés ou retirés.
+# ACTION REQUISE : wrapper flutter_pty/llama/android_intent avec Platform.isIOS
+# ────────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Check iOS compatibility
+        run: |
+          echo "🔍 Vérification compatibilité iOS..."
+          grep -E "flutter_pty|llama_flutter_android|android_intent" pubspec.yaml \
+            && echo "⚠️  Packages Android-only détectés — build peut échouer" \
+            || echo "✅ Pas de package Android-only détecté"
+
+      - name: Build iOS (no codesign)
+        continue-on-error: true
+        run: |
+          flutter build ios \
+            --release \
+            --no-codesign
+
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: panda-ide-ios-build
+          path: build/ios/iphoneos/Runner.app
+          retention-days: 30
+
+      - name: iOS build status
+        run: |
+          echo "ℹ️  iOS build terminé (peut avoir échoué sur packages Android-only)."
+          echo "Pour un build iOS fonctionnel, wrapper flutter_pty, llama_flutter_android"
+          echo "et android_intent_plus avec des guards Platform.isIOS."
