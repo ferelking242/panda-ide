@@ -21,7 +21,6 @@ import 'donation_page.dart';
 import 'file_manager.dart';
 import 'editor_page.dart';
 import 'menu_screen.dart';
-import 'project_screen.dart';
 import 'downloads.dart';
 import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
@@ -143,6 +142,11 @@ class _SelectTypeState extends State<SelectType>
   // ── Conversation history ──────────────────────────────────────────
   bool _showHistoryPanel = false;
 
+  // ── Sidebar search ────────────────────────────────────────────────
+  final _sidebarSearchCtrl = TextEditingController();
+  List<File> _sidebarSearchResults = [];
+  bool _sidebarSearching = false;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
   void initState() {
@@ -184,6 +188,7 @@ class _SelectTypeState extends State<SelectType>
     createFileController.dispose();
     _agentInputCtrl.dispose();
     _agentScrollCtrl.dispose();
+    _sidebarSearchCtrl.dispose();
     _splitViewController.dispose();
     _sendAnimCtrl.dispose();
     _themeAnimCtrl.dispose();
@@ -933,6 +938,30 @@ class _SelectTypeState extends State<SelectType>
   }
 
   // ── Open a file / folder / project as a tab in the new Panda IDE UI ──────
+  // ── Active editor helpers ─────────────────────────────────────────────────
+  _EditorTabConfig? _activeEditorConfig() {
+    if (_openTabs.isEmpty) return null;
+    final tab = _openTabs[_activeTabIdx];
+    return _editorTabs[tab.id];
+  }
+
+  String? _activeProjectDir() {
+    final cfg = _activeEditorConfig();
+    return (cfg != null && cfg.isProject) ? cfg.rootDir : null;
+  }
+
+  void _openGithubTab() {
+    setState(() {
+      if (!_openTabs.any((t) => t.id == 'github')) {
+        _openTabs.add(const _TabDef(
+            id: 'github', title: 'GitHub', icon: Broken.programming_arrows));
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'github');
+      }
+    });
+  }
+
   // This replaces all Navigator.push(EditorPage(...)) calls so that files and
   // projects open inside the tab system instead of the old full-screen Panda UI.
   void _openEditorTab({
@@ -1237,11 +1266,43 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Explorer panel ────────────────────────────────────────────────────────
   Widget _sidebarExplorer(BuildContext ctx, AppTheme t, bool dark) {
+    final activeProjPath = _activeProjectDir();
+
+    if (activeProjPath != null) {
+      // Active project → show full file tree
+      return DirectoryTreeViewerCustom(
+        rootPath: activeProjPath,
+        appTheme: t,
+        isUnfoldedFirst: true,
+        enableCreateFileOption: true,
+        enableCreateFolderOption: true,
+        enableDeleteFileOption: true,
+        enableDeleteFolderOption: true,
+        enableRenameFileOption: true,
+        enableRenameFolderOption: true,
+        enableGitFeatures: true,
+        onFileTap: (file) {
+          final lang = languages.firstWhere(
+            (l) => l.extension.contains(
+                path.extension(file.path).replaceFirst('.', '')),
+            orElse: () => languages[0],
+          );
+          _openEditorTab(
+            file:            file,
+            rootDir:         activeProjPath,
+            languageDetails: lang,
+            isProject:       false,
+          );
+        },
+      );
+    }
+
+    // No active project → show open/clone actions + recent projects
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
         _panelItem(ctx, t, Broken.document_text, 'Nouveau fichier…',
-            () { Navigator.of(ctx).pop(); _doNewFile(ctx, t); }),
+            () => _doNewFile(ctx, t)),
         _panelItem(ctx, t, Broken.document_upload, 'Ouvrir un fichier…',
             () => _doOpenFile(ctx)),
         _panelItem(ctx, t, Broken.folder_open, 'Ouvrir un dossier…',
@@ -1251,8 +1312,48 @@ class _SelectTypeState extends State<SelectType>
         _panelItem(ctx, t, Broken.folder_2, 'Gestionnaire de fichiers',
             () => _push(ctx, const FileManagerPage())),
         const Divider(indent: 12, endIndent: 12),
-        _panelItem(ctx, t, Broken.sidebar_right, 'Projets',
-            () => _push(ctx, const ProjectScreen())),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Text('PROJETS RÉCENTS',
+              style: _kSectionTitle.copyWith(
+                  color: dark ? Colors.grey[500] : Colors.grey[600])),
+        ),
+        FutureBuilder<List<Directory>>(
+          future: Future(() async {
+            final d = Directory(projectDir); // global constant from constants.dart
+            if (!d.existsSync()) return [];
+            final entities = await d.list().toList();
+            final dirs = entities.whereType<Directory>().toList()
+              ..sort((a, b) =>
+                  b.statSync().modified.compareTo(a.statSync().modified));
+            return dirs.take(8).toList();
+          }),
+          builder: (_, snap) {
+            if (!snap.hasData || snap.data!.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                child: Text('Aucun projet récent.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: dark ? Colors.grey[600] : Colors.grey[500])),
+              );
+            }
+            return Column(
+              children: snap.data!
+                  .map((dir) => _panelItem(
+                        ctx, t, Broken.folder_open,
+                        path.basename(dir.path),
+                        () => _openEditorTab(
+                          rootDir:   dir.path,
+                          isProject: true,
+                          isCloned:  false,
+                        ),
+                      ))
+                  .toList(),
+            );
+          },
+        ),
+        const Divider(indent: 12, endIndent: 12),
         _panelItem(ctx, t, Broken.document_download, 'Téléchargements',
             () => _push(ctx, DownloadManager())),
       ],
@@ -1261,30 +1362,63 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Search panel ──────────────────────────────────────────────────────────
   Widget _sidebarSearch(BuildContext ctx, AppTheme t, bool dark) {
-    final ctrl = TextEditingController();
-    return Padding(
-      padding: const EdgeInsets.all(10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: ctrl,
+    final activeDir = _activeProjectDir();
+
+    Future<void> runSearch(String query) async {
+      if (query.trim().isEmpty || activeDir == null) {
+        if (mounted) setState(() { _sidebarSearchResults = []; _sidebarSearching = false; });
+        return;
+      }
+      if (mounted) setState(() => _sidebarSearching = true);
+      final results = <File>[];
+      try {
+        await for (final entity in Directory(activeDir)
+            .list(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            final name = path.basename(entity.path).toLowerCase();
+            if (name.contains(query.toLowerCase())) {
+              results.add(entity);
+              if (results.length >= 50) break;
+            }
+          }
+        }
+      } catch (_) {}
+      if (mounted) {
+        setState(() {
+          _sidebarSearchResults = results;
+          _sidebarSearching = false;
+        });
+      }
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(10),
+          child: TextField(
+            controller: _sidebarSearchCtrl,
             autofocus: false,
             style: TextStyle(
                 color: dark ? Colors.grey[300] : Colors.grey[800],
                 fontSize: 13),
             cursorColor: _kAccent,
+            onChanged: runSearch,
             decoration: InputDecoration(
-              hintText: 'Rechercher…',
+              hintText: activeDir != null
+                  ? 'Rechercher des fichiers…'
+                  : 'Ouvrez un projet d\'abord',
               hintStyle: const TextStyle(color: Colors.grey, fontSize: 13),
-              prefixIcon: const Icon(Icons.search, size: 16, color: Colors.grey),
+              prefixIcon:
+                  const Icon(Icons.search, size: 16, color: Colors.grey),
               isDense: true,
               filled: true,
               fillColor: dark ? const Color(0xff3c3c3c) : Colors.white,
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
                 borderSide: BorderSide(
-                    color: dark ? const Color(0xff555555) : const Color(0xffcccccc)),
+                    color: dark
+                        ? const Color(0xff555555)
+                        : const Color(0xffcccccc)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
@@ -1292,42 +1426,159 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Ouvrez un fichier pour lancer la recherche dans un projet.',
-            style: TextStyle(
-                fontSize: 12,
-                color: dark ? Colors.grey[500] : Colors.grey[600]),
-          ),
-        ],
-      ),
+        ),
+        if (_sidebarSearching)
+          const LinearProgressIndicator(
+              color: _kAccent, backgroundColor: Colors.transparent),
+        Expanded(
+          child: _sidebarSearchResults.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  child: Text(
+                    activeDir != null
+                        ? (_sidebarSearchCtrl.text.isEmpty
+                            ? 'Saisissez un nom de fichier pour rechercher.'
+                            : 'Aucun résultat.')
+                        : 'Ouvrez un dossier ou un projet pour lancer la recherche.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color:
+                            dark ? Colors.grey[500] : Colors.grey[600]),
+                  ),
+                )
+              : ListView.builder(
+                  padding: EdgeInsets.zero,
+                  itemCount: _sidebarSearchResults.length,
+                  itemBuilder: (_, i) {
+                    final file = _sidebarSearchResults[i];
+                    return _panelItem(
+                      ctx, t,
+                      Broken.document_text,
+                      path.basename(file.path),
+                      () {
+                        final lang = languages.firstWhere(
+                          (l) => l.extension.contains(path
+                              .extension(file.path)
+                              .replaceFirst('.', '')),
+                          orElse: () => languages[0],
+                        );
+                        _openEditorTab(
+                          file:            file,
+                          rootDir:         activeDir!,
+                          languageDetails: lang,
+                          isProject:       false,
+                        );
+                      },
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
   // ── Git panel ─────────────────────────────────────────────────────────────
   Widget _sidebarGit(BuildContext ctx, AppTheme t, bool dark) {
-    void openGithubTab() => setState(() {
-          if (!_openTabs.any((tab) => tab.id == 'github')) {
-            _openTabs.add(const _TabDef(
-                id: 'github', title: 'GitHub', icon: Broken.programming_arrows));
-            _activeTabIdx = _openTabs.length - 1;
-          } else {
-            _activeTabIdx = _openTabs.indexWhere((tab) => tab.id == 'github');
-          }
-          _sidebarState = 1;
-          _activeRail = 0;
-        });
+    final activeDir = _activeProjectDir();
+    final isGitRepo = activeDir != null &&
+        Directory('$activeDir/.git').existsSync();
+
+    if (isGitRepo) {
+      // Trigger status refresh for this project
+      ctx.read<RepoStatusBloc>().add(LoadRepoStatus(activeDir));
+      return BlocBuilder<RepoStatusBloc, RepoStatusState>(
+        builder: (_, repoState) {
+          final loaded = repoState is RepoStatusLoaded ? repoState : null;
+          final staged   = loaded?.staged   ?? <String>[];
+          final unstaged = loaded?.unstaged ?? <String>[];
+          final branch   = loaded?.currentBranch ?? '…';
+          final isLoading = repoState is RepoStatusLoading;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Branch header + refresh
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(children: [
+                  Icon(Broken.programming_arrows, size: 13, color: _kAccent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      branch,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: dark ? Colors.grey[300] : Colors.grey[700]),
+                    ),
+                  ),
+                  if (isLoading)
+                    const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 1.5, color: _kAccent))
+                  else
+                    InkWell(
+                      onTap: () => ctx
+                          .read<RepoStatusBloc>()
+                          .add(LoadRepoStatus(activeDir)),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(Icons.refresh,
+                            size: 14,
+                            color: dark ? Colors.grey[500] : Colors.grey[600]),
+                      ),
+                    ),
+                ]),
+              ),
+              if (staged.isNotEmpty) ...[
+                _gitSectionLabel('INDEXÉS (${staged.length})', dark),
+                ...staged.map(
+                    (s) => _gitFileItem(ctx, t, dark, s, activeDir)),
+              ],
+              if (unstaged.isNotEmpty) ...[
+                _gitSectionLabel('CHANGEMENTS (${unstaged.length})', dark),
+                ...unstaged.map(
+                    (s) => _gitFileItem(ctx, t, dark, s, activeDir)),
+              ],
+              if (loaded != null &&
+                  staged.isEmpty &&
+                  unstaged.isEmpty)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Text(
+                    'Pas de modifications en attente.',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: dark ? Colors.grey[500] : Colors.grey[600]),
+                  ),
+                ),
+              const Divider(indent: 12, endIndent: 12),
+              _panelItem(ctx, t, Broken.programming_arrows, 'Ouvrir GitHub',
+                  _openGithubTab),
+              _panelItem(ctx, t, Broken.add_circle, 'Cloner un dépôt…',
+                  () => _doCloneRepo(ctx, t)),
+            ],
+          );
+        },
+      );
+    }
+
+    // No git project open → basic panel
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
         _panelItem(ctx, t, Broken.programming_arrows, 'Ouvrir GitHub',
-            openGithubTab),
+            _openGithubTab),
         _panelItem(ctx, t, Broken.add_circle, 'Cloner un dépôt…',
             () => _doCloneRepo(ctx, t)),
         BlocBuilder<GithubAuthCubit, GithubAuthState>(
           builder: (_, s) => s.isSignedIn
               ? _panelItem(ctx, t, Broken.add_square, 'Créer un dépôt…',
-                  openGithubTab)
+                  _openGithubTab)
               : const SizedBox.shrink(),
         ),
         const Divider(indent: 12, endIndent: 12),
@@ -1345,6 +1596,59 @@ class _SelectTypeState extends State<SelectType>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _gitSectionLabel(String title, bool dark) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+        child: Text(title,
+            style: _kSectionTitle.copyWith(
+                color: dark ? Colors.grey[500] : Colors.grey[600])),
+      );
+
+  Widget _gitFileItem(
+      BuildContext ctx, AppTheme t, bool dark, String line, String rootDir) {
+    final indicator = line.length >= 2 ? line.substring(0, 2).trim() : '?';
+    final filePath  = line.length > 3 ? line.substring(3).trim() : line.trim();
+    final color = indicator.contains('D')
+        ? Colors.red[400]!
+        : indicator.contains('A') || indicator.contains('?')
+            ? Colors.green[400]!
+            : _kAccent;
+    return InkWell(
+      onTap: () {
+        final f = File('$rootDir/$filePath');
+        if (!f.existsSync()) return;
+        final lang = languages.firstWhere(
+          (l) => l.extension
+              .contains(path.extension(f.path).replaceFirst('.', '')),
+          orElse: () => languages[0],
+        );
+        _openEditorTab(file: f, rootDir: rootDir, languageDetails: lang);
+      },
+      child: Padding(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Row(children: [
+          SizedBox(
+            width: 16,
+            child: Text(indicator,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: color)),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(filePath,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: dark ? Colors.grey[300] : Colors.grey[700]),
+                overflow: TextOverflow.ellipsis),
+          ),
+        ]),
+      ),
     );
   }
 
@@ -1797,8 +2101,7 @@ class _SelectTypeState extends State<SelectType>
           } else if (value == 'open_file') {
             _doOpenFile(ctx);
           } else if (value == 'new_project') {
-            _push(ctx, const ProjectScreen());
-            setState(() => _sidebarState = 0);
+            _doOpenFolder(ctx, appTheme);
           }
         });
       }
@@ -3583,20 +3886,14 @@ class _SelectTypeState extends State<SelectType>
                     svgAsset: 'assets/icons/code-branch-solid.svg',
                     label: 'GitHub — Ouvrir un référentiel…',
                     isDark: isDark,
-                    onTap: () {
-                      if (authState.isSignedIn) {
-                        _push(context, GithubPage());
-                      } else {
-                        _push(context, GithubPage());
-                      }
-                    },
+                    onTap: _openGithubTab,
                   ),
                   if (authState.isSignedIn)
                     _StartItem(
                       icon: Broken.add_circle,
                       label: 'Créer un dépôt GitHub…',
                       isDark: isDark,
-                      onTap: () => _push(context, GithubPage()),
+                      onTap: _openGithubTab,
                     ),
                 ],
               ),
@@ -3724,7 +4021,7 @@ class _SelectTypeState extends State<SelectType>
               subtitle:
                   'Connectez votre compte GitHub et gérez vos dépôts directement.',
               isDark: isDark,
-              onTap: () => _push(context, GithubPage()),
+              onTap: _openGithubTab,
             ),
             const SizedBox(height: 10),
             _WalkthroughCard(
