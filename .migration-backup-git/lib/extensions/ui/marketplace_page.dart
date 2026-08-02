@@ -15,6 +15,8 @@ import '../open_vsx_client.dart';
 import '../extension_registry.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
+import '../../ui/adb_setup_page.dart';
+import '../../services/flutter_sdk_service.dart';
 
 // ── Categories ─────────────────────────────────────────────────────────────────
 const _kCategories = [
@@ -1091,6 +1093,8 @@ class _RuntimeInfo {
   final String website;
   final Widget icon;
   final String useCase;
+  /// Optional label for an extra action button shown in the detail page.
+  final String? extraAction;
 
   const _RuntimeInfo({
     required this.key,
@@ -1101,10 +1105,42 @@ class _RuntimeInfo {
     required this.website,
     required this.icon,
     required this.useCase,
+    this.extraAction,
   });
 }
 
 final _kRuntimes = <_RuntimeInfo>[
+  _RuntimeInfo(
+    key: 'flutter',
+    name: 'Flutter SDK',
+    description: 'Flutter framework + Dart SDK + flutter run',
+    version: '3.x stable',
+    longDescription:
+        'The full Flutter SDK for ARM64 Android. Includes the flutter CLI, '
+        'Dart SDK, pub package manager, and everything needed to run '
+        '"flutter run", "flutter build apk", and "flutter pub get" '
+        'directly on this device — no computer required.\n\n'
+        'After installing, open the ADB Setup page to enable '
+        '"flutter run" on your device via Shizuku or Wireless ADB.',
+    website: 'https://flutter.dev',
+    useCase: 'flutter run / build / pub get directly on your phone',
+    icon: const Icon(Icons.flutter_dash, size: 26, color: Color(0xFF54C5F8)),
+    extraAction: 'ADB Setup for flutter run',
+  ),
+  _RuntimeInfo(
+    key: 'android-sdk',
+    name: 'Android SDK (platform-tools)',
+    description: 'adb, fastboot — required for flutter run',
+    version: 'r35+',
+    longDescription:
+        'Android SDK platform-tools provides the adb (Android Debug Bridge) '
+        'binary for ARM64 Android. This is required for "flutter run" '
+        'and for wireless debugging. Install this alongside the Flutter SDK.',
+    website: 'https://developer.android.com/studio/releases/platform-tools',
+    useCase: 'flutter run, adb install, adb shell, wireless debugging',
+    icon: const FaIcon(FontAwesomeIcons.android, size: 26,
+        color: Color(0xFF3DDC84)),
+  ),
   _RuntimeInfo(
     key: 'node',
     name: 'Node.js',
@@ -1416,6 +1452,22 @@ class _RuntimeDetailPage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12)),
             ),
           ),
+
+          // Extra action (e.g. ADB Setup for Flutter SDK)
+          if (info.extraAction != null) ...[
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const AdbSetupPage())),
+              icon: const Icon(Icons.usb_rounded, size: 16),
+              label: Text(info.extraAction!),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
 
           // About

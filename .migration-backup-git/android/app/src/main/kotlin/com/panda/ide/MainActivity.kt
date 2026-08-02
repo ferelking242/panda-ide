@@ -72,6 +72,8 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         ensurePdfViewPluginRegistered(flutterEngine)
+        // Register Shizuku bridge (ADB-level shell for flutter run on-device)
+        ShizukuBridge.register(flutterEngine)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -237,6 +239,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        ShizukuBridge.unregister()
         splitInstallService.unregisterListener()
         pfdEventSink = null
         super.onDestroy()

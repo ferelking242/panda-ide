@@ -427,6 +427,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Future<void> _loadPathBinaries() async {
     final pathDirs = [
       binDir,
+      '$runtimesDir/flutter/bin',
+      '$runtimesDir/android-sdk/platform-tools',
       '$runtimesDir/node/bin',
       '/bin',
       '/usr/bin',
@@ -562,10 +564,28 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
     await _ensureBashRc();
 
+    // Detect which runtimes are installed so we only add their dirs to PATH.
+    final flutterInstalled =
+        Directory('$runtimesDir/flutter/bin').existsSync();
+    final androidSdkInstalled =
+        Directory('$runtimesDir/android-sdk/platform-tools').existsSync();
+
+    final pathParts = [
+      binDir,
+      if (flutterInstalled)  '$runtimesDir/flutter/bin',
+      if (androidSdkInstalled) '$runtimesDir/android-sdk/platform-tools',
+      if (androidSdkInstalled) '$runtimesDir/android-sdk/build-tools/current',
+      '$runtimesDir/node/bin',
+      '/bin',
+      '/usr/bin',
+      '/sbin',
+      '/usr/sbin',
+    ];
+
     final enVars = <String, String>{
       'HOME': homeDir,
       'PS1': ' \x1b[32m\\w \x1b[0m\$ ',
-      'PATH': '$binDir:$runtimesDir/node/bin:/bin:/usr/bin:/sbin:/usr/sbin',
+      'PATH': pathParts.join(':'),
       'PROMPT_DIRTRIM': '2',
       'ROXUM_SHARED_PATH': _sharedPath,
       'LD_LIBRARY_PATH': '$_sharedPath:$libDir:$runtimesDir/clang',
@@ -577,7 +597,21 @@ class _SetupTerminalState extends State<SetupTerminal> {
       'GIT_SSL_CAINFO': '$certDir/cacert.pem',
       'RUSTFLAGS': '--sysroot $runtimesDir/rust',
       'GOROOT': '$runtimesDir/go',
-      'CC': 'clang'
+      'CC': 'clang',
+      // ── Flutter SDK (injected when $runtimesDir/flutter is present) ──────
+      if (flutterInstalled) ...{
+        'FLUTTER_ROOT'              : '$runtimesDir/flutter',
+        'PUB_CACHE'                 : '$runtimesDir/flutter/.pub-cache',
+        'PUB_HOSTED_URL'            : 'https://pub.dartlang.org',
+        'FLUTTER_STORAGE_BASE_URL'  : 'https://storage.googleapis.com',
+        'FLUTTER_SUPPRESS_ANALYTICS': 'true',
+        'DART_VM_OPTIONS'           : '--disable-dart-dev',
+      },
+      // ── Android SDK (injected when platform-tools are present) ───────────
+      if (androidSdkInstalled) ...{
+        'ANDROID_HOME'    : '$runtimesDir/android-sdk',
+        'ANDROID_SDK_ROOT': '$runtimesDir/android-sdk',
+      },
     };
 
     final process = Pty.start(

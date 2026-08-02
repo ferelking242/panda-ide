@@ -71,6 +71,8 @@ android {
 
     dynamicFeatures.addAll(
         setOf(
+            ":app:flutter_feature",
+            ":app:android_sdk_feature",
             ":app:rust_feature",
             ":app:go_feature",
             ":app:ruby_feature",
@@ -103,6 +105,9 @@ kotlin {
 dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("com.google.android.play:feature-delivery:2.1.0")
+    // Shizuku — ADB-level shell access without root (flutter run on-device)
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 }
 
 
