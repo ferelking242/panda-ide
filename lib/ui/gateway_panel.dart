@@ -185,62 +185,71 @@ class _GatewayPanelState extends State<GatewayPanel>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            const Icon(Icons.router, size: 16, color: _kAccent),
-            const SizedBox(width: 8),
-            Text('PANDA BROWSER GATEWAY',
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                    letterSpacing: 1.1, color: muted)),
-            const Spacer(),
-            // Provider toggle
-            _ProviderToggle(manager: mgr, fg: fg, muted: muted),
-          ]),
+          // Title + provider toggle — wraps on narrow screens
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.router, size: 16, color: _kAccent),
+                const SizedBox(width: 8),
+                Text('PANDA BROWSER GATEWAY',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                        letterSpacing: 1.1, color: muted)),
+              ]),
+              _ProviderToggle(manager: mgr, fg: fg, muted: muted),
+            ],
+          ),
           const SizedBox(height: 10),
-          Row(children: [
-            // Install button
-            _ActionButton(
-              label: _installing ? 'Installation…' : 'Installer / MàJ',
-              icon: Icons.download_outlined,
-              color: _kAccent,
-              enabled: !_installing && !mgr.isRunning,
-              onTap: _install,
-            ),
-            const SizedBox(width: 8),
-            // Start / Stop
-            _ActionButton(
-              label: mgr.status == GatewayStatus.starting
-                  ? 'Démarrage…'
-                  : mgr.isRunning ? 'Arrêter' : 'Démarrer',
-              icon: mgr.isRunning ? Icons.stop_circle_outlined : Icons.play_circle_outlined,
-              color: mgr.isRunning ? _kRed : _kGreen,
-              enabled: !_installing &&
-                  mgr.status != GatewayStatus.starting &&
-                  mgr.status != GatewayStatus.stopping,
-              onTap: () async {
-                if (mgr.isRunning) {
-                  await mgr.stop();
-                } else {
-                  if (_installDir != null) await mgr.start(_installDir!);
-                }
-              },
-            ),
-            const SizedBox(width: 8),
-            // Open in browser (client test)
-            if (mgr.isRunning)
+          // Action buttons — wrap on small screens
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              // Install button
               _ActionButton(
-                label: 'Client Test',
-                icon: Icons.language_outlined,
-                color: muted,
-                enabled: true,
-                onTap: () {
-                  _webController?.loadUrl(
-                    urlRequest: URLRequest(
-                        url: WebUri('http://127.0.0.1:${mgr.apiPort}/client')),
-                  );
-                  _tabCtrl.animateTo(0);
+                label: _installing ? 'Installation…' : 'Installer / MàJ',
+                icon: Icons.download_outlined,
+                color: _kAccent,
+                enabled: !_installing && !mgr.isRunning,
+                onTap: _install,
+              ),
+              // Start / Stop
+              _ActionButton(
+                label: mgr.status == GatewayStatus.starting
+                    ? 'Démarrage…'
+                    : mgr.isRunning ? 'Arrêter' : 'Démarrer',
+                icon: mgr.isRunning ? Icons.stop_circle_outlined : Icons.play_circle_outlined,
+                color: mgr.isRunning ? _kRed : _kGreen,
+                enabled: !_installing &&
+                    mgr.status != GatewayStatus.starting &&
+                    mgr.status != GatewayStatus.stopping,
+                onTap: () async {
+                  if (mgr.isRunning) {
+                    await mgr.stop();
+                  } else {
+                    if (_installDir != null) await mgr.start(_installDir!);
+                  }
                 },
               ),
-          ]),
+              // Open in browser (client test)
+              if (mgr.isRunning)
+                _ActionButton(
+                  label: 'Client Test',
+                  icon: Icons.language_outlined,
+                  color: muted,
+                  enabled: true,
+                  onTap: () {
+                    _webController?.loadUrl(
+                      urlRequest: URLRequest(
+                          url: WebUri('http://127.0.0.1:${mgr.apiPort}/client')),
+                    );
+                    _tabCtrl.animateTo(0);
+                  },
+                ),
+            ],
+          ),
           if (_installing && _installLog.isNotEmpty) ...[
             const SizedBox(height: 8),
             Container(

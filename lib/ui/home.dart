@@ -2790,7 +2790,7 @@ class _SelectTypeState extends State<SelectType>
                           Icon(Broken.cpu, size: 11, color: muted),
                           const SizedBox(width: 4),
                           ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 90),
+                            constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.22),
                             child: Text(
                               modelDisplayName,
                               overflow: TextOverflow.ellipsis,

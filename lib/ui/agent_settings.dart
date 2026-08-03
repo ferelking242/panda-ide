@@ -1204,6 +1204,10 @@ class _ProviderPicker extends StatelessWidget {
   }
 }
 
+/// Model dropdown — utilise un BottomSheet au lieu de DropdownButton.
+/// DropdownButton échoue silencieusement sur certains appareils Android
+/// (overlay bloqué par le touch event system). Le BottomSheet fonctionne
+/// nativement sur mobile comme sur desktop.
 class _ModelDropdown extends StatelessWidget {
   final List<String> models;
   final String selected;
@@ -1226,24 +1230,111 @@ class _ModelDropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     if (models.isEmpty) return const SizedBox.shrink();
     final eff = models.contains(selected) ? selected : models.first;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: border),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _show(context, eff),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: card,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: border),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: Text(
+              eff,
+              style: TextStyle(fontSize: 13, color: fg),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Icon(Broken.arrow_down_2, size: 14, color: muted),
+        ]),
       ),
-      child: DropdownButton<String>(
-        value: eff,
-        isExpanded: true,
-        underline: const SizedBox.shrink(),
-        dropdownColor: card,
-        icon: Icon(Broken.arrow_down_2, size: 14, color: muted),
-        style: TextStyle(fontSize: 13, color: fg),
-        items: models
-            .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-            .toList(),
-        onChanged: (v) { if (v != null) onChanged(v); },
+    );
+  }
+
+  void _show(BuildContext context, String eff) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (ctx, scroll) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(top: 10, bottom: 10),
+                decoration: BoxDecoration(
+                  color: muted.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(
+                'Choisir un modèle',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView.builder(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(8, 6, 8, 24),
+                itemCount: models.length,
+                itemBuilder: (_, i) {
+                  final m = models[i];
+                  final isSel = m == eff;
+                  return ListTile(
+                    dense: true,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    leading: Icon(
+                      isSel ? Broken.tick_circle : Broken.cpu,
+                      size: 16,
+                      color: isSel ? _kAccent : muted,
+                    ),
+                    title: Text(
+                      m,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: fg,
+                        fontWeight:
+                            isSel ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                    selected: isSel,
+                    selectedTileColor: _kAccent.withOpacity(0.08),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      onChanged(m);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
