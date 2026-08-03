@@ -91,6 +91,11 @@ class _SelectTypeState extends State<SelectType>
   bool _bottomPanelOpen  = false;
   int  _bottomPanelTab   = 0; // 0=Terminal 1=Problems 2=Output 3=Debug
 
+  // Problems panel state
+  final _problemsSearchCtrl = TextEditingController();
+  String _problemsSearch    = '';
+  int    _problemsFilter    = 0; // 0=all 1=errors 2=warnings
+
   // ── Dynamic tab system ──────────────────────────────────────────
   int  _activeTabIdx = 0;
   final List<_TabDef> _openTabs = [
@@ -192,6 +197,7 @@ class _SelectTypeState extends State<SelectType>
     _splitViewController.dispose();
     _sendAnimCtrl.dispose();
     _themeAnimCtrl.dispose();
+    _problemsSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -722,125 +728,127 @@ class _SelectTypeState extends State<SelectType>
                   // ── Top bar spans full width ──────────────────────────
                   _buildTopBar(context, appTheme, appThemestate),
 
-                  // ── Below top bar: activity bar + sidebar overlay + editor ─
+                  // ── Below top bar: activity bar (full-height) | editor + panel ─
                   Expanded(
-                    child: Stack(
+                    child: Row(
                       children: [
-                        // ── Main row: activity bar + full-width editor ──────
-                        Row(
-                          children: [
-                            if (_sidebarState >= 1)
-                              _buildActivityBar(context, appTheme),
+                        // Activity bar — full height, spans editor AND terminal
+                        if (_sidebarState >= 1)
+                          _buildActivityBar(context, appTheme),
 
-                            // ── Editor area ────────────────────────────────
-                            Expanded(
-                              child: ClipSmoothRect(
-                                radius: _sidebarState >= 1
-                                    ? SmoothBorderRadius.only(
-                                        topLeft: SmoothRadius(
-                                            cornerRadius: 22,
-                                            cornerSmoothing: 0.6),
-                                        bottomLeft: SmoothRadius(
-                                            cornerRadius: 22,
-                                            cornerSmoothing: 0.6))
-                                    : SmoothBorderRadius.zero,
-                                child: Container(
-                                color: appTheme.scaffoldBg,
-                                child: Row(
+                        // ── Right side: editor stacked above bottom panel ──
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              Column(
                                 children: [
+                                  // ── Editor area ──────────────────────────────
                                   Expanded(
-                                    child: _splitEditor
-                                        ? MultiSplitView(
-                                            controller: _splitViewController,
-                                            builder: (context, area) {
-                                              if (area.index == 0) {
-                                                return Column(
+                                    child: ClipSmoothRect(
+                                      radius: _sidebarState >= 1
+                                          ? SmoothBorderRadius.only(
+                                              topLeft: SmoothRadius(
+                                                  cornerRadius: 22,
+                                                  cornerSmoothing: 0.6),
+                                              bottomLeft: _bottomPanelOpen
+                                                  ? const SmoothRadius(
+                                                      cornerRadius: 0,
+                                                      cornerSmoothing: 0)
+                                                  : SmoothRadius(
+                                                      cornerRadius: 22,
+                                                      cornerSmoothing: 0.6))
+                                          : SmoothBorderRadius.zero,
+                                      child: Container(
+                                      color: appTheme.scaffoldBg,
+                                      child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: _splitEditor
+                                              ? MultiSplitView(
+                                                  controller: _splitViewController,
+                                                  builder: (context, area) {
+                                                    if (area.index == 0) {
+                                                      return Column(
+                                                        children: [
+                                                          _buildTabBar(appTheme,
+                                                              isPrimary: true),
+                                                          Expanded(
+                                                            child: _buildActiveTab(
+                                                                context,
+                                                                appTheme,
+                                                                appThemestate),
+                                                          ),
+                                                        ],
+                                                      );
+                                                    }
+                                                    return Column(
+                                                      children: [
+                                                        _buildTabBar(appTheme,
+                                                            isPrimary: false),
+                                                        Expanded(
+                                                          child: _buildSplitActiveTab(
+                                                              context,
+                                                              appTheme,
+                                                              appThemestate),
+                                                        ),
+                                                      ],
+                                                    );
+                                                  },
+                                                )
+                                              : Column(
                                                   children: [
                                                     _buildTabBar(appTheme,
                                                         isPrimary: true),
                                                     Expanded(
-                                                      child: _buildActiveTab(
-                                                          context,
-                                                          appTheme,
-                                                          appThemestate),
+                                                      child: AnimatedSwitcher(
+                                                        duration: const Duration(milliseconds: 150),
+                                                        child: KeyedSubtree(
+                                                          key: ValueKey(_activeTabIdx),
+                                                          child: _buildActiveTab(context,
+                                                              appTheme, appThemestate),
+                                                        ),
+                                                      ),
                                                     ),
                                                   ],
-                                                );
-                                              }
-                                              return Column(
-                                                children: [
-                                                  _buildTabBar(appTheme,
-                                                      isPrimary: false),
-                                                  Expanded(
-                                                    child: _buildSplitActiveTab(
-                                                        context,
-                                                        appTheme,
-                                                        appThemestate),
-                                                  ),
-                                                ],
-                                              );
-                                            },
-                                          )
-                                        : Column(
-                                            children: [
-                                              _buildTabBar(appTheme,
-                                                  isPrimary: true),
-                                              Expanded(
-                                                child: AnimatedSwitcher(
-                                                  duration: const Duration(milliseconds: 150),
-                                                  child: KeyedSubtree(
-                                                    key: ValueKey(_activeTabIdx),
-                                                    child: _buildActiveTab(context,
-                                                        appTheme, appThemestate),
-                                                  ),
                                                 ),
-                                              ),
-                                            ],
-                                          ),
+                                        ),
+                                        // Panda Agent panel
+                                        if (_rightPanelOpen)
+                                          _buildPandaAgentPanel(context, appTheme),
+                                      ],
+                                    ),
+                                    ),
+                                    ),
                                   ),
-                                  // Panda Agent panel
-                                  if (_rightPanelOpen)
-                                    _buildPandaAgentPanel(context, appTheme),
+                                  // ── Bottom panel — stays right of activity bar ──
+                                  if (_bottomPanelOpen)
+                                    _buildBottomPanel(),
                                 ],
                               ),
-                            ),
-                            ),
-                            ),
-                          ],
-                        ),
 
-                        // ── Sidebar overlay (no layout push) ───────────────
-                        if (_sidebarState == 2)
-                          Positioned(
-                            left: 48,
-                            top: 0,
-                            bottom: 0,
-                            child: Material(
-                              elevation: 6,
-                              shadowColor: Colors.black45,
-                              child: SizedBox(
-                                width: _kSidebarWidth,
-                                child: _buildSidebarPanel(context, appTheme),
-                              ),
-                            ),
+                              // ── Sidebar overlay (no layout push) ────────────────
+                              if (_sidebarState == 2)
+                                Positioned(
+                                  left: 0,
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Material(
+                                    elevation: 6,
+                                    shadowColor: Colors.black45,
+                                    child: SizedBox(
+                                      width: _kSidebarWidth,
+                                      child: _buildSidebarPanel(context, appTheme),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
+                        ),
                       ],
                     ),
                   ),
-                  // ── Bottom panel ─────────────────────────────────────
-                  if (_bottomPanelOpen)
-                    _buildBottomPanel(),
-
-                  // Status bar — respecte la largeur de l'activity bar
-                  Row(children: [
-                    if (_sidebarState >= 1) const SizedBox(width: 48),
-                    Expanded(
-                      child: _buildStatusBar(
-                        context, appTheme,
-                        withLeftRadius: _sidebarState >= 1,
-                      ),
-                    ),
-                  ]),
+// ── Status bar ────────────────────────────────────────
+                  _buildStatusBar(context, appTheme),
                 ],
               ),
               // ── Floating agent overlay ──────────────────────────────
@@ -2221,6 +2229,90 @@ class _SelectTypeState extends State<SelectType>
                     ),
                   ]),
                 ),
+                // ── Problems toolbar (search + filter + actions) ───────────
+                if (_bottomPanelTab == 1)
+                  Container(
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: tabBg,
+                      border: Border(bottom: BorderSide(color: border)),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(children: [
+                      // Search input
+                      Expanded(
+                        child: SizedBox(
+                          height: 20,
+                          child: TextField(
+                            controller: _problemsSearchCtrl,
+                            style: TextStyle(fontSize: 11, color: selFg),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              hintText: 'Filter (e.g. text, **/*.ts, !**/node_modules/**)',
+                              hintStyle: TextStyle(fontSize: 11, color: fg),
+                              prefixIcon: Icon(Icons.search, size: 12, color: fg),
+                              prefixIconConstraints: const BoxConstraints(minWidth: 24, minHeight: 20),
+                              filled: true,
+                              fillColor: isDark ? const Color(0xff3c3c3c) : const Color(0xffe8e8e8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(2),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                            onChanged: (v) => setState(() => _problemsSearch = v),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Filter: errors only
+                      _PanelToolbarBtn(
+                        icon: Icons.cancel_outlined,
+                        tooltip: 'Show Errors',
+                        active: _problemsFilter == 1,
+                        fg: fg, activeFg: Colors.red[300]!,
+                        onTap: () => setState(() =>
+                          _problemsFilter = _problemsFilter == 1 ? 0 : 1),
+                      ),
+                      // Filter: warnings only
+                      _PanelToolbarBtn(
+                        icon: Icons.warning_amber_outlined,
+                        tooltip: 'Show Warnings',
+                        active: _problemsFilter == 2,
+                        fg: fg, activeFg: Colors.orange[300]!,
+                        onTap: () => setState(() =>
+                          _problemsFilter = _problemsFilter == 2 ? 0 : 2),
+                      ),
+                      // Collapse all
+                      _PanelToolbarBtn(
+                        icon: Icons.unfold_less,
+                        tooltip: 'Collapse All',
+                        active: false,
+                        fg: fg, activeFg: fg,
+                        onTap: () {},
+                      ),
+                      // Clear all
+                      _PanelToolbarBtn(
+                        icon: Icons.clear_all,
+                        tooltip: 'Clear All',
+                        active: false,
+                        fg: fg, activeFg: fg,
+                        onTap: () => setState(() {
+                          _problemsSearch = '';
+                          _problemsSearchCtrl.clear();
+                          _problemsFilter = 0;
+                        }),
+                      ),
+                      // More actions
+                      _PanelToolbarBtn(
+                        icon: Icons.more_horiz,
+                        tooltip: 'More Actions',
+                        active: false,
+                        fg: fg, activeFg: fg,
+                        onTap: () {},
+                      ),
+                    ]),
+                  ),
                 Expanded(
                   child: Container(
                     color: bg,
@@ -2251,10 +2343,11 @@ class _SelectTypeState extends State<SelectType>
               showKeyboardMenu: true,
             );
           case 1: // Problems
-            return ListView(padding: const EdgeInsets.all(12), children: [
-              Text('Aucun problème détecté.',
-                  style: TextStyle(fontSize: 12, color: fg)),
-            ]);
+            return _ProblemsPanel(
+              fg: fg,
+              search: _problemsSearch,
+              filter: _problemsFilter,
+            );
           case 2: // Output
             return ListView(padding: const EdgeInsets.all(12), children: [
               Text('Pas de sortie.', style: TextStyle(fontSize: 12, color: fg)),
@@ -4737,6 +4830,70 @@ class _SidebarClipper extends CustomClipper<Path> {
 }
 
 /// Minimal clickable item for the VSCode-style status bar.
+// ── Panel toolbar button (used in bottom panel tab headers) ─────────────────
+class _PanelToolbarBtn extends StatelessWidget {
+  const _PanelToolbarBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.active,
+    required this.fg,
+    required this.activeFg,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String   tooltip;
+  final bool     active;
+  final Color    fg;
+  final Color    activeFg;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      waitDuration: const Duration(milliseconds: 500),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(3),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+          child: Icon(icon, size: 14, color: active ? activeFg : fg),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Problems panel content ────────────────────────────────────────────────
+class _ProblemsPanel extends StatelessWidget {
+  const _ProblemsPanel({
+    required this.fg,
+    required this.search,
+    required this.filter,
+  });
+  final Color  fg;
+  final String search;
+  final int    filter; // 0=all 1=errors 2=warnings
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = true; // TODO: wire to real diagnostics
+    final label = search.isNotEmpty
+        ? 'No problems matching "$search"'
+        : 'No problems have been detected in the workspace.';
+    return Center(
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.check_circle_outline, size: 32, color: fg.withOpacity(0.35)),
+        const SizedBox(height: 8),
+        Text(label,
+          style: TextStyle(fontSize: 12, color: fg.withOpacity(0.6)),
+          textAlign: TextAlign.center,
+        ),
+      ]),
+    );
+  }
+}
+
 class _StatusBarItem extends StatelessWidget {
   final IconData      icon;
   final String        label;
