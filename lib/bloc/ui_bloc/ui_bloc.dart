@@ -681,11 +681,17 @@ class DownloadManagerBloc extends Cubit<DownloadManagerState> {
   }
 
   void markFullyCompleted(int index) {
+    final newProgress = Map<int, double>.from(state.downloadProgress);
+    final newExtractionProgress = Map<int, double>.from(state.extractionProgress);
     final newExtracting = Set<int>.from(state.extractingItems);
     final newFullyCompleted = Set<int>.from(state.fullyCompleted);
+    newProgress.remove(index);
+    newExtractionProgress.remove(index);
     newExtracting.remove(index);
     newFullyCompleted.add(index);
     emit(state.copyWith(
+      downloadProgress: newProgress,
+      extractionProgress: newExtractionProgress,
       extractingItems: newExtracting,
       fullyCompleted: newFullyCompleted
     ));

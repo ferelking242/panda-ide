@@ -432,10 +432,6 @@ class _DownloadManagerState extends State<DownloadManager> {
     return _pfdRuntimes[normalizedParentName];
   }
 
-  bool _hasAnotherDownloadInProgress(int currentIndex) {
-    return loadingIndexes.any((index) => index != currentIndex);
-  }
-
   bool _isClangRuntimeInstalled() {
     final clangDir = Directory('$runtimesDir/clang');
     return clangDir.existsSync();
@@ -454,16 +450,9 @@ class _DownloadManagerState extends State<DownloadManager> {
     final downloadBloc = context.read<DownloadManagerBloc>();
     final normalizedParentName = packageParentName?.toLowerCase();
 
-    if (_hasAnotherDownloadInProgress(index)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Wait till the existing download finishes.'),
-          ),
-        );
-      }
-      return;
-    }
+    // Keep parallel downloads enabled, but do not start the same package
+    // twice when the user taps its action repeatedly.
+    if (loadingIndexes.contains(index)) return;
 
     if (!isExtension &&
         (normalizedParentName == 'rust' || normalizedParentName == 'go') &&
@@ -486,25 +475,6 @@ class _DownloadManagerState extends State<DownloadManager> {
       packageParentName,
       isExtension: isExtension,
     );
-
-    if (Platform.isAndroid && pfdConfig == null) {
-      if (mounted) {
-        setState(() {
-          loadingIndexes.remove(index);
-        });
-      }
-      downloadBloc.clearProgress(index);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'This ${isExtension ? 'extension' : 'runtime'} is not available through Play Feature Delivery in this build.',
-            ),
-          ),
-        );
-      }
-      return;
-    }
 
     if (pfdConfig != null) {
       final pfdOk = await _ensurePfdFeatureInstalled(
@@ -633,6 +603,29 @@ class _DownloadManagerState extends State<DownloadManager> {
       }
       return;
     }
+
+    // Packages without a Play Feature Delivery mapping use their catalog URL.
+    // This is also the Android fallback for sideloaded builds.
+    if (url.isNotEmpty) {
+      await _httpDownloadWithProgress(
+        context: context,
+        index: index,
+        downloadBloc: downloadBloc,
+        url: url,
+        archivePath: '$tempDir/$archiveName',
+        archiveName: archiveName,
+        extractDir: isExtension ? extensionDir : runtimesDir,
+        runtimeParentName: packageParentName,
+        extensionMetadata: extensionMetadata,
+        isExtension: isExtension,
+      );
+    } else {
+      downloadBloc.clearProgress(index);
+    }
+    if (mounted) {
+      setState(() => loadingIndexes.remove(index));
+    }
+    return;
   }
 
   Future<bool> _finalizeModuleOnlyInstall({

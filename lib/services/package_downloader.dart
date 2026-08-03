@@ -95,12 +95,6 @@ class PackageDownloader {
       return;
     }
 
-    // Prevent multiple simultaneous downloads on different indexes
-    if (_globalActiveIndexes.any((i) => i != index)) {
-      _showSnack(context, 'Wait till the existing download finishes.');
-      return;
-    }
-
     final normalizedParent = packageParentName?.toLowerCase();
 
     // Clang prerequisite for Rust/Go
@@ -116,16 +110,34 @@ class PackageDownloader {
 
     final pfdConfig = _pfdConfig(packageParentName, isExtension: isExtension);
 
-    if (Platform.isAndroid && pfdConfig == null) {
-      downloadBloc.clearProgress(index);
-      _showSnack(context,
-          'This ${isExtension ? 'extension' : 'runtime'} is not available through Play Feature Delivery in this build.');
-      return;
-    }
-
     _globalActiveIndexes.add(index);
 
     try {
+      // Only packages explicitly mapped to a Play Feature use PFD. Every
+      // other catalog item must continue through its regular HTTP source,
+      // including on Android/sideloaded builds.
+      if (pfdConfig == null) {
+        if (url.isEmpty) {
+          downloadBloc.clearProgress(index);
+          _showSnack(context, 'No download source is available for this package.');
+          return;
+        }
+        await _httpDownload(
+          context: context,
+          index: index,
+          downloadBloc: downloadBloc,
+          catalogCubit: catalogCubit,
+          url: url,
+          archivePath: '$tempDir/$archiveName',
+          archiveName: archiveName,
+          extractDir: isExtension ? extensionDir : runtimesDir,
+          runtimeParentName: packageParentName,
+          extensionMetadata: extensionMetadata,
+          isExtension: isExtension,
+        );
+        return;
+      }
+
       if (pfdConfig != null) {
         final pfdOk = await _ensurePfdInstalled(
           context: context,

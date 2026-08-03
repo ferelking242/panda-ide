@@ -3941,6 +3941,17 @@ class _SelectTypeState extends State<SelectType>
               _agentMessages[agentIdx]['phase'] = 'error';
             });
           },
+          onDone: () {
+            if (!mounted || !_agentGenerating) return;
+            setState(() {
+              _agentGenerating = false;
+              if (_agentPhase != AgentPhase.error) {
+                _agentPhase = AgentPhase.done;
+                _agentMessages[agentIdx]['phase'] = 'done';
+              }
+              _sendAnimCtrl.stop();
+            });
+          },
         );
   }
 

@@ -1547,7 +1547,14 @@ class _InlineDownloadButton extends StatelessWidget {
         final isExtracting    = dlState.isExtracting(index);
         final extractPct      = dlState.extractionProgress[index] ?? 0.0;
         final isFullyDone     = dlState.isFullyCompleted(index);
-        final isInstalled     = installDir.existsSync() || isFullyDone;
+        final isInstalled     = isFullyDone || installDir.existsSync();
+
+        // Completion wins over any final 80%/100% progress event. The bloc
+        // clears those transient values, but this ordering also protects the
+        // button from a stale frame during the state transition.
+        if (isInstalled) {
+          return Icon(Icons.check_circle_rounded, color: cs.primary, size: 26);
+        }
 
         // ── Extracting ──────────────────────────────────────────────────
         if (isExtracting) {
@@ -1600,11 +1607,6 @@ class _InlineDownloadButton extends StatelessWidget {
               ),
             ),
           );
-        }
-
-        // ── Installed ───────────────────────────────────────────────────
-        if (isInstalled) {
-          return Icon(Icons.check_circle_rounded, color: cs.primary, size: 26);
         }
 
         // ── Not started ─────────────────────────────────────────────────

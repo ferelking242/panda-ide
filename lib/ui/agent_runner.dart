@@ -369,6 +369,17 @@ class AgentRunner {
       }
 
       final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
+      final reasoningText = _extractNonStreamingReasoning(decoded);
+      if (reasoningText.isNotEmpty) {
+        ctrl.add(AgentChunk(
+          phase: AgentPhase.thinking,
+          text: reasoningText,
+        ));
+        PandaLog.d(
+          'AgentRunner',
+          'Non-stream reasoning received (${reasoningText.length} chars)',
+        );
+      }
       final assistantText = model.parseChatMessage(decoded);
       final toolCalls = model.parseToolCalls(decoded);
       PandaLog.d('SSE', 'Parsed response — text=${assistantText.length} chars toolCalls=${toolCalls.length}');
@@ -718,5 +729,50 @@ class AgentRunner {
     for (final chunk in parsed) {
       ctrl.add(chunk);
     }
+  }
+
+  /// Extract provider-specific reasoning from a non-streaming response.
+  ///
+  /// Tool-calling requests intentionally use `stream: false`, so reasoning
+  /// does not pass through the SSE parser. Providers place it under different
+  /// keys (`reasoning_content`, `reasoning`, `thinking`, or `thought`).
+  String _extractNonStreamingReasoning(Map<String, dynamic> payload) {
+    final parts = <String>[];
+
+    void visit(dynamic value) {
+      if (value is List) {
+        for (final item in value) {
+          visit(item);
+        }
+        return;
+      }
+      if (value is! Map) return;
+
+      for (final entry in value.entries) {
+        final key = entry.key.toString();
+        final child = entry.value;
+        final isReasoningKey = key == 'reasoning_content' ||
+            key == 'reasoning' ||
+            key == 'thinking' ||
+            key == 'thought';
+
+        if (isReasoningKey) {
+          if (child is String && child.trim().isNotEmpty) {
+            parts.add(child);
+          } else if (child is Map || child is List) {
+            visit(child);
+          }
+          continue;
+        }
+
+        // Walk response envelopes, but do not inspect ordinary text fields.
+        if (child is Map || child is List) {
+          visit(child);
+        }
+      }
+    }
+
+    visit(payload);
+    return parts.join();
   }
 }
