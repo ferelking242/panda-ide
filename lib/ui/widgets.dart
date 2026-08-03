@@ -11141,6 +11141,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       case Perplexity():
       case OpenRouter():
       case FireWorks():
+      case PandaGateway():
       case CustomModel():
         for (final line in chunk.split('\n')) {
           if (line.startsWith('data: ')) {
@@ -11211,13 +11212,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       case Perplexity():
       case OpenRouter():
       case FireWorks():
-        final messages = _buildChatHistory(history);
-        messages.add({"role": "user", "content": prompt});
-        return {
-          "model": chatModel.model,
-          "stream": true,
-          "messages": messages,
-        };
+      case PandaGateway():
       case CustomModel():
         final messages = _buildChatHistory(history);
         messages.add({"role": "user", "content": prompt});
