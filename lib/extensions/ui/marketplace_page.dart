@@ -16,6 +16,7 @@ import '../extension_registry.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
 import '../../ui/adb_setup_page.dart';
+import '../../ui/downloads.dart';
 import '../../services/flutter_sdk_service.dart';
 
 // ── Categories ─────────────────────────────────────────────────────────────────
@@ -309,7 +310,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   void _openExtensionDetail(MarketplaceExtension ext) {
-    Navigator.push(context, MaterialPageRoute(
+    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
       builder: (_) => _ExtensionDetailPage(
         ext: ext,
         client: _client,
@@ -341,50 +342,66 @@ class _MarketplaceHeader extends StatelessWidget {
     required this.onSearchExpand,
   });
 
-  static const _sectionTitles = {
-    _Section.extensions: 'Extensions',
-    _Section.runtimes:   'Runtimes',
-    _Section.installed:  'Installed',
-  };
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs    = theme.colorScheme;
-    final title = _sectionTitles[section] ?? 'Marketplace';
+    final headerBg = theme.appBarTheme.backgroundColor ?? cs.surface;
+    final onHeader = theme.appBarTheme.foregroundColor ?? cs.onSurface;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeInOut,
-      color: theme.appBarTheme.backgroundColor ?? cs.surface,
-      padding: EdgeInsets.fromLTRB(12, MediaQuery.of(context).padding.top + 6, 12, 8),
+      decoration: BoxDecoration(
+        color: headerBg,
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.3))),
+      ),
+      padding: EdgeInsets.fromLTRB(12, MediaQuery.of(context).padding.top + 6, 8, 8),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Title row with collapse toggle ──────────────────────────────
+          // ── Top bar: [store icon + Marketplace] ··· [search] [sort] [account] ──
           Row(
             children: [
+              // Left: store icon + Marketplace brand
+              Icon(Icons.storefront_rounded, size: 18, color: cs.primary),
+              const SizedBox(width: 6),
               Text(
-                title,
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                'Marketplace',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: onHeader,
+                  letterSpacing: 0.2,
+                ),
               ),
               const Spacer(),
+
+              // Right: search / sort / account
               if (section == _Section.extensions) ...[
                 if (collapsed)
                   IconButton(
-                    icon: Icon(Icons.search, color: cs.onSurface),
+                    icon: Icon(Icons.search, size: 20, color: onHeader.withOpacity(0.7)),
                     tooltip: 'Search',
                     onPressed: onSearchExpand,
                     padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                 if (collapsed)
                   _SortButton(sortBy: sortBy, onSelected: onSortChanged),
               ],
+              // Account icon (GitHub avatar placeholder)
+              IconButton(
+                icon: Icon(Icons.account_circle_outlined, size: 20,
+                    color: onHeader.withOpacity(0.7)),
+                tooltip: 'Account',
+                onPressed: () {},
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
             ],
           ),
 
-          // ── Animated search bar ─────────────────────────────────────────
+          // ── Animated search bar (Extensions section only) ───────────────
           if (section == _Section.extensions)
             AnimatedCrossFade(
               duration: const Duration(milliseconds: 200),
@@ -392,7 +409,7 @@ class _MarketplaceHeader extends StatelessWidget {
                   ? CrossFadeState.showSecond
                   : CrossFadeState.showFirst,
               firstChild: Padding(
-                padding: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.only(top: 8),
                 child: Row(
                   children: [
                     Expanded(
@@ -405,7 +422,8 @@ class _MarketplaceHeader extends StatelessWidget {
                             fontSize: 13,
                             color: cs.onSurface.withOpacity(0.4),
                           ),
-                          prefixIcon: Icon(Icons.search, size: 18, color: cs.onSurface.withOpacity(0.5)),
+                          prefixIcon: Icon(Icons.search, size: 18,
+                              color: cs.onSurface.withOpacity(0.5)),
                           suffixIcon: searchCtrl.text.isNotEmpty
                               ? IconButton(
                                   icon: const Icon(Icons.close, size: 16),
@@ -794,10 +812,17 @@ class _ExtensionDetailPageState extends State<_ExtensionDetailPage>
     final alreadyInstalled = ExtensionRegistry.instance.isInstalled(ext.id) ||
         _installState == _InstallState.installed;
 
+    final appBarBg = theme.appBarTheme.backgroundColor ?? cs.surface;
+    final appBarFg = theme.appBarTheme.foregroundColor ?? cs.onSurface;
+
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
+        backgroundColor: appBarBg,
+        foregroundColor: appBarFg,
+        iconTheme: IconThemeData(color: appBarFg),
         title: Text(ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-            style: const TextStyle(fontSize: 16)),
+            style: TextStyle(fontSize: 16, color: appBarFg)),
         elevation: 0,
         bottom: TabBar(
           controller: _tab,
@@ -1383,17 +1408,32 @@ class _RuntimeDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs    = theme.colorScheme;
+    final scaffoldBg = theme.scaffoldBackgroundColor;
+    final appBarBg   = theme.appBarTheme.backgroundColor ?? cs.surface;
+    final appBarFg   = theme.appBarTheme.foregroundColor ?? cs.onSurface;
+
+    // Map runtime keys to DownloadManager parentNames
+    const _downloadableKeys = {
+      'node', 'python', 'java', 'kotlin', 'clang',
+      'dart', 'rust', 'go', 'ruby', 'lua',
+    };
+    final canDownload = _downloadableKeys.contains(info.key);
+    final isFlutter   = info.key == 'flutter' || info.key == 'android-sdk';
 
     return Scaffold(
+      backgroundColor: scaffoldBg,
       appBar: AppBar(
-        title: Text(info.name),
+        backgroundColor: appBarBg,
+        foregroundColor: appBarFg,
+        iconTheme: IconThemeData(color: appBarFg),
+        title: Text(info.name, style: TextStyle(color: appBarFg)),
         elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // Hero
+          // ── Hero ──────────────────────────────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1412,15 +1452,15 @@ class _RuntimeDetailPage extends StatelessWidget {
                   children: [
                     Text(info.name,
                         style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700)),
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface)),
                     const SizedBox(height: 4),
                     Text(info.description,
                         style: TextStyle(fontSize: 13,
                             color: cs.onSurface.withOpacity(0.55))),
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: cs.primary.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(14),
@@ -1436,28 +1476,88 @@ class _RuntimeDetailPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Install button
-          FilledButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Installing ${info.name}…'),
-                behavior: SnackBarBehavior.floating,
-              ));
-            },
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: Text('Install ${info.name}'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+          // ── Install / Download button ──────────────────────────────────
+          if (canDownload)
+            FilledButton.icon(
+              onPressed: () {
+                // Navigate to DownloadManager where the actual runtime install
+                // happens through the Android PFD feature module system.
+                Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute(builder: (_) => const DownloadManager()),
+                );
+              },
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: Text('Installer ${info.name}'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            )
+          else if (isFlutter)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(context, rootNavigator: true).push(
+                      MaterialPageRoute(builder: (_) => const DownloadManager()),
+                    );
+                  },
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: const Text('Voir les téléchargements'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: cs.primaryContainer.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.info_outline, size: 16,
+                        color: cs.primary.withOpacity(0.8)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        info.key == 'flutter'
+                            ? 'Flutter SDK ARM64 : téléchargez via la section SDKs ci-dessous.'
+                            : 'Android SDK : inclus avec le Flutter SDK.',
+                        style: TextStyle(fontSize: 12,
+                            color: cs.onSurface.withOpacity(0.75)),
+                      ),
+                    ),
+                  ]),
+                ),
+              ],
+            )
+          else
+            FilledButton.icon(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text('Installation de ${info.name} non encore supportée.'),
+                  behavior: SnackBarBehavior.floating,
+                ));
+              },
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: Text('Installer ${info.name}'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          ),
 
-          // Extra action (e.g. ADB Setup for Flutter SDK)
+          // ── ADB Setup action (Flutter SDK only) ────────────────────────
           if (info.extraAction != null) ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: () => Navigator.push(context,
+              onPressed: () => Navigator.of(context, rootNavigator: true).push(
                   MaterialPageRoute(builder: (_) => const AdbSetupPage())),
               icon: const Icon(Icons.usb_rounded, size: 16),
               label: Text(info.extraAction!),
@@ -1470,16 +1570,16 @@ class _RuntimeDetailPage extends StatelessWidget {
           ],
           const SizedBox(height: 20),
 
-          // About
-          _SectionHeader(title: 'About'),
+          // ── About ──────────────────────────────────────────────────────
+          _SectionHeader(title: 'À propos'),
           const SizedBox(height: 8),
           Text(info.longDescription,
               style: theme.textTheme.bodyMedium?.copyWith(
                   color: cs.onSurface.withOpacity(0.85), height: 1.6)),
           const SizedBox(height: 20),
 
-          // Use cases
-          _SectionHeader(title: 'Use Cases'),
+          // ── Use cases ──────────────────────────────────────────────────
+          _SectionHeader(title: 'Cas d\'utilisation'),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(12),
@@ -1502,8 +1602,8 @@ class _RuntimeDetailPage extends StatelessWidget {
           ),
           const SizedBox(height: 20),
 
-          // Website
-          _SectionHeader(title: 'Official Website'),
+          // ── Official Website ────────────────────────────────────────────
+          _SectionHeader(title: 'Site officiel'),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),

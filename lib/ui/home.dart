@@ -739,6 +739,9 @@ class _SelectTypeState extends State<SelectType>
                                     ? SmoothBorderRadius.only(
                                         topLeft: SmoothRadius(
                                             cornerRadius: 22,
+                                            cornerSmoothing: 0.6),
+                                        bottomLeft: SmoothRadius(
+                                            cornerRadius: 22,
                                             cornerSmoothing: 0.6))
                                     : SmoothBorderRadius.zero,
                                 child: Container(
@@ -854,64 +857,99 @@ class _SelectTypeState extends State<SelectType>
     final fg     = isDark ? _kActivitySelDark : _kActivitySelLight;
 
     return BlocBuilder<RepoStatusBloc, RepoStatusState>(
-      builder: (_, repoState) {
-        final branch = (repoState is RepoStatusLoaded &&
-                (repoState.currentBranch?.isNotEmpty ?? false))
-            ? repoState.currentBranch!
-            : 'main';
+      builder: (ctx, repoState) {
+        final hasProject = repoState is RepoStatusLoaded &&
+            (repoState.currentBranch?.isNotEmpty ?? false);
+        final branch = hasProject ? repoState.currentBranch! : null;
 
-        final int errors   = 0;
-        final int warnings = 0;
+        // Errors / warnings are 0 for now (will be wired to language diagnostics)
+        const int errors   = 0;
+        const int warnings = 0;
+
         return Container(
-              height: 22,
-              color: bg,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(children: [
-                // ── Left: branch ──────────────────────────────────────
-                _StatusBarItem(
-                  icon: Icons.call_split_rounded,
-                  label: branch,
-                  fg: fg,
-                  onTap: () {},
+          height: 22,
+          color: bg,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Row(children: [
+            // ── Left: remote / branch ─────────────────────────────────
+            if (branch != null)
+              _StatusBarItem(
+                icon: Icons.call_split_rounded,
+                label: branch,
+                fg: fg,
+                onTap: () {},
+              )
+            else
+              // VSCode-style "><" remote / open button
+              Builder(builder: (bCtx) => InkWell(
+                onTap: () => _showWorkspaceMenu(bCtx, isDark, appTheme),
+                borderRadius: BorderRadius.circular(3),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.chevron_right, size: 13, color: fg),
+                    Icon(Icons.chevron_left, size: 13, color: fg),
+                  ]),
                 ),
-                // ── Left: errors & warnings ───────────────────────────
-                if (errors > 0 || warnings > 0) ...[
-                  const SizedBox(width: 8),
-                  _StatusBarItem(
-                    icon: Icons.error_outline,
-                    label: '$errors',
-                    fg: errors > 0 ? Colors.red[200]! : fg,
-                    onTap: () => setState(() => _bottomPanelOpen = true),
-                  ),
-                  const SizedBox(width: 4),
-                  _StatusBarItem(
-                    icon: Icons.warning_amber_outlined,
-                    label: '$warnings',
-                    fg: warnings > 0 ? Colors.orange[200]! : fg,
-                    onTap: () => setState(() => _bottomPanelOpen = true),
-                  ),
-                ],
-                const Spacer(),
-                // ── Right: terminal shortcut ──────────────────────────
-                _StatusBarItem(
-                  icon: Icons.terminal,
-                  label: 'Terminal',
-                  fg: fg,
-                  onTap: () => setState(() {
-                    _bottomPanelOpen = true;
-                    _bottomPanelTab  = 0;
-                  }),
-                ),
-                const SizedBox(width: 8),
-                // ── Right: notifications ──────────────────────────────
-                _StatusBarItem(
-                  icon: Icons.notifications_none,
-                  label: '',
-                  fg: fg,
-                  onTap: () {},
-                ),
-              ]),
-            );
+              )),
+
+            const SizedBox(width: 6),
+
+            // ── Left: problems (always visible) ──────────────────────
+            _StatusBarItem(
+              icon: Icons.cancel_outlined,
+              label: errors > 0 ? '$errors' : '',
+              fg: errors > 0 ? Colors.red[300]! : fg,
+              onTap: () => setState(() {
+                _bottomPanelOpen = true;
+                _bottomPanelTab  = 1;
+              }),
+            ),
+            const SizedBox(width: 2),
+
+            // ── Left: warnings (always visible) ──────────────────────
+            _StatusBarItem(
+              icon: Icons.warning_amber_outlined,
+              label: warnings > 0 ? '$warnings' : '',
+              fg: warnings > 0 ? Colors.orange[300]! : fg,
+              onTap: () => setState(() {
+                _bottomPanelOpen = true;
+                _bottomPanelTab  = 1;
+              }),
+            ),
+
+            const Spacer(),
+
+            // ── Right: Panda AI ───────────────────────────────────────
+            _StatusBarItem(
+              icon: Broken.magic_star,
+              label: '',
+              fg: _rightPanelOpen ? _kAccent : fg,
+              onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+            ),
+            const SizedBox(width: 2),
+
+            // ── Right: terminal ───────────────────────────────────────
+            _StatusBarItem(
+              icon: Icons.terminal,
+              label: '',
+              fg: _bottomPanelOpen ? _kAccent : fg,
+              onTap: () => setState(() {
+                _bottomPanelOpen = true;
+                _bottomPanelTab  = 0;
+              }),
+            ),
+            const SizedBox(width: 2),
+
+            // ── Right: notifications ──────────────────────────────────
+            _StatusBarItem(
+              icon: Icons.notifications_none,
+              label: '',
+              fg: fg,
+              onTap: () {},
+            ),
+          ]),
+        );
       },
     );
   }
