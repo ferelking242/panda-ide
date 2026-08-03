@@ -789,7 +789,7 @@ class _ExtensionDetailPageState extends State<_ExtensionDetailPage>
       setState(() { _readme = r; _readmeLoading = false; });
     } catch (_) {
       if (!mounted) return;
-      setState(() _readmeLoading = false);
+      setState(() { _readmeLoading = false; });
     }
   }
 
