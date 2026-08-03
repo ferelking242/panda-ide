@@ -85,7 +85,12 @@ class _StartScreenState extends State<StartScreen> {
       _pushSelectType();
     } else {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const PermissionScreen()),
+        PageRouteBuilder(
+          pageBuilder: (context, animation, _) => const PermissionScreen(),
+          transitionsBuilder: (context, animation, _, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
       );
     }
   }

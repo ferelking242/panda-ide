@@ -18,7 +18,8 @@ class GatewayManager extends ChangeNotifier {
   Process? _nodeProcess;
   Process? _pythonProcess;
   int _apiPort = 8000;
-  String _provider = 'chatgpt'; // 'chatgpt' | 'claude'
+  String _provider = 'chatgpt'; // 'chatgpt' | 'claude' | 'pandagateway'
+  String _token = ''; // API token for Panda Open Gateway
 
   // Getters
   GatewayStatus get status => _status;
@@ -33,6 +34,14 @@ class GatewayManager extends ChangeNotifier {
     _provider = p;
     notifyListeners();
   }
+
+  void setToken(String t) {
+    _token = t;
+    notifyListeners();
+  }
+
+  /// Public wrapper so UI can detect Python without starting the server.
+  Future<String?> findPython() => _findPython();
 
   // ── Démarrage ──────────────────────────────────────────────────────────────
 
@@ -66,6 +75,8 @@ class GatewayManager extends ChangeNotifier {
       'SLOW_MO': '0',
       'LOG_LEVEL': 'INFO',
       'VERBOSE': 'false',
+      if (_token.isNotEmpty) 'PANDA_GATEWAY_TOKEN': _token,
+      if (_token.isNotEmpty) 'API_KEY': _token,
     };
 
     // Charger l'env file si présent

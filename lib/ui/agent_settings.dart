@@ -140,6 +140,16 @@ const _providers = <_ProviderDef>[
     apiKeyHint: 'pplx-...',
   ),
   _ProviderDef(
+    id: 'pandagateway',
+    name: 'Panda Open Gateway',
+    description: 'Accès ChatGPT/Claude via Panda Browser Gateway local',
+    icon: Broken.routing_2,
+    color: Color(0xff5090c8),
+    models: ['gpt-4o', 'gpt-4o-mini', 'claude-3-5-sonnet', 'claude-3-haiku'],
+    docsUrl: '',
+    apiKeyHint: 'Token Panda Open Gateway (optionnel)',
+  ),
+  _ProviderDef(
     id: 'custom',
     name: 'Custom / Local',
     description: 'Endpoint OpenAI-compatible (Ollama, LM Studio…)',

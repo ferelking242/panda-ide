@@ -232,7 +232,11 @@ class AgentRunner {
         ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $name\n'));
         PandaLog.toolCall('Gemini', name, args);
 
-        final result = await _dispatchTool(tools, name, args);
+        final result = await _dispatchTool(tools, name, args)
+            .timeout(const Duration(seconds: 45), onTimeout: () {
+          PandaLog.w('Gemini', 'Tool $name timed out after 45 s');
+          return 'Error: tool $name exceeded 45 s timeout';
+        });
         PandaLog.toolResult('Gemini', name, result);
         toolResults.add({
           'tool_call_id': name,

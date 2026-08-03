@@ -1496,6 +1496,10 @@ class AgenticTools {
         args,
         environment: env,
         workingDirectory: workspacePath,
+      ).timeout(
+        const Duration(seconds: 120),
+        onTimeout: () => throw TimeoutException(
+            'runShellCommand "$command" exceeded 120 s timeout'),
       );
       return ToolResult.success({
         "pid": process.pid.toString(),

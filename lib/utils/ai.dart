@@ -948,6 +948,39 @@ class FireWorks extends OpenAiCompatible {
   FireWorks({required this.apiKey, required this.model});
 }
 
+/// PandaGateway — Panda Browser Gateway local server (OpenAI-compatible).
+///
+/// Routes requests through the local uvicorn server running at
+/// http://127.0.0.1:[port]/v1 — which itself connects to ChatGPT or Claude
+/// via a browser session, bypassing API key requirements.
+class PandaGateway extends OpenAiCompatible {
+  final int port;
+
+  PandaGateway({
+    required String apiKey,
+    String model = 'gpt-4o',
+    this.port = 8000,
+  }) : _apiKey = apiKey, _model = model;
+
+  final String _apiKey;
+  final String _model;
+
+  @override
+  String get baseUrl => 'http://127.0.0.1:$port/v1';
+
+  @override
+  String? get apiKey => _apiKey.isEmpty ? null : _apiKey;
+
+  @override
+  String? get model => _model;
+
+  @override
+  Map<String, String> get headers => {
+    'Content-Type': 'application/json; charset=utf-8',
+    if (_apiKey.isNotEmpty) 'Authorization': 'Bearer $_apiKey',
+  };
+}
+
 class CustomModel extends Models {
   @override
   final ToolCallingMethod toolCallingMethod;
