@@ -181,8 +181,10 @@ class ExtensionRegistry {
   static void setRoot(String path) => _root = path;
 
   /// Chemin d'installation pour une extension donnée.
+  /// Falls back to the system temp directory if setRoot() was never called
+  /// (avoids a null-check crash on first install).
   static String installPathFor(String extensionId, String version) {
-    assert(_root != null, 'Call ExtensionRegistry.setRoot() first.');
-    return p.join(_root!, 'extensions', '$extensionId-$version');
+    final root = _root ?? Directory.systemTemp.path;
+    return p.join(root, 'panda_extensions', '$extensionId-$version');
   }
 }

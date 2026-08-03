@@ -3,10 +3,12 @@ import 'package:code_forge/code_forge.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path_provider/path_provider.dart';
 import 'bloc/repo_bloc/repo_bloc.dart';
 import 'bloc/ui_bloc/ui_bloc.dart';
 import 'extensions/extension_api_router.dart';
 import 'extensions/extension_host_setup.dart';
+import 'extensions/extension_registry.dart';
 import 'ui/start_screen.dart';
 import 'utils/functions.dart';
 import 'utils/themes.dart';
@@ -21,6 +23,17 @@ Future<void> main() async {
   if (!kIsWeb) {
     await migrateSharedStorageRoots();
   }
+
+  // Initialise ExtensionRegistry root path so that installs have a real target.
+  if (!kIsWeb) {
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      ExtensionRegistry.setRoot(dir.path);
+    } catch (_) {
+      // Non-fatal: fallback handled inside installPathFor.
+    }
+  }
+
   // Extension Host — extraction JS + configuration + contributes statiques.
   // Uniquement sur Android (nécessite le filesystem Android + node binary).
   if (!kIsWeb) {
@@ -53,6 +66,71 @@ Future<void> main() async {
     )
   );
 }
+
+// ── Palette ────────────────────────────────────────────────────────────────────
+const _kAccent = Color(0xff5090c8);
+
+ColorScheme _darkScheme() => ColorScheme(
+  brightness: Brightness.dark,
+  primary:              _kAccent,
+  onPrimary:            Colors.white,
+  primaryContainer:     const Color(0xff1a3a55),
+  onPrimaryContainer:   Colors.white,
+  secondary:            const Color(0xff7aabdd),
+  onSecondary:          Colors.black,
+  secondaryContainer:   const Color(0xff1c3548),
+  onSecondaryContainer: Colors.white,
+  tertiary:             const Color(0xff9ec3e8),
+  onTertiary:           Colors.black,
+  tertiaryContainer:    const Color(0xff1d3045),
+  onTertiaryContainer:  Colors.white,
+  error:                const Color(0xffcf6679),
+  onError:              Colors.white,
+  errorContainer:       const Color(0xff5c1826),
+  onErrorContainer:     Colors.white,
+  surface:              const Color(0xff252525),
+  onSurface:            const Color(0xffe0e0e0),
+  surfaceContainerHighest: const Color(0xff333333),
+  outline:              const Color(0xff555555),
+  outlineVariant:       const Color(0xff3a3a3a),
+  shadow:               Colors.black,
+  scrim:                Colors.black,
+  inverseSurface:       Colors.white,
+  onInverseSurface:     Colors.black,
+  inversePrimary:       _kAccent,
+);
+
+ColorScheme _lightScheme() => ColorScheme(
+  brightness: Brightness.light,
+  primary:              _kAccent,
+  onPrimary:            Colors.white,
+  primaryContainer:     const Color(0xffd0e6f8),
+  onPrimaryContainer:   const Color(0xff0d2a45),
+  secondary:            const Color(0xff4a7aaa),
+  onSecondary:          Colors.white,
+  secondaryContainer:   const Color(0xffcce0f5),
+  onSecondaryContainer: const Color(0xff0d2a45),
+  tertiary:             const Color(0xff2d6ea0),
+  onTertiary:           Colors.white,
+  tertiaryContainer:    const Color(0xffbbe3ff),
+  onTertiaryContainer:  const Color(0xff0d2a45),
+  error:                const Color(0xffba1a1a),
+  onError:              Colors.white,
+  errorContainer:       const Color(0xffffdad6),
+  onErrorContainer:     const Color(0xff410002),
+  surface:              const Color(0xfffafafa),
+  onSurface:            const Color(0xff1a1a1a),
+  surfaceContainerHighest: const Color(0xffe8e8e8),
+  outline:              const Color(0xff9e9e9e),
+  outlineVariant:       const Color(0xffcccccc),
+  shadow:               Colors.black,
+  scrim:                Colors.black,
+  inverseSurface:       const Color(0xff2d2d2d),
+  onInverseSurface:     Colors.white,
+  inversePrimary:       _kAccent,
+);
+
+// ── MainApp ────────────────────────────────────────────────────────────────────
 
 class MainApp extends StatelessWidget {
   final String recent, appTheme, codeForgeConfig, aiConfig, modelSelected;
@@ -108,8 +186,8 @@ class MainApp extends StatelessWidget {
       ],
       child: BlocBuilder<AppThemeBloc, AppThemeState>(
         builder: (context, appThemeState) {
+          final isDark = appThemeState.appTheme.isDark;
           // Fournir le BuildContext live à l'ExtensionApiRouter (Android uniquement).
-          // Post-frame pour éviter les rebuilds en plein build.
           if (!kIsWeb) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               ExtensionApiRouter.instance.setContext(context);
@@ -125,6 +203,9 @@ class MainApp extends StatelessWidget {
           };
           return MaterialApp(
             theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: isDark ? _darkScheme() : _lightScheme(),
+              brightness: isDark ? Brightness.dark : Brightness.light,
               progressIndicatorTheme: progressTheme,
               popupMenuTheme: appThemeState.appTheme.popupBtnTheme,
               scaffoldBackgroundColor: appThemeState.appTheme.scaffoldBg,
@@ -132,7 +213,7 @@ class MainApp extends StatelessWidget {
               listTileTheme: appThemeState.appTheme.tileTheme,
               cardTheme: appThemeState.appTheme.cardTheme.data,
               textSelectionTheme: const TextSelectionThemeData(
-                selectionHandleColor: Colors.blue,
+                selectionHandleColor: _kAccent,
               ),
             ),
             home: SafeArea(

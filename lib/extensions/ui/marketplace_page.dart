@@ -1,8 +1,16 @@
-/// Page Marketplace Open VSX — redesigned.
+/// Marketplace Open VSX — redesigned.
 ///
-/// Design: Telegram-style bottom pill navigation, animated collapsible search,
-/// VSCode-like extension detail pages, runtime detail pages, real FA icons,
-/// full app-theme compliance (zero hardcoded colours).
+/// Fixes:
+///  1. Full dark-theme compliance — no hardcoded colours, uses ColorScheme.
+///  2. Filter button in header toggles category chips; larger icons; header
+///     colour = scaffold bg (consistent); top pill nav (no bottom dock);
+///     pills compact/stick to header on scroll.
+///  3. Null-check operator crash on install → graceful error path.
+///  4. Extension detail = single VSCode-style scrollable page, opens inside
+///     the panel (not rootNavigator / fullscreen).
+///  5. Bottom dock removed; Extensions / Runtimes / SDK / Installed are top
+///     pills; SDK is its own pill; Installed tap → opens real detail.
+///  6. Sidebar artefacts addressed (no rogue colours in pill nav container).
 library;
 
 import 'dart:async';
@@ -16,8 +24,6 @@ import '../extension_registry.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
 import '../../ui/adb_setup_page.dart';
-import '../../ui/downloads.dart';
-import '../../services/flutter_sdk_service.dart';
 
 // ── Categories ─────────────────────────────────────────────────────────────────
 const _kCategories = [
@@ -40,9 +46,11 @@ const _kSortOptions = {
 };
 
 // ── Section enum ───────────────────────────────────────────────────────────────
-enum _Section { extensions, runtimes, installed }
+enum _Section { extensions, runtimes, sdks, installed }
 
-// ── MarketplacePage ────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// MarketplacePage
+// ══════════════════════════════════════════════════════════════════════════════
 class MarketplacePage extends StatefulWidget {
   final bool embedded;
   const MarketplacePage({super.key, this.embedded = false});
@@ -52,18 +60,18 @@ class MarketplacePage extends StatefulWidget {
 }
 
 class _MarketplacePageState extends State<MarketplacePage> {
-  final _client = OpenVsxClient();
+  final _client     = OpenVsxClient();
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
 
   _Section _section = _Section.extensions;
 
   List<MarketplaceExtension> _results = [];
-  bool _loading = false;
+  bool   _loading      = false;
   String? _error;
-  int _offset = 0;
-  int _totalSize = 0;
-  bool _loadingMore = false;
+  int    _offset       = 0;
+  int    _totalSize    = 0;
+  bool   _loadingMore  = false;
 
   String _selectedCategory = 'All';
   String _sortBy = 'relevance';
@@ -72,9 +80,14 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
   Timer? _debounce;
 
-  // Scroll-driven search collapse
-  bool _searchCollapsed = false;
-  double _lastScroll = 0;
+  // Scroll-driven collapse
+  bool   _searchCollapsed  = false;
+  bool   _pillsCompact     = false;   // pills shrink on scroll
+  bool   _filtersVisible   = false;   // filter chip panel toggle
+  double _lastScroll       = 0;
+
+  // Detail overlay (opens in-panel instead of rootNavigator push)
+  MarketplaceExtension? _detailExt;
 
   @override
   void initState() {
@@ -93,17 +106,20 @@ class _MarketplacePageState extends State<MarketplacePage> {
     super.dispose();
   }
 
-  // ── Scroll ─────────────────────────────────────────────────────────────────
+  // ── Scroll ──────────────────────────────────────────────────────────────────
 
   void _onScroll() {
-    final pos = _scrollCtrl.position.pixels;
+    final pos          = _scrollCtrl.position.pixels;
     final scrollingDown = pos > _lastScroll + 6;
     final scrollingUp   = pos < _lastScroll - 6;
 
-    if (scrollingDown && !_searchCollapsed) {
-      setState(() => _searchCollapsed = true);
-    } else if (scrollingUp && _searchCollapsed) {
-      setState(() => _searchCollapsed = false);
+    if (scrollingDown) {
+      if (!_searchCollapsed) setState(() => _searchCollapsed = true);
+      if (!_pillsCompact)    setState(() => _pillsCompact = true);
+      if (_filtersVisible)   setState(() => _filtersVisible = false);
+    } else if (scrollingUp) {
+      if (_searchCollapsed) setState(() => _searchCollapsed = false);
+      if (_pillsCompact)    setState(() => _pillsCompact = false);
     }
     _lastScroll = pos;
 
@@ -116,7 +132,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     }
   }
 
-  // ── Data ───────────────────────────────────────────────────────────────────
+  // ── Data ────────────────────────────────────────────────────────────────────
 
   Future<void> _loadFeatured() async {
     setState(() { _loading = true; _error = null; _offset = 0; });
@@ -147,10 +163,10 @@ class _MarketplacePageState extends State<MarketplacePage> {
       );
       if (!mounted) return;
       setState(() {
-        _results = reset ? r.extensions : [..._results, ...r.extensions];
+        _results  = reset ? r.extensions : [..._results, ...r.extensions];
         _totalSize = r.totalSize;
-        _offset += r.extensions.length;
-        _loading = false;
+        _offset   += r.extensions.length;
+        _loading     = false;
         _loadingMore = false;
       });
     } catch (e) {
@@ -166,12 +182,12 @@ class _MarketplacePageState extends State<MarketplacePage> {
     });
   }
 
-  // ── Install ────────────────────────────────────────────────────────────────
+  // ── Install ──────────────────────────────────────────────────────────────────
 
   Future<void> _install(MarketplaceExtension ext) async {
     setState(() => _installStates[ext.id] = _InstallState.installing);
-    final installer = VsixInstaller(onProgress: (_, __) {});
     try {
+      final installer = VsixInstaller(onProgress: (_, __) {});
       final result = await installer.installFromUrl(ext.buildDownloadUrl());
       if (!mounted) return;
       switch (result) {
@@ -190,6 +206,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   void _showSnack(String msg, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
       backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
@@ -197,7 +214,15 @@ class _MarketplacePageState extends State<MarketplacePage> {
     ));
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────────
+  // ── Detail ───────────────────────────────────────────────────────────────────
+
+  void _openExtensionDetail(MarketplaceExtension ext) {
+    setState(() => _detailExt = ext);
+  }
+
+  void _closeDetail() => setState(() => _detailExt = null);
+
+  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -206,66 +231,90 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
     Widget body = Column(
       children: [
-        // ── Animated header ────────────────────────────────────────────────
+        // ── Header ──────────────────────────────────────────────────────────
         _MarketplaceHeader(
-          section: _section,
-          searchCtrl: _searchCtrl,
-          collapsed: _searchCollapsed,
-          sortBy: _sortBy,
-          onSortChanged: (v) {
+          section:         _section,
+          searchCtrl:      _searchCtrl,
+          collapsed:       _searchCollapsed,
+          filtersVisible:  _filtersVisible,
+          embedded:        widget.embedded,
+          sortBy:          _sortBy,
+          onSortChanged:   (v) {
             setState(() => _sortBy = v);
             _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
           },
-          onSearchExpand: () => setState(() => _searchCollapsed = false),
+          onSearchExpand:  () => setState(() => _searchCollapsed = false),
+          onFilterToggle:  () => setState(() => _filtersVisible = !_filtersVisible),
         ),
 
-        // ── Category chips (only for Extensions) ──────────────────────────
+        // ── Top pill nav (replaces bottom dock) ──────────────────────────────
+        _TopPillNav(
+          current:  _section,
+          compact:  _pillsCompact,
+          onTap:    (s) => setState(() {
+            _section        = s;
+            _searchCollapsed = false;
+            _pillsCompact   = false;
+          }),
+        ),
+
+        // ── Category filter chips (toggled by filter button) ─────────────────
         if (_section == _Section.extensions)
-          SizedBox(
-            height: 40,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: _kCategories.length,
-              itemBuilder: (_, i) {
-                final cat = _kCategories[i];
-                final sel = cat == _selectedCategory;
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: FilterChip(
-                    label: Text(cat, style: const TextStyle(fontSize: 12)),
-                    selected: sel,
-                    selectedColor: cs.primary.withOpacity(0.18),
-                    checkmarkColor: cs.primary,
-                    side: BorderSide(color: sel ? cs.primary : cs.outline),
-                    showCheckmark: false,
-                    onSelected: (_) {
-                      setState(() => _selectedCategory = cat);
-                      _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
-                    },
-                  ),
-                );
-              },
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 200),
+            crossFadeState: _filtersVisible
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: SizedBox(
+              height: 44,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                itemCount: _kCategories.length,
+                itemBuilder: (_, i) {
+                  final cat = _kCategories[i];
+                  final sel = cat == _selectedCategory;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilterChip(
+                      label: Text(cat, style: const TextStyle(fontSize: 12)),
+                      selected: sel,
+                      selectedColor: cs.primary.withOpacity(0.18),
+                      checkmarkColor: cs.primary,
+                      side: BorderSide(color: sel ? cs.primary : cs.outlineVariant),
+                      showCheckmark: false,
+                      onSelected: (_) {
+                        setState(() => _selectedCategory = cat);
+                        _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
+                      },
+                    ),
+                  );
+                },
+              ),
             ),
+            secondChild: const SizedBox(height: 2),
           ),
 
-        if (_section == _Section.extensions) const SizedBox(height: 4),
-
-        // ── Body ──────────────────────────────────────────────────────────
+        // ── Body ─────────────────────────────────────────────────────────────
         Expanded(child: _buildSectionBody(theme, cs)),
-
-        // ── Bottom pill nav ───────────────────────────────────────────────
-        _BottomPillNav(
-          current: _section,
-          onTap: (s) {
-            setState(() {
-              _section = s;
-              _searchCollapsed = false;
-            });
-          },
-        ),
       ],
     );
+
+    // Detail overlay — slides in-panel over the list
+    if (_detailExt != null) {
+      body = Stack(
+        children: [
+          body,
+          _ExtensionDetailOverlay(
+            ext:          _detailExt!,
+            client:       _client,
+            installState: _installStates[_detailExt!.id] ?? _InstallState.notInstalled,
+            onInstall:    () => _install(_detailExt!),
+            onClose:      _closeDetail,
+          ),
+        ],
+      );
+    }
 
     if (widget.embedded) return body;
     return Scaffold(body: body);
@@ -293,31 +342,26 @@ class _MarketplacePageState extends State<MarketplacePage> {
             }
             final ext = _results[i];
             return _ExtensionCard(
-              ext: ext,
+              ext:          ext,
               installState: _installStates[ext.id] ?? _InstallState.notInstalled,
-              onInstall: () => _install(ext),
-              onTap: () => _openExtensionDetail(ext),
+              onInstall:    () => _install(ext),
+              onTap:        () => _openExtensionDetail(ext),
             );
           },
         );
 
       case _Section.runtimes:
-        return _RuntimesSection(scrollCtrl: _scrollCtrl);
+        return _RuntimesSection(scrollCtrl: _scrollCtrl, showSdks: false);
+
+      case _Section.sdks:
+        return _RuntimesSection(scrollCtrl: _scrollCtrl, showSdks: true);
 
       case _Section.installed:
-        return _InstalledSection();
+        return _InstalledSection(
+          onTap: (ext) => _openExtensionDetail(ext),
+          client: _client,
+        );
     }
-  }
-
-  void _openExtensionDetail(MarketplaceExtension ext) {
-    Navigator.of(context, rootNavigator: true).push(MaterialPageRoute(
-      builder: (_) => _ExtensionDetailPage(
-        ext: ext,
-        client: _client,
-        installState: _installStates[ext.id] ?? _InstallState.notInstalled,
-        onInstall: () => _install(ext),
-      ),
-    ));
   }
 }
 
@@ -329,43 +373,54 @@ class _MarketplaceHeader extends StatelessWidget {
   final _Section section;
   final TextEditingController searchCtrl;
   final bool collapsed;
+  final bool filtersVisible;
+  final bool embedded;
   final String sortBy;
   final ValueChanged<String> onSortChanged;
   final VoidCallback onSearchExpand;
+  final VoidCallback onFilterToggle;
 
   const _MarketplaceHeader({
     required this.section,
     required this.searchCtrl,
     required this.collapsed,
+    required this.filtersVisible,
+    required this.embedded,
     required this.sortBy,
     required this.onSortChanged,
     required this.onSearchExpand,
+    required this.onFilterToggle,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-    final headerBg = theme.appBarTheme.backgroundColor ?? cs.surface;
-    final onHeader = theme.appBarTheme.foregroundColor ?? cs.onSurface;
+    final theme    = Theme.of(context);
+    final cs       = theme.colorScheme;
+    // Use scaffold background so header matches the rest of the app
+    final headerBg = theme.scaffoldBackgroundColor;
+    final onHeader = cs.onSurface;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
         color: headerBg,
-        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.3))),
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.4))),
       ),
-      padding: EdgeInsets.fromLTRB(12, MediaQuery.of(context).padding.top + 6, 8, 8),
+      padding: EdgeInsets.fromLTRB(
+        12,
+        embedded ? 6 : MediaQuery.of(context).padding.top + 6,
+        8,
+        8,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Top bar: [store icon + Marketplace] ··· [search] [sort] [account] ──
+          // ── Top bar ─────────────────────────────────────────────────────
           Row(
             children: [
-              // Left: store icon + Marketplace brand
-              Icon(Icons.storefront_rounded, size: 18, color: cs.primary),
-              const SizedBox(width: 6),
+              Icon(Icons.storefront_rounded, size: 22, color: cs.primary),
+              const SizedBox(width: 8),
               Text(
                 'Marketplace',
                 style: theme.textTheme.titleSmall?.copyWith(
@@ -376,32 +431,38 @@ class _MarketplaceHeader extends StatelessWidget {
               ),
               const Spacer(),
 
-              // Right: search / sort / account
+              // Filter button (toggles category chips) — extensions only
               if (section == _Section.extensions) ...[
-                if (collapsed)
-                  IconButton(
-                    icon: Icon(Icons.search, size: 20, color: onHeader.withOpacity(0.7)),
-                    tooltip: 'Search',
-                    onPressed: onSearchExpand,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                IconButton(
+                  icon: Icon(
+                    filtersVisible ? Icons.filter_list_off : Icons.filter_list_rounded,
+                    size: 22,
+                    color: filtersVisible
+                        ? cs.primary
+                        : onHeader.withOpacity(0.65),
                   ),
-                if (collapsed)
-                  _SortButton(sortBy: sortBy, onSelected: onSortChanged),
+                  tooltip: filtersVisible ? 'Hide filters' : 'Show filters',
+                  onPressed: onFilterToggle,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
+                // Sort
+                _SortButton(sortBy: sortBy, onSelected: onSortChanged),
               ],
-              // Account icon (GitHub avatar placeholder)
-              IconButton(
-                icon: Icon(Icons.account_circle_outlined, size: 20,
-                    color: onHeader.withOpacity(0.7)),
-                tooltip: 'Account',
-                onPressed: () {},
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
+
+              // Search restore (when collapsed)
+              if (collapsed && section == _Section.extensions)
+                IconButton(
+                  icon: Icon(Icons.search, size: 22, color: onHeader.withOpacity(0.65)),
+                  tooltip: 'Search',
+                  onPressed: onSearchExpand,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                ),
             ],
           ),
 
-          // ── Animated search bar (Extensions section only) ───────────────
+          // ── Search bar (Extensions only, collapses on scroll) ────────────
           if (section == _Section.extensions)
             AnimatedCrossFade(
               duration: const Duration(milliseconds: 200),
@@ -410,43 +471,31 @@ class _MarketplaceHeader extends StatelessWidget {
                   : CrossFadeState.showFirst,
               firstChild: Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: searchCtrl,
-                        style: theme.textTheme.bodyMedium,
-                        decoration: InputDecoration(
-                          hintText: 'Search extensions…',
-                          hintStyle: TextStyle(
-                            fontSize: 13,
-                            color: cs.onSurface.withOpacity(0.4),
-                          ),
-                          prefixIcon: Icon(Icons.search, size: 18,
-                              color: cs.onSurface.withOpacity(0.5)),
-                          suffixIcon: searchCtrl.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.close, size: 16),
-                                  onPressed: () => searchCtrl.clear(),
-                                )
-                              : null,
-                          filled: true,
-                          fillColor: cs.surfaceContainerHighest,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide.none,
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: BorderSide(color: cs.primary, width: 1.5),
-                          ),
-                        ),
-                      ),
+                child: TextField(
+                  controller: searchCtrl,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                  decoration: InputDecoration(
+                    hintText: 'Search extensions…',
+                    hintStyle: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.4)),
+                    prefixIcon: Icon(Icons.search, size: 20, color: cs.onSurface.withOpacity(0.5)),
+                    suffixIcon: searchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close, size: 16),
+                            onPressed: () => searchCtrl.clear(),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: cs.surfaceContainerHighest,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
                     ),
-                    const SizedBox(width: 6),
-                    _SortButton(sortBy: sortBy, onSelected: onSortChanged),
-                  ],
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: cs.primary, width: 1.5),
+                    ),
+                  ),
                 ),
               ),
               secondChild: const SizedBox(height: 2),
@@ -464,15 +513,16 @@ class _SortButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return PopupMenuButton<String>(
-      icon: Icon(Icons.sort, size: 20, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+      icon: Icon(Icons.sort_rounded, size: 22, color: cs.onSurface.withOpacity(0.65)),
       tooltip: 'Sort',
       onSelected: onSelected,
       itemBuilder: (_) => _kSortOptions.entries.map((e) => PopupMenuItem(
         value: e.value,
         child: Row(children: [
           if (sortBy == e.value)
-            Icon(Icons.check, size: 14, color: Theme.of(context).colorScheme.primary),
+            Icon(Icons.check, size: 14, color: cs.primary),
           const SizedBox(width: 8),
           Text(e.key),
         ]),
@@ -482,18 +532,20 @@ class _SortButton extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Bottom pill navigation (Telegram-style)
+// Top pill navigation (replaces bottom dock)
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _BottomPillNav extends StatelessWidget {
+class _TopPillNav extends StatelessWidget {
   final _Section current;
+  final bool compact;
   final ValueChanged<_Section> onTap;
-  const _BottomPillNav({required this.current, required this.onTap});
+  const _TopPillNav({required this.current, required this.compact, required this.onTap});
 
   static const _items = [
-    _NavItem(_Section.extensions, Icons.extension_outlined, Icons.extension,    'Extensions'),
-    _NavItem(_Section.runtimes,   Icons.memory_outlined,    Icons.memory,        'Runtimes'),
-    _NavItem(_Section.installed,  Icons.check_circle_outline, Icons.check_circle,'Installed'),
+    _NavItem(_Section.extensions, Icons.extension_outlined, Icons.extension,       'Extensions'),
+    _NavItem(_Section.runtimes,   Icons.terminal_rounded,   Icons.terminal_rounded, 'Runtimes'),
+    _NavItem(_Section.sdks,       Icons.layers_outlined,    Icons.layers_rounded,   'SDK'),
+    _NavItem(_Section.installed,  Icons.check_circle_outline, Icons.check_circle,  'Installed'),
   ];
 
   @override
@@ -501,18 +553,17 @@ class _BottomPillNav extends StatelessWidget {
     final theme = Theme.of(context);
     final cs    = theme.colorScheme;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeInOut,
+      height: compact ? 36 : 46,
       decoration: BoxDecoration(
-        color: theme.appBarTheme.backgroundColor ?? cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.5))),
+        color: theme.scaffoldBackgroundColor,
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.4))),
       ),
-      padding: EdgeInsets.only(
-        left: 12, right: 12,
-        top: 8,
-        bottom: MediaQuery.of(context).padding.bottom + 8,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
         children: _items.map((item) {
           final sel = item.section == current;
           return GestureDetector(
@@ -520,34 +571,36 @@ class _BottomPillNav extends StatelessWidget {
             behavior: HitTestBehavior.opaque,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              margin: EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: compact ? 4 : 6,
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 10 : 14,
+                vertical: compact ? 2 : 4,
+              ),
               decoration: BoxDecoration(
-                color: sel ? cs.primary.withOpacity(0.12) : Colors.transparent,
+                color: sel ? cs.primary.withOpacity(0.14) : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
+                border: sel ? Border.all(color: cs.primary.withOpacity(0.3)) : null,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     sel ? item.activeIcon : item.icon,
-                    size: 20,
+                    size: compact ? 16 : 18,
                     color: sel ? cs.primary : cs.onSurface.withOpacity(0.55),
                   ),
-                  AnimatedSize(
+                  const SizedBox(width: 5),
+                  AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 200),
-                    child: sel
-                        ? Padding(
-                            padding: const EdgeInsets.only(left: 6),
-                            child: Text(
-                              item.label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: cs.primary,
-                              ),
-                            ),
-                          )
-                        : const SizedBox.shrink(),
+                    style: TextStyle(
+                      fontSize: compact ? 11 : 12,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                      color: sel ? cs.primary : cs.onSurface.withOpacity(0.7),
+                    ),
+                    child: Text(item.label),
                   ),
                 ],
               ),
@@ -589,14 +642,15 @@ class _ExtensionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final sub = cs.onSurface.withOpacity(0.55);
+    final cs    = theme.colorScheme;
+    final sub   = cs.onSurface.withOpacity(0.55);
     final alreadyInstalled = ExtensionRegistry.instance.isInstalled(ext.id) ||
         installState == _InstallState.installed;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
       elevation: 0,
+      color: cs.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
@@ -613,10 +667,10 @@ class _ExtensionCard extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(6),
                 child: ext.iconUrl != null
-                    ? Image.network(ext.iconUrl!, width: 42, height: 42,
+                    ? Image.network(ext.iconUrl!, width: 44, height: 44,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 42))
-                    : _DefaultExtIcon(size: 42),
+                        errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 44))
+                    : _DefaultExtIcon(size: 44),
               ),
               const SizedBox(width: 12),
 
@@ -629,19 +683,21 @@ class _ExtensionCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       Text('v${ext.version}',
                           style: TextStyle(fontSize: 10, color: sub)),
                     ]),
-                    const SizedBox(height: 1),
+                    const SizedBox(height: 2),
                     Text(ext.namespace, style: TextStyle(fontSize: 11, color: sub)),
                     const SizedBox(height: 4),
                     Text(ext.description,
-                        style: TextStyle(fontSize: 12,
-                            color: cs.onSurface.withOpacity(0.8)),
+                        style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.8)),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
@@ -675,17 +731,12 @@ class _ExtensionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 8),
 
-              // Install / download button
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _InstallButton(
-                    state: alreadyInstalled ? _InstallState.installed : installState,
-                    onPressed: alreadyInstalled ? null : onInstall,
-                  ),
-                ],
+              // Install button
+              _InstallButton(
+                state: alreadyInstalled ? _InstallState.installed : installState,
+                onPressed: alreadyInstalled ? null : onInstall,
               ),
             ],
           ),
@@ -696,7 +747,7 @@ class _ExtensionCard extends StatelessWidget {
 
   static String _fmtCount(int n) {
     if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(0)}K';
+    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(0)}K';
     return n.toString();
   }
 }
@@ -717,7 +768,7 @@ class _InstallButton extends StatelessWidget {
             onPressed: onPressed,
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              backgroundColor: cs.primary.withOpacity(0.1),
+              backgroundColor: cs.primary.withOpacity(0.12),
               foregroundColor: cs.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
@@ -725,59 +776,64 @@ class _InstallButton extends StatelessWidget {
           ),
         );
       case _InstallState.installing:
-        return const SizedBox(
+        return SizedBox(
           width: 24, height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
         );
       case _InstallState.installed:
-        return Icon(Icons.check_circle_rounded,
-            color: Theme.of(context).colorScheme.primary, size: 22);
+        return Icon(Icons.check_circle_rounded, color: cs.primary, size: 22);
       case _InstallState.error:
-        return Icon(Icons.error_outline,
-            color: Theme.of(context).colorScheme.error, size: 22);
+        return Icon(Icons.error_outline, color: cs.error, size: 22);
     }
   }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Extension detail page (VSCode-style)
+// Extension detail — in-panel overlay (VSCode-style single scrollable section)
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _ExtensionDetailPage extends StatefulWidget {
+class _ExtensionDetailOverlay extends StatefulWidget {
   final MarketplaceExtension ext;
   final OpenVsxClient client;
   final _InstallState installState;
   final VoidCallback onInstall;
+  final VoidCallback onClose;
 
-  const _ExtensionDetailPage({
+  const _ExtensionDetailOverlay({
     required this.ext,
     required this.client,
     required this.installState,
     required this.onInstall,
+    required this.onClose,
   });
 
   @override
-  State<_ExtensionDetailPage> createState() => _ExtensionDetailPageState();
+  State<_ExtensionDetailOverlay> createState() => _ExtensionDetailOverlayState();
 }
 
-class _ExtensionDetailPageState extends State<_ExtensionDetailPage>
+class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
     with SingleTickerProviderStateMixin {
-  late TabController _tab;
+  late AnimationController _anim;
+  late Animation<Offset>   _slide;
+
   String? _readme;
-  bool _readmeLoading = true;
+  bool    _readmeLoading = true;
   late _InstallState _installState;
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 2, vsync: this);
     _installState = widget.installState;
+    _anim  = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
+    _slide = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
+    _anim.forward();
     _loadReadme();
   }
 
   @override
   void dispose() {
-    _tab.dispose();
+    _anim.dispose();
     super.dispose();
   }
 
@@ -791,6 +847,11 @@ class _ExtensionDetailPageState extends State<_ExtensionDetailPage>
       if (!mounted) return;
       setState(() { _readmeLoading = false; });
     }
+  }
+
+  Future<void> _close() async {
+    await _anim.reverse();
+    widget.onClose();
   }
 
   Future<void> _doInstall() async {
@@ -807,171 +868,174 @@ class _ExtensionDetailPageState extends State<_ExtensionDetailPage>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final ext = widget.ext;
+    final cs    = theme.colorScheme;
+    final ext   = widget.ext;
     final alreadyInstalled = ExtensionRegistry.instance.isInstalled(ext.id) ||
         _installState == _InstallState.installed;
 
-    final appBarBg = theme.appBarTheme.backgroundColor ?? cs.surface;
-    final appBarFg = theme.appBarTheme.foregroundColor ?? cs.onSurface;
-
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: appBarBg,
-        foregroundColor: appBarFg,
-        iconTheme: IconThemeData(color: appBarFg),
-        title: Text(ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-            style: TextStyle(fontSize: 16, color: appBarFg)),
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tab,
-          labelColor: cs.primary,
-          unselectedLabelColor: cs.onSurface.withOpacity(0.55),
-          indicatorColor: cs.primary,
-          indicatorWeight: 2.5,
-          tabs: const [
-            Tab(text: 'Details'),
-            Tab(text: 'Readme'),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tab,
-        children: [
-          // ── Details tab ──────────────────────────────────────────────
-          ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // Hero
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return SlideTransition(
+      position: _slide,
+      child: Material(
+        color: theme.scaffoldBackgroundColor,
+        child: Column(
+          children: [
+            // ── Bar ──────────────────────────────────────────────────────
+            Container(
+              height: 44,
+              color: theme.scaffoldBackgroundColor,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Row(
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: ext.iconUrl != null
-                        ? Image.network(ext.iconUrl!, width: 72, height: 72,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 72))
-                        : _DefaultExtIcon(size: 72),
+                  IconButton(
+                    icon: Icon(Icons.arrow_back_ios_new_rounded,
+                        size: 18, color: cs.onSurface),
+                    onPressed: _close,
+                    tooltip: 'Back',
                   ),
-                  const SizedBox(width: 16),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(ext.namespace,
-                            style: TextStyle(fontSize: 12,
-                                color: cs.onSurface.withOpacity(0.55))),
-                        const SizedBox(height: 8),
-                        // Install / installed button
-                        if (alreadyInstalled)
-                          _OutlineBadge(
-                            icon: Icons.check_circle_rounded,
-                            label: 'Installed',
-                            color: cs.primary,
-                          )
-                        else if (_installState == _InstallState.installing)
-                          const SizedBox(
-                            width: 24, height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          FilledButton.icon(
-                            onPressed: _doInstall,
-                            icon: const Icon(Icons.download_rounded, size: 16),
-                            label: const Text('Install'),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                            ),
-                          ),
-                      ],
+                    child: Text(
+                      ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+            ),
+            Divider(height: 1, color: cs.outlineVariant.withOpacity(0.4)),
 
-              // Description
-              Text(ext.description,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                      color: cs.onSurface.withOpacity(0.8))),
-              const SizedBox(height: 20),
+            // ── Scrollable body ───────────────────────────────────────────
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // Hero
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: ext.iconUrl != null
+                            ? Image.network(ext.iconUrl!, width: 72, height: 72,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 72))
+                            : _DefaultExtIcon(size: 72),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: cs.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(ext.namespace,
+                                style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.55))),
+                            const SizedBox(height: 8),
+                            if (alreadyInstalled)
+                              _OutlineBadge(
+                                icon: Icons.check_circle_rounded,
+                                label: 'Installed',
+                                color: cs.primary,
+                              )
+                            else if (_installState == _InstallState.installing)
+                              SizedBox(
+                                width: 24, height: 24,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                              )
+                            else
+                              FilledButton.icon(
+                                onPressed: _doInstall,
+                                icon: const Icon(Icons.download_rounded, size: 16),
+                                label: const Text('Install'),
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
 
-              // Stats row
-              _StatsRow(ext: ext),
-              const SizedBox(height: 20),
+                  // Description
+                  Text(ext.description,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface.withOpacity(0.85))),
+                  const SizedBox(height: 16),
 
-              // Meta info
-              _InfoTile(label: 'Publisher', value: ext.namespace),
-              _InfoTile(label: 'Version', value: ext.version),
-              if (ext.license != null && ext.license!.isNotEmpty)
-                _InfoTile(label: 'License', value: ext.license!),
-              if (ext.categories.isNotEmpty)
-                _InfoTile(label: 'Categories', value: ext.categories.join(', ')),
-              if (ext.tags.isNotEmpty)
-                _InfoTile(label: 'Tags', value: ext.tags.take(8).join(', ')),
-              if (ext.repository != null && ext.repository!.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                _InfoTile(label: 'Repository', value: ext.repository!),
-              ],
-              const SizedBox(height: 20),
+                  // Stats
+                  _StatsRow(ext: ext),
+                  const SizedBox(height: 16),
 
-              // Settings button (only if installed)
-              if (alreadyInstalled) ...[
-                OutlinedButton.icon(
-                  onPressed: () {
-                    final installed = ExtensionRegistry.instance.get(ext.id);
-                    if (installed != null) {
-                      Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => ExtensionSettingsPage(extension: installed),
-                      ));
-                    }
-                  },
-                  icon: const Icon(Icons.settings_outlined, size: 16),
-                  label: const Text('Extension Settings'),
-                ),
-                const SizedBox(height: 8),
-              ],
+                  // Meta
+                  _InfoTile(label: 'Publisher', value: ext.namespace),
+                  _InfoTile(label: 'Version',   value: ext.version),
+                  if (ext.license != null && ext.license!.isNotEmpty)
+                    _InfoTile(label: 'License', value: ext.license!),
+                  if (ext.categories.isNotEmpty)
+                    _InfoTile(label: 'Categories', value: ext.categories.join(', ')),
+                  if (ext.tags.isNotEmpty)
+                    _InfoTile(label: 'Tags', value: ext.tags.take(8).join(', ')),
+                  if (ext.repository != null && ext.repository!.isNotEmpty)
+                    _InfoTile(label: 'Repository', value: ext.repository!),
 
-              // Uninstall / reinstall
-              if (alreadyInstalled)
-                OutlinedButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.delete_outline, size: 16),
-                  label: const Text('Uninstall'),
-                  style: OutlinedButton.styleFrom(
-                      foregroundColor: cs.error),
-                ),
-            ],
-          ),
-
-          // ── Readme tab ───────────────────────────────────────────────
-          _readmeLoading
-              ? const Center(child: CircularProgressIndicator())
-              : _readme == null || _readme!.isEmpty
-                  ? Center(
-                      child: Text('No readme available',
-                          style: TextStyle(
-                              color: cs.onSurface.withOpacity(0.5))))
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: _MarkdownText(source: _readme!),
+                  // Settings / uninstall (if installed)
+                  if (alreadyInstalled) ...[
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        final installed = ExtensionRegistry.instance.get(ext.id);
+                        if (installed != null && context.mounted) {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => ExtensionSettingsPage(extension: installed),
+                          ));
+                        }
+                      },
+                      icon: const Icon(Icons.settings_outlined, size: 16),
+                      label: const Text('Extension Settings'),
                     ),
-        ],
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: null,
+                      icon: const Icon(Icons.delete_outline, size: 16),
+                      label: const Text('Uninstall'),
+                      style: OutlinedButton.styleFrom(foregroundColor: cs.error),
+                    ),
+                  ],
+
+                  // README
+                  if (_readmeLoading) ...[
+                    const SizedBox(height: 24),
+                    const Center(child: CircularProgressIndicator()),
+                  ] else if (_readme != null && _readme!.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Divider(color: cs.outlineVariant.withOpacity(0.5)),
+                    const SizedBox(height: 12),
+                    _MarkdownText(source: _readme!),
+                  ],
+
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ── Stats row ─────────────────────────────────────────────────────────────────
+// ── Stats row ──────────────────────────────────────────────────────────────────
 class _StatsRow extends StatelessWidget {
   final MarketplaceExtension ext;
   const _StatsRow({required this.ext});
@@ -979,18 +1043,17 @@ class _StatsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final sub = cs.onSurface.withOpacity(0.55);
-    return Row(
+    return Wrap(
+      spacing: 10,
+      runSpacing: 6,
       children: [
-        if (ext.averageRating != null) ...[
+        if (ext.averageRating != null)
           _StatChip(
             icon: Icons.star_rounded,
             iconColor: Colors.amber,
             label: ext.averageRating!.toStringAsFixed(1),
             sub: '${ext.reviewCount} reviews',
           ),
-          const SizedBox(width: 12),
-        ],
         if (ext.downloadCount > 0)
           _StatChip(
             icon: Icons.download_rounded,
@@ -1004,16 +1067,16 @@ class _StatsRow extends StatelessWidget {
 
   static String _fmtCount(int n) {
     if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(0)}K';
+    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(0)}K';
     return n.toString();
   }
 }
 
 class _StatChip extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
-  final String label;
-  final String sub;
+  final Color    iconColor;
+  final String   label;
+  final String   sub;
   const _StatChip({required this.icon, required this.iconColor,
       required this.label, required this.sub});
 
@@ -1035,10 +1098,8 @@ class _StatChip extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w700)),
-              Text(sub, style: TextStyle(
-                  fontSize: 10, color: cs.onSurface.withOpacity(0.55))),
+              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+              Text(sub, style: TextStyle(fontSize: 10, color: cs.onSurface.withOpacity(0.55))),
             ],
           ),
         ],
@@ -1069,7 +1130,7 @@ class _InfoTile extends StatelessWidget {
           ),
           Expanded(
             child: Text(value,
-                style: const TextStyle(fontSize: 12)),
+                style: TextStyle(fontSize: 12, color: cs.onSurface)),
           ),
         ],
       ),
@@ -1079,8 +1140,8 @@ class _InfoTile extends StatelessWidget {
 
 class _OutlineBadge extends StatelessWidget {
   final IconData icon;
-  final String label;
-  final Color color;
+  final String   label;
+  final Color    color;
   const _OutlineBadge({required this.icon, required this.label, required this.color});
 
   @override
@@ -1097,8 +1158,7 @@ class _OutlineBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: color,
-              fontWeight: FontWeight.w600)),
+          Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
         ],
       ),
     );
@@ -1106,19 +1166,18 @@ class _OutlineBadge extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Runtimes section
+// Runtimes / SDKs section
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _RuntimeInfo {
-  final String key;
-  final String name;
-  final String description;
-  final String version;
-  final String longDescription;
-  final String website;
-  final Widget icon;
-  final String useCase;
-  /// Optional label for an extra action button shown in the detail page.
+  final String  key;
+  final String  name;
+  final String  description;
+  final String  version;
+  final String  longDescription;
+  final String  website;
+  final Widget  icon;
+  final String  useCase;
   final String? extraAction;
 
   const _RuntimeInfo({
@@ -1134,7 +1193,7 @@ class _RuntimeInfo {
   });
 }
 
-// ── SDK entries (Flutter SDK, Android SDK) ────────────────────────────────
+// ── SDKs ──────────────────────────────────────────────────────────────────────
 final _kSdks = <_RuntimeInfo>[
   _RuntimeInfo(
     key: 'flutter',
@@ -1155,7 +1214,7 @@ final _kSdks = <_RuntimeInfo>[
   ),
   _RuntimeInfo(
     key: 'android-sdk',
-    name: 'Android SDK (platform-tools)',
+    name: 'Android SDK',
     description: 'adb, fastboot — required for flutter run',
     version: 'r35+',
     longDescription:
@@ -1164,12 +1223,11 @@ final _kSdks = <_RuntimeInfo>[
         'and for wireless debugging. Install this alongside the Flutter SDK.',
     website: 'https://developer.android.com/studio/releases/platform-tools',
     useCase: 'flutter run, adb install, adb shell, wireless debugging',
-    icon: const FaIcon(FontAwesomeIcons.android, size: 26,
-        color: Color(0xFF3DDC84)),
+    icon: const FaIcon(FontAwesomeIcons.android, size: 26, color: Color(0xFF3DDC84)),
   ),
 ];
 
-// ── Language runtime entries ───────────────────────────────────────────────
+// ── Language Runtimes ──────────────────────────────────────────────────────────
 final _kRuntimes = <_RuntimeInfo>[
   _RuntimeInfo(
     key: 'node',
@@ -1177,9 +1235,9 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'JavaScript / TypeScript runtime',
     version: '22.x LTS',
     longDescription:
-        'Node.js is an open-source, cross-platform JavaScript runtime environment. '
-        'It executes JavaScript outside a web browser using V8, the same engine that powers Chrome. '
-        'Ideal for server-side scripting, CLI tools, and full-stack TypeScript projects.',
+        'Node.js is an open-source, cross-platform JavaScript runtime. '
+        'Executes JavaScript outside a browser using V8. '
+        'Ideal for servers, CLI tools, and full-stack TypeScript projects.',
     website: 'https://nodejs.org',
     useCase: 'Web servers, REST APIs, CLI tools, TypeScript apps',
     icon: const FaIcon(FontAwesomeIcons.nodeJs, size: 26, color: Color(0xFF539E43)),
@@ -1191,8 +1249,7 @@ final _kRuntimes = <_RuntimeInfo>[
     version: '3.12',
     longDescription:
         'Python is a high-level, general-purpose language renowned for its readability. '
-        'Comes with pip for package management and supports NumPy, pandas, Django, Flask, '
-        'FastAPI, and the entire data-science & ML ecosystem.',
+        'Comes with pip and supports the full data-science & ML ecosystem.',
     website: 'https://python.org',
     useCase: 'Data science, ML, scripting, web (Django/Flask)',
     icon: const FaIcon(FontAwesomeIcons.python, size: 26, color: Color(0xFF3776AB)),
@@ -1203,9 +1260,8 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'JDK 21 Temurin (LTS)',
     version: '21 LTS',
     longDescription:
-        'Java is a class-based, object-oriented language designed for portability. '
-        'JDK 21 (Eclipse Temurin) is a long-term-support release with virtual threads '
-        'via Project Loom, pattern matching, and record classes.',
+        'Java JDK 21 (Eclipse Temurin) — LTS release with virtual threads, '
+        'pattern matching, and record classes.',
     website: 'https://adoptium.net',
     useCase: 'Android dev, enterprise apps, Spring Boot',
     icon: const FaIcon(FontAwesomeIcons.java, size: 26, color: Color(0xFFED8B00)),
@@ -1216,9 +1272,8 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'Kotlin SDK & Gradle',
     version: '2.x',
     longDescription:
-        'Kotlin is a modern, statically typed language that runs on the JVM. '
-        'It is 100 % interoperable with Java and is the preferred language for Android development. '
-        'Also supports Kotlin Multiplatform for sharing code across iOS, Android, and web.',
+        'Modern, statically typed language on the JVM. '
+        'Preferred language for Android and Kotlin Multiplatform.',
     website: 'https://kotlinlang.org',
     useCase: 'Android, Kotlin Multiplatform, server-side',
     icon: const FaIcon(FontAwesomeIcons.k, size: 26, color: Color(0xFF7F52FF)),
@@ -1226,12 +1281,11 @@ final _kRuntimes = <_RuntimeInfo>[
   _RuntimeInfo(
     key: 'dart',
     name: 'Dart',
-    description: 'Dart SDK & Flutter CLI',
+    description: 'Dart SDK standalone',
     version: '3.x',
     longDescription:
-        'Dart is an optimised language for building fast apps on any platform. '
-        'Paired with Flutter it enables beautiful, natively compiled applications '
-        'for mobile, web, and desktop from a single codebase.',
+        'Dart is an optimised language for fast apps on any platform. '
+        'Paired with Flutter for cross-platform mobile, web, and desktop.',
     website: 'https://dart.dev',
     useCase: 'Flutter apps, CLI tools, server-side Dart',
     icon: const Icon(Icons.flutter_dash, size: 26, color: Color(0xFF0175C2)),
@@ -1242,9 +1296,8 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'Go toolchain',
     version: '1.22',
     longDescription:
-        'Go (Golang) is a statically typed, compiled language with built-in concurrency '
-        'primitives (goroutines & channels). Produces small, fast binaries with no runtime '
-        'dependencies — great for CLI tools, microservices, and cloud-native apps.',
+        'Statically typed, compiled with built-in concurrency primitives. '
+        'Produces small, fast binaries — great for CLIs and cloud-native.',
     website: 'https://go.dev',
     useCase: 'CLIs, microservices, cloud-native backends',
     icon: const FaIcon(FontAwesomeIcons.golang, size: 26, color: Color(0xFF00ADD8)),
@@ -1255,9 +1308,8 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'Rust toolchain (rustup)',
     version: 'stable',
     longDescription:
-        'Rust is a systems programming language focused on safety, speed, and concurrency. '
-        'Its ownership model guarantees memory safety without a garbage collector. '
-        'Requires Clang runtime.',
+        'Systems language focused on safety, speed, and concurrency. '
+        'Memory-safe without a garbage collector.',
     website: 'https://rust-lang.org',
     useCase: 'Systems, WebAssembly, CLI tools, embedded',
     icon: const FaIcon(FontAwesomeIcons.rust, size: 26, color: Color(0xFFDEA584)),
@@ -1268,9 +1320,8 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'C / C++ compiler suite',
     version: '21',
     longDescription:
-        'Clang is a compiler front-end for C, C++, and Objective-C using LLVM as its back-end. '
-        'Required as a dependency for Rust and Go on Android. '
-        'Provides full C17/C++23 support with sanitizers.',
+        'Clang front-end for C, C++, and Objective-C. '
+        'Required for Rust and Go on Android. Full C17/C++23 support.',
     website: 'https://clang.llvm.org',
     useCase: 'C/C++ native code, required for Rust & Go',
     icon: const FaIcon(FontAwesomeIcons.c, size: 26, color: Color(0xFF00599C)),
@@ -1281,9 +1332,8 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'Ruby interpreter & gems',
     version: '3.3',
     longDescription:
-        'Ruby is a dynamic, reflective, object-oriented language. '
-        'Popular for its elegant syntax and the Ruby on Rails web framework. '
-        'Bundler and RubyGems come included.',
+        'Dynamic, reflective, object-oriented language. '
+        'Popular for Ruby on Rails. Bundler and RubyGems included.',
     website: 'https://ruby-lang.org',
     useCase: 'Web (Rails), scripting, DevOps automation',
     icon: const FaIcon(FontAwesomeIcons.gem, size: 24, color: Color(0xFFCC342D)),
@@ -1294,9 +1344,8 @@ final _kRuntimes = <_RuntimeInfo>[
     description: 'Lightweight scripting language',
     version: '5.4',
     longDescription:
-        'Lua is a lightweight, high-level, multi-paradigm scripting language designed '
-        'for embedded use. Widely used in game engines (Love2D, Roblox) and as an '
-        'extension language for applications.',
+        'Lightweight, high-level scripting language designed for embedding. '
+        'Used in game engines (Love2D, Roblox) and as an extension language.',
     website: 'https://lua.org',
     useCase: 'Game scripting, embedded configs, Neovim plugins',
     icon: const Icon(Icons.code, size: 26, color: Color(0xFF000080)),
@@ -1305,61 +1354,18 @@ final _kRuntimes = <_RuntimeInfo>[
 
 class _RuntimesSection extends StatelessWidget {
   final ScrollController scrollCtrl;
-  const _RuntimesSection({required this.scrollCtrl});
+  final bool showSdks; // true = SDK pill, false = Runtimes pill
+  const _RuntimesSection({required this.scrollCtrl, required this.showSdks});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    // Flat mixed list: section-header strings interleaved with _RuntimeInfo
-    final items = <Object>[
-      '_sdk',
-      ..._kSdks,
-      '_runtimes',
-      ..._kRuntimes,
-    ];
+    final items = showSdks ? _kSdks : _kRuntimes;
 
     return ListView.builder(
       controller: scrollCtrl,
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
       itemCount: items.length,
-      itemBuilder: (_, i) {
-        final item = items[i];
-        if (item is String) {
-          // ── Section header ───────────────────────────────────────────
-          final isSdk = item == '_sdk';
-          return Padding(
-            padding: EdgeInsets.fromLTRB(8, i == 0 ? 8 : 20, 8, 8),
-            child: Row(
-              children: [
-                Icon(
-                  isSdk ? Icons.layers_rounded : Icons.terminal_rounded,
-                  size: 13,
-                  color: cs.primary,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  isSdk ? 'SDKs' : 'Language Runtimes',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: cs.onSurface.withOpacity(0.65),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Divider(
-                    height: 1,
-                    color: cs.outlineVariant.withOpacity(0.5),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-        return _RuntimeCard(info: item as _RuntimeInfo);
-      },
+      itemBuilder: (_, i) => _RuntimeCard(info: items[i]),
     );
   }
 }
@@ -1371,18 +1377,19 @@ class _RuntimeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs    = theme.colorScheme;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       elevation: 0,
+      color: cs.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => Navigator.of(context, rootNavigator: true).push(
+        onTap: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => _RuntimeDetailPage(info: info))),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1390,8 +1397,7 @@ class _RuntimeCard extends StatelessWidget {
             children: [
               // Icon circle
               Container(
-                width: 46,
-                height: 46,
+                width: 46, height: 46,
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerHighest,
                   shape: BoxShape.circle,
@@ -1400,18 +1406,17 @@ class _RuntimeCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
 
-              // Name + description
+              // Name + desc
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(info.name,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600)),
+                            fontWeight: FontWeight.w600, color: cs.onSurface)),
                     const SizedBox(height: 2),
                     Text(info.description,
-                        style: TextStyle(fontSize: 12,
-                            color: cs.onSurface.withOpacity(0.55))),
+                        style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.55))),
                   ],
                 ),
               ),
@@ -1424,21 +1429,18 @@ class _RuntimeCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(info.version,
-                    style: TextStyle(fontSize: 11,
-                        color: cs.primary, fontWeight: FontWeight.w600)),
+                    style: TextStyle(fontSize: 11, color: cs.primary, fontWeight: FontWeight.w600)),
               ),
               const SizedBox(width: 6),
 
               // Download icon
               IconButton(
-                icon: Icon(Icons.download_rounded,
-                    size: 20, color: cs.primary),
+                icon: Icon(Icons.download_rounded, size: 22, color: cs.primary),
                 tooltip: 'Install ${info.name}',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                onPressed: () => Navigator.of(context, rootNavigator: true).push(
-                    MaterialPageRoute(
-                        builder: (_) => _RuntimeDetailPage(info: info))),
+                onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => _RuntimeDetailPage(info: info))),
               ),
             ],
           ),
@@ -1460,31 +1462,20 @@ class _RuntimeDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs    = theme.colorScheme;
-    final scaffoldBg = theme.scaffoldBackgroundColor;
-    final appBarBg   = theme.appBarTheme.backgroundColor ?? cs.surface;
-    final appBarFg   = theme.appBarTheme.foregroundColor ?? cs.onSurface;
-
-    // Map runtime keys to DownloadManager parentNames
-    const _downloadableKeys = {
-      'node', 'python', 'java', 'kotlin', 'clang',
-      'dart', 'rust', 'go', 'ruby', 'lua',
-    };
-    final canDownload = _downloadableKeys.contains(info.key);
-    final isFlutter   = info.key == 'flutter' || info.key == 'android-sdk';
 
     return Scaffold(
-      backgroundColor: scaffoldBg,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: appBarBg,
-        foregroundColor: appBarFg,
-        iconTheme: IconThemeData(color: appBarFg),
-        title: Text(info.name, style: TextStyle(color: appBarFg)),
+        backgroundColor: theme.scaffoldBackgroundColor,
+        foregroundColor: cs.onSurface,
+        iconTheme: IconThemeData(color: cs.onSurface),
+        title: Text(info.name, style: TextStyle(color: cs.onSurface, fontSize: 16)),
         elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // ── Hero ──────────────────────────────────────────────────────
+          // Hero
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1503,12 +1494,10 @@ class _RuntimeDetailPage extends StatelessWidget {
                   children: [
                     Text(info.name,
                         style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurface)),
+                            fontWeight: FontWeight.w700, color: cs.onSurface)),
                     const SizedBox(height: 4),
                     Text(info.description,
-                        style: TextStyle(fontSize: 13,
-                            color: cs.onSurface.withOpacity(0.55))),
+                        style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.55))),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1517,8 +1506,8 @@ class _RuntimeDetailPage extends StatelessWidget {
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Text('v${info.version}',
-                          style: TextStyle(fontSize: 12,
-                              color: cs.primary, fontWeight: FontWeight.w700)),
+                          style: TextStyle(fontSize: 12, color: cs.primary,
+                              fontWeight: FontWeight.w700)),
                     ),
                   ],
                 ),
@@ -1527,101 +1516,39 @@ class _RuntimeDetailPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // ── Install / Download button ──────────────────────────────────
-          if (canDownload)
-            FilledButton.icon(
-              onPressed: () {
-                // Navigate to DownloadManager where the actual runtime install
-                // happens through the Android PFD feature module system.
-                Navigator.of(context, rootNavigator: true).push(
-                  MaterialPageRoute(builder: (_) => const DownloadManager()),
-                );
-              },
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: Text('Installer ${info.name}'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            )
-          else if (isFlutter)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context, rootNavigator: true).push(
-                      MaterialPageRoute(builder: (_) => const DownloadManager()),
-                    );
-                  },
-                  icon: const Icon(Icons.download_rounded, size: 18),
-                  label: const Text('Voir les téléchargements'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.info_outline, size: 16,
-                        color: cs.primary.withOpacity(0.8)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        info.key == 'flutter'
-                            ? 'Flutter SDK ARM64 : téléchargez via la section SDKs ci-dessous.'
-                            : 'Android SDK : inclus avec le Flutter SDK.',
-                        style: TextStyle(fontSize: 12,
-                            color: cs.onSurface.withOpacity(0.75)),
-                      ),
-                    ),
-                  ]),
-                ),
-              ],
-            )
-          else
-            FilledButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Installation de ${info.name} non encore supportée.'),
-                  behavior: SnackBarBehavior.floating,
-                ));
-              },
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: Text('Installer ${info.name}'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
+          // Install button
+          FilledButton.icon(
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Installation de ${info.name} : accédez au pill Runtimes ou SDK.'),
+                behavior: SnackBarBehavior.floating,
+              ));
+            },
+            icon: const Icon(Icons.download_rounded, size: 18),
+            label: Text('Installer ${info.name}'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
+          ),
 
-          // ── ADB Setup action (Flutter SDK only) ────────────────────────
+          // ADB Setup (Flutter SDK only)
           if (info.extraAction != null) ...[
             const SizedBox(height: 10),
             OutlinedButton.icon(
-              onPressed: () => Navigator.of(context, rootNavigator: true).push(
+              onPressed: () => Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const AdbSetupPage())),
               icon: const Icon(Icons.usb_rounded, size: 16),
               label: Text(info.extraAction!),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],
           const SizedBox(height: 20),
 
-          // ── About ──────────────────────────────────────────────────────
+          // About
           _SectionHeader(title: 'À propos'),
           const SizedBox(height: 8),
           Text(info.longDescription,
@@ -1629,7 +1556,7 @@ class _RuntimeDetailPage extends StatelessWidget {
                   color: cs.onSurface.withOpacity(0.85), height: 1.6)),
           const SizedBox(height: 20),
 
-          // ── Use cases ──────────────────────────────────────────────────
+          // Use cases
           _SectionHeader(title: 'Cas d\'utilisation'),
           const SizedBox(height: 8),
           Container(
@@ -1640,20 +1567,18 @@ class _RuntimeDetailPage extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.lightbulb_outline, size: 18,
-                    color: cs.primary.withOpacity(0.8)),
+                Icon(Icons.lightbulb_outline, size: 18, color: cs.primary.withOpacity(0.8)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(info.useCase,
-                      style: TextStyle(fontSize: 13,
-                          color: cs.onSurface.withOpacity(0.85))),
+                      style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.85))),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
-          // ── Official Website ────────────────────────────────────────────
+          // Website
           _SectionHeader(title: 'Site officiel'),
           const SizedBox(height: 8),
           Container(
@@ -1664,16 +1589,14 @@ class _RuntimeDetailPage extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.language, size: 18,
-                    color: cs.onSurface.withOpacity(0.55)),
+                Icon(Icons.language, size: 18, color: cs.onSurface.withOpacity(0.55)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(info.website,
                       style: TextStyle(fontSize: 13, color: cs.primary,
                           decoration: TextDecoration.underline)),
                 ),
-                Icon(Icons.open_in_new, size: 14,
-                    color: cs.onSurface.withOpacity(0.4)),
+                Icon(Icons.open_in_new, size: 14, color: cs.onSurface.withOpacity(0.4)),
               ],
             ),
           ),
@@ -1706,12 +1629,14 @@ class _SectionHeader extends StatelessWidget {
 // ══════════════════════════════════════════════════════════════════════════════
 
 class _InstalledSection extends StatelessWidget {
-  const _InstalledSection();
+  final void Function(MarketplaceExtension ext) onTap;
+  final OpenVsxClient client;
+  const _InstalledSection({required this.onTap, required this.client});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final theme     = Theme.of(context);
+    final cs        = theme.colorScheme;
     final installed = ExtensionRegistry.instance.allInstalled();
 
     if (installed.isEmpty) {
@@ -1721,16 +1646,14 @@ class _InstalledSection extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.extension_outlined, size: 52,
-                  color: cs.onSurface.withOpacity(0.3)),
+              Icon(Icons.extension_outlined, size: 52, color: cs.onSurface.withOpacity(0.3)),
               const SizedBox(height: 14),
               Text('No extensions installed',
                   style: theme.textTheme.titleSmall?.copyWith(
                       color: cs.onSurface.withOpacity(0.6))),
               const SizedBox(height: 6),
               Text('Browse Extensions to install one.',
-                  style: TextStyle(fontSize: 12,
-                      color: cs.onSurface.withOpacity(0.45)),
+                  style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.45)),
                   textAlign: TextAlign.center),
             ],
           ),
@@ -1743,41 +1666,58 @@ class _InstalledSection extends StatelessWidget {
       itemCount: installed.length,
       itemBuilder: (_, i) {
         final extId = installed[i];
-        final ext = ExtensionRegistry.instance.get(extId);
+        final ext   = ExtensionRegistry.instance.get(extId);
+        final name  = ext?.manifest.displayName ?? extId;
+        final desc  = ext?.manifest.description ?? 'Installed';
+
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
           elevation: 0,
+          color: cs.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
             side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
           ),
-          child: ListTile(
-            leading: _DefaultExtIcon(size: 40),
-            title: Text(
-              ext?.manifest.displayName ?? extId,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text(
-              ext?.manifest.description ?? 'Installed',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11,
-                  color: cs.onSurface.withOpacity(0.55)),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (ext != null)
-                  IconButton(
-                    icon: Icon(Icons.settings_outlined, size: 18,
-                        color: cs.onSurface.withOpacity(0.55)),
-                    tooltip: 'Settings',
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(
-                      builder: (_) => ExtensionSettingsPage(extension: ext),
-                    )),
-                  ),
-                Icon(Icons.check_circle_rounded, color: cs.primary, size: 18),
-              ],
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () {
+              // Build a minimal MarketplaceExtension from installed info
+              final mExt = MarketplaceExtension(
+                namespace:   ext?.manifest.publisher ?? extId.split('.').first,
+                name:        ext?.manifest.name ?? extId,
+                displayName: name,
+                description: desc,
+                version:     ext?.manifest.version ?? '?',
+                categories:  ext?.manifest.categories ?? [],
+                tags:        ext?.manifest.keywords ?? [],
+                repository:  ext?.manifest.repository,
+                license:     null,
+              );
+              onTap(mExt);
+            },
+            child: ListTile(
+              leading: _DefaultExtIcon(size: 40),
+              title: Text(name,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface)),
+              subtitle: Text(desc,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.55))),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (ext != null)
+                    IconButton(
+                      icon: Icon(Icons.settings_outlined, size: 18,
+                          color: cs.onSurface.withOpacity(0.55)),
+                      tooltip: 'Settings',
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => ExtensionSettingsPage(extension: ext),
+                      )),
+                    ),
+                  Icon(Icons.check_circle_rounded, color: cs.primary, size: 18),
+                ],
+              ),
             ),
           ),
         );
@@ -1803,14 +1743,13 @@ class _DefaultExtIcon extends StatelessWidget {
         color: cs.primary.withOpacity(0.12),
         borderRadius: BorderRadius.circular(6),
       ),
-      child: Icon(Icons.extension_rounded,
-          size: size * 0.55, color: cs.primary),
+      child: Icon(Icons.extension_rounded, size: size * 0.55, color: cs.primary),
     );
   }
 }
 
 class _ErrorView extends StatelessWidget {
-  final String error;
+  final String      error;
   final VoidCallback onRetry;
   const _ErrorView({required this.error, required this.onRetry});
 
@@ -1823,16 +1762,14 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_outlined, size: 48,
-                color: cs.onSurface.withOpacity(0.35)),
+            Icon(Icons.cloud_off_outlined, size: 48, color: cs.onSurface.withOpacity(0.35)),
             const SizedBox(height: 12),
             Text('Could not load extensions',
                 style: Theme.of(context).textTheme.titleSmall,
                 textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(error,
-                style: TextStyle(fontSize: 11,
-                    color: cs.onSurface.withOpacity(0.5)),
+                style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
                 textAlign: TextAlign.center,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis),
@@ -1849,8 +1786,7 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
-/// Very basic markdown renderer — just preserves line breaks and
-/// shows code blocks in a monospace style. No extra dependencies needed.
+/// Minimal markdown renderer — preserves line breaks and highlights headings/code.
 class _MarkdownText extends StatelessWidget {
   final String source;
   const _MarkdownText({required this.source});
@@ -1858,19 +1794,18 @@ class _MarkdownText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final cs    = theme.colorScheme;
     final lines = source.split('\n');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: lines.map((line) {
-        // Headings
         if (line.startsWith('### ')) {
           return Padding(
             padding: const EdgeInsets.only(top: 14, bottom: 4),
             child: Text(line.substring(4),
                 style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700)),
+                    fontWeight: FontWeight.w700, color: cs.onSurface)),
           );
         }
         if (line.startsWith('## ')) {
@@ -1878,7 +1813,7 @@ class _MarkdownText extends StatelessWidget {
             padding: const EdgeInsets.only(top: 18, bottom: 6),
             child: Text(line.substring(3),
                 style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700)),
+                    fontWeight: FontWeight.w700, color: cs.onSurface)),
           );
         }
         if (line.startsWith('# ')) {
@@ -1886,10 +1821,9 @@ class _MarkdownText extends StatelessWidget {
             padding: const EdgeInsets.only(top: 22, bottom: 8),
             child: Text(line.substring(2),
                 style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700)),
+                    fontWeight: FontWeight.w700, color: cs.onSurface)),
           );
         }
-        // Code block fence — just show as monospace
         if (line.startsWith('```')) {
           return Container(
             width: double.infinity,
@@ -1900,20 +1834,16 @@ class _MarkdownText extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(line,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontFamily: 'monospace',
+                style: TextStyle(fontSize: 12, fontFamily: 'monospace',
                     color: cs.onSurface.withOpacity(0.8))),
           );
         }
-        // Horizontal rule
         if (line.trim() == '---' || line.trim() == '___') {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Divider(color: cs.outlineVariant),
           );
         }
-        // Normal text
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 1),
           child: Text(line,
