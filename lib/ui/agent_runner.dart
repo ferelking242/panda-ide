@@ -333,7 +333,9 @@ class AgentRunner {
         Uri.parse(chatUrl),
         headers: model.headers,
         body: jsonEncode(body),
-      );
+      ).timeout(const Duration(seconds: 90), onTimeout: () {
+        throw TimeoutException('La requête tool-calling a dépassé 90 secondes.');
+      });
 
       PandaLog.httpResponse('SSE', resp.statusCode, chatUrl, body: resp.body);
 
@@ -388,7 +390,11 @@ class AgentRunner {
 
         ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $functionName\n'));
         PandaLog.toolCall('SSE', functionName, args);
-        final result = await _dispatchTool(tools, functionName, args);
+        final result = await _dispatchTool(tools, functionName, args)
+            .timeout(const Duration(seconds: 45), onTimeout: () {
+          PandaLog.w('SSE', 'Tool $functionName timed out after 45 s');
+          return 'Error: tool $functionName exceeded 45 s timeout';
+        });
         PandaLog.toolResult('SSE', functionName, result);
         toolResults.add(result);
       }

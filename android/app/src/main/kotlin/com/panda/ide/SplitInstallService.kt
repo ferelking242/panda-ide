@@ -1,6 +1,7 @@
 package com.panda.ide
 
 import android.content.Context
+import android.content.pm.PackageManager
 import com.google.android.play.core.splitcompat.SplitCompat
 import com.google.android.play.core.splitinstall.SplitInstallManager
 import com.google.android.play.core.splitinstall.SplitInstallManagerFactory
@@ -27,6 +28,16 @@ class SplitInstallService(context: Context) {
         SplitCompat.install(appContext)
     }
 
+    /** Returns true if Play Store (Finsky) is installed — false on sideloaded builds. */
+    private fun isPlayStoreAvailable(): Boolean {
+        return try {
+            appContext.packageManager.getPackageInfo("com.android.vending", 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
     fun installModule(
         moduleName: String,
         onState: (Map<String, Any?>) -> Unit,
@@ -39,6 +50,19 @@ class SplitInstallService(context: Context) {
                     "progress" to 100,
                     "bytesDownloaded" to 0L,
                     "totalBytesToDownload" to 0L,
+                )
+            )
+            return
+        }
+
+        // Fail fast on sideloaded builds — Play Feature Delivery requires Play Store
+        if (!isPlayStoreAvailable()) {
+            onState(
+                mapOf(
+                    "moduleName" to moduleName,
+                    "status" to "failed",
+                    "progress" to 0,
+                    "errorMessage" to "Play Store not available (sideloaded build) — use direct download.",
                 )
             )
             return

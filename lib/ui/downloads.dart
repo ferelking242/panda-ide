@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:percent_indicator/linear_percent_indicator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
@@ -431,12 +432,28 @@ class _DownloadManagerState extends State<DownloadManager> {
         config: pfdConfig,
       );
       if (!pfdOk) {
+        // PFD failed (sideloaded build) — fall back to direct HTTP download if URL is available
+        if (url.isNotEmpty) {
+          final archivePath = '$tempDir/$archiveName';
+          await _httpDownloadWithProgress(
+            context: context,
+            index: index,
+            downloadBloc: downloadBloc,
+            url: url,
+            archivePath: archivePath,
+            archiveName: archiveName,
+            extractDir: isExtension ? extensionDir : runtimesDir,
+            runtimeParentName: packageParentName,
+            extensionMetadata: extensionMetadata,
+            isExtension: isExtension,
+          );
+        }
         if (mounted) {
           setState(() {
             loadingIndexes.remove(index);
           });
         }
-        downloadBloc.clearProgress(index);
+        if (url.isEmpty) downloadBloc.clearProgress(index);
         return;
       }
 
@@ -706,6 +723,95 @@ class _DownloadManagerState extends State<DownloadManager> {
     return basePercent + (clamped * ((100.0 - basePercent) / 100.0));
   }
 
+  /// Direct HTTP download with real byte-level progress — used as fallback when
+  /// Play Feature Delivery is unavailable (sideloaded builds).
+  Future<void> _httpDownloadWithProgress({
+    required BuildContext context,
+    required int index,
+    required DownloadManagerBloc downloadBloc,
+    required String url,
+    required String archivePath,
+    required String archiveName,
+    required String extractDir,
+    required String? runtimeParentName,
+    required Extension? extensionMetadata,
+    required bool isExtension,
+  }) async {
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await client.send(request);
+
+      if (response.statusCode != 200) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Download failed: HTTP ${response.statusCode}')),
+          );
+        }
+        return;
+      }
+
+      final totalBytes = response.contentLength ?? 0;
+      int receivedBytes = 0;
+
+      // Ensure temp dir exists
+      final tempDirectory = Directory(tempDir);
+      if (!tempDirectory.existsSync()) await tempDirectory.create(recursive: true);
+
+      final file = File(archivePath);
+      final sink = file.openWrite();
+      try {
+        await for (final chunk in response.stream) {
+          sink.add(chunk);
+          receivedBytes += chunk.length;
+          if (totalBytes > 0) {
+            final progress = (receivedBytes / totalBytes * 80.0).clamp(0.0, 80.0);
+            downloadBloc.updateProgress(index, progress);
+          }
+        }
+      } finally {
+        await sink.flush();
+        await sink.close();
+      }
+
+      // Handle module-only installs (no extraction needed)
+      if (isExtension && !_requiresExtraction(archiveName)) {
+        final normalizedParent = runtimeParentName?.toLowerCase();
+        if (normalizedParent != null && extensionMetadata != null) {
+          downloadBloc.updateProgress(index, 100.0);
+          downloadBloc.markFullyCompleted(index);
+          if (context.mounted) {
+            await context.read<PackageCatalogCubit>().refreshInstalledStatusOnly();
+          }
+          return;
+        }
+      }
+
+      // Extract the archive
+      await _startExtraction(
+        downloadBloc,
+        index,
+        archivePath,
+        extractDir,
+        archiveName,
+        runtimeParentName: runtimeParentName,
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Download error: $e')),
+        );
+      }
+      downloadBloc.clearProgress(index);
+    } finally {
+      client.close();
+    }
+  }
+
+  bool _requiresExtraction(String archiveName) {
+    return archiveName.endsWith('.zip') || archiveName.endsWith('.tar.gz');
+  }
+
   Future<T> _runPfdInstallSerial<T>(Future<T> Function() action) {
     final previous = _pfdInstallChain;
     final gate = Completer<void>();
@@ -776,14 +882,14 @@ class _DownloadManagerState extends State<DownloadManager> {
       try {
         await NativeChannel.installModule(config.moduleName);
         final ok = await completer.future.timeout(
-          const Duration(minutes: 3),
+          const Duration(seconds: 30),
           onTimeout: () => false,
         );
         if (!ok && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Failed to download ${config.displayName.toLowerCase()} feature module',
+                'Play Feature Delivery unavailable for ${config.displayName.toLowerCase()} — switching to direct download.',
               ),
             ),
           );

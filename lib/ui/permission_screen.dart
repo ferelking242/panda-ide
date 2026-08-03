@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../utils/constants.dart';
 import 'home.dart';
 
 const _kAccent = Color(0xff5090c8);
@@ -71,7 +72,17 @@ class _PermissionScreenState extends State<PermissionScreen> {
   Future<void> _requestStorage() async {
     final result = await _storagePermission().request();
     setState(() => _storageStatus = result);
-    if (result == PermissionStatus.permanentlyDenied) {
+    if (result == PermissionStatus.granted) {
+      // Create "Panda IDE" public folder structure now that we have permission
+      for (final path in [pandaRootDir, projectDir, templateDir, filesDir, pandaLogsDir]) {
+        final dir = Directory(path);
+        if (!dir.existsSync()) {
+          try {
+            await dir.create(recursive: true);
+          } catch (_) {}
+        }
+      }
+    } else if (result == PermissionStatus.permanentlyDenied) {
       openAppSettings();
     }
   }

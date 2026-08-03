@@ -157,28 +157,20 @@ class _PandaSplashScreenState extends State<PandaSplashScreen>
                             ),
                           ],
                         ),
-                        child: ClipOval(
-                          child: Image.asset(
-                            'assets/icons/app-icon.png',
-                            width: 120,
-                            height: 120,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              width: 120,
-                              height: 120,
-                              decoration: const BoxDecoration(
-                                color: Color(0xff1a3a55),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'P',
-                                  style: TextStyle(
-                                    color: Color(0xff5090c8),
-                                    fontSize: 64,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: const BoxDecoration(
+                            color: Color(0xff1a3a55),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'P',
+                              style: TextStyle(
+                                color: Color(0xff5090c8),
+                                fontSize: 64,
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
                           ),
