@@ -177,8 +177,8 @@ class _ExtensionSettingsPageState extends State<ExtensionSettingsPage> {
         final parts = item.key.split('.');
         final sectionKey = parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : null;
         final valueKey = parts.last;
-        final config = await ConfigStore.instance.getConfiguration(sectionKey);
-        final stored = config[valueKey];
+        final config = ConfigStore.instance.getSectionProxy(sectionKey);
+        final stored = (config['items'] as Map<String, dynamic>?)?[valueKey];
         _values[item.key] = stored ?? item.defaultValue;
       }
     }
@@ -199,7 +199,7 @@ class _ExtensionSettingsPageState extends State<ExtensionSettingsPage> {
     final parts = item.key.split('.');
     final sectionKey = parts.length > 1 ? parts.sublist(0, parts.length - 1).join('.') : null;
     final valueKey = parts.last;
-    await ConfigStore.instance.updateConfiguration(sectionKey, valueKey, value, 1);
+    await ConfigStore.instance.update(sectionKey, valueKey, value, 1);
   }
 
   Future<void> _resetToDefaults() async {
@@ -216,18 +216,27 @@ class _ExtensionSettingsPageState extends State<ExtensionSettingsPage> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    final cs     = theme.colorScheme;
+    final appBarBg = theme.appBarTheme.backgroundColor ?? cs.surface;
+    final appBarFg = theme.appBarTheme.foregroundColor ?? cs.onSurface;
+
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
+        backgroundColor: appBarBg,
+        foregroundColor: appBarFg,
+        iconTheme: IconThemeData(color: appBarFg),
         title: Text(
           '${widget.extension.manifest.displayName} — Settings',
-          style: const TextStyle(fontSize: 15),
+          style: TextStyle(fontSize: 15, color: appBarFg),
         ),
         elevation: 0,
         actions: [
           if (_hasChanges)
             TextButton(
               onPressed: _resetToDefaults,
-              child: const Text('Reset', style: TextStyle(fontSize: 12)),
+              child: Text('Reset',
+                  style: TextStyle(fontSize: 12, color: cs.primary)),
             ),
         ],
       ),

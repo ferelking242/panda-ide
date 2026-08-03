@@ -71,8 +71,6 @@ android {
 
     dynamicFeatures.addAll(
         setOf(
-            ":app:flutter_feature",
-            ":app:android_sdk_feature",
             ":app:rust_feature",
             ":app:go_feature",
             ":app:ruby_feature",
