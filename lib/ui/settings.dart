@@ -6,6 +6,7 @@ import 'package:code_forge/code_forge.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
@@ -36,7 +37,7 @@ class Settings extends StatefulWidget {
 
 class _SettingsState extends State<Settings> {
   late final Terminal terminal;
-  late final SshKeygen sshKeygen;
+  SshKeygen? _sshKeygen;
   final apiController = TextEditingController();
   final modelNameController = TextEditingController(), modelIdController = TextEditingController();
   final scrollController = ScrollController(), terminalThemeScroll = ScrollController();
@@ -148,16 +149,16 @@ int main() {
   void initState() {
     super.initState();
 
-    sshKeygen = SshKeygen(
-      comment: "user@panda-IDE",
-    );
-
-    if(SshKeygen.publicKeyFilelocation.existsSync() && SshKeygen.privateKeyFilelocation.existsSync()){
-      _isGeneratedKey = true;
+    if (!kIsWeb) {
+      _sshKeygen = SshKeygen(comment: "user@panda-IDE");
+      if (SshKeygen.publicKeyFilelocation.existsSync() &&
+          SshKeygen.privateKeyFilelocation.existsSync()) {
+        _isGeneratedKey = true;
+      }
+      _initializeCopilotForSettingsWhenDisabled();
     }
     terminal = Terminal(platform: TerminalTargetPlatform.android);
     _seedTerminalPreview();
-    _initializeCopilotForSettingsWhenDisabled();
   }
 
   void _seedTerminalPreview() {
@@ -4172,7 +4173,7 @@ int main() {
                                                                     
                                                       onPressed: () async {
                                                         setState(() => _isGeneratedKey = false);
-                                                        await sshKeygen.generate();
+                                                        if (!kIsWeb) await _sshKeygen?.generate();
                                                         setState(() => _isGeneratedKey = true);
                                                       },
                                                                     
@@ -4275,7 +4276,7 @@ int main() {
                                                           appTheme,
                                                           "mkdir -p ~/.ssh\n\n"
                                                           "chmod 700 ~/.ssh\n\n"
-                                                          "echo \"${SshKeygen.publicKeyFilelocation.readAsStringSync()}\" >> ~/.ssh/authorized_keys\n\n"
+                                                          "echo \"${(kIsWeb ? '(clé SSH non disponible sur le web)' : SshKeygen.publicKeyFilelocation.readAsStringSync())}\" >> ~/.ssh/authorized_keys\n\n"
                                                           "chmod 600 ~/.ssh/authorized_keys",
                                                           200
                                                         ),
@@ -4297,7 +4298,7 @@ int main() {
                                                           child: copyArea(
                                                             context,
                                                             appTheme,
-                                                            'New-Item -ItemType Directory -Force "\$HOME\\.ssh" | Out-Null; Add-Content "\$HOME\\.ssh\\authorized_keys" "${SshKeygen.publicKeyFilelocation.readAsStringSync()}"',
+                                                            'New-Item -ItemType Directory -Force "\$HOME\\.ssh" | Out-Null; Add-Content "\$HOME\\.ssh\\authorized_keys" "${(kIsWeb ? '(clé SSH non disponible sur le web)' : SshKeygen.publicKeyFilelocation.readAsStringSync())}"',
                                                             135
                                                           ),
                                                         ),
@@ -4545,7 +4546,7 @@ int main() {
                                                                                         : server.password
                                                                                       : isObscure
                                                                                         ? "${"*" * 8}\u00B7\u00B7\u00B7"
-                                                                                        : SshKeygen.privateKeyFilelocation.path
+                                                                                        : (kIsWeb ? '' : SshKeygen.privateKeyFilelocation.path)
                                                                                   ),
                                                                                   Padding(
                                                                                     padding: const EdgeInsets.only(left: 17),

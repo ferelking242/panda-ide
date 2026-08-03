@@ -831,8 +831,16 @@ class _SelectTypeState extends State<SelectType>
                   if (_bottomPanelOpen)
                     _buildBottomPanel(),
 
-                  // ── Status bar ────────────────────────────────────────
-                  _buildStatusBar(context, appTheme),
+                  // Status bar — respecte la largeur de l'activity bar
+                  Row(children: [
+                    if (_sidebarState >= 1) const SizedBox(width: 48),
+                    Expanded(
+                      child: _buildStatusBar(
+                        context, appTheme,
+                        withLeftRadius: _sidebarState >= 1,
+                      ),
+                    ),
+                  ]),
                 ],
               ),
               // ── Floating agent overlay ──────────────────────────────
@@ -851,7 +859,11 @@ class _SelectTypeState extends State<SelectType>
 
 
   // ── VSCode-style status bar ────────────────────────────────────────────────
-  Widget _buildStatusBar(BuildContext context, AppTheme appTheme) {
+  Widget _buildStatusBar(
+    BuildContext context,
+    AppTheme appTheme, {
+    bool withLeftRadius = false,
+  }) {
     final isDark = appTheme.isDark;
     final bg     = isDark ? _kActivityBgDark : _kActivityBgLight;
     final fg     = isDark ? _kActivitySelDark : _kActivitySelLight;
@@ -866,10 +878,16 @@ class _SelectTypeState extends State<SelectType>
         const int errors   = 0;
         const int warnings = 0;
 
-        return Container(
+        return ClipRect(
+          child: Container(
           height: 22,
-          color: bg,
-          padding: const EdgeInsets.symmetric(horizontal: 6),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: withLeftRadius
+                ? const BorderRadius.only(topLeft: Radius.circular(20))
+                : BorderRadius.zero,
+          ),
+          padding: EdgeInsets.only(left: withLeftRadius ? 14 : 6, right: 6),
           child: Row(children: [
             // ── Left: remote / branch ─────────────────────────────────
             if (branch != null)
@@ -898,7 +916,7 @@ class _SelectTypeState extends State<SelectType>
             // ── Left: problems (always visible) ──────────────────────
             _StatusBarItem(
               icon: Icons.cancel_outlined,
-              label: errors > 0 ? '$errors' : '',
+              label: '$errors',
               fg: errors > 0 ? Colors.red[300]! : fg,
               onTap: () => setState(() {
                 _bottomPanelOpen = true;
@@ -910,7 +928,7 @@ class _SelectTypeState extends State<SelectType>
             // ── Left: warnings (always visible) ──────────────────────
             _StatusBarItem(
               icon: Icons.warning_amber_outlined,
-              label: warnings > 0 ? '$warnings' : '',
+              label: '$warnings',
               fg: warnings > 0 ? Colors.orange[300]! : fg,
               onTap: () => setState(() {
                 _bottomPanelOpen = true;
@@ -923,7 +941,7 @@ class _SelectTypeState extends State<SelectType>
             // ── Right: Panda AI ───────────────────────────────────────
             _StatusBarItem(
               icon: Broken.magic_star,
-              label: '',
+              label: 'Panda AI',
               fg: _rightPanelOpen ? _kAccent : fg,
               onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
             ),
@@ -949,7 +967,8 @@ class _SelectTypeState extends State<SelectType>
               onTap: () {},
             ),
           ]),
-        );
+          ),  // Container
+        );    // ClipRect
       },
     );
   }
