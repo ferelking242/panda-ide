@@ -293,7 +293,16 @@ class AgentRunner {
         int chunkCount = 0;
         final lines = streamed.stream
             .transform(const Utf8Decoder())
-            .transform(const LineSplitter());
+            .transform(const LineSplitter())
+            // Per-event timeout: abort if the server stops sending for 60 s
+            .timeout(
+              const Duration(seconds: 60),
+              onTimeout: (sink) {
+                PandaLog.w('SSE', 'Per-event timeout reached (60 s) — closing stream');
+                sink.close();
+              },
+            );
+        final startMs = DateTime.now().millisecondsSinceEpoch;
         await for (final line in lines) {
           if (ctrl.isClosed) break;
           if (!line.startsWith('data:')) continue;
@@ -310,7 +319,8 @@ class AgentRunner {
           chunkCount++;
           _parseChunk(obj, ctrl);
         }
-        PandaLog.d('SSE', 'Stream done — $chunkCount chunks received');
+        final elapsed = DateTime.now().millisecondsSinceEpoch - startMs;
+        PandaLog.d('SSE', 'Stream done — $chunkCount chunks in ${elapsed}ms');
         return;
       }
 
