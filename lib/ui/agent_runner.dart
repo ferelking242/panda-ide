@@ -294,6 +294,17 @@ class AgentRunner {
         final streamed = await _client!.send(req).timeout(const Duration(seconds: 90), onTimeout: () {
           throw TimeoutException('La connexion SSE a dépassé 90 secondes.');
         });
+
+        if (streamed.statusCode != 200) {
+          final body = await streamed.stream.bytesToString();
+          PandaLog.e('SSE', 'HTTP ${streamed.statusCode} from $chatUrl', body: body);
+          ctrl.add(AgentChunk(
+            phase: AgentPhase.error,
+            text: 'HTTP ${streamed.statusCode}: $body',
+          ));
+          return;
+        }
+
         int chunkCount = 0;
         final lines = streamed.stream
             .transform(const Utf8Decoder())
@@ -324,7 +335,11 @@ class AgentRunner {
           _parseChunk(obj, ctrl);
         }
         final elapsed = DateTime.now().millisecondsSinceEpoch - startMs;
-        PandaLog.d('SSE', 'Stream done — $chunkCount chunks in ${elapsed}ms');
+        if (chunkCount == 0) {
+          PandaLog.w('SSE', 'Stream ended with ZERO chunks in ${elapsed}ms — possible silent auth error or empty response');
+        } else {
+          PandaLog.d('SSE', 'Stream done — $chunkCount chunks in ${elapsed}ms');
+        }
         return;
       }
 

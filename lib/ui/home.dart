@@ -848,7 +848,8 @@ class _SelectTypeState extends State<SelectType>
                     ),
                   ),
 // ── Status bar ────────────────────────────────────────
-                  _buildStatusBar(context, appTheme),
+                  _buildStatusBar(context, appTheme,
+                      sidebarActive: _sidebarState >= 1),
                 ],
               ),
               // ── Floating agent overlay ──────────────────────────────
@@ -870,11 +871,12 @@ class _SelectTypeState extends State<SelectType>
   Widget _buildStatusBar(
     BuildContext context,
     AppTheme appTheme, {
-    bool withLeftRadius = false,
+    bool sidebarActive = false,
   }) {
-    final isDark = appTheme.isDark;
-    final bg     = isDark ? _kActivityBgDark : _kActivityBgLight;
-    final fg     = isDark ? _kActivitySelDark : _kActivitySelLight;
+    final isDark  = appTheme.isDark;
+    final actBg   = isDark ? _kActivityBgDark : _kActivityBgLight;
+    final editorBg = isDark ? appTheme.scaffoldBg : appTheme.scaffoldBg;
+    final fg      = isDark ? _kActivitySelDark : _kActivitySelLight;
 
     return BlocBuilder<RepoStatusBloc, RepoStatusState>(
       builder: (ctx, repoState) {
@@ -886,97 +888,109 @@ class _SelectTypeState extends State<SelectType>
         const int errors   = 0;
         const int warnings = 0;
 
-        return ClipRect(
+        // ── Editor portion of the bar (right of activity bar) ─────────
+        final editorBar = ClipRRect(
+          borderRadius: sidebarActive
+              ? const BorderRadius.only(topLeft: Radius.circular(20))
+              : BorderRadius.zero,
           child: Container(
-          height: 22,
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: withLeftRadius
-                ? const BorderRadius.only(topLeft: Radius.circular(20))
-                : BorderRadius.zero,
-          ),
-          padding: EdgeInsets.only(left: withLeftRadius ? 14 : 6, right: 6),
-          child: Row(children: [
-            // ── Left: remote / branch ─────────────────────────────────
-            if (branch != null)
+            height: 22,
+            color: actBg,
+            padding: EdgeInsets.only(left: sidebarActive ? 14 : 6, right: 6),
+            child: Row(children: [
+              // ── Left: remote / branch ───────────────────────────────
+              if (branch != null)
+                _StatusBarItem(
+                  icon: Icons.call_split_rounded,
+                  label: branch,
+                  fg: fg,
+                  onTap: () {},
+                )
+              else
+                // VSCode-style "><" remote / open button
+                Builder(builder: (bCtx) => InkWell(
+                  onTap: () => _showWorkspaceMenu(bCtx, isDark, appTheme),
+                  borderRadius: BorderRadius.circular(3),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.chevron_right, size: 13, color: fg),
+                      Icon(Icons.chevron_left, size: 13, color: fg),
+                    ]),
+                  ),
+                )),
+
+              const SizedBox(width: 6),
+
+              // ── Left: problems ──────────────────────────────────────
               _StatusBarItem(
-                icon: Icons.call_split_rounded,
-                label: branch,
+                icon: Icons.cancel_outlined,
+                label: '$errors',
+                fg: errors > 0 ? Colors.red[300]! : fg,
+                onTap: () => setState(() {
+                  _bottomPanelOpen = true;
+                  _bottomPanelTab  = 1;
+                }),
+              ),
+              const SizedBox(width: 2),
+
+              // ── Left: warnings ──────────────────────────────────────
+              _StatusBarItem(
+                icon: Icons.warning_amber_outlined,
+                label: '$warnings',
+                fg: warnings > 0 ? Colors.orange[300]! : fg,
+                onTap: () => setState(() {
+                  _bottomPanelOpen = true;
+                  _bottomPanelTab  = 1;
+                }),
+              ),
+
+              const Spacer(),
+
+              // ── Right: Panda AI icon ────────────────────────────────
+              _StatusBarItem(
+                icon: Broken.magic_star,
+                label: '',
+                fg: _rightPanelOpen ? _kAccent : fg,
+                onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
+              ),
+              const SizedBox(width: 2),
+
+              // ── Right: terminal ─────────────────────────────────────
+              _StatusBarItem(
+                icon: Icons.terminal,
+                label: '',
+                fg: _bottomPanelOpen ? _kAccent : fg,
+                onTap: () => setState(() {
+                  _bottomPanelOpen = true;
+                  _bottomPanelTab  = 0;
+                }),
+              ),
+              const SizedBox(width: 2),
+
+              // ── Right: notifications ────────────────────────────────
+              _StatusBarItem(
+                icon: Icons.notifications_none,
+                label: '',
                 fg: fg,
                 onTap: () {},
-              )
-            else
-              // VSCode-style "><" remote / open button
-              Builder(builder: (bCtx) => InkWell(
-                onTap: () => _showWorkspaceMenu(bCtx, isDark, appTheme),
-                borderRadius: BorderRadius.circular(3),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.chevron_right, size: 13, color: fg),
-                    Icon(Icons.chevron_left, size: 13, color: fg),
-                  ]),
-                ),
-              )),
+              ),
+            ]),
+          ),
+        );
 
-            const SizedBox(width: 6),
+        if (!sidebarActive) return SizedBox(height: 22, child: editorBar);
 
-            // ── Left: problems (always visible) ──────────────────────
-            _StatusBarItem(
-              icon: Icons.cancel_outlined,
-              label: '$errors',
-              fg: errors > 0 ? Colors.red[300]! : fg,
-              onTap: () => setState(() {
-                _bottomPanelOpen = true;
-                _bottomPanelTab  = 1;
-              }),
-            ),
-            const SizedBox(width: 2),
-
-            // ── Left: warnings (always visible) ──────────────────────
-            _StatusBarItem(
-              icon: Icons.warning_amber_outlined,
-              label: '$warnings',
-              fg: warnings > 0 ? Colors.orange[300]! : fg,
-              onTap: () => setState(() {
-                _bottomPanelOpen = true;
-                _bottomPanelTab  = 1;
-              }),
-            ),
-
-            const Spacer(),
-
-            // ── Right: Panda AI ───────────────────────────────────────
-            _StatusBarItem(
-              icon: Broken.magic_star,
-              label: 'Panda AI',
-              fg: _rightPanelOpen ? _kAccent : fg,
-              onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
-            ),
-            const SizedBox(width: 2),
-
-            // ── Right: terminal ───────────────────────────────────────
-            _StatusBarItem(
-              icon: Icons.terminal,
-              label: '',
-              fg: _bottomPanelOpen ? _kAccent : fg,
-              onTap: () => setState(() {
-                _bottomPanelOpen = true;
-                _bottomPanelTab  = 0;
-              }),
-            ),
-            const SizedBox(width: 2),
-
-            // ── Right: notifications ──────────────────────────────────
-            _StatusBarItem(
-              icon: Icons.notifications_none,
-              label: '',
-              fg: fg,
-              onTap: () {},
-            ),
+        // Two-tone: activity-bar block | rounded editor bar
+        return SizedBox(
+          height: 22,
+          child: Row(children: [
+            // Activity bar segment (flat, same bg, no radius)
+            Container(width: 48, height: 22, color: actBg),
+            // Editor bar with rounded top-left corner
+            Expanded(child: editorBar),
           ]),
-          ),  // Container
-        );    // ClipRect
+        );
       },
     );
   }

@@ -31,7 +31,7 @@ abstract final class PandaLog {
   static PandaLevel minLevel = PandaLevel.verbose;
 
   /// Niveau minimum écrit dans le fichier log (release + debug).
-  static PandaLevel fileMinLevel = PandaLevel.warning;
+  static PandaLevel fileMinLevel = PandaLevel.info;
 
   static IOSink? _fileSink;
   static String? _openLogDate;
