@@ -1134,7 +1134,8 @@ class _RuntimeInfo {
   });
 }
 
-final _kRuntimes = <_RuntimeInfo>[
+// ── SDK entries (Flutter SDK, Android SDK) ────────────────────────────────
+final _kSdks = <_RuntimeInfo>[
   _RuntimeInfo(
     key: 'flutter',
     name: 'Flutter SDK',
@@ -1166,6 +1167,10 @@ final _kRuntimes = <_RuntimeInfo>[
     icon: const FaIcon(FontAwesomeIcons.android, size: 26,
         color: Color(0xFF3DDC84)),
   ),
+];
+
+// ── Language runtime entries ───────────────────────────────────────────────
+final _kRuntimes = <_RuntimeInfo>[
   _RuntimeInfo(
     key: 'node',
     name: 'Node.js',
@@ -1304,11 +1309,57 @@ class _RuntimesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    // Flat mixed list: section-header strings interleaved with _RuntimeInfo
+    final items = <Object>[
+      '_sdk',
+      ..._kSdks,
+      '_runtimes',
+      ..._kRuntimes,
+    ];
+
     return ListView.builder(
       controller: scrollCtrl,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      itemCount: _kRuntimes.length,
-      itemBuilder: (_, i) => _RuntimeCard(info: _kRuntimes[i]),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 24),
+      itemCount: items.length,
+      itemBuilder: (_, i) {
+        final item = items[i];
+        if (item is String) {
+          // ── Section header ───────────────────────────────────────────
+          final isSdk = item == '_sdk';
+          return Padding(
+            padding: EdgeInsets.fromLTRB(8, i == 0 ? 8 : 20, 8, 8),
+            child: Row(
+              children: [
+                Icon(
+                  isSdk ? Icons.layers_rounded : Icons.terminal_rounded,
+                  size: 13,
+                  color: cs.primary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isSdk ? 'SDKs' : 'Language Runtimes',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface.withOpacity(0.65),
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Divider(
+                    height: 1,
+                    color: cs.outlineVariant.withOpacity(0.5),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return _RuntimeCard(info: item as _RuntimeInfo);
+      },
     );
   }
 }
@@ -1331,7 +1382,7 @@ class _RuntimeCard extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => Navigator.push(context,
+        onTap: () => Navigator.of(context, rootNavigator: true).push(
             MaterialPageRoute(builder: (_) => _RuntimeDetailPage(info: info))),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1385,7 +1436,7 @@ class _RuntimeCard extends StatelessWidget {
                 tooltip: 'Install ${info.name}',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                onPressed: () => Navigator.push(context,
+                onPressed: () => Navigator.of(context, rootNavigator: true).push(
                     MaterialPageRoute(
                         builder: (_) => _RuntimeDetailPage(info: info))),
               ),

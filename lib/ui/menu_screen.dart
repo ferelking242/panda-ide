@@ -34,13 +34,24 @@ class MenuScreen extends StatelessWidget {
               })),
             )))
         .toList();
+    final theme  = Theme.of(context);
+    final cs     = theme.colorScheme;
+    final abBg   = theme.appBarTheme.backgroundColor ?? cs.surface;
+    final abFg   = theme.appBarTheme.foregroundColor ?? cs.onSurface;
+
     return PopScope(
       canPop: true,
       onPopInvokedWithResult: (didPop, result) => context.read<MenuSearchBloc>().add(Search(searchedLangs: const [])),
       child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
         body: CustomScrollView(
           slivers: [
-            SliverAppBar(expandedHeight: 65, actions: [
+            SliverAppBar(
+              backgroundColor: abBg,
+              foregroundColor: abFg,
+              iconTheme: IconThemeData(color: abFg),
+              expandedHeight: 65,
+              actions: [
               const SizedBox(height: 20),
               Expanded(
                 child: Padding(

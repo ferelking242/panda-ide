@@ -25,8 +25,11 @@ class MdView extends StatelessWidget {
     final isDark = appTheme.isDark;
     final config = isDark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
     final editorTheme = getMergedHighlightThemes(theme.codeForgeConfig)[theme.codeForgeConfig['theme']];
+    final scaffoldBg = isDark ? const Color(0xFF1E1E1E) : const Color(0xFFFAFAFA);
+
     return SafeArea(
       child: Scaffold(
+        backgroundColor: scaffoldBg,
         body: MarkdownWidget(
           data: data,
           config: config.copy(configs: [

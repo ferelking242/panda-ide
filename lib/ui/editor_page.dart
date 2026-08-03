@@ -1708,35 +1708,32 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
       ]),
       builder: (context, snapshot) {
         if (snapshot.hasError && !widget.isProject) {
+          final _cs = Theme.of(context).colorScheme;
+          final _ab = Theme.of(context).appBarTheme;
           return Scaffold(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             resizeToAvoidBottomInset: true,
-            appBar: AppBar(title: const Text('Error')),
+            appBar: AppBar(
+              backgroundColor: _ab.backgroundColor ?? _cs.surface,
+              foregroundColor: _ab.foregroundColor ?? _cs.onSurface,
+              title: Text('Error', style: TextStyle(color: _ab.foregroundColor ?? _cs.onSurface)),
+            ),
             body: SingleChildScrollView(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.error_outline,
-                      size: 48,
-                      color: Colors.red,
-                    ),
+                    Icon(Icons.error_outline, size: 48, color: _cs.error),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Failed to initialize editor',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text('Failed to initialize editor',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
+                            color: _cs.onSurface)),
                     const SizedBox(height: 8),
                     Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: Text(
-                        snapshot.error.toString(),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.grey),
-                      ),
+                      child: Text(snapshot.error.toString(),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: _cs.onSurface.withOpacity(0.6))),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
@@ -1754,22 +1751,23 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                 snapshot.data == null ||
                 snapshot.data!.isEmpty) &&
             !widget.isProject) {
+          final _cs = Theme.of(context).colorScheme;
+          final _ab = Theme.of(context).appBarTheme;
           return Scaffold(
-            appBar: AppBar(title: const Text('Error')),
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            appBar: AppBar(
+              backgroundColor: _ab.backgroundColor ?? _cs.surface,
+              foregroundColor: _ab.foregroundColor ?? _cs.onSurface,
+              title: Text('Error', style: TextStyle(color: _ab.foregroundColor ?? _cs.onSurface)),
+            ),
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.warning_amber_rounded,
-                    size: 48,
-                    color: Colors.orange,
-                  ),
+                  Icon(Icons.warning_amber_rounded, size: 48, color: _cs.error),
                   const SizedBox(height: 16),
-                  const Text(
-                    'No data received',
-                    style: TextStyle(fontSize: 18),
-                  ),
+                  Text('No data received',
+                      style: TextStyle(fontSize: 18, color: _cs.onSurface)),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -1789,8 +1787,15 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
             : null;
 
         if ((target == null || !target.existsSync()) && !widget.isProject) {
+          final _cs = Theme.of(context).colorScheme;
+          final _ab = Theme.of(context).appBarTheme;
           return Scaffold(
-            appBar: AppBar(title: const Text('Error')),
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            appBar: AppBar(
+              backgroundColor: _ab.backgroundColor ?? _cs.surface,
+              foregroundColor: _ab.foregroundColor ?? _cs.onSurface,
+              title: Text('Error', style: TextStyle(color: _ab.foregroundColor ?? _cs.onSurface)),
+            ),
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,

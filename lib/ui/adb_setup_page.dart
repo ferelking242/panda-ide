@@ -87,9 +87,16 @@ class _AdbSetupPageState extends State<AdbSetupPage> {
     final theme = Theme.of(context);
     final cs    = theme.colorScheme;
 
+    final appBarBg = theme.appBarTheme.backgroundColor ?? cs.surface;
+    final appBarFg = theme.appBarTheme.foregroundColor ?? cs.onSurface;
+
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('ADB Setup for flutter run'),
+        backgroundColor: appBarBg,
+        foregroundColor: appBarFg,
+        iconTheme: IconThemeData(color: appBarFg),
+        title: Text('ADB Setup for flutter run', style: TextStyle(color: appBarFg)),
         elevation: 0,
       ),
       body: _checking

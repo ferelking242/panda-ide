@@ -91,6 +91,11 @@ class _WebViewScreenState extends State<WebViewScreen> {
     final initialUrl = widget.streamUrl ??
         'http://localhost:5285/${path.basename(widget.htmlFile!.path)}';
 
+    final theme    = Theme.of(context);
+    final cs       = theme.colorScheme;
+    final appBarBg = theme.appBarTheme.backgroundColor ?? cs.surface;
+    final appBarFg = theme.appBarTheme.foregroundColor ?? cs.onSurface;
+
     return PopScope(
       onPopInvokedWithResult: (val, _) async {
         await stopServer();
@@ -98,16 +103,22 @@ class _WebViewScreenState extends State<WebViewScreen> {
       child: BlocBuilder<WebViewBloc, WebViewState>(
         builder: (context, state) {
           return Scaffold(
+            backgroundColor: theme.scaffoldBackgroundColor,
             appBar: AppBar(
+              backgroundColor: appBarBg,
+              foregroundColor: appBarFg,
+              iconTheme: IconThemeData(color: appBarFg),
               actions: [
                 PopupMenuButton(
+                  color: cs.surfaceContainerHigh,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadiusGeometry.circular(10)
+                    borderRadius: BorderRadiusGeometry.circular(10),
                   ),
                   tooltip: "Options",
                   popUpAnimationStyle: AnimationStyle(
-                    duration: const Duration(milliseconds: 100)
+                    duration: const Duration(milliseconds: 100),
                   ),
+                  icon: Icon(Icons.more_vert, color: appBarFg),
                   itemBuilder: (context) => [
                     PopupMenuItem(
                       child: ListTile(
@@ -131,18 +142,18 @@ class _WebViewScreenState extends State<WebViewScreen> {
                           }
                         },
                         contentPadding: const EdgeInsets.all(0),
-                        title: const Text("Desktop"),
-                        titleTextStyle: const TextStyle(color: Colors.grey, fontSize: 18),
-                        leading: const Icon(
-                          Icons.desktop_mac_sharp,
-                          color: Colors.grey, size: 30),
+                        title: Text("Desktop",
+                            style: TextStyle(color: cs.onSurface, fontSize: 16)),
+                        leading: Icon(Icons.desktop_mac_sharp,
+                            color: cs.onSurface.withOpacity(0.7), size: 24),
                         trailing: Checkbox(
-                            fillColor: WidgetStatePropertyAll(!state.isMobile
-                              ? const Color(0xff0e639c)
-                              : Colors.transparent),
-                            side: const BorderSide(color: Colors.grey),
-                            value: !state.isMobile,
-                            onChanged: null),
+                          fillColor: WidgetStatePropertyAll(!state.isMobile
+                            ? cs.primary
+                            : Colors.transparent),
+                          side: BorderSide(color: cs.outline),
+                          value: !state.isMobile,
+                          onChanged: null,
+                        ),
                       ),
                     ),
                     PopupMenuItem(
@@ -155,46 +166,43 @@ class _WebViewScreenState extends State<WebViewScreen> {
                             await controller.evaluateJavascript(source: """
                               if (window.setEruda) {
                                 window.setEruda(${!state.isConsole});
-                                } else {
-                                  console.error('setEruda is not defined');
-                                }
-                                """);
+                              } else {
+                                console.error('setEruda is not defined');
+                              }
+                            """);
                             if (context.mounted) {
                               Navigator.of(context).pop();
                             }
                           }
                         },
-                        title: const Text("Dev Tools"),
-                        titleTextStyle: const TextStyle(color: Colors.grey, fontSize: 18),
-                        leading: const Icon(
-                          Icons.construction_outlined,
-                          color: Colors.grey, size: 30
-                        ),
+                        title: Text("Dev Tools",
+                            style: TextStyle(color: cs.onSurface, fontSize: 16)),
+                        leading: Icon(Icons.construction_outlined,
+                            color: cs.onSurface.withOpacity(0.7), size: 24),
                         trailing: Checkbox(
                           fillColor: WidgetStatePropertyAll(state.isConsole
-                            ? const Color(0xff0e639c)
+                            ? cs.primary
                             : Colors.transparent),
-                          side: const BorderSide(color: Colors.grey),
+                          side: BorderSide(color: cs.outline),
                           value: state.isConsole,
-                          onChanged: null),
+                          onChanged: null,
+                        ),
                       ),
                     ),
                   ],
-                )
+                ),
               ],
               title: isLoaded
                 ? FutureBuilder(future: (() async {
                     return await controller.getTitle();
                   })(), builder: (context, snapshot) {
-                    if (snapshot.connectionState ==
-                        ConnectionState.waiting) {
-                      return const Center(
-                          child: CircularProgressIndicator());
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
                     }
-                    return Text(snapshot.data ?? "WebView",
-                        style: const TextStyle(color: Colors.white));
+                    return Text(snapshot.data ?? 'WebView',
+                        style: TextStyle(color: appBarFg));
                   })
-                : const Text("WebView"),
+                : Text('WebView', style: TextStyle(color: appBarFg)),
             ),
             body: InAppWebView(
               initialSettings: InAppWebViewSettings(
