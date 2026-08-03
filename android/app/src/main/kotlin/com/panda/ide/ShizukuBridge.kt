@@ -169,13 +169,21 @@ object ShizukuBridge {
         // Run on a background thread — never block the main thread
         Thread {
             try {
-                // Shizuku's exec goes through its remote service which runs
-                // at ADB privilege level. We use the Shizuku.newProcess API.
-                val process = Shizuku.newProcess(
+                // Shizuku.newProcess() became private in API 13.1.5 —
+                // call it via reflection so it works across all versions.
+                @Suppress("DiscouragedPrivateApi")
+                val newProcessMethod = Shizuku::class.java.getDeclaredMethod(
+                    "newProcess",
+                    Array<String>::class.java,
+                    Array<String>::class.java,
+                    String::class.java
+                ).also { it.isAccessible = true }
+                val process = newProcessMethod.invoke(
+                    null,
                     arrayOf("sh", "-c", command),
-                    null, // inherit env
-                    null  // inherit cwd
-                )
+                    null,   // inherit env
+                    null    // inherit cwd
+                ) as Process
 
                 val stdout = process.inputStream.bufferedReader().readText()
                 val stderr = process.errorStream.bufferedReader().readText()
