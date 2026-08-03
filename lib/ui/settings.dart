@@ -24,6 +24,7 @@ import '../utils/themes.dart';
 import 'browser/settings/browser_settings_page.dart';
 import 'downloads.dart';
 import 'widgets.dart';
+import '../extensions/ui/marketplace_page.dart';
 
 class Settings extends StatefulWidget {
   /// When [embedded] is true, the widget skips its own Scaffold/AppBar
@@ -320,7 +321,7 @@ int main() {
                 Navigator.of(dialogContext).pop();
                 Navigator.of(context).push(
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => const DownloadManager(),
+                    pageBuilder: (context, animation, secondaryAnimation) => const MarketplacePage(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       return SizeTransition(sizeFactor: animation, child: child);
                     },
@@ -349,7 +350,7 @@ int main() {
             : const Color.fromARGB(255, 240, 240, 240),
           title: Text('Node Runtime Required', style: TextStyle(color: textColor)),
           content: Text(
-            'GitHub Copilot sign-in requires the Node.js runtime.\n\nPlease install Node.js from Downloads before continuing.',
+            'GitHub Copilot sign-in requires the Node.js runtime.\n\nPlease install Node.js from the Marketplace (Runtimes tab) before continuing.',
             style: TextStyle(color: textColor),
           ),
           actions: [
@@ -362,7 +363,7 @@ int main() {
                 Navigator.of(dialogContext).pop();
                 Navigator.of(context).push(
                   PageRouteBuilder(
-                    pageBuilder: (context, animation, secondaryAnimation) => const DownloadManager(),
+                    pageBuilder: (context, animation, secondaryAnimation) => const MarketplacePage(),
                     transitionsBuilder: (context, animation, secondaryAnimation, child) {
                       return SizeTransition(sizeFactor: animation, child: child);
                     },

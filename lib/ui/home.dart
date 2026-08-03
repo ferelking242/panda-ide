@@ -21,6 +21,7 @@ import 'donation_page.dart';
 import 'file_manager.dart';
 import 'editor_page.dart';
 import 'menu_screen.dart';
+// downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
 import 'downloads.dart';
 import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
@@ -1434,7 +1435,7 @@ class _SelectTypeState extends State<SelectType>
         ),
         const Divider(indent: 12, endIndent: 12),
         _panelItem(ctx, t, Broken.document_download, 'Téléchargements',
-            () => _push(ctx, DownloadManager())),
+            () => _push(ctx, const MarketplacePage())),
       ],
     );
   }
@@ -1833,7 +1834,7 @@ class _SelectTypeState extends State<SelectType>
               ),
               const SizedBox(width: 4),
               GestureDetector(
-                onTap: () => _push(ctx, DownloadManager()),
+                onTap: () => _push(ctx, const MarketplacePage()),
                 child: Text('Installer',
                     style: TextStyle(
                         fontSize: 11,
@@ -1883,7 +1884,7 @@ class _SelectTypeState extends State<SelectType>
         _panelItem(ctx, t, Broken.cpu, 'Parcourir les modèles IA',
             () => _push(ctx, const MenuScreen())),
         _panelItem(ctx, t, Broken.document_download, 'Téléchargements / Paquets',
-            () => _push(ctx, DownloadManager())),
+            () => _push(ctx, const MarketplacePage())),
         const Divider(indent: 12, endIndent: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -4176,7 +4177,7 @@ class _SelectTypeState extends State<SelectType>
               subtitle:
                   'Configurez votre éditeur, téléchargez les runtimes et commencez à coder.',
               isDark: isDark,
-              onTap: () => _push(context, DownloadManager()),
+              onTap: () => _push(context, const MarketplacePage()),
             ),
             const SizedBox(height: 10),
             _WalkthroughCard(

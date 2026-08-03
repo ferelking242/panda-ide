@@ -8,15 +8,19 @@
 ///  3. Null-check operator crash on install → graceful error path.
 ///  4. Extension detail = single VSCode-style scrollable page, opens inside
 ///     the panel (not rootNavigator / fullscreen).
-///  5. Bottom dock removed; Extensions / Runtimes / SDK / Installed are top
-///     pills; SDK is its own pill; Installed tap → opens real detail.
-///  6. Sidebar artefacts addressed (no rogue colours in pill nav container).
+///  5. Bottom dock removed; Extensions / Runtimes / SDK / Panda Ext. / Installed
+///     are top pills; downloads inline with progress (no separate page).
+///  6. Panda Extensions pill replaces the separate Downloads page.
+///  7. Download buttons trigger inline download+progress via PackageDownloader.
 library;
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:percent_indicator/linear_percent_indicator.dart';
 
 import '../models/marketplace_extension.dart';
 import '../open_vsx_client.dart';
@@ -24,7 +28,10 @@ import '../extension_registry.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
 import '../../ui/adb_setup_page.dart';
-import '../../ui/downloads.dart';
+import '../../bloc/ui_bloc/ui_bloc.dart';
+import '../../utils/constants.dart';
+import '../../utils/languages.dart';
+import '../../services/package_downloader.dart';
 
 // ── Categories ─────────────────────────────────────────────────────────────────
 const _kCategories = [
@@ -47,7 +54,7 @@ const _kSortOptions = {
 };
 
 // ── Section enum ───────────────────────────────────────────────────────────────
-enum _Section { extensions, runtimes, sdks, installed }
+enum _Section { extensions, runtimes, sdks, pandaExt, installed }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MarketplacePage
@@ -357,6 +364,9 @@ class _MarketplacePageState extends State<MarketplacePage> {
       case _Section.sdks:
         return _RuntimesSection(scrollCtrl: _scrollCtrl, showSdks: true);
 
+      case _Section.pandaExt:
+        return _PandaExtensionsSection(scrollCtrl: _scrollCtrl);
+
       case _Section.installed:
         return _InstalledSection(
           onTap: (ext) => _openExtensionDetail(ext),
@@ -543,10 +553,11 @@ class _TopPillNav extends StatelessWidget {
   const _TopPillNav({required this.current, required this.compact, required this.onTap});
 
   static const _items = [
-    _NavItem(_Section.extensions, Icons.extension_outlined, Icons.extension,       'Extensions'),
-    _NavItem(_Section.runtimes,   Icons.terminal_rounded,   Icons.terminal_rounded, 'Runtimes'),
-    _NavItem(_Section.sdks,       Icons.layers_outlined,    Icons.layers_rounded,   'SDK'),
-    _NavItem(_Section.installed,  Icons.check_circle_outline, Icons.check_circle,  'Installed'),
+    _NavItem(_Section.extensions, Icons.extension_outlined, Icons.extension,         'Extensions'),
+    _NavItem(_Section.runtimes,   Icons.terminal_rounded,   Icons.terminal_rounded,  'Runtimes'),
+    _NavItem(_Section.sdks,       Icons.layers_outlined,    Icons.layers_rounded,    'SDK'),
+    _NavItem(_Section.pandaExt,   Icons.download_outlined,  Icons.download_rounded,  'Panda Ext.'),
+    _NavItem(_Section.installed,  Icons.check_circle_outline, Icons.check_circle,   'Installed'),
   ];
 
   @override
@@ -1353,27 +1364,67 @@ final _kRuntimes = <_RuntimeInfo>[
   ),
 ];
 
-class _RuntimesSection extends StatelessWidget {
+// ──────────────────────────────────────────────────────────────────────────────
+// Runtimes / SDKs section — with inline download progress
+// ──────────────────────────────────────────────────────────────────────────────
+
+class _RuntimesSection extends StatefulWidget {
   final ScrollController scrollCtrl;
-  final bool showSdks; // true = SDK pill, false = Runtimes pill
+  final bool showSdks;
   const _RuntimesSection({required this.scrollCtrl, required this.showSdks});
 
   @override
+  State<_RuntimesSection> createState() => _RuntimesSectionState();
+}
+
+class _RuntimesSectionState extends State<_RuntimesSection> {
+  @override
   Widget build(BuildContext context) {
-    final items = showSdks ? _kSdks : _kRuntimes;
+    final catalogState = context.watch<PackageCatalogCubit>().state;
+    final items = widget.showSdks ? _kSdks : _kRuntimes;
+
+    // Map _RuntimeInfo.key → catalog index (needed for DownloadManagerBloc)
+    final Map<String, int> keyToIndex = {};
+    for (int i = 0; i < catalogState.runtimes.length; i++) {
+      keyToIndex[catalogState.runtimes[i].parentName.toLowerCase()] = i;
+    }
 
     return ListView.builder(
-      controller: scrollCtrl,
+      controller: widget.scrollCtrl,
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
       itemCount: items.length,
-      itemBuilder: (_, i) => _RuntimeCard(info: items[i]),
+      itemBuilder: (_, i) {
+        final info = items[i];
+        final resolvedKey = PackageDownloader.resolveAlias(info.key);
+        final idx  = keyToIndex[resolvedKey];
+        // Find the catalog RunTime for url/archiveName
+        RunTime? rt;
+        if (idx != null) {
+          rt = catalogState.runtimes[idx];
+        }
+        return _RuntimeCard(
+          info: info,
+          catalogIndex: idx,
+          catalogRuntime: rt,
+          catalogState: catalogState,
+        );
+      },
     );
   }
 }
 
 class _RuntimeCard extends StatelessWidget {
   final _RuntimeInfo info;
-  const _RuntimeCard({required this.info});
+  final int? catalogIndex;
+  final RunTime? catalogRuntime;
+  final PackageCatalogState catalogState;
+
+  const _RuntimeCard({
+    required this.info,
+    required this.catalogIndex,
+    required this.catalogRuntime,
+    required this.catalogState,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1391,7 +1442,12 @@ class _RuntimeCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _RuntimeDetailPage(info: info))),
+            MaterialPageRoute(builder: (_) => _RuntimeDetailPage(
+              info: info,
+              catalogIndex: catalogIndex,
+              catalogRuntime: catalogRuntime,
+              catalogState: catalogState,
+            ))),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
@@ -1434,25 +1490,131 @@ class _RuntimeCard extends StatelessWidget {
               ),
               const SizedBox(width: 6),
 
-              // Download icon
-              IconButton(
-                icon: Icon(Icons.download_rounded, size: 22, color: cs.primary),
-                tooltip: 'Install ${info.name}',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => DownloadManager(
-                      preselectedPackageParentName: info.key,
-                      preselectedIsExtension: false,
-                    ),
-                  ),
-                ),
-              ),
+              // Inline download button / progress
+              if (catalogIndex != null)
+                _InlineDownloadButton(
+                  index: catalogIndex!,
+                  onDownload: () => _triggerDownload(context),
+                  installDir: Directory('$runtimesDir/${info.key}'),
+                )
+              else
+                Icon(Icons.download_rounded, size: 22, color: cs.onSurface.withOpacity(0.3)),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  void _triggerDownload(BuildContext context) {
+    final rt = catalogRuntime;
+    final idx = catalogIndex;
+    if (rt == null || idx == null) return;
+    PackageDownloader.startDownload(
+      context: context,
+      index: idx,
+      url: rt.url,
+      archiveName: rt.archiveName,
+      targetDir: downloadsDir,
+      isExtension: false,
+      packageParentName: rt.parentName,
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Inline download button — shows progress bar while downloading
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _InlineDownloadButton extends StatelessWidget {
+  final int index;
+  final VoidCallback onDownload;
+  final Directory installDir;
+
+  const _InlineDownloadButton({
+    required this.index,
+    required this.onDownload,
+    required this.installDir,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return BlocBuilder<DownloadManagerBloc, DownloadManagerState>(
+      builder: (context, dlState) {
+        final percent         = dlState.downloadProgress[index] ?? 0.0;
+        final isExtracting    = dlState.isExtracting(index);
+        final extractPct      = dlState.extractionProgress[index] ?? 0.0;
+        final isFullyDone     = dlState.isFullyCompleted(index);
+        final isInstalled     = installDir.existsSync() || isFullyDone;
+
+        // ── Extracting ──────────────────────────────────────────────────
+        if (isExtracting) {
+          return SizedBox(
+            width: 90,
+            child: LinearPercentIndicator(
+              progressColor: Colors.greenAccent.withOpacity(0.7),
+              percent: (extractPct / 100).clamp(0.0, 1.0),
+              width: 86,
+              lineHeight: 36,
+              barRadius: const Radius.circular(18),
+              center: Text(
+                extractPct > 0 ? '${extractPct.toStringAsFixed(0)}%' : '…',
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+          );
+        }
+
+        // ── Downloading ─────────────────────────────────────────────────
+        if (percent > 0.0 && percent < 100.0) {
+          return SizedBox(
+            width: 90,
+            child: LinearPercentIndicator(
+              progressColor: cs.primary.withOpacity(0.7),
+              percent: (percent / 100).clamp(0.0, 1.0),
+              width: 86,
+              lineHeight: 36,
+              barRadius: const Radius.circular(18),
+              center: Text('${percent.toStringAsFixed(0)}%',
+                  style: const TextStyle(fontSize: 11)),
+            ),
+          );
+        }
+
+        // ── Starting (index active but 0 progress) ──────────────────────
+        if (PackageDownloader.isActive(index)) {
+          return SizedBox(
+            width: 90,
+            child: LinearPercentIndicator(
+              progressColor: cs.primary.withOpacity(0.5),
+              percent: 0.0,
+              width: 86,
+              lineHeight: 36,
+              barRadius: const Radius.circular(18),
+              center: SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: cs.primary),
+              ),
+            ),
+          );
+        }
+
+        // ── Installed ───────────────────────────────────────────────────
+        if (isInstalled) {
+          return Icon(Icons.check_circle_rounded, color: cs.primary, size: 26);
+        }
+
+        // ── Not started ─────────────────────────────────────────────────
+        return IconButton(
+          icon: Icon(Icons.download_rounded, size: 22, color: cs.primary),
+          onPressed: onDownload,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+        );
+      },
     );
   }
 }
@@ -1463,12 +1625,23 @@ class _RuntimeCard extends StatelessWidget {
 
 class _RuntimeDetailPage extends StatelessWidget {
   final _RuntimeInfo info;
-  const _RuntimeDetailPage({required this.info});
+  final int? catalogIndex;
+  final RunTime? catalogRuntime;
+  final PackageCatalogState catalogState;
+
+  const _RuntimeDetailPage({
+    required this.info,
+    required this.catalogIndex,
+    required this.catalogRuntime,
+    required this.catalogState,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs    = theme.colorScheme;
+    final idx   = catalogIndex;
+    final rt    = catalogRuntime;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -1523,25 +1696,80 @@ class _RuntimeDetailPage extends StatelessWidget {
           ),
           const SizedBox(height: 24),
 
-          // Install button
-          FilledButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => DownloadManager(
-                    preselectedPackageParentName: info.key,
-                    preselectedIsExtension: false,
+          // Install button — inline with progress
+          if (idx != null && rt != null)
+            BlocBuilder<DownloadManagerBloc, DownloadManagerState>(
+              builder: (context, dlState) {
+                final percent      = dlState.downloadProgress[idx] ?? 0.0;
+                final isExtracting = dlState.isExtracting(idx);
+                final extractPct   = dlState.extractionProgress[idx] ?? 0.0;
+                final isInstalled  = Directory('$runtimesDir/${info.key}').existsSync() ||
+                    dlState.isFullyCompleted(idx);
+
+                if (isExtracting || (percent > 0 && percent < 100) || PackageDownloader.isActive(idx)) {
+                  final pct = isExtracting ? extractPct : percent;
+                  return Column(
+                    children: [
+                      LinearProgressIndicator(
+                        value: (pct / 100).clamp(0.0, 1.0),
+                        backgroundColor: cs.surfaceContainerHighest,
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                        minHeight: 8,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        isExtracting ? 'Extracting… ${extractPct.toStringAsFixed(0)}%'
+                            : 'Downloading… ${percent.toStringAsFixed(0)}%',
+                        style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.6)),
+                      ),
+                    ],
+                  );
+                }
+
+                if (isInstalled) {
+                  return OutlinedButton.icon(
+                    onPressed: null,
+                    icon: Icon(Icons.check_circle_rounded, color: cs.primary, size: 16),
+                    label: Text('Installed',
+                        style: TextStyle(color: cs.primary)),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: cs.primary.withOpacity(0.4)),
+                    ),
+                  );
+                }
+
+                return FilledButton.icon(
+                  onPressed: () => PackageDownloader.startDownload(
+                    context: context,
+                    index: idx,
+                    url: rt.url,
+                    archiveName: rt.archiveName,
+                    targetDir: downloadsDir,
+                    isExtension: false,
+                    packageParentName: rt.parentName,
                   ),
-                ),
-              );
-            },
-            icon: const Icon(Icons.download_rounded, size: 18),
-            label: Text('Installer ${info.name}'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  icon: const Icon(Icons.download_rounded, size: 18),
+                  label: Text('Installer ${info.name}'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 48),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                );
+              },
+            )
+          else
+            FilledButton.icon(
+              onPressed: null,
+              icon: const Icon(Icons.download_rounded, size: 18),
+              label: Text('Installer ${info.name}'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
-          ),
 
           // ADB Setup (Flutter SDK only)
           if (info.extraAction != null) ...[
@@ -1617,6 +1845,169 @@ class _RuntimeDetailPage extends StatelessWidget {
     );
   }
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Panda Extensions section — LSP servers & tools (former Downloads page)
+// ══════════════════════════════════════════════════════════════════════════════
+
+class _PandaExtensionsSection extends StatefulWidget {
+  final ScrollController scrollCtrl;
+  const _PandaExtensionsSection({required this.scrollCtrl});
+
+  @override
+  State<_PandaExtensionsSection> createState() => _PandaExtensionsSectionState();
+}
+
+class _PandaExtensionsSectionState extends State<_PandaExtensionsSection> {
+  @override
+  Widget build(BuildContext context) {
+    final theme        = Theme.of(context);
+    final cs           = theme.colorScheme;
+    final catalogState = context.watch<PackageCatalogCubit>().state;
+    final extItems     = catalogState.extensions;
+
+    if (catalogState.isSyncing && extItems.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (extItems.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.download_outlined, size: 52, color: cs.onSurface.withOpacity(0.3)),
+              const SizedBox(height: 14),
+              Text('No Panda extensions available',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                      color: cs.onSurface.withOpacity(0.6))),
+              const SizedBox(height: 8),
+              FilledButton.tonal(
+                onPressed: () => context.read<PackageCatalogCubit>().refreshCatalog(),
+                child: const Text('Refresh'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // extensions list uses offset runtimes.length for DownloadManagerBloc index
+    final runtimeCount = catalogState.runtimes.length;
+
+    return ListView.builder(
+      controller: widget.scrollCtrl,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
+      itemCount: extItems.length,
+      itemBuilder: (_, i) {
+        final ext = extItems[i];
+        final extIdx = i + runtimeCount;
+        return _PandaExtCard(
+          ext: ext,
+          index: extIdx,
+          hasUpdate: catalogState.extensionUpdates.contains(ext.parentName),
+        );
+      },
+    );
+  }
+}
+
+class _PandaExtCard extends StatelessWidget {
+  final Extension ext;
+  final int index;
+  final bool hasUpdate;
+
+  const _PandaExtCard({
+    required this.ext,
+    required this.index,
+    required this.hasUpdate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme  = Theme.of(context);
+    final cs     = theme.colorScheme;
+    final sub    = cs.onSurface.withOpacity(0.55);
+    final extDir = Directory('$extensionDir/${ext.parentName}');
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+      elevation: 0,
+      color: cs.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Icon
+            ext.icon,
+            const SizedBox(width: 12),
+
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text(ext.name,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600, color: cs.onSurface),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    if (hasUpdate)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text('Update',
+                            style: TextStyle(
+                                color: Colors.orange, fontSize: 10,
+                                fontWeight: FontWeight.w700)),
+                      ),
+                  ]),
+                  const SizedBox(height: 3),
+                  Text(ext.details,
+                      style: TextStyle(fontSize: 11, color: sub),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                  Text('${ext.archiveSize} MB',
+                      style: TextStyle(fontSize: 11, color: sub)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Inline download button / progress
+            _InlineDownloadButton(
+              index: index,
+              onDownload: () => PackageDownloader.startDownload(
+                context: context,
+                index: index,
+                url: ext.url,
+                archiveName: ext.archiveName,
+                targetDir: downloadsDir,
+                isExtension: true,
+                packageParentName: ext.parentName,
+                extensionMetadata: ext,
+              ),
+              installDir: extDir,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _SectionHeader extends StatelessWidget {
   final String title;
