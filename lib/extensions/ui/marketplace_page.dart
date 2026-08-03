@@ -24,6 +24,7 @@ import '../extension_registry.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
 import '../../ui/adb_setup_page.dart';
+import '../../ui/downloads.dart';
 
 // ── Categories ─────────────────────────────────────────────────────────────────
 const _kCategories = [
@@ -1440,7 +1441,13 @@ class _RuntimeCard extends StatelessWidget {
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => _RuntimeDetailPage(info: info))),
+                  MaterialPageRoute(
+                    builder: (_) => DownloadManager(
+                      preselectedPackageParentName: info.key,
+                      preselectedIsExtension: false,
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -1519,10 +1526,14 @@ class _RuntimeDetailPage extends StatelessWidget {
           // Install button
           FilledButton.icon(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Installation de ${info.name} : accédez au pill Runtimes ou SDK.'),
-                behavior: SnackBarBehavior.floating,
-              ));
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => DownloadManager(
+                    preselectedPackageParentName: info.key,
+                    preselectedIsExtension: false,
+                  ),
+                ),
+              );
             },
             icon: const Icon(Icons.download_rounded, size: 18),
             label: Text('Installer ${info.name}'),

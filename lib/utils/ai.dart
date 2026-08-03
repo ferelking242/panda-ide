@@ -144,7 +144,99 @@ sealed class Models {
       case ToolCallingMethod.none:
       case ToolCallingMethod.openAiCompatible:
         try {
-          return response["choices"]?[0]?["message"]?["content"]?.toString() ?? '';
+          final directText = response['text']?.toString();
+          if (directText != null && directText.isNotEmpty) return directText;
+
+          final choices = response['choices'];
+          if (choices is List && choices.isNotEmpty) {
+            final first = choices.first;
+            if (first is Map) {
+              final message = first['message'];
+              if (message is Map) {
+                final content = message['content'];
+                if (content is String && content.isNotEmpty) return content;
+                if (content is List) {
+                  final buffer = StringBuffer();
+                  for (final item in content) {
+                    if (item is String && item.isNotEmpty) {
+                      if (buffer.isNotEmpty) buffer.write('\n');
+                      buffer.write(item);
+                    } else if (item is Map) {
+                      final text = item['text']?.toString();
+                      if (text != null && text.isNotEmpty) {
+                        if (buffer.isNotEmpty) buffer.write('\n');
+                        buffer.write(text);
+                      }
+                    }
+                  }
+                  return buffer.toString();
+                }
+              }
+              final delta = first['delta'];
+              if (delta is Map) {
+                final content = delta['content'];
+                if (content is String && content.isNotEmpty) return content;
+                if (content is List) {
+                  final buffer = StringBuffer();
+                  for (final item in content) {
+                    if (item is String && item.isNotEmpty) {
+                      if (buffer.isNotEmpty) buffer.write('\n');
+                      buffer.write(item);
+                    } else if (item is Map) {
+                      final text = item['text']?.toString();
+                      if (text != null && text.isNotEmpty) {
+                        if (buffer.isNotEmpty) buffer.write('\n');
+                        buffer.write(text);
+                      }
+                    }
+                  }
+                  return buffer.toString();
+                }
+              }
+            }
+          }
+
+          final output = response['output'];
+          if (output is List) {
+            final buffer = StringBuffer();
+            for (final item in output) {
+              if (item is! Map) continue;
+              final content = item['content'];
+              if (content is List) {
+                for (final part in content) {
+                  if (part is Map) {
+                    final text = part['text']?.toString();
+                    if (text != null && text.isNotEmpty) {
+                      if (buffer.isNotEmpty) buffer.write('\n');
+                      buffer.write(text);
+                    }
+                  }
+                }
+              }
+            }
+            return buffer.toString();
+          }
+
+          final content = response['content'];
+          if (content is String && content.isNotEmpty) return content;
+          if (content is List) {
+            final buffer = StringBuffer();
+            for (final item in content) {
+              if (item is String && item.isNotEmpty) {
+                if (buffer.isNotEmpty) buffer.write('\n');
+                buffer.write(item);
+              } else if (item is Map) {
+                final text = item['text']?.toString();
+                if (text != null && text.isNotEmpty) {
+                  if (buffer.isNotEmpty) buffer.write('\n');
+                  buffer.write(text);
+                }
+              }
+            }
+            return buffer.toString();
+          }
+
+          return response["choices"]?[0]?['message']?['content']?.toString() ?? '';
         } catch (_) {
           return '';
         }
@@ -224,11 +316,33 @@ sealed class Models {
       case ToolCallingMethod.openAiCompatible:
         try {
           final rawCalls = response["choices"]?[0]?['message']?["tool_calls"];
-          if (rawCalls is! List) return const [];
-          return rawCalls
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+          if (rawCalls is List) {
+            return rawCalls.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          }
+
+          final output = response['output'];
+          if (output is List) {
+            final calls = <Map<String, dynamic>>[];
+            for (final item in output) {
+              if (item is! Map || item['type']?.toString() != 'function_call') continue;
+              final name = item['name']?.toString();
+              final arguments = item['arguments'];
+              if (name == null || name.isEmpty) continue;
+              calls.add({
+                'id': item['call_id']?.toString() ?? 'function_call_${calls.length}',
+                'type': 'function',
+                'function': {
+                  'name': name,
+                  'arguments': arguments is String
+                      ? arguments
+                      : jsonEncode(arguments ?? {}),
+                },
+              });
+            }
+            return calls;
+          }
+
+          return const [];
         } catch (_) {
           return const [];
         }

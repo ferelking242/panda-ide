@@ -95,7 +95,8 @@ class AgentRunner {
     String workspacePath = '',
   }) async {
     _client = http.Client();
-    final agenticTools = (context != null)
+    final shouldUseTools = context != null && _shouldUseTools(messages);
+    final agenticTools = shouldUseTools
         ? AgenticTools(workspacePath: workspacePath, context: context)
         : null;
     PandaLog.i('AgentRunner', 'Starting run — provider=${model.runtimeType} tools=${agenticTools != null}');
@@ -203,7 +204,7 @@ class AgentRunner {
 
       // Add assistant turn to conversation
       conversationMessages.add({
-        'role': 'model',
+        'role': 'assistant',
         'content': assistantText,
         'tool_calls': functionCalls.map((fc) => {
           'id': fc['name'] ?? 'call_${turn}_${functionCalls.indexOf(fc)}',
@@ -313,7 +314,8 @@ class AgentRunner {
             .timeout(
               const Duration(seconds: 60),
               onTimeout: (sink) {
-                PandaLog.w('SSE', 'Per-event timeout reached (60 s) — closing stream');
+                PandaLog.w('SSE', 'Per-event timeout reached (60 s) — surfacing error');
+                sink.addError(const TimeoutException('Le modèle n’a pas répondu dans le délai imparti.'));
                 sink.close();
               },
             );
@@ -373,6 +375,19 @@ class AgentRunner {
 
       if (assistantText.isNotEmpty) {
         ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: assistantText));
+      } else {
+        final fallbackChunks = parseSsePayload(decoded);
+        if (fallbackChunks.isNotEmpty) {
+          for (final chunk in fallbackChunks) {
+            ctrl.add(chunk);
+          }
+        } else if (tools == null || toolCalls.isEmpty) {
+          ctrl.add(const AgentChunk(
+            phase: AgentPhase.error,
+            text: 'Le modèle n’a renvoyé aucun contenu exploitable.',
+          ));
+          return;
+        }
       }
 
       if (toolCalls.isEmpty || tools == null) return;
@@ -570,38 +585,138 @@ class AgentRunner {
     }
   }
 
-  void _parseChunk(Map<String, dynamic> obj, StreamController<AgentChunk> ctrl) {
-    // ── OpenAI-compatible ────────────────────────────────────────────────────
-    final choices = obj['choices'];
-    if (choices is List && choices.isNotEmpty) {
-      final delta = choices[0]['delta'];
-      if (delta is Map) {
-        final content = delta['content'];
-        if (content is String && content.isNotEmpty) {
-          ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: content));
-        }
-        final reasoning = delta['reasoning_content'] ?? delta['reasoning'] ?? delta['thinking'];
-        if (reasoning is String && reasoning.isNotEmpty) {
-          ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: reasoning));
-        }
-      }
-      return;
+  bool _shouldUseTools(List<Map<String, dynamic>> messages) {
+    final latestUser = messages.lastWhere(
+      (message) => (message['role']?.toString() ?? '') == 'user',
+      orElse: () => <String, dynamic>{},
+    );
+    final text = latestUser['content']?.toString() ?? '';
+    if (text.trim().isEmpty || text.trim().length < 8) {
+      return false;
     }
 
-    // ── Anthropic SSE ────────────────────────────────────────────────────────
-    final type = obj['type']?.toString() ?? '';
+    final lowered = text.toLowerCase();
+    final actionTerms = [
+      'create', 'edit', 'write', 'read', 'search', 'find', 'open', 'run', 'clone', 'delete',
+      'rename', 'install', 'fix', 'build', 'analyze', 'summarize', 'debug', 'test', 'update',
+      'generate', 'list', 'inspect', 'compare', 'explain', 'help', 'implement',
+    ];
+    return actionTerms.any(lowered.contains);
+  }
+
+  static List<AgentChunk> parseSsePayload(Map<String, dynamic> payload) {
+    final chunks = <AgentChunk>[];
+
+    final choices = payload['choices'];
+    if (choices is List && choices.isNotEmpty) {
+      for (final entry in choices) {
+        if (entry is! Map) continue;
+        final delta = entry['delta'];
+        if (delta is Map) {
+          final content = delta['content'];
+          if (content is String && content.isNotEmpty) {
+            chunks.add(AgentChunk(phase: AgentPhase.streaming, text: content));
+          } else if (content is List) {
+            for (final item in content) {
+              if (item is String && item.isNotEmpty) {
+                chunks.add(AgentChunk(phase: AgentPhase.streaming, text: item));
+              } else if (item is Map) {
+                final text = item['text']?.toString();
+                if (text != null && text.isNotEmpty) {
+                  chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+                }
+              }
+            }
+          }
+
+          final reasoning = delta['reasoning_content'] ?? delta['reasoning'] ?? delta['thinking'];
+          if (reasoning is String && reasoning.isNotEmpty) {
+            chunks.add(AgentChunk(phase: AgentPhase.thinking, text: reasoning));
+          }
+        }
+
+        final message = entry['message'];
+        if (message is Map) {
+          final content = message['content'];
+          if (content is String && content.isNotEmpty) {
+            chunks.add(AgentChunk(phase: AgentPhase.streaming, text: content));
+          } else if (content is List) {
+            for (final item in content) {
+              if (item is String && item.isNotEmpty) {
+                chunks.add(AgentChunk(phase: AgentPhase.streaming, text: item));
+              } else if (item is Map) {
+                final text = item['text']?.toString();
+                if (text != null && text.isNotEmpty) {
+                  chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+                }
+              }
+            }
+          }
+        }
+      }
+      return chunks;
+    }
+
+    final output = payload['output'];
+    if (output is List) {
+      for (final item in output) {
+        if (item is! Map) continue;
+        final content = item['content'];
+        if (content is List) {
+          for (final part in content) {
+            if (part is Map) {
+              final text = part['text']?.toString();
+              if (text != null && text.isNotEmpty) {
+                chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+              }
+            }
+          }
+        }
+      }
+      if (chunks.isNotEmpty) return chunks;
+    }
+
+    final content = payload['content'];
+    if (content is String && content.isNotEmpty) {
+      chunks.add(AgentChunk(phase: AgentPhase.streaming, text: content));
+      return chunks;
+    }
+    if (content is List) {
+      for (final item in content) {
+        if (item is Map) {
+          final text = item['text']?.toString();
+          if (text != null && text.isNotEmpty) {
+            chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+          }
+        } else if (item is String && item.isNotEmpty) {
+          chunks.add(AgentChunk(phase: AgentPhase.streaming, text: item));
+        }
+      }
+    }
+
+    final type = payload['type']?.toString() ?? '';
     if (type == 'content_block_delta') {
-      final dt = obj['delta'];
+      final dt = payload['delta'];
       if (dt is Map) {
         final dtType = dt['type']?.toString() ?? '';
         if (dtType == 'text_delta') {
           final t = dt['text']?.toString() ?? '';
-          if (t.isNotEmpty) ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: t));
+          if (t.isNotEmpty) chunks.add(AgentChunk(phase: AgentPhase.streaming, text: t));
         } else if (dtType == 'thinking_delta') {
           final t = dt['thinking']?.toString() ?? '';
-          if (t.isNotEmpty) ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: t));
+          if (t.isNotEmpty) chunks.add(AgentChunk(phase: AgentPhase.thinking, text: t));
         }
       }
+    }
+
+    return chunks;
+  }
+
+  void _parseChunk(Map<String, dynamic> obj, StreamController<AgentChunk> ctrl) {
+    final parsed = parseSsePayload(obj);
+    if (parsed.isEmpty) return;
+    for (final chunk in parsed) {
+      ctrl.add(chunk);
     }
   }
 }

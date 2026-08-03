@@ -29,7 +29,14 @@ class _PfdRuntimeConfig {
 }
 
 class DownloadManager extends StatefulWidget {
-  const DownloadManager({super.key});
+  final String? preselectedPackageParentName;
+  final bool? preselectedIsExtension;
+
+  const DownloadManager({
+    super.key,
+    this.preselectedPackageParentName,
+    this.preselectedIsExtension,
+  });
 
   @override
   State<DownloadManager> createState() => _DownloadManagerState();
@@ -316,14 +323,17 @@ class _DownloadManagerState extends State<DownloadManager> {
     _pfdInstallEvents = NativeChannel.moduleInstallEvents().asBroadcastStream();
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final catalogState = context.read<PackageCatalogCubit>().state;
+      final catalogCubit = context.read<PackageCatalogCubit>();
+      final catalogState = catalogCubit.state;
       if (catalogState.runtimes.isEmpty &&
           catalogState.extensions.isEmpty &&
           !catalogState.isSyncing) {
-        context.read<PackageCatalogCubit>().refreshCatalog();
+        await catalogCubit.refreshCatalog();
       }
+      if (!mounted) return;
+      await _autoStartPreselectedPackage();
     });
   }
 
@@ -334,6 +344,53 @@ class _DownloadManagerState extends State<DownloadManager> {
     }
     _activePfdSubscriptions.clear();
     super.dispose();
+  }
+
+  Future<void> _autoStartPreselectedPackage() async {
+    final parentName = widget.preselectedPackageParentName;
+    if (parentName == null || parentName.isEmpty) return;
+
+    final catalogState = context.read<PackageCatalogCubit>().state;
+    final isExtension = widget.preselectedIsExtension ?? false;
+    final items = isExtension ? catalogState.extensions : catalogState.runtimes;
+    final normalizedParent = parentName.toLowerCase();
+    final alias = _resolveCatalogAlias(normalizedParent);
+    final match = items.where((item) => item.parentName.toLowerCase() == alias).toList();
+    if (match.isEmpty) return;
+
+    final index = isExtension
+        ? catalogState.extensions.indexWhere((item) => item.parentName.toLowerCase() == alias) + catalogState.runtimes.length
+        : catalogState.runtimes.indexWhere((item) => item.parentName.toLowerCase() == alias);
+    if (index < 0) return;
+
+    final item = match.first;
+    if (!mounted) return;
+    await _startDownload(
+      context,
+      index,
+      item.url,
+      item.archiveName,
+      downloadsDir,
+      isExtension,
+      packageParentName: item.parentName,
+      extensionMetadata: isExtension ? item : null,
+    );
+  }
+
+  String _resolveCatalogAlias(String parentName) {
+    const aliases = {
+      'java': 'java-21-openjdk',
+      'nodejs': 'node',
+      'node.js': 'node',
+      'javascript': 'node',
+      'typescript': 'node',
+      'flutter': 'dart',
+      'android-sdk': 'java-21-openjdk',
+      'copilot': 'copilot-language-server',
+      'github-copilot': 'copilot-language-server',
+      'github-copilot-for-roxum': 'copilot-language-server',
+    };
+    return aliases[parentName] ?? parentName;
   }
 
   _PfdRuntimeConfig? _runtimePfdConfig(
