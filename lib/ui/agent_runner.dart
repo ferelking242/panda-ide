@@ -315,7 +315,7 @@ class AgentRunner {
               const Duration(seconds: 60),
               onTimeout: (sink) {
                 PandaLog.w('SSE', 'Per-event timeout reached (60 s) — surfacing error');
-                sink.addError(const TimeoutException('Le modèle n’a pas répondu dans le délai imparti.'));
+                sink.addError(TimeoutException('Le modèle n’a pas répondu dans le délai imparti.'));
                 sink.close();
               },
             );

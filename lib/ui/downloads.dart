@@ -352,18 +352,43 @@ class _DownloadManagerState extends State<DownloadManager> {
 
     final catalogState = context.read<PackageCatalogCubit>().state;
     final isExtension = widget.preselectedIsExtension ?? false;
-    final items = isExtension ? catalogState.extensions : catalogState.runtimes;
     final normalizedParent = parentName.toLowerCase();
     final alias = _resolveCatalogAlias(normalizedParent);
-    final match = items.where((item) => item.parentName.toLowerCase() == alias).toList();
-    if (match.isEmpty) return;
 
-    final index = isExtension
-        ? catalogState.extensions.indexWhere((item) => item.parentName.toLowerCase() == alias) + catalogState.runtimes.length
-        : catalogState.runtimes.indexWhere((item) => item.parentName.toLowerCase() == alias);
+    if (isExtension) {
+      final matches = catalogState.extensions
+          .where((item) => item.parentName.toLowerCase() == alias)
+          .toList();
+      if (matches.isEmpty) return;
+
+      final index = catalogState.extensions.indexWhere((item) => item.parentName.toLowerCase() == alias) +
+          catalogState.runtimes.length;
+      if (index < 0) return;
+
+      final item = matches.first;
+      if (!mounted) return;
+      await _startDownload(
+        context,
+        index,
+        item.url,
+        item.archiveName,
+        downloadsDir,
+        isExtension,
+        packageParentName: item.parentName,
+        extensionMetadata: item,
+      );
+      return;
+    }
+
+    final runtimeMatches = catalogState.runtimes
+        .where((item) => item.parentName.toLowerCase() == alias)
+        .toList();
+    if (runtimeMatches.isEmpty) return;
+
+    final index = catalogState.runtimes.indexWhere((item) => item.parentName.toLowerCase() == alias);
     if (index < 0) return;
 
-    final item = match.first;
+    final item = runtimeMatches.first;
     if (!mounted) return;
     await _startDownload(
       context,
@@ -373,7 +398,7 @@ class _DownloadManagerState extends State<DownloadManager> {
       downloadsDir,
       isExtension,
       packageParentName: item.parentName,
-      extensionMetadata: isExtension ? item : null,
+      extensionMetadata: null,
     );
   }
 
