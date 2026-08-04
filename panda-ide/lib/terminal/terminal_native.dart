@@ -1549,26 +1549,20 @@ class TerminalKeyboardMenu extends StatefulWidget {
 }
 
 class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
-  bool isCtrlActive = false;
-  bool isAltActive = false;
+  bool isCtrlActive  = false;
+  bool isAltActive   = false;
   bool isShiftActive = false;
 
+  // ── Modifier helpers ────────────────────────────────────────────────────
   void _resetModifiers() {
     setState(() {
-      isCtrlActive = false;
-      isAltActive = false;
+      isCtrlActive  = false;
+      isAltActive   = false;
       isShiftActive = false;
     });
   }
 
-  void _toggleCtrl() {
-    setState(() {
-      isCtrlActive = !isCtrlActive;
-      if (isCtrlActive) {
-        isAltActive = false;
-        isShiftActive = false;
-      }
-    });
+  void _notifyModifier() {
     widget.onModifierChanged(
       isCtrlActive,
       isAltActive,
@@ -1577,121 +1571,146 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
     );
   }
 
+  /// Toggle Ctrl; Ctrl + Shift can both be held simultaneously.
+  void _toggleCtrl() {
+    setState(() => isCtrlActive = !isCtrlActive);
+    _notifyModifier();
+  }
+
+  /// Toggle Alt; Alt is exclusive with Ctrl and Shift.
   void _toggleAlt() {
     setState(() {
       isAltActive = !isAltActive;
       if (isAltActive) {
-        isCtrlActive = false;
+        isCtrlActive  = false;
         isShiftActive = false;
       }
     });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
+    _notifyModifier();
+  }
+
+  /// Toggle Shift; Shift + Ctrl can both be held simultaneously.
+  void _toggleShift() {
+    setState(() => isShiftActive = !isShiftActive);
+    _notifyModifier();
+  }
+
+  // ── Small key helper ────────────────────────────────────────────────────
+  Widget _key(String label, VoidCallback onTap, {bool active = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 28,
+        constraints: const BoxConstraints(minWidth: 34),
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xff5090c8).withValues(alpha: 0.35)
+              : const Color(0xff2d2d2d),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+              color: active
+                  ? const Color(0xff5090c8)
+                  : const Color(0xff444444),
+              width: 1),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: active ? const Color(0xff5090c8) : Colors.white70,
+              fontSize: 11,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  void _toggleShift() {
-    setState(() {
-      isShiftActive = !isShiftActive;
-      if (isShiftActive) {
-        isCtrlActive = false;
-        isAltActive = false;
-      }
-    });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
+  Widget _iconKey(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 28,
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        decoration: BoxDecoration(
+          color: const Color(0xff2d2d2d),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: const Color(0xff444444), width: 1),
+        ),
+        child: Icon(icon, size: 14, color: Colors.white70),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xff181818),
+      color: const Color(0xff1a1a1a),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          // ── Row 1: modifiers + arrows ────────────────────────────────────
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              TextButton(
-                onPressed: _toggleCtrl,
-                style: TextButton.styleFrom(
-                  foregroundColor: isCtrlActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isCtrlActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("CTRL"),
+              // Sticky modifier keys
+              _key('CTRL',  _toggleCtrl,  active: isCtrlActive),
+              _key('ALT',   _toggleAlt,   active: isAltActive),
+              _key('SHIFT', _toggleShift, active: isShiftActive),
+              const SizedBox(width: 4),
+              _key('ESC', () => widget.onSendSequence('\x1b')),
+              _key('TAB', () => widget.onSendSequence('\t')),
+              const Spacer(),
+              // Arrow cluster
+              _iconKey(Icons.arrow_back,
+                  () => widget.onSendSequence('\x1b[D')),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _iconKey(Icons.arrow_upward,
+                      () => widget.onSendSequence('\x1b[A')),
+                  _iconKey(Icons.arrow_downward,
+                      () => widget.onSendSequence('\x1b[B')),
+                ],
               ),
-              TextButton(
-                onPressed: _toggleAlt,
-                style: TextButton.styleFrom(
-                  foregroundColor: isAltActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isAltActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("ALT"),
-              ),
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b[H'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("HOME"),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[A'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_upward),
-              ),
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b[F'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("END"),
-              ),
+              _iconKey(Icons.arrow_forward,
+                  () => widget.onSendSequence('\x1b[C')),
             ],
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("ESC"),
-              ),
-              TextButton(
-                onPressed: _toggleShift,
-                style: TextButton.styleFrom(
-                  foregroundColor: isShiftActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isShiftActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("SHIFT"),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[D'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: IconButton(
-                  onPressed: () => widget.onSendSequence('\x1b[B'),
-                  color: Colors.white,
-                  icon: const Icon(Icons.arrow_downward),
-                ),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[C'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_forward),
-              ),
-            ],
+          // ── Row 2: extra shortcuts (scrollable) ──────────────────────────
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _key('HOME', () => widget.onSendSequence('\x1b[H')),
+                _key('END',  () => widget.onSendSequence('\x1b[F')),
+                _key('PGUP', () => widget.onSendSequence('\x1b[5~')),
+                _key('PGDN', () => widget.onSendSequence('\x1b[6~')),
+                _key('DEL',  () => widget.onSendSequence('\x1b[3~')),
+                const SizedBox(width: 6),
+                _key('F1',  () => widget.onSendSequence('\x1bOP')),
+                _key('F2',  () => widget.onSendSequence('\x1bOQ')),
+                _key('F3',  () => widget.onSendSequence('\x1bOR')),
+                _key('F4',  () => widget.onSendSequence('\x1bOS')),
+                _key('F5',  () => widget.onSendSequence('\x1b[15~')),
+                const SizedBox(width: 6),
+                _key('Ctrl+C', () => widget.onSendSequence('\x03')),
+                _key('Ctrl+D', () => widget.onSendSequence('\x04')),
+                _key('Ctrl+Z', () => widget.onSendSequence('\x1a')),
+                _key('Ctrl+L', () => widget.onSendSequence('\x0c')),
+                _key('Ctrl+A', () => widget.onSendSequence('\x01')),
+                _key('Ctrl+E', () => widget.onSendSequence('\x05')),
+                _key('Ctrl+U', () => widget.onSendSequence('\x15')),
+                _key('Ctrl+K', () => widget.onSendSequence('\x0b')),
+                _key('Ctrl+W', () => widget.onSendSequence('\x17')),
+                _key('Ctrl+R', () => widget.onSendSequence('\x12')),
+              ],
+            ),
           ),
         ],
       ),

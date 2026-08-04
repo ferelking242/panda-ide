@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 const appVersion = String.fromEnvironment(
   'APP_VERSION',
@@ -91,6 +93,52 @@ class AndroidUpdateService {
     );
   }
 
+  /// Download APK to local storage with progress callback (0.0–1.0).
+  /// Returns the local file path when done.
+  static Future<String> downloadApkWithProgress(
+    AndroidUpdateInfo update, {
+    required void Function(double progress) onProgress,
+  }) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      throw UnsupportedError('Android only');
+    }
+    final dir = await getApplicationDocumentsDirectory();
+    final dest = File('${dir.path}/${update.apkName}');
+
+    final client = http.Client();
+    try {
+      final request = http.Request('GET', Uri.parse(update.apkUrl));
+      final response = await client.send(request);
+      final totalBytes = response.contentLength ?? 0;
+      int received = 0;
+
+      final sink = dest.openWrite();
+      await for (final chunk in response.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (totalBytes > 0) {
+          onProgress((received / totalBytes).clamp(0.0, 1.0));
+        }
+      }
+      await sink.close();
+    } finally {
+      client.close();
+    }
+
+    return dest.path;
+  }
+
+  /// Install an APK that was already downloaded locally.
+  static Future<bool> installLocalApk(String filePath) async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return false;
+    final result = await _channel.invokeMethod<bool>(
+      'installLocalApk',
+      {'path': filePath},
+    );
+    return result == true;
+  }
+
+  /// Legacy: download + install in one shot via native channel.
   static Future<bool> install(AndroidUpdateInfo update) async {
     if (update.apkUrl.isEmpty) return false;
     final result = await _channel.invokeMethod<bool>(

@@ -133,6 +133,24 @@ class MainActivity : FlutterActivity() {
                         }
                     }.start()
                 }
+                "installLocalApk" -> {
+                    val path = call.argument<String>("path")
+                    if (path.isNullOrBlank()) {
+                        result.error("BAD_PATH", "Path is required", null)
+                        return@setMethodCallHandler
+                    }
+                    val apk = File(path)
+                    if (!apk.exists()) {
+                        result.error("FILE_NOT_FOUND", "APK not found at $path", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        installUpdateApk(apk)
+                        result.success(true)
+                    } catch (error: Exception) {
+                        result.error("INSTALL_FAILED", error.message, null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

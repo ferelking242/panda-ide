@@ -91,6 +91,10 @@ class _SelectTypeState extends State<SelectType>
   bool _checkingPendingSharedFile  = false;
   int  _pendingSharedFileRetryCount = 0;
 
+  // APK download state (-1=none, 0..1=downloading, 2.0=ready to install)
+  double _apkDownloadProgress = -1;
+  String? _downloadedApkPath;
+
   // Active activity-bar item (0 = none/welcome)
   int _activeRail = 0;
   // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
@@ -186,8 +190,26 @@ class _SelectTypeState extends State<SelectType>
       _openPendingSharedFile();
       _maybeShowStorageMigrationNotice();
       _checkForAndroidUpdate();
+      _loadPendingApk();
       context.read<ChatSessionBloc>().add(LoadChatSessions());
     });
+  }
+
+  /// Load a previously downloaded APK from SharedPreferences.
+  Future<void> _loadPendingApk() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedPath = prefs.getString('pending_apk_path');
+      if (savedPath != null && File(savedPath).existsSync()) {
+        if (mounted) setState(() {
+          _apkDownloadProgress = 2.0;
+          _downloadedApkPath = savedPath;
+        });
+      } else if (savedPath != null) {
+        // File no longer exists — clear stale entry
+        await prefs.remove('pending_apk_path');
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkForAndroidUpdate() async {
@@ -212,22 +234,62 @@ class _SelectTypeState extends State<SelectType>
             FilledButton(
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
+                // Start background download with progress in the sidebar
+                setState(() { _apkDownloadProgress = 0.0; });
                 try {
-                  await AndroidUpdateService.install(update);
+                  final apkPath = await AndroidUpdateService.downloadApkWithProgress(
+                    update,
+                    onProgress: (p) {
+                      if (mounted) setState(() => _apkDownloadProgress = p);
+                    },
+                  );
+                  if (!mounted) return;
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setString('pending_apk_path', apkPath);
+                  if (!mounted) return;
+                  setState(() {
+                    _apkDownloadProgress = 2.0;
+                    _downloadedApkPath = apkPath;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Téléchargement terminé — appuyez sur l\'icône pour installer')),
+                  );
                 } catch (error) {
                   if (!mounted) return;
+                  setState(() => _apkDownloadProgress = -1);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Mise à jour impossible : $error')),
+                    SnackBar(content: Text('Téléchargement impossible : $error')),
                   );
                 }
               },
-              child: const Text('Installer'),
+              child: const Text('Télécharger'),
             ),
           ],
         ),
       );
     } catch (error) {
       PandaLog.w('PandaAgent', 'Android update check failed: $error');
+    }
+  }
+
+  /// Install a locally cached APK (clears the pending state on success).
+  Future<void> _installPendingApk() async {
+    final localPath = _downloadedApkPath;
+    if (localPath == null) return;
+    try {
+      await AndroidUpdateService.installLocalApk(localPath);
+      // Clear after launching the installer
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('pending_apk_path');
+      if (mounted) setState(() {
+        _apkDownloadProgress = -1;
+        _downloadedApkPath = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Installation impossible : $error')),
+      );
     }
   }
 
@@ -941,6 +1003,9 @@ class _SelectTypeState extends State<SelectType>
         const int errors   = 0;
         const int warnings = 0;
 
+        // Active editor language name
+        final activeLang = _activeEditorConfig()?.languageDetails?.name;
+
         // ── Editor portion of the bar (right of activity bar) ─────────
         final editorBar = ClipRRect(
           borderRadius: sidebarActive
@@ -997,6 +1062,17 @@ class _SelectTypeState extends State<SelectType>
                   _bottomPanelTab  = 1;
                 }),
               ),
+
+              // ── Left: language name ─────────────────────────────────
+              if (activeLang != null) ...[
+                const SizedBox(width: 6),
+                _StatusBarItem(
+                  icon: Icons.code,
+                  label: activeLang,
+                  fg: fg,
+                  onTap: () {},
+                ),
+              ],
 
               const Spacer(),
 
@@ -1130,6 +1206,9 @@ class _SelectTypeState extends State<SelectType>
     const tabIcon = Broken.document_text;
 
     setState(() {
+      // Remove the welcome tab if it's still open — the editor replaces it.
+      _openTabs.removeWhere((t) => t.id == 'welcome');
+
       if (!_openTabs.any((t) => t.id == tabId)) {
         _openTabs.add(_TabDef(id: tabId, title: tabTitle, icon: tabIcon));
         _editorTabs[tabId] = _EditorTabConfig(
@@ -1141,6 +1220,7 @@ class _SelectTypeState extends State<SelectType>
         );
       }
       _activeTabIdx = _openTabs.indexWhere((t) => t.id == tabId);
+      if (_activeTabIdx < 0) _activeTabIdx = 0;
       // Make sure the sidebar collapses so the editor gets full width.
       if (_sidebarState == 2) _sidebarState = 1;
       _activeRail = 0;
@@ -1166,6 +1246,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
         _RailItem(icon: Broken.magic_star,          label: 'Panda Agent',       idx: 10),
+        _RailItem(icon: Broken.warning_2,           label: 'Diagnostics',       idx: 11),
       ];
 
       return Container(
@@ -1316,6 +1397,42 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
 
+            // ── APK download / update indicator ────────────────────────
+            if (_apkDownloadProgress >= 0)
+              Tooltip(
+                message: _apkDownloadProgress >= 2.0
+                    ? 'Mise à jour téléchargée — Appuyez pour installer'
+                    : 'Téléchargement de la mise à jour…',
+                child: InkWell(
+                  onTap: _apkDownloadProgress >= 2.0
+                      ? _installPendingApk
+                      : null,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: _apkDownloadProgress >= 2.0
+                          ? Icon(Icons.system_update,
+                              size: 20,
+                              color: Colors.green[400])
+                          : Stack(alignment: Alignment.center, children: [
+                              CircularProgressIndicator(
+                                value: _apkDownloadProgress > 0
+                                    ? _apkDownloadProgress
+                                    : null,
+                                strokeWidth: 2,
+                                color: _kAccent,
+                              ),
+                              const Icon(Icons.download,
+                                  size: 12, color: _kAccent),
+                            ]),
+                    ),
+                  ),
+                ),
+              ),
+
             _ActivityBtnEx(
               item:      _RailItem(icon: Broken.settings, label: 'Parametres', idx: 99),
               selected:  false,
@@ -1358,6 +1475,7 @@ class _SelectTypeState extends State<SelectType>
       5: 'TUNNEL / SSH',
       6: 'MARKETPLACE',
       9: 'GITHUB COPILOT',
+      11: 'DIAGNOSTICS',
     };
 
     Widget panelBody;
@@ -1382,6 +1500,9 @@ class _SelectTypeState extends State<SelectType>
         break;
       case 9: // GitHub Copilot
         panelBody = _sidebarCopilot(context, appTheme, isDark);
+        break;
+      case 11: // Diagnostics
+        panelBody = _sidebarDiagnostics(context, appTheme, isDark);
         break;
       default:
         panelBody = const SizedBox.shrink();
@@ -1825,22 +1946,32 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Debug panel ───────────────────────────────────────────────────────────
   Widget _sidebarDebug(BuildContext ctx, AppTheme t, bool dark) {
+    final activeCfg = _activeEditorConfig();
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
-        _panelItem(ctx, t, Broken.cpu, 'Ouvrir le terminal',
-            () => _push(ctx, SetupTerminal(
-                  projectDir: homeDir,
-                  sshId: null,
-                  termuxId: null,
-                ))),
-        _panelItem(ctx, t, Broken.play_circle, 'Exécuter un fichier…',
+        _panelItem(ctx, t, Icons.terminal, 'Ouvrir le terminal', () {
+          setState(() {
+            _bottomPanelOpen = true;
+            _bottomPanelTab  = 0;
+          });
+        }),
+        if (activeCfg != null)
+          _panelItem(ctx, t, Broken.play_circle, 'Exécuter le fichier actif', () {
+            setState(() {
+              _bottomPanelOpen = true;
+              _bottomPanelTab  = 0;
+            });
+          }),
+        _panelItem(ctx, t, Broken.play_circle, 'Ouvrir un fichier à exécuter…',
             () => _doOpenFile(ctx)),
         const Divider(indent: 12, endIndent: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Text(
-            'Ouvrez un projet pour accéder aux configurations de lancement.',
+            activeCfg != null
+                ? 'Projet : ${path.basename(activeCfg.rootDir)}'
+                : 'Ouvrez un projet pour accéder aux configurations de lancement.',
             style: TextStyle(
                 fontSize: 12,
                 color: dark ? Colors.grey[500] : Colors.grey[600]),
@@ -2340,6 +2471,78 @@ class _SelectTypeState extends State<SelectType>
               size: 14, color: ok ? Colors.green : Colors.orange),
         ],
       ),
+    );
+  }
+
+  // ── Diagnostics sidebar panel ─────────────────────────────────────────────
+  Widget _sidebarDiagnostics(BuildContext ctx, AppTheme t, bool dark) {
+    final activeCfg = _activeEditorConfig();
+
+    if (activeCfg == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Text(
+          'Ouvrez un fichier ou un projet pour voir les diagnostics.',
+          style: TextStyle(
+              fontSize: 12,
+              color: dark ? Colors.grey[500] : Colors.grey[600]),
+        ),
+      );
+    }
+
+    // Show file name + placeholder diagnostics
+    final fileName = activeCfg.file != null
+        ? path.basename(activeCfg.file!.path)
+        : path.basename(activeCfg.rootDir);
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          child: Text('FICHIER ACTIF',
+              style: _kSectionTitle.copyWith(
+                  color: dark ? Colors.grey[500] : Colors.grey[500])),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(children: [
+            Icon(Broken.document_text, size: 14,
+                color: dark ? Colors.grey[400] : Colors.grey[700]),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(fileName,
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: dark ? Colors.grey[300] : Colors.grey[800]),
+                  overflow: TextOverflow.ellipsis),
+            ),
+          ]),
+        ),
+        const Divider(indent: 12, endIndent: 12),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+          child: Text('PROBLÈMES',
+              style: _kSectionTitle.copyWith(
+                  color: dark ? Colors.grey[500] : Colors.grey[500])),
+        ),
+        // Errors / warnings will be populated once LSP diagnostics are wired
+        _panelItem(ctx, t, Icons.cancel_outlined, 'Erreurs (0)', () {
+          setState(() {
+            _bottomPanelOpen = true;
+            _bottomPanelTab  = 1;
+          });
+        }),
+        _panelItem(ctx, t, Icons.warning_amber_outlined, 'Avertissements (0)', () {
+          setState(() {
+            _bottomPanelOpen = true;
+            _bottomPanelTab  = 1;
+          });
+        }),
+        const Divider(indent: 12, endIndent: 12),
+        _panelItem(ctx, t, Broken.refresh_2, 'Actualiser les diagnostics',
+            () => setState(() {})),
+      ],
     );
   }
 
@@ -2976,12 +3179,32 @@ class _SelectTypeState extends State<SelectType>
   void _showEditorMenu(BuildContext ctx, bool isDark, bool isPrimary) {
     final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
     final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
+    final activeCfg = _activeEditorConfig();
     showMenu<String>(
       context: ctx,
       position: const RelativeRect.fromLTRB(0, 35, 0, 0),
       color: bg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       items: [
+        if (activeCfg != null) ...[
+          PopupMenuItem<String>(
+            value: 'run',
+            child: Row(children: [
+              Icon(Broken.play_circle, size: 14, color: fg),
+              const SizedBox(width: 8),
+              Text('Exécuter', style: TextStyle(fontSize: 13, color: fg)),
+            ]),
+          ),
+        ],
+        PopupMenuItem<String>(
+          value: 'terminal',
+          child: Row(children: [
+            Icon(Icons.terminal, size: 14, color: fg),
+            const SizedBox(width: 8),
+            Text('Ouvrir le terminal', style: TextStyle(fontSize: 13, color: fg)),
+          ]),
+        ),
+        const PopupMenuDivider(),
         PopupMenuItem<String>(
           value: 'close_all',
           child: Text('Tout fermer',
@@ -2993,7 +3216,19 @@ class _SelectTypeState extends State<SelectType>
       ],
     ).then((value) {
       if (value == null) return;
-      if (value == 'close_all') {
+      if (value == 'terminal') {
+        setState(() {
+          _bottomPanelOpen = true;
+          _bottomPanelTab  = 0;
+        });
+      } else if (value == 'run') {
+        setState(() {
+          _bottomPanelOpen = true;
+          _bottomPanelTab  = 0;
+          _activeRail      = 4;
+          _sidebarState    = 2;
+        });
+      } else if (value == 'close_all') {
         setState(() {
           if (isPrimary) {
             _editorTabs.clear(); // clean up all editor tab configs
