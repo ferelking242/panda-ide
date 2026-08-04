@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:code_forge/code_forge.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
@@ -19,13 +20,15 @@ Future<void> main() async {
   if (!kIsWeb) {
     await RustLib.init();
   }
-  // migrateSharedStorageRoots uses dart:io (Directory) — skip on web.
-  if (!kIsWeb) {
+  // Shared storage roots and the extension host use Android-only paths and
+  // native binaries. Keep iOS focused on the Flutter UI and Agent providers.
+  final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+  if (isAndroid) {
     await migrateSharedStorageRoots();
   }
 
   // Initialise ExtensionRegistry root path so that installs have a real target.
-  if (!kIsWeb) {
+  if (isAndroid) {
     try {
       final dir = await getApplicationDocumentsDirectory();
       ExtensionRegistry.setRoot(dir.path);
@@ -36,7 +39,7 @@ Future<void> main() async {
 
   // Extension Host — extraction JS + configuration + contributes statiques.
   // Uniquement sur Android (nécessite le filesystem Android + node binary).
-  if (!kIsWeb) {
+  if (isAndroid) {
     try {
       final sharedPath = await NativeChannel.getLibraryPath();
       await ExtensionHostSetup.init(sharedPath: sharedPath);
@@ -149,8 +152,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isAndroid =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
     // Wire ExtensionApiRouter une seule fois au démarrage (Android uniquement).
-    if (!kIsWeb) {
+    if (isAndroid) {
       ExtensionApiRouter.instance.attachToManager();
     }
     return MultiBlocProvider(
@@ -188,7 +193,7 @@ class MainApp extends StatelessWidget {
         builder: (context, appThemeState) {
           final isDark = appThemeState.appTheme.isDark;
           // Fournir le BuildContext live à l'ExtensionApiRouter (Android uniquement).
-          if (!kIsWeb) {
+          if (isAndroid) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               ExtensionApiRouter.instance.setContext(context);
             });

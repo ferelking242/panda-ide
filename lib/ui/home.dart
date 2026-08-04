@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -35,6 +36,7 @@ import '../utils/functions.dart';
 import '../utils/languages.dart';
 import '../utils/panda_log.dart';
 import '../utils/themes.dart';
+import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
@@ -83,6 +85,7 @@ class _SelectTypeState extends State<SelectType>
   AnimationStatus _terminalSelectionStatus = AnimationStatus.dismissed;
   bool _didShowPackageUpdateToast  = false;
   bool _didShowStorageMigrationToast = false;
+  bool _didCheckAndroidUpdate = false;
   bool _checkingPendingSharedFile  = false;
   int  _pendingSharedFileRetryCount = 0;
 
@@ -180,8 +183,50 @@ class _SelectTypeState extends State<SelectType>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openPendingSharedFile();
       _maybeShowStorageMigrationNotice();
+      _checkForAndroidUpdate();
       context.read<ChatSessionBloc>().add(LoadChatSessions());
     });
+  }
+
+  Future<void> _checkForAndroidUpdate() async {
+    if (_didCheckAndroidUpdate) return;
+    _didCheckAndroidUpdate = true;
+    try {
+      final update = await AndroidUpdateService.checkForUpdate();
+      if (!mounted || update == null) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Mise à jour disponible'),
+          content: Text(
+            'Panda IDE ${update.version} (build ${update.buildNumber}) est disponible.\n\n'
+            'Version installée : $appVersion (build $appBuildNumber)',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Plus tard'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                try {
+                  await AndroidUpdateService.install(update);
+                } catch (error) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Mise à jour impossible : $error')),
+                  );
+                }
+              },
+              child: const Text('Installer'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      PandaLog.w('PandaAgent', 'Android update check failed: $error');
+    }
   }
 
   @override
@@ -207,7 +252,9 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Pending shared file ────────────────────────────────────────────────────
   Future<void> _openPendingSharedFile() async {
-    if (kIsWeb) return; // NativeChannel not available on web
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
+      return; // NativeChannel is currently Android-only.
+    }
     if (_checkingPendingSharedFile) return;
     _checkingPendingSharedFile = true;
     try {

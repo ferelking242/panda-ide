@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -73,7 +74,7 @@ class _StartScreenState extends State<StartScreen> {
   }
 
   Future<void> _navigate() async {
-    if (kIsWeb) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       _pushSelectType();
       return;
     }
@@ -106,7 +107,7 @@ class _StartScreenState extends State<StartScreen> {
   Future<void> _initializeApp() async {
     PandaLog.i('StartScreen', 'Initialization started');
 
-    if (kIsWeb) {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       await ensureCopilotEnabledPrefInitialized();
       await ensureCopilotSignedPrefInitialized();
       return;

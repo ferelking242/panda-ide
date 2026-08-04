@@ -7,10 +7,12 @@ import android.content.res.ColorStateList
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.annotation.NonNull
 import androidx.documentfile.provider.DocumentFile
+import androidx.core.content.FileProvider
 import io.endigo.plugins.pdfviewflutter.PDFViewFlutterPlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -28,6 +30,8 @@ import java.io.File
 import java.io.InputStream
 import java.io.FileOutputStream
 import java.io.OutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 import com.google.android.play.core.splitcompat.SplitCompat
@@ -35,6 +39,7 @@ import com.google.android.play.core.splitcompat.SplitCompat
 class MainActivity : FlutterActivity() {
     private val TAG = "MainActivity"
     private val CORE_CHANNEL = "com.panda.ide"
+    private val UPDATE_CHANNEL = "panda/update"
     private val SAF_CHANNEL = "panda/saf"
     private val PFD_CHANNEL = "panda/pfd"
     private val PFD_EVENTS_CHANNEL = "panda/pfd_events"
@@ -92,6 +97,43 @@ class MainActivity : FlutterActivity() {
                 }
                 else ->
                     result.notImplemented()
+            }
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            UPDATE_CHANNEL
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "downloadAndInstallApk" -> {
+                    val url = call.argument<String>("url")
+                    val filename = call.argument<String>("filename")
+                        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                        ?.ifBlank { "panda-ide-update.apk" }
+                        ?: "panda-ide-update.apk"
+                    if (url.isNullOrBlank() || !url.startsWith("https://")) {
+                        result.error("BAD_URL", "Only HTTPS APK URLs are supported", null)
+                        return@setMethodCallHandler
+                    }
+                    Thread {
+                        try {
+                            val apk = downloadUpdateApk(url, filename)
+                            runOnUiThread {
+                                try {
+                                    installUpdateApk(apk)
+                                    result.success(true)
+                                } catch (error: Exception) {
+                                    result.error("INSTALL_FAILED", error.message, null)
+                                }
+                            }
+                        } catch (error: Exception) {
+                            runOnUiThread {
+                                result.error("DOWNLOAD_FAILED", error.message, null)
+                            }
+                        }
+                    }.start()
+                }
+                else -> result.notImplemented()
             }
         }
 
@@ -236,6 +278,62 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    private fun downloadUpdateApk(url: String, filename: String): File {
+        val target = File(cacheDir, filename)
+        if (target.exists()) target.delete()
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15_000
+            readTimeout = 120_000
+            instanceFollowRedirects = true
+            setRequestProperty("Accept", "application/vnd.android.package-archive")
+        }
+        try {
+            if (connection.responseCode !in 200..299) {
+                throw IllegalStateException("HTTP ${connection.responseCode}")
+            }
+            connection.inputStream.use { input ->
+                FileOutputStream(target).use { output ->
+                    input.copyTo(output)
+                }
+            }
+            if (!target.exists() || target.length() == 0L) {
+                throw IllegalStateException("Downloaded APK is empty")
+            }
+            return target
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun installUpdateApk(apk: File) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                )
+            )
+            throw IllegalStateException(
+                "Autorise l’installation de sources inconnues pour Panda IDE, puis relance la mise à jour."
+            )
+        }
+        val apkUri = FileProvider.getUriForFile(
+            this,
+            "$packageName.fileprovider",
+            apk,
+        )
+        startActivity(
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        )
     }
 
     override fun onDestroy() {

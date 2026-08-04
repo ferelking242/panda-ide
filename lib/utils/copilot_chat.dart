@@ -290,7 +290,7 @@ class CopilotChat {
 
     final modelData = _cachedModels!.firstWhere(
       (item) => item['id'] == model,
-      orElse: () => const {},
+      orElse: () => const <String, dynamic>{},
     );
 
     if (modelData.isEmpty) return const {};

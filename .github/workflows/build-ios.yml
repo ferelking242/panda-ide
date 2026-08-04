@@ -1,26 +1,15 @@
-name: Build iOS
+name: Build iOS (manual)
 
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
   workflow_dispatch:
 
-# ⚠️  COMPATIBILITÉ iOS — ÉTAT ACTUEL
-# ────────────────────────────────────────────────────────────────────────────────
-# ❌ BLOQUANTS connus (Android-only) :
-#   - flutter_pty          → PTY non disponible sur iOS (sandbox Apple)
-#   - llama_flutter_android → Android NDK only, pas de port iOS
-#   - android_intent_plus   → Android-only par définition
-#
-# Le build échouera jusqu'à ce que ces packages soient wrappés ou retirés.
-# ACTION REQUISE : wrapper flutter_pty/llama/android_intent avec Platform.isIOS
-# ────────────────────────────────────────────────────────────────────────────────
+permissions:
+  contents: read
 
 jobs:
   build-ios:
+    name: Build unsigned iOS IPA
     runs-on: macos-15
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,7 +17,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           cache: true
 
       - name: Setup Xcode
@@ -36,33 +25,27 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Generate iOS host project
+        run: flutter create . --platforms ios --org com.panda
+
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Check iOS compatibility
-        run: |
-          echo "🔍 Vérification compatibilité iOS..."
-          grep -E "flutter_pty|llama_flutter_android|android_intent" pubspec.yaml \
-            && echo "⚠️  Packages Android-only détectés — build peut échouer" \
-            || echo "✅ Pas de package Android-only détecté"
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
 
-      - name: Build iOS (no codesign)
-        continue-on-error: true
+      - name: Package unsigned IPA
         run: |
-          flutter build ios \
-            --release \
-            --no-codesign
+          set -euo pipefail
+          rm -rf Payload release-assets
+          mkdir -p Payload release-assets
+          cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          ditto -c -k --sequesterRsrc --keepParent Payload \
+            release-assets/panda-ide-ios-unsigned.ipa
 
-      - name: Upload IPA artifact
-        if: success()
+      - name: Upload iOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: panda-ide-ios-build
-          path: build/ios/iphoneos/Runner.app
+          name: panda-ide-ios-unsigned
+          path: release-assets/*.ipa
           retention-days: 30
-
-      - name: iOS build status
-        run: |
-          echo "ℹ️  iOS build terminé (peut avoir échoué sur packages Android-only)."
-          echo "Pour un build iOS fonctionnel, wrapper flutter_pty, llama_flutter_android"
-          echo "et android_intent_plus avec des guards Platform.isIOS."

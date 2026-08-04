@@ -1,7 +1,4 @@
-import 'package:android_intent_plus/android_intent.dart';
-import 'package:android_intent_plus/flag.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -17,17 +14,9 @@ class BuyMeCoffee extends StatelessWidget {
     }
   }
 
-  void _launchUPI(){
+  void _launchUPI() {
     const upiUrl = 'upi://pay?pa=athulas2005@oksbi&pn=HECKMON&tn=Support%20Panda&cu=INR';
-    final intent = AndroidIntent(
-      action: 'action_view',
-      data: upiUrl,
-      flags: <int>[
-        Flag.FLAG_ACTIVITY_NEW_TASK,
-      ],
-    );
-
-    intent.launch();
+    _launchURL(upiUrl);
   }
 
   @override

@@ -102,6 +102,7 @@ kotlin {
 
 dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("com.google.android.play:feature-delivery:2.1.0")
     // Shizuku — ADB-level shell access without root (flutter run on-device)
     implementation("dev.rikka.shizuku:api:13.1.5")
