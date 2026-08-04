@@ -33,6 +33,7 @@ import '../ui/github_page.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
+import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
