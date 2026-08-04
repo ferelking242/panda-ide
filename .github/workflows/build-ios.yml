@@ -54,8 +54,19 @@ jobs:
           perl -0pi -e 's|        -e "/__embed_ggml-common.h__/d" \\\n|        -e "/__embed_ggml-common.h__/d" \\\n        -e \x27/#include "ggml-common.h"/d\x27 \\\n|' "$podspec"
           grep -q '/#include "ggml-common.h"/d' "$podspec"
 
+      - name: Prepare and patch generated Metal shader
+        run: |
+          set -euo pipefail
+          (cd ios && pod install)
+          shader="$(find ios/Pods \
+            -path '*/ggml-metal-ios.metal' \
+            -print -quit)"
+          test -n "$shader"
+          sed -i '' '/#include "ggml-common.h"/d' "$shader"
+          ! grep -q '#include "ggml-common.h"' "$shader"
+
       - name: Build iOS
-        run: flutter build ios --release --no-codesign
+        run: flutter build ios --release --no-codesign --no-pub
 
       - name: Package unsigned IPA
         run: |

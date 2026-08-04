@@ -154,6 +154,17 @@ jobs:
           perl -0pi -e 's|        -e "/__embed_ggml-common.h__/d" \\\n|        -e "/__embed_ggml-common.h__/d" \\\n        -e \x27/#include "ggml-common.h"/d\x27 \\\n|' "$podspec"
           grep -q '/#include "ggml-common.h"/d' "$podspec"
 
+      - name: Prepare and patch generated Metal shader
+        run: |
+          set -euo pipefail
+          (cd ios && pod install)
+          shader="$(find ios/Pods \
+            -path '*/ggml-metal-ios.metal' \
+            -print -quit)"
+          test -n "$shader"
+          sed -i '' '/#include "ggml-common.h"/d' "$shader"
+          ! grep -q '#include "ggml-common.h"' "$shader"
+
       - name: Build iOS app
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
@@ -162,6 +173,7 @@ jobs:
           flutter build ios \
             --release \
             --no-codesign \
+            --no-pub \
             --build-name "$APP_VERSION" \
             --build-number "$BUILD_NUMBER" \
             --dart-define=APP_VERSION="$APP_VERSION" \
