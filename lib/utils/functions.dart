@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_archive/flutter_archive.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:panda/utils/themes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -280,6 +281,17 @@ Future<Directory> setupTempDir() async {
 }
 
 Future<Directory> setupFilesDir() async {
+  // On web, dart:io paths like /data/data/... don't exist.
+  // Use path_provider which returns an IDBFS-backed virtual path on web.
+  if (kIsWeb) {
+    final appDir = await getApplicationDocumentsDirectory();
+    final webFilesDir = Directory('${appDir.path}/panda_files');
+    if (!webFilesDir.existsSync()) {
+      await webFilesDir.create(recursive: true);
+    }
+    return webFilesDir;
+  }
+
   // The active root is private during first launch and switches to public
   // storage only after a successful write probe or explicit permission grant.
   // Never let a permission-protected public path abort startup.
@@ -1571,6 +1583,7 @@ Future<File?> pickFile() async {
   final result = await FilePicker.pickFiles(
     allowMultiple: false,
     type: FileType.custom,
+    withData: kIsWeb, // always fetch bytes on web since there's no file path
   );
 
   if (result == null || result.files.isEmpty) return null;
@@ -1582,21 +1595,22 @@ Future<File?> pickFile() async {
   }
 
   final projectDir = await setupFilesDir();
-  final currentFiles = File('${projectDir.path}/.current_files.json');
 
-  Map<String, String> fileMap = {};
-
-  if (currentFiles.existsSync() && currentFiles.lengthSync() > 0) {
-    fileMap = Map<String, String>.from(
-      jsonDecode(currentFiles.readAsStringSync()),
-    );
+  // On web we skip the identifier/metadata JSON since dart:io may not fully
+  // support it; the file bytes path below is always taken instead.
+  if (!kIsWeb) {
+    final currentFiles = File('${projectDir.path}/.current_files.json');
+    Map<String, String> fileMap = {};
+    if (currentFiles.existsSync() && currentFiles.lengthSync() > 0) {
+      fileMap = Map<String, String>.from(
+        jsonDecode(currentFiles.readAsStringSync()),
+      );
+    }
+    if (picked.identifier != null) {
+      fileMap[picked.name] = picked.identifier!;
+    }
+    await currentFiles.writeAsString(jsonEncode(fileMap), flush: true);
   }
-
-  if (picked.identifier != null) {
-    fileMap[picked.name] = picked.identifier!;
-  }
-
-  await currentFiles.writeAsString(jsonEncode(fileMap), flush: true);
 
   final targetFile = File('${projectDir.path}/${picked.name}');
 
@@ -1611,6 +1625,8 @@ Future<File?> pickFile() async {
 }
 
 Future<Directory?> pickDir() async {
+  // SAF (Storage Access Framework) is Android-only; not available on web or desktop.
+  if (kIsWeb) return null;
   const MethodChannel saf = MethodChannel('panda/saf');
   final String? treeUri = await saf.invokeMethod<String>('pickSafDir');
 

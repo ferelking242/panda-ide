@@ -438,8 +438,17 @@ class _SelectTypeState extends State<SelectType>
                     style: _primaryBtn(),
                     onPressed: () async {
                       if (!_createFileKey.currentState!.validate()) return;
+                      // On web, use the platform-compatible dir from setupFilesDir()
+                      // instead of the Android-specific filesDir constant.
+                      final String targetDir;
+                      if (kIsWeb) {
+                        final d = await setupFilesDir();
+                        targetDir = d.path;
+                      } else {
+                        targetDir = filesDir;
+                      }
                       final file = await createFile(
-                          createFileController.text, filesDir, context);
+                          createFileController.text, targetDir, context);
                       if (file != null && context.mounted) {
                         Navigator.of(ctx).pop();
                         final lang = languages.firstWhere(
@@ -485,6 +494,29 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Future<void> _doOpenFolder(BuildContext context, AppTheme appTheme) async {
+    // Folder picking via Android SAF is not available on web.
+    if (kIsWeb) {
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            backgroundColor: appTheme.isDark
+                ? const Color(0xff2b2b2b)
+                : Colors.white,
+            title: const Text('Non disponible sur le web'),
+            content: const Text(
+                'L\'ouverture de dossiers n\'est pas supportée sur la version web. '
+                'Utilisez l\'application Android pour gérer des projets complets.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('OK')),
+            ],
+          ),
+        );
+      }
+      return;
+    }
     final dir = await pickDir();
     if (dir == null) return;
     if (!dir.existsSync()) {
@@ -1051,8 +1083,10 @@ class _SelectTypeState extends State<SelectType>
   void _push(BuildContext context, Widget page) {
     Navigator.of(context).push(PageRouteBuilder(
       pageBuilder: (_, __, ___) => page,
+      transitionDuration: const Duration(milliseconds: 200),
+      reverseTransitionDuration: const Duration(milliseconds: 150),
       transitionsBuilder: (_, a, __, child) =>
-          SizeTransition(sizeFactor: a, child: child),
+          FadeTransition(opacity: CurvedAnimation(parent: a, curve: Curves.easeIn), child: child),
     ));
   }
 
@@ -5136,11 +5170,17 @@ class _SelectTypeState extends State<SelectType>
       BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
     final isDark = appTheme.isDark;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(40, 32, 40, 48),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680),
-        child: Column(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 600;
+        final hPad = isNarrow ? 16.0 : 40.0;
+        return SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 48),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 680),
+              child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Hero ────────────────────────────────────────────────────
@@ -5347,7 +5387,10 @@ class _SelectTypeState extends State<SelectType>
           ],
         ),
       ),
-    );
+    ),   // Align
+    );   // SingleChildScrollView / return
+      }, // LayoutBuilder builder
+    );   // LayoutBuilder
   }
 
   Widget _sectionHeader(String title, bool isDark) => Text(
