@@ -569,6 +569,19 @@ class _AgentSettingsState extends State<AgentSettings>
               {'role': 'user', 'content': code},
             ],
           },
+          customParser: (response) {
+            try {
+              final data = response is Map ? response : {};
+              final choices = data['choices'] as List?;
+              if (choices != null && choices.isNotEmpty) {
+                final msg = choices.first['message'] ?? choices.first['delta'];
+                if (msg is Map) return (msg['content'] ?? '').toString();
+              }
+              return (data['text'] ?? data['content'] ?? response ?? '').toString();
+            } catch (_) {
+              return response?.toString() ?? '';
+            }
+          },
         );
       default:
         return null;
