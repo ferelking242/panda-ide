@@ -80,7 +80,7 @@ class AgentRunner {
             systemPromptOverride.trim().isEmpty
         ? _systemPrompt
         : '$_systemPrompt\n\nAdditional Panda Agent context:\n$systemPromptOverride';
-    _run(
+    unawaited(_run(
       model: model,
       messages: messages,
       systemPrompt: effectiveSystemPrompt,
@@ -88,7 +88,7 @@ class AgentRunner {
       context: context,
       workspacePath: workspacePath,
       agentMode: agentMode,
-    );
+    ));
     return ctrl.stream;
   }
 
@@ -102,23 +102,23 @@ class AgentRunner {
     String agentMode = 'agent',
   }) async {
     _client = http.Client();
-    final shouldUseTools = context != null &&
-        agentMode != 'normal' &&
-        (agentMode == 'agent' || _shouldUseTools(messages));
-    final agenticTools = shouldUseTools
-        ? AgenticTools(workspacePath: workspacePath, context: context)
-        : null;
-    final toolSchemas = agenticTools?.getTools(
-          readAccessOnly: agentMode != 'agent',
-        ) ??
-        const <Map<String, dynamic>>[];
-    PandaLog.i(
-      'AgentRunner',
-      'Starting run — provider=${model.runtimeType} '
-      'mode=$agentMode tools=${agenticTools != null} '
-      'toolCount=${toolSchemas.length} workspace=$workspacePath',
-    );
     try {
+      final shouldUseTools = context != null &&
+          agentMode != 'normal' &&
+          (agentMode == 'agent' || _shouldUseTools(messages));
+      final agenticTools = shouldUseTools
+          ? AgenticTools(workspacePath: workspacePath, context: context)
+          : null;
+      final toolSchemas = agenticTools?.getTools(
+            readAccessOnly: agentMode != 'agent',
+          ) ??
+          const <Map<String, dynamic>>[];
+      PandaLog.i(
+        'AgentRunner',
+        'Starting run — provider=${model.runtimeType} '
+        'mode=$agentMode tools=${agenticTools != null} '
+        'toolCount=${toolSchemas.length} workspace=$workspacePath',
+      );
       if (model is Gemini) {
         await _runGemini(
           model,

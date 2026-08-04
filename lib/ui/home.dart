@@ -127,6 +127,7 @@ class _SelectTypeState extends State<SelectType>
   String     _agentThinkingBuf  = '';
   String     _agentStreamBuf    = '';
   final      _agentRunner       = AgentRunner();
+  int        _agentRequestSerial = 0;
 
   // ── Agent UI state ───────────────────────────────────────────────
   /// 'ask' | 'agent' | 'normal'
@@ -4105,6 +4106,8 @@ class _SelectTypeState extends State<SelectType>
   }
 
   void _agentStop() {
+    PandaLog.w('PandaAgent', 'Generation cancelled by user');
+    _agentRequestSerial++;
     _agentRunner.cancel();
     _sendAnimCtrl.stop();
     if (!mounted) return;
@@ -4114,7 +4117,9 @@ class _SelectTypeState extends State<SelectType>
       if (_agentMessages.isNotEmpty &&
           _agentMessages.last['role'] == 'agent' &&
           _agentMessages.last['phase'] == 'streaming') {
-        _agentMessages.last['phase'] = 'done';
+        _agentMessages.last['text'] =
+            _agentStreamBuf.isEmpty ? 'Génération arrêtée.' : _agentStreamBuf;
+        _agentMessages.last['phase'] = 'error';
       }
     });
   }
@@ -4281,14 +4286,64 @@ class _SelectTypeState extends State<SelectType>
   Future<void> _agentSend() async {
     final text = _agentInputCtrl.text.trim();
     if (text.isEmpty || _agentGenerating) return;
+    final requestId = ++_agentRequestSerial;
     _sendAnimCtrl.repeat(reverse: true);
+    setState(() {
+      _agentGenerating = true;
+      _agentPhase = AgentPhase.thinking;
+    });
     PandaLog.i(
       'PandaAgent',
       'Send requested — chars=${text.length} mode=$_agentChatMode',
     );
+    try {
+      await _agentSendInternal(text, requestId);
+    } catch (error, stack) {
+      PandaLog.e(
+        'PandaAgent',
+        'Failure before stream started',
+        error: '$error\n$stack',
+      );
+      _showAgentFailure(text, error.toString(), requestId);
+    }
+  }
+
+  void _showAgentFailure(String prompt, String message, int requestId) {
+    if (requestId != _agentRequestSerial) return;
+    _sendAnimCtrl.stop();
+    if (!mounted) return;
+    setState(() {
+      _agentGenerating = false;
+      _agentPhase = AgentPhase.error;
+      if (_agentMessages.isEmpty ||
+          _agentMessages.last['role'] != 'agent' ||
+          _agentMessages.last['phase'] != 'streaming') {
+        _agentMessages.add({'role': 'user', 'text': prompt});
+        _agentMessages.add({
+          'role': 'agent',
+          'text': 'Erreur : $message',
+          'thinking': '',
+          'phase': 'error',
+        });
+      } else {
+        _agentMessages.last['text'] = 'Erreur : $message';
+        _agentMessages.last['phase'] = 'error';
+      }
+      _agentInputCtrl.clear();
+    });
+    _agentScrollToBottom();
+  }
+
+  Future<void> _agentSendInternal(String text, int requestId) async {
+    PandaLog.d('PandaAgent', 'Preparing model and conversation');
 
     // Récupère le modèle sélectionné dans le panel (ou le chatModel par défaut)
     final aiState = context.read<AIBloc>().state;
+    PandaLog.d(
+      'PandaAgent',
+      'AI state loaded — configs=${aiState.config.length} '
+      'selected=${aiState.modelSelected['chat']}',
+    );
 
     // Priorité : modèle choisi dans le panel > chatModel de l'AIBloc
     Models? model;
@@ -4310,8 +4365,21 @@ class _SelectTypeState extends State<SelectType>
         selectedConfig['provider']?.toString().toLowerCase() == 'copilot';
     if (selectedConfig is Map) {
       try {
+        PandaLog.d(
+          'PandaAgent',
+          'Resolving provider=${selectedConfig['provider']}',
+        );
         model = await _resolveAgentModel(
           Map<String, dynamic>.from(selectedConfig),
+        ).timeout(
+          const Duration(seconds: 20),
+          onTimeout: () => throw TimeoutException(
+            'La résolution du modèle IA a expiré.',
+          ),
+        );
+        PandaLog.d(
+          'PandaAgent',
+          'Provider resolved — model=${model?.runtimeType ?? '<none>'}',
         );
         if (model == null &&
             selectedConfig['provider']?.toString().toLowerCase() == 'copilot') {
@@ -4331,6 +4399,8 @@ class _SelectTypeState extends State<SelectType>
     if (model == null) {
       _sendAnimCtrl.stop();
       setState(() {
+        _agentGenerating = false;
+        _agentPhase = AgentPhase.error;
         _agentMessages.add({'role': 'user', 'text': text});
         _agentMessages.add({
           'role': 'agent',
@@ -4345,7 +4415,16 @@ class _SelectTypeState extends State<SelectType>
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || requestId != _agentRequestSerial) return;
+
+    PandaLog.d('PandaAgent', 'Loading agent preferences');
+    final prefs = await SharedPreferences.getInstance().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => throw TimeoutException(
+        'Le chargement des préférences de Panda Agent a expiré.',
+      ),
+    );
+    if (!mounted || requestId != _agentRequestSerial) return;
     final memoryEnabled = prefs.getBool('agent_memory_enabled') ?? true;
     final memoryNotes = memoryEnabled
         ? (prefs.getString('agent_memory_notes') ?? '').trim()
@@ -4369,6 +4448,10 @@ class _SelectTypeState extends State<SelectType>
             })
         .toList();
     final messages = [...history, {'role': 'user', 'content': text}];
+    PandaLog.d(
+      'PandaAgent',
+      'Conversation prepared — messages=${messages.length}',
+    );
 
     setState(() {
       _agentMessages.add({'role': 'user', 'text': text});
@@ -4391,8 +4474,9 @@ class _SelectTypeState extends State<SelectType>
     // The active editor is the source of truth. Recent projects are only a
     // fallback for the welcome state; relying on recents alone can give the
     // agent an empty workspace after a project was opened in a tab.
-    String workspacePath = _activeProjectDir() ?? '';
+    String workspacePath = '';
     try {
+      workspacePath = _activeProjectDir() ?? '';
       if (workspacePath.isEmpty) {
         final recentState = context.read<RecentBloc>().state;
         final recentProject = recentState.recent.cast<dynamic>().firstWhere(
@@ -4412,6 +4496,10 @@ class _SelectTypeState extends State<SelectType>
       'Workspace resolved — ${workspacePath.isEmpty ? '<none>' : workspacePath}',
     );
 
+    PandaLog.i(
+      'PandaAgent',
+      'Starting AgentRunner — model=${model.runtimeType} mode=$_agentChatMode',
+    );
     _agentRunner
         .run(
           model: model,
@@ -4425,7 +4513,7 @@ class _SelectTypeState extends State<SelectType>
         )
         .listen(
           (chunk) {
-            if (!mounted) return;
+            if (!mounted || requestId != _agentRequestSerial) return;
             setState(() {
               switch (chunk.phase) {
                 case AgentPhase.thinking:
@@ -4458,7 +4546,8 @@ class _SelectTypeState extends State<SelectType>
           },
           onError: (e) {
             PandaLog.e('PandaAgent', 'Stream error', error: e);
-            if (!mounted) return;
+            _sendAnimCtrl.stop();
+            if (!mounted || requestId != _agentRequestSerial) return;
             setState(() {
               _agentGenerating = false;
               _agentPhase      = AgentPhase.error;
@@ -4468,7 +4557,12 @@ class _SelectTypeState extends State<SelectType>
           },
           onDone: () {
             PandaLog.i('PandaAgent', 'Stream closed');
-            if (!mounted || !_agentGenerating) return;
+            _sendAnimCtrl.stop();
+            if (!mounted ||
+                requestId != _agentRequestSerial ||
+                !_agentGenerating) {
+              return;
+            }
             setState(() {
               _agentGenerating = false;
               if (_agentPhase != AgentPhase.error) {
