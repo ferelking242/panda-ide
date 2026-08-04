@@ -199,7 +199,7 @@ class ModelDownloadManager {
             return;
           }
 
-          await sink.add(chunk);
+          sink.add(chunk);
           task.bytesDownloaded += chunk.length;
           bytesThisWindow      += chunk.length;
 
@@ -293,13 +293,12 @@ class ModelDownloadManager {
   }
 
   Future<Digest> _computeSha256Stream(Stream<List<int>> stream) async {
-    final output = AccumulatorSink<Digest>();
-    final input  = sha256.startChunkedConversion(output);
+    final chunks = <List<int>>[];
     await for (final chunk in stream) {
-      input.add(chunk);
+      chunks.add(chunk);
     }
-    input.close();
-    return output.events.single;
+    final bytes = chunks.expand((c) => c).toList();
+    return sha256.convert(bytes);
   }
 
   // ── Index des modèles installés ────────────────────────────────────────────
