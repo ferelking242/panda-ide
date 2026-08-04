@@ -2278,14 +2278,18 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
     });
   }
 
-  void createEntry(Directory parent) {
+  Future<void> createEntry(Directory parent) async {
     final value = _controller.text.trim();
     if (value.isNotEmpty) {
       final newPath = path.join(parent.path, value);
-      if (isFolderCreation) {
-        Directory(newPath).createSync();
-      } else {
-        File(newPath).createSync();
+      try {
+        if (isFolderCreation) {
+          await Directory(newPath).create(recursive: true);
+        } else {
+          await File(newPath).create(recursive: true);
+        }
+      } catch (e) {
+        debugPrint('createEntry error: $e');
       }
     }
     stopCreating();
@@ -2294,18 +2298,20 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
     } catch (_) {}
   }
 
-  void renameEntry(String oldPath, bool isFolder) {
+  Future<void> renameEntry(String oldPath, bool isFolder) async {
     final value = _renameController.text.trim();
     if (value.isNotEmpty && value != path.basename(oldPath)) {
       final parentDir = path.dirname(oldPath);
       final newPath = path.join(parentDir, value);
       try {
         if (isFolder) {
-          Directory(oldPath).renameSync(newPath);
+          await Directory(oldPath).rename(newPath);
         } else {
-          File(oldPath).renameSync(newPath);
+          await File(oldPath).rename(newPath);
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('renameEntry error: $e');
+      }
     }
     stopRenaming();
     try {
@@ -3026,10 +3032,10 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
     );
   }
 
-  void _performFolderDeletion(BuildContext context, Directory directory) {
+  Future<void> _performFolderDeletion(BuildContext context, Directory directory) async {
     try {
-      directory.deleteSync(recursive: true);
-      setState(() {});
+      await directory.delete(recursive: true);
+      if (mounted) setState(() {});
       if (context.mounted) {
         try {
           context.read<RepoStatusBloc>().add(LoadRepoStatus(widget.rootPath));
@@ -3143,10 +3149,10 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
     );
   }
 
-  void _performFileDeletion(BuildContext context, File file) {
+  Future<void> _performFileDeletion(BuildContext context, File file) async {
     try {
-      file.deleteSync();
-      setState(() {});
+      await file.delete();
+      if (mounted) setState(() {});
       if (context.mounted) {
         try {
           context.read<RepoStatusBloc>().add(LoadRepoStatus(widget.rootPath));
