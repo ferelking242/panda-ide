@@ -87,6 +87,24 @@ jobs:
             -print 2>/dev/null | sort -u)
           test "$patch_count" -gt 0
 
+          ggml_count=0
+          while IFS= read -r ggml_source; do
+            ggml_count=$((ggml_count + 1))
+            perl -0pi -e '
+              if (!/define GGML_VERSION/) {
+                s/\nconst char \* ggml_version\(void\) \{/
+                  \n#ifndef GGML_VERSION\n#define GGML_VERSION "0.9.11"\n#endif\n
+                  \n#ifndef GGML_COMMIT\n#define GGML_COMMIT "unknown"\n#endif\n\n
+                  const char * ggml_version(void) {/x;
+              }
+            ' "$ggml_source"
+            grep -q '#define GGML_VERSION' "$ggml_source"
+            grep -q '#define GGML_COMMIT' "$ggml_source"
+          done < <(find -L "$HOME/.pub-cache" ios/.symlinks ios/Pods \
+            -type f -path '*/ios/llama_cpp_src/ggml/src/ggml.c' \
+            -print 2>/dev/null | sort -u)
+          test "$ggml_count" -gt 0
+
           shader="$(find "$HOME/.pub-cache" ios/Pods \
             -name 'ggml-metal-ios.metal' \
             -print -quit)"
