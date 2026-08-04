@@ -144,6 +144,16 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Patch llama Metal shader for Xcode
+        run: |
+          set -euo pipefail
+          metal_source="$(find "$HOME/.pub-cache" \
+            -path '*/Llama-Flutter-*/android/src/main/cpp/llama.cpp/ggml/src/ggml-metal/ggml-metal.metal' \
+            -print -quit)"
+          test -n "$metal_source"
+          sed -i '' '/#include "ggml-common.h"/d' "$metal_source"
+          ! grep -q '#include "ggml-common.h"' "$metal_source"
+
       - name: Build iOS app
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}
