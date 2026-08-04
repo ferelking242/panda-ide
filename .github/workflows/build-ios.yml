@@ -58,8 +58,8 @@ jobs:
         run: |
           set -euo pipefail
           (cd ios && pod install)
-          shader="$(find ios/Pods \
-            -path '*/ggml-metal-ios.metal' \
+          shader="$(find "$HOME/.pub-cache" ios/Pods \
+            -name 'ggml-metal-ios.metal' \
             -print -quit)"
           test -n "$shader"
           sed -i '' '/#include "ggml-common.h"/d' "$shader"
