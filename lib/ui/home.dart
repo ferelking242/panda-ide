@@ -4475,6 +4475,99 @@ class _SelectTypeState extends State<SelectType>
     }
   }
 
+  // ── P2: Token estimation ─────────────────────────────────────────────────
+  /// Estimates the number of tokens in [messages] (~4 chars per token).
+  int _estimateTokens(List<Map<String, dynamic>> messages) {
+    int chars = 0;
+    for (final m in messages) {
+      chars += (m['text']?.toString().length ?? 0);
+      chars += (m['thinking']?.toString().length ?? 0);
+    }
+    return (chars / 4).round();
+  }
+
+  // ── P2: SummaryMemory — compresses old messages when context is too large ─
+  /// Calls the LLM to summarise old messages when [_agentMessages] exceeds
+  /// ~40 000 tokens, keeping the 4 most recent messages intact.
+  Future<void> _compressOldMessages(Models model) async {
+    if (_agentMessages.length < 6) return; // need at least 3 pairs
+    if (_estimateTokens(_agentMessages) < 40000) return;
+
+    final keepCount = 4;
+    final toCompress = _agentMessages.sublist(0, _agentMessages.length - keepCount);
+    final recent     = _agentMessages.sublist(_agentMessages.length - keepCount);
+
+    final oldText = toCompress.map((m) {
+      final role = m['role'] == 'user' ? 'Utilisateur' : 'Agent';
+      return '$role: ${m['text'] ?? ''}';
+    }).join('\n\n');
+
+    try {
+      final summaryMsgs = <Map<String, dynamic>>[
+        {
+          'role': 'user',
+          'content':
+              'Résume cette conversation de développement en 300 mots max. '
+              'Conserve : décisions techniques, fichiers modifiés, bugs résolus, '
+              'contexte clé.\n\n$oldText',
+        },
+      ];
+      String summary = '';
+      await for (final chunk in AgentRunner().run(
+        model: model,
+        messages: summaryMsgs,
+        agentMode: 'normal',
+      )) {
+        if (chunk.phase == AgentPhase.streaming) summary += chunk.text;
+      }
+      if (summary.isNotEmpty && mounted) {
+        setState(() {
+          _agentMessages
+            ..clear()
+            ..add({
+              'role': 'agent',
+              'text': '[📝 Résumé de la conversation précédente]\n$summary',
+              'thinking': '',
+              'phase': 'done',
+            })
+            ..addAll(recent);
+        });
+        PandaLog.i('PandaAgent',
+            'SummaryMemory: compressed ${toCompress.length} messages → summary');
+      }
+    } catch (e) {
+      PandaLog.w('PandaAgent', 'SummaryMemory compression failed: $e');
+    }
+  }
+
+  // ── P2: ProjectMemory — reads .panda/memory.md ───────────────────────────
+  Future<String> _loadProjectMemory(String workspacePath) async {
+    if (workspacePath.isEmpty) return '';
+    try {
+      final file = File('$workspacePath/.panda/memory.md');
+      if (!file.existsSync()) return '';
+      final content = await file.readAsString();
+      PandaLog.i('PandaAgent', 'ProjectMemory loaded (${content.length} chars)');
+      return content.trim();
+    } catch (e) {
+      PandaLog.w('PandaAgent', 'Could not load project memory: $e');
+      return '';
+    }
+  }
+
+  // ── P2: ProjectMemory — writes .panda/memory.md ──────────────────────────
+  Future<void> _saveProjectMemory(String workspacePath, String content) async {
+    if (workspacePath.isEmpty || content.isEmpty) return;
+    try {
+      final dir = Directory('$workspacePath/.panda');
+      if (!dir.existsSync()) await dir.create(recursive: true);
+      await File('$workspacePath/.panda/memory.md').writeAsString(content);
+      PandaLog.i('PandaAgent', 'ProjectMemory saved');
+    } catch (e) {
+      PandaLog.w('PandaAgent', 'Could not save project memory: $e');
+    }
+  }
+
   /// Auto-saves the current conversation to history after each AI response.
   /// Silently no-ops if there are fewer than 2 messages or if already saving.
   void _autoSaveConversation() {
@@ -4789,51 +4882,7 @@ class _SelectTypeState extends State<SelectType>
         : '';
     final customSystemPrompt = (prefs.getString('agent_system_prompt') ?? '')
         .trim();
-    final systemPromptParts = <String>[
-      if (customSystemPrompt.isNotEmpty) customSystemPrompt,
-      if (memoryNotes.isNotEmpty)
-        'Persistent project/user context:\n$memoryNotes',
-    ];
-
-    // Construit l'historique au format OpenAI
-    final history = <Map<String, dynamic>>[];
-    for (final message in _agentMessages) {
-      final role = message['role']?.toString();
-      final content = message['text']?.toString() ?? '';
-      if ((role == 'user' || role == 'agent') && content.isNotEmpty) {
-        history.add(<String, dynamic>{
-          'role': role == 'user' ? 'user' : 'assistant',
-          'content': content,
-        });
-      }
-    }
-    final messages = <Map<String, dynamic>>[
-      ...history,
-      <String, dynamic>{'role': 'user', 'content': text},
-    ];
-    PandaLog.d(
-      'PandaAgent',
-      'Conversation prepared — messages=${messages.length}',
-    );
-
-    setState(() {
-      _agentMessages.add({'role': 'user', 'text': text});
-      _agentMessages.add({
-        'role': 'agent',
-        'text': '',
-        'thinking': '',
-        'phase': 'streaming',
-      });
-      _agentInputCtrl.clear();
-      _agentGenerating  = true;
-      _agentPhase       = AgentPhase.streaming;
-      _agentThinkingBuf = '';
-      _agentStreamBuf   = '';
-    });
-
-    final agentIdx = _agentMessages.length - 1;
-
-    // Récupère le workspacePath depuis les entrées récentes (premier projet ouvert)
+    // ── Résolution du workspacePath (avant injection mémoire) ────────────
     // The active editor is the source of truth. Recent projects are only a
     // fallback for the welcome state; relying on recents alone can give the
     // agent an empty workspace after a project was opened in a tab.
@@ -4858,6 +4907,61 @@ class _SelectTypeState extends State<SelectType>
       'PandaAgent',
       'Workspace resolved — ${workspacePath.isEmpty ? '<none>' : workspacePath}',
     );
+
+    // ── P2: ProjectMemory — injecte .panda/memory.md ─────────────────────
+    final projectMemory = await _loadProjectMemory(workspacePath);
+    final systemPromptParts = <String>[
+      if (customSystemPrompt.isNotEmpty) customSystemPrompt,
+      if (memoryNotes.isNotEmpty)
+        'Persistent project/user context:\n$memoryNotes',
+      if (projectMemory.isNotEmpty)
+        '## MÉMOIRE PROJET\n$projectMemory',
+    ];
+
+    // ── P2: SummaryMemory — compresse si le contexte dépasse 40k tokens ──
+    if (_estimateTokens(_agentMessages) > 40000) {
+      await _compressOldMessages(model);
+    }
+
+    // Construit l'historique au format OpenAI (après compression éventuelle)
+    final history = <Map<String, dynamic>>[];
+    for (final message in _agentMessages) {
+      final role = message['role']?.toString();
+      final content = message['text']?.toString() ?? '';
+      if ((role == 'user' || role == 'agent') && content.isNotEmpty) {
+        history.add(<String, dynamic>{
+          'role': role == 'user' ? 'user' : 'assistant',
+          'content': content,
+        });
+      }
+    }
+    final messages = <Map<String, dynamic>>[
+      ...history,
+      <String, dynamic>{'role': 'user', 'content': text},
+    ];
+    PandaLog.d(
+      'PandaAgent',
+      'Conversation prepared — messages=${messages.length} '
+      'tokens≈${_estimateTokens(_agentMessages)} '
+      'projectMemory=${projectMemory.isNotEmpty}',
+    );
+
+    setState(() {
+      _agentMessages.add({'role': 'user', 'text': text});
+      _agentMessages.add({
+        'role': 'agent',
+        'text': '',
+        'thinking': '',
+        'phase': 'streaming',
+      });
+      _agentInputCtrl.clear();
+      _agentGenerating  = true;
+      _agentPhase       = AgentPhase.streaming;
+      _agentThinkingBuf = '';
+      _agentStreamBuf   = '';
+    });
+
+    final agentIdx = _agentMessages.length - 1;
 
     PandaLog.i(
       'PandaAgent',
