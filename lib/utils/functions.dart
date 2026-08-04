@@ -1658,11 +1658,28 @@ Future<File?> createFile(
   String dirPath,
   BuildContext context,
 ) async {
+  final file = File("$dirPath/$filename");
+
+  if (kIsWeb) {
+    // On Flutter web, dart:io sync calls (existsSync, createSync) are
+    // not supported. Use only async APIs and return the File object
+    // regardless — the editor's own try/catch handles a missing/unreadable
+    // file gracefully by starting with empty content.
+    try {
+      final dir = Directory(dirPath);
+      await dir.create(recursive: true);
+    } catch (_) { /* best-effort: virtual FS may not need explicit mkdir */ }
+    try {
+      await file.create(recursive: true);
+    } catch (_) { /* best-effort: return File path even if creation fails */ }
+    return file;
+  }
+
+  // ── Native (Android / desktop) path ──────────────────────────────────────
   final fileDir = Directory(dirPath);
   if (!fileDir.existsSync()) {
     await fileDir.create(recursive: true);
   }
-  final file = File("$dirPath/$filename");
   if (!file.existsSync()) {
     try {
       await file.create(recursive: true);
@@ -1683,6 +1700,7 @@ Future<File?> createFile(
           ),
         );
       }
+      return null;
     }
   }
   return file;
