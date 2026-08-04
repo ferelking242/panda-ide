@@ -1094,6 +1094,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
+        _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
       ];
 
       return Container(
@@ -1166,6 +1167,16 @@ class _SelectTypeState extends State<SelectType>
                         _sidebarState = 1;
                         _activeRail = 0;
                       });
+                      return;
+                    }
+                    // Copilot is a real sidebar panel: its controls must stay
+                    // reachable after the extension has been installed.
+                    if (item.idx == 9) {
+                      setState(() {
+                        _activeRail = 9;
+                        _sidebarState = 2;
+                      });
+                      _ensureCopilotInitialized();
                       return;
                     }
                     setState(() {
@@ -1270,6 +1281,7 @@ class _SelectTypeState extends State<SelectType>
       4: 'EXÉCUTER / DEBUG',
       5: 'TUNNEL / SSH',
       6: 'MARKETPLACE',
+      9: 'GITHUB COPILOT',
     };
 
     Widget panelBody;
@@ -1291,6 +1303,9 @@ class _SelectTypeState extends State<SelectType>
         break;
       case 6: // Marketplace
         panelBody = _sidebarMarketplace(context, appTheme, isDark);
+        break;
+      case 9: // GitHub Copilot
+        panelBody = _sidebarCopilot(context, appTheme, isDark);
         break;
       default:
         panelBody = const SizedBox.shrink();
@@ -1896,6 +1911,382 @@ class _SelectTypeState extends State<SelectType>
           ),
         ),
       ],
+    );
+  }
+
+  void _ensureCopilotInitialized() {
+    if (kIsWeb) return;
+    final copilotBloc = context.read<CopilotBloc>();
+    if (copilotBloc.state.isInitialized ||
+        copilotBloc.state.status == CopilotStatus.initializing ||
+        copilotBloc.state.status == CopilotStatus.signingIn) {
+      return;
+    }
+    if (!Directory('$extensionDir/copilot-language-server').existsSync() ||
+        !File('$binDir/node').existsSync()) {
+      return;
+    }
+    copilotBloc.add(CopilotInitialize(
+      configPath: filesDir,
+      workspacePath: homeDir,
+    ));
+  }
+
+  void _openCopilotChatTab() {
+    setState(() {
+      final existing = _openTabs.indexWhere((tab) => tab.id == 'copilot-chat');
+      if (existing == -1) {
+        _openTabs.add(const _TabDef(
+          id: 'copilot-chat',
+          title: 'Copilot Chat',
+          icon: Broken.message_programming,
+        ));
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = existing;
+      }
+      _sidebarState = 1;
+      _activeRail = 0;
+    });
+  }
+
+  Widget _buildCopilotChatPage() {
+    // AIChat already contains the Copilot model selector, conversation history,
+    // streaming responses and Agent/Ask modes. These two blocs are local to
+    // this standalone tab; the shared AIBloc/Copilot blocs come from main().
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => AIChatBloc()),
+        BlocProvider(create: (_) => AIChatUIBloc()),
+      ],
+      child: AIChat(
+        filePath: homeDir,
+        workspacePath: homeDir,
+      ),
+    );
+  }
+
+  Widget _sidebarCopilot(BuildContext ctx, AppTheme t, bool dark) {
+    final fg = dark ? Colors.grey[200]! : Colors.grey[850]!;
+    final muted = dark ? Colors.grey[500]! : Colors.grey[600]!;
+    final card = dark ? const Color(0xff2d2d2d) : Colors.white;
+    final border = dark ? const Color(0xff424242) : const Color(0xffdddddd);
+    final extensionInstalled =
+        kIsWeb || Directory('$extensionDir/copilot-language-server').existsSync();
+    final nodeInstalled = kIsWeb || File('$binDir/node').existsSync();
+
+    return BlocBuilder<CopilotBloc, CopilotState>(
+      builder: (context, state) {
+        final canSignIn = extensionInstalled &&
+            nodeInstalled &&
+            state.isInitialized &&
+            state.status != CopilotStatus.initializing &&
+            state.status != CopilotStatus.signingIn;
+        final statusLabel = switch (state.status) {
+          CopilotStatus.signedIn => state.user == null
+              ? 'Connecté à GitHub Copilot'
+              : 'Connecté en tant que ${state.user}',
+          CopilotStatus.signingIn => 'Connexion à GitHub…',
+          CopilotStatus.initializing => 'Démarrage du serveur…',
+          CopilotStatus.notAuthorized => 'Compte sans accès Copilot',
+          CopilotStatus.error => 'Erreur du serveur Copilot',
+          CopilotStatus.notSignedIn => 'Extension prête — connexion requise',
+          CopilotStatus.notInitialized => 'Prêt à être configuré',
+        };
+        final statusColor = switch (state.status) {
+          CopilotStatus.signedIn => Colors.green,
+          CopilotStatus.error || CopilotStatus.notAuthorized => Colors.orange,
+          CopilotStatus.initializing || CopilotStatus.signingIn => _kAccent,
+          _ => muted,
+        };
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: card,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: border),
+              ),
+              child: Row(
+                children: [
+                  SvgPicture.asset(
+                    'assets/icons/github-copilot-icon.svg',
+                    width: 28,
+                    height: 28,
+                    colorFilter: ColorFilter.mode(fg, BlendMode.srcIn),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('GitHub Copilot',
+                            style: TextStyle(
+                                color: fg,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 3),
+                        Text(statusLabel,
+                            style: TextStyle(color: statusColor, fontSize: 10),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            _copilotRequirementRow(
+              icon: Broken.box,
+              label: 'Extension Copilot',
+              ok: extensionInstalled,
+              fg: fg,
+            ),
+            _copilotRequirementRow(
+              icon: Broken.code,
+              label: 'Runtime Node.js',
+              ok: nodeInstalled,
+              fg: fg,
+            ),
+            const SizedBox(height: 8),
+            if (!extensionInstalled || !nodeInstalled)
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(dark ? 0.12 : 0.08),
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                ),
+                child: Text(
+                  !extensionInstalled && !nodeInstalled
+                      ? 'Installez l’extension Copilot et Node.js depuis la Marketplace.'
+                      : !extensionInstalled
+                          ? 'Installez l’extension Copilot depuis la Marketplace.'
+                          : 'Installez le runtime Node.js depuis la Marketplace.',
+                  style: TextStyle(color: dark ? Colors.orange[300] : Colors.orange[800], fontSize: 11),
+                ),
+              ),
+            if (!extensionInstalled || !nodeInstalled) const SizedBox(height: 8),
+            if (!extensionInstalled || !nodeInstalled)
+              _copilotActionButton(
+                label: 'Ouvrir la Marketplace',
+                icon: Broken.shop,
+                onPressed: () => setState(() {
+                  _activeRail = 6;
+                  _sidebarState = 2;
+                }),
+                fg: fg,
+                border: border,
+              ),
+            if (extensionInstalled && nodeInstalled && !state.isInitialized)
+              _copilotActionButton(
+                label: 'Démarrer Copilot',
+                icon: Broken.refresh,
+                onPressed: _ensureCopilotInitialized,
+                fg: fg,
+                border: border,
+              ),
+            if (canSignIn && !state.isSignedIn)
+              _copilotActionButton(
+                label: state.status == CopilotStatus.error
+                    ? 'Réessayer la connexion'
+                    : 'Se connecter avec GitHub',
+                icon: Broken.login,
+                onPressed: state.status == CopilotStatus.error
+                    ? _ensureCopilotInitialized
+                    : () => context
+                        .read<CopilotBloc>()
+                        .add(CopilotSignInInitiate()),
+                fg: fg,
+                border: border,
+              ),
+            if (state.signInPayload?.userCode != null) ...[
+              const SizedBox(height: 7),
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: _kAccent.withOpacity(dark ? 0.12 : 0.08),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('Code GitHub',
+                        style: TextStyle(color: muted, fontSize: 10)),
+                    const SizedBox(height: 3),
+                    SelectableText(
+                      state.signInPayload!.userCode!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: fg,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 2),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Ouvrez github.com/login/device, saisissez ce code, puis confirmez.',
+                      style: TextStyle(color: muted, fontSize: 10),
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(
+                                  text: state.signInPayload!.userCode!));
+                            },
+                            child: const Text('Copier',
+                                style: TextStyle(fontSize: 11)),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () async {
+                              final uri = Uri.parse(
+                                state.signInPayload!.verificationUri ??
+                                    'https://github.com/login/device',
+                              );
+                              await launchUrl(
+                                uri,
+                                mode: LaunchMode.externalApplication,
+                              );
+                            },
+                            child: const Text(
+                              'Ouvrir GitHub',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => context.read<CopilotBloc>().add(
+                                CopilotSignInConfirm(
+                                    state.signInPayload!.userCode!)),
+                            child: const Text('Confirmer',
+                                style: TextStyle(fontSize: 11)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (state.isSignedIn) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _copilotActionButton(
+                      label: 'Ouvrir le chat',
+                      icon: Broken.message_text,
+                      onPressed: _openCopilotChatTab,
+                      fg: fg,
+                      border: border,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
+                    tooltip: state.isEnabled ? 'Désactiver' : 'Activer',
+                    onPressed: () => context.read<CopilotBloc>().add(
+                        CopilotSetEnabled(!state.isEnabled)),
+                    icon: Icon(
+                      state.isEnabled ? Icons.toggle_on : Icons.toggle_off,
+                      color: state.isEnabled ? Colors.green : muted,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                state.isEnabled
+                    ? 'Les suggestions inline sont activées dans l’éditeur.'
+                    : 'Les suggestions inline sont désactivées.',
+                style: TextStyle(color: muted, fontSize: 10),
+              ),
+              const SizedBox(height: 5),
+              TextButton(
+                onPressed: () =>
+                    context.read<CopilotBloc>().add(CopilotSignOut()),
+                child: const Text('Se déconnecter',
+                    style: TextStyle(fontSize: 11)),
+              ),
+            ],
+            if (state.error != null) ...[
+              const SizedBox(height: 7),
+              Text(state.error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 10),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis),
+            ],
+            const Divider(height: 22),
+            Text(
+              'Ce que fait cette intégration',
+              style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              '• Complétions de code inline dans l’éditeur\n'
+              '• Chat Copilot avec les modèles disponibles\n'
+              '• Modes Ask et Agent dans le panneau de chat\n'
+              '• Node.js requis pour le language server\n\n'
+              'Ce n’est pas Codespaces : Panda ne fournit pas un environnement cloud GitHub complet. '
+              'Copilot fournit l’assistance de code, tandis que Node.js exécute son serveur local.',
+              style: TextStyle(color: muted, fontSize: 10, height: 1.35),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _copilotRequirementRow({
+    required IconData icon,
+    required String label,
+    required bool ok,
+    required Color fg,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: ok ? Colors.green : Colors.orange),
+          const SizedBox(width: 7),
+          Expanded(child: Text(label, style: TextStyle(color: fg, fontSize: 11))),
+          Icon(ok ? Icons.check_circle : Icons.warning_amber_rounded,
+              size: 14, color: ok ? Colors.green : Colors.orange),
+        ],
+      ),
+    );
+  }
+
+  Widget _copilotActionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+    required Color fg,
+    required Color border,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 14),
+        label: Text(label, style: const TextStyle(fontSize: 11)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: fg,
+          side: BorderSide(color: border),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+          alignment: Alignment.centerLeft,
+        ),
+      ),
     );
   }
 
@@ -2554,6 +2945,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'agent') {
       return _buildPandaAgentPanel(context, appTheme, asPage: true);
     }
+    if (tab.id == 'copilot-chat') {
+      return _buildCopilotChatPage();
+    }
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
     }
@@ -2615,6 +3009,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'agent') {
       return _buildPandaAgentPanel(context, appTheme, asPage: true);
+    }
+    if (tab.id == 'copilot-chat') {
+      return _buildCopilotChatPage();
     }
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);

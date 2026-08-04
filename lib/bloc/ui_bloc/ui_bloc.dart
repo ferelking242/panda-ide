@@ -924,24 +924,24 @@ class CopilotBloc extends Bloc<CopilotEvent, CopilotState> {
         emit(state.copyWith(
           status: CopilotStatus.signedIn,
           user: payload.user,
-          signInPayload: null,
+          clearSignInPayload: true,
         ));
         await _saveConfig(true);
       } else if (payload.isNotAuthorized) {
         emit(state.copyWith(
           status: CopilotStatus.notAuthorized,
-          signInPayload: null,
+          clearSignInPayload: true,
         ));
       } else {        _expectingSignIn = false;        emit(state.copyWith(
           status: CopilotStatus.notSignedIn,
-          signInPayload: null,
+           clearSignInPayload: true,
         ));
       }
     } catch (e) {
       emit(state.copyWith(
         status: CopilotStatus.error,
         error: e.toString(),
-        signInPayload: null,
+        clearSignInPayload: true,
       ));
     }
   }
@@ -954,7 +954,7 @@ class CopilotBloc extends Bloc<CopilotEvent, CopilotState> {
       emit(state.copyWith(
         status: CopilotStatus.notSignedIn,
         user: null,
-        signInPayload: null,
+        clearSignInPayload: true,
       ));
       await _saveConfig(false);
     } catch (e) {

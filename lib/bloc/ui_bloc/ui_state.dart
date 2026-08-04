@@ -621,6 +621,7 @@ class CopilotState {
     CopilotSignInPayload? signInPayload,
     CopilotCompletionData? currentCompletion,
     bool clearCompletion = false,
+    bool clearSignInPayload = false,
   }) {
     return CopilotState(
       status: status ?? this.status,
@@ -628,7 +629,9 @@ class CopilotState {
       error: error,
       isInitialized: isInitialized ?? this.isInitialized,
       isEnabled: isEnabled ?? this.isEnabled,
-      signInPayload: signInPayload ?? this.signInPayload,
+      signInPayload: clearSignInPayload
+          ? null
+          : (signInPayload ?? this.signInPayload),
       currentCompletion: clearCompletion ? null : (currentCompletion ?? this.currentCompletion),
     );
   }
