@@ -241,19 +241,70 @@
 - ✅ `ExtensionApiRouter.instance.attachToManager()` appelé dans `MainApp.build()` (Android uniquement)
 - ✅ `ExtensionApiRouter.instance.setContext(context)` mis à jour via `addPostFrameCallback` à chaque rebuild
 
-### Navigation vers les UI extensions (à intégrer dans les menus/sidebar)
+---
 
-```dart
-// Marketplace Open VSX
-Navigator.push(context, MaterialPageRoute(builder: (_) => const MarketplacePage()));
+# Local AI Marketplace — Suivi de progression
 
-// Panel extensions installées
-Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtensionsPanel()));
+## P1 — Fondations ✅ COMPLET
+**Commit :** `d2d1a22`
 
-// WebViews extensions dans le layout
-child: ExtensionWebviewContainer()
-```
+| Fichier | Rôle |
+|---------|------|
+| `lib/local_models/models/device_profile.dart` | DeviceProfile — profil matériel |
+| `lib/local_models/models/ai_model_entry.dart` | AiModelEntry, ModelQuant, InstalledModel |
+| `lib/local_models/services/device_profiler.dart` | DeviceProfiler — /proc/cpuinfo, RAM, stockage |
+| `lib/local_models/services/catalog_service.dart` | CatalogService — multi-stage (mem→prefs→remote→asset) |
+| `lib/local_models/services/model_download_manager.dart` | Download chunked + reprise + SHA256 + index |
+| `lib/local_models/ui/local_models_page.dart` | Marketplace — piles horizontales par catégorie |
+| `assets/local_models_catalog.json` | Catalogue embarqué |
 
 ---
 
-*Dernière mise à jour : Wiring main.dart complété — 2026-07-30*
+## P2 — Détail et recommandations ✅ COMPLET
+**Commit :** `d2d1a22`
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/local_models/ui/local_model_detail_page.dart` | Page de détail — specs, compat, quant selector, download |
+| `lib/local_models/services/device_profiler.dart` | Algorithme de recommandation par DeviceProfile |
+
+---
+
+## P3 — Optimisations llama.cpp ✅ COMPLET
+**Commit :** `ad9b73b`
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/local_models/services/inference_config_service.dart` | Auto-config threads, ctx, flash attention, batch size |
+| `lib/local_models/services/model_activation_service.dart` | Enregistrement modèle dans aiConfig + set default |
+
+---
+
+## P4 — Intelligence et polish ✅ COMPLET
+**Commit :** feat(P4)
+
+| Fichier | Rôle |
+|---------|------|
+| `lib/local_models/services/lru_cache_service.dart` | Cache LRU — touch, candidats, nettoyage auto/manuel |
+| `lib/local_models/services/model_selector_service.dart` | Sélection auto du modèle par tâche IDE (7 types) |
+| `lib/local_models/services/model_notification_service.dart` | Notifications rich Android — progress, succès, erreur |
+| `lib/local_models/ui/advanced_inference_settings_page.dart` | Mode avancé — paramètres llama.cpp manuels |
+| `lib/local_models/ui/lru_manager_page.dart` | UI gestion cache — liste LRU, nettoyage, settings |
+| `assets/local_models_catalog.json` | Catalogue étendu : **50 modèles** (bartowski, unsloth, Google, Meta, Microsoft, Mistral, DeepSeek, IBM, Cohere…) |
+| `pubspec.yaml` | Ajout `flutter_local_notifications: ^18.0.1` |
+
+### Fonctionnalités P4
+
+- ✅ **Cache LRU** : `LruCacheService` — `touch()` à chaque activation, `getCandidates()` triés par lastUsedAt, `autoCleanup()` déclenché si espace < seuil configurable
+- ✅ **Nettoyage manuel** : `LruManagerPage` — liste des modèles installés avec badges LRU, sélection multiple, confirmation avant suppression
+- ✅ **Settings LRU** : seuil de stockage (0.5-10 GB), jours avant éligibilité (7-90), toggle auto-cleanup
+- ✅ **Sélection auto par tâche** : `ModelSelectorService` — 7 types de tâches IDE (`codeCompletion`, `agentChat`, `visionAnalysis`, `mathReasoning`, `generalChat`, `codeReview`, `debugAssistance`)
+- ✅ **Scoring multi-critères** : codingScore × poids tâche + toolCalling + vision + reasoning + bonus LRU récent
+- ✅ **Override par tâche** : `setDefaultForTask()` / `getOverrideForTask()` persisté dans SharedPreferences
+- ✅ **Notifications Android** : `ModelNotificationService` — 2 canaux Android (`panda_models_progress` LOW + `panda_models_complete` HIGH), progression temps réel, bouton Annuler inline, succès avec "Charger le modèle", erreur avec "Réessayer"
+- ✅ **Mode avancé llama.cpp** : `AdvancedInferenceSettingsPage` — sliders/champs pour n_threads, n_ctx, n_gpu_layers, n_batch, toggles Flash Attention + mmap, reset aux valeurs auto, sauvegarde dans aiConfig
+- ✅ **Catalogue 50 modèles** : Qwen2.5 (0.5B→14B Coder + 3B→14B général + QwQ-32B), Phi-3/3.5/4 Mini, Gemma 3 (1B/4B/12B) + Gemma 2-2B, Llama 3.2 (1B/3B) + 3.1 8B + 3.3 70B, DeepSeek R1 (1.5B/7B/14B) + Coder V2 Lite + V3, Mistral 7B/Nemo/Small 3.1/Codestral, StarCoder2 (3B/7B), CodeGemma (2B/7B), LLaVA 1.6, Moondream2, Hermes 3, OpenChat 3.5, Yi 1.5/Coder, WizardCoder, WizardLM-2, Command-R, Functionary, Granite 3.1 (2B/8B), Aya Expanse, InternLM2.5, Falcon3, SmolLM2 (360M/1.7B), TinyLlama, Neural Chat, Solar, Stable Code, Orca-2, Zephyr, Marco-o1, DeepSeek V3 Q2
+
+---
+
+*Dernière mise à jour : Phase P4 (Local AI Marketplace) complétée — 2026-08-04*

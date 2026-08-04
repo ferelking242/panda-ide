@@ -341,6 +341,10 @@ class ModelDownloadManager {
     await prefs.setString(_kInstalledKey, jsonEncode(list));
   }
 
+  /// Exposé publiquement pour que LruCacheService puisse persister après
+  /// la mise à jour de `lastUsedAt` sur un InstalledModel.
+  Future<void> persistInstalledIndex() => _saveInstalledIndex();
+
   Future<void> deleteModel(String modelId, String quantLevel) async {
     final list = _installed[modelId];
     if (list == null) return;
