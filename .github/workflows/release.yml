@@ -144,6 +144,26 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Patch Llama iOS Swift bridge
+        run: |
+          set -euo pipefail
+          plugin="$(find "$HOME/.pub-cache" \
+            -path '*/Llama-Flutter-*/ios/Classes/LlamaFlutterAndroidPlugin.swift' \
+            -print -quit)"
+          test -n "$plugin"
+          perl -0pi -e '
+            s/LlamaHostApiProtocol/LlamaHostApi/g;
+            s/\.onLoadProgress\(progress\)/.onLoadProgress(progress: progress)/g;
+            s/\.onError\(error\.localizedDescription\)/.onError(error: error.localizedDescription)/g;
+            s/\.onToken\(token\)/.onToken(token: token)/g;
+            s/\bpublic (class|func|static func)/$1/g;
+          ' "$plugin"
+          grep -q 'class LlamaFlutterAndroidPlugin: NSObject, FlutterPlugin, LlamaHostApi' "$plugin"
+          ! grep -q 'LlamaHostApiProtocol' "$plugin"
+          grep -q 'onLoadProgress(progress: progress)' "$plugin"
+          grep -q 'onError(error: error.localizedDescription)' "$plugin"
+          grep -q 'onToken(token: token)' "$plugin"
+
       - name: Prepare and patch generated Metal shader
         run: |
           set -euo pipefail
