@@ -501,6 +501,80 @@ class _AgentSettingsState extends State<AgentSettings>
     }
   }
 
+  Models? _modelFromAiConfig(Map<String, dynamic> cfg) {
+    final providerRaw = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
+    final provider    = providerRaw.toLowerCase();
+    final apiKey      = (cfg['apiKey'] ?? '').toString();
+    final modelName   = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
+
+    switch (provider) {
+      case 'gemini':     return Gemini(apiKey: apiKey, model: modelName);
+      case 'claude':     return Claude(apiKey: apiKey, model: modelName);
+      case 'openai':     return OpenAI(apiKey: apiKey, model: modelName);
+      case 'grok':       return Grok(apiKey: apiKey, model: modelName);
+      case 'deepseek':   return DeepSeek(apiKey: apiKey, model: modelName);
+      case 'mistral':    return Mistral(apiKey: apiKey, model: modelName);
+      case 'togetherai': return TogetherAi(apiKey: apiKey, model: modelName);
+      case 'perplexity': return Perplexity(apiKey: apiKey, model: modelName);
+      case 'openrouter': return OpenRouter(apiKey: apiKey, model: modelName);
+      case 'groq':       return Groq(apiKey: apiKey, model: modelName);
+      case 'fireworks':  return FireWorks(apiKey: apiKey, model: modelName);
+      case 'cohere':     return Cohere(apiKey: apiKey, model: modelName);
+      case 'cerebras':   return Cerebras(apiKey: apiKey, model: modelName);
+      case 'novita':     return Novita(apiKey: apiKey, model: modelName);
+      case 'hyperbolic': return Hyperbolic(apiKey: apiKey, model: modelName);
+      case 'sambanova':  return SambaNova(apiKey: apiKey, model: modelName);
+      case 'qwen':       return Qwen(apiKey: apiKey, model: modelName);
+      case 'ollama':
+        final ollamaPort = (cfg['port'] as num?)?.toInt() ?? 11434;
+        return Ollama(model: modelName, port: ollamaPort);
+      case 'lmstudio':
+        final lmsPort = (cfg['port'] as num?)?.toInt() ?? 1234;
+        return LmStudio(model: modelName, port: lmsPort);
+      case 'pandagateway':
+        final port = (cfg['port'] as num?)?.toInt() ?? 8000;
+        return PandaGateway(apiKey: apiKey, model: modelName, port: port);
+      case 'localllama':
+        final mp = (cfg['modelPath'] ?? '').toString().trim();
+        if (mp.isEmpty) return null;
+        return LocalLlama(
+          modelPath: mp,
+          displayName: modelName.isNotEmpty ? modelName : mp.split('/').last,
+          threads: (cfg['threads'] as num?)?.toInt() ?? 4,
+          contextSize: (cfg['contextSize'] as num?)?.toInt() ?? 4096,
+          gpuLayers: (cfg['gpuLayers'] as num?)?.toInt() ?? 0,
+        );
+      case 'custom':
+        final url = (cfg['url'] ?? '').toString().trim();
+        if (url.isEmpty) return null;
+        final parsedHeaders = <String, String>{};
+        final hdrs = cfg['headers'];
+        if (hdrs is Map) {
+          hdrs.forEach((k, v) {
+            if (k != null && v != null) parsedHeaders[k.toString()] = v.toString();
+          });
+        }
+        if (apiKey.isNotEmpty && !parsedHeaders.containsKey('Authorization')) {
+          parsedHeaders['Authorization'] = 'Bearer $apiKey';
+        }
+        return CustomModel(
+          url: url,
+          httpMethod: (cfg['httpMethod'] ?? 'POST').toString(),
+          toolCallingMethod: ToolCallingMethod.openAiCompatible,
+          customHeaders: parsedHeaders,
+          requestBuilder: (code, instruction) => {
+            if (modelName.isNotEmpty) 'model': modelName,
+            'messages': [
+              {'role': 'system', 'content': instruction},
+              {'role': 'user', 'content': code},
+            ],
+          },
+        );
+      default:
+        return null;
+    }
+  }
+
   Future<Models?> _resolveModel(Map<String, dynamic> cfg) async {
     final provider = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString().toLowerCase();
     if (provider != 'copilot') {
@@ -606,7 +680,7 @@ class _AgentSettingsState extends State<AgentSettings>
       'cerebras':    'https://api.cerebras.ai/v1/models',
       'novita':      'https://api.novita.ai/v3/openai/models',
       'hyperbolic':  'https://api.hyperbolic.xyz/v1/models',
-      'pandagateway': '${AppConstants.aiGatewayUrl}/v1/models',
+      'pandagateway': 'http://127.0.0.1:8000/v1/models',
     };
 
     if (provider == 'custom') {
