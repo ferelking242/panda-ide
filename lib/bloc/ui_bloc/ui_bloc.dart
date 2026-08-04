@@ -8,7 +8,7 @@ import 'package:code_forge/code_forge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_file_downloader/flutter_file_downloader.dart';
 import 'package:http/http.dart' as http;
-import 'package:llama_flutter_android/llama_flutter_android.dart';
+import '../../utils/llama_wrapper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:panda/utils/constants.dart';
 import '../../utils/ai.dart';

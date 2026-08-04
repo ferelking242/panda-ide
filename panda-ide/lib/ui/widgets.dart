@@ -10,7 +10,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_json/flutter_json.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:http/http.dart' as http;
-import 'package:llama_flutter_android/llama_flutter_android.dart';
+import '../utils/llama_wrapper.dart';
 import 'package:markdown_widget/config/configs.dart';
 import 'package:markdown_widget/widget/all.dart';
 import 'package:path/path.dart' as path;
