@@ -31,9 +31,15 @@ jobs:
       - name: Set iOS deployment target
         run: |
           set -euo pipefail
-          sed -i '' "s/^# platform :ios.*/platform :ios, '14.0'/" ios/Podfile
-          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*/IPHONEOS_DEPLOYMENT_TARGET = 14.0/g" \
+          if grep -qE "^platform :ios" ios/Podfile; then
+            sed -i '' "s/^platform :ios.*/platform :ios, '14.0'/" ios/Podfile
+          else
+            printf "platform :ios, '14.0'\n" | cat - ios/Podfile > ios/Podfile.tmp
+            mv ios/Podfile.tmp ios/Podfile
+          fi
+          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*;/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g" \
             ios/Runner.xcodeproj/project.pbxproj
+          grep -qE "^platform :ios, ['\"]14\\.0['\"]" ios/Podfile
 
       - name: Get dependencies
         run: flutter pub get
