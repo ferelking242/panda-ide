@@ -1,6 +1,7 @@
 /// LocalModelDetailPage — page de détail complète d'un modèle.
 ///
 /// Affiche specs, compatibilité, quantizations, et lance le téléchargement.
+/// Phase 3 : bouton "Utiliser dans Panda AI" + config d'inférence auto.
 library;
 
 import 'dart:async';
@@ -8,6 +9,8 @@ import 'package:flutter/material.dart';
 import '../models/ai_model_entry.dart';
 import '../models/device_profile.dart';
 import '../services/model_download_manager.dart';
+import '../services/inference_config_service.dart';
+import '../services/model_activation_service.dart';
 
 class LocalModelDetailPage extends StatefulWidget {
   final AiModelEntry  model;
@@ -26,6 +29,8 @@ class LocalModelDetailPage extends StatefulWidget {
 class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
   late ModelQuant? _selectedQuant;
   String _storage = 'internal'; // "internal" | "sdcard"
+  bool   _activating = false;
+  String? _activationMessage;
 
   StreamSubscription<DownloadTask>? _dlSub;
 
@@ -517,30 +522,71 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
     }
 
     if (_isInstalled) {
-      return Row(
+      return Column(
         children: [
-          Expanded(
-            child: _MainButton(
-              label: '✓ Déjà installé',
-              icon: Icons.check_circle_outline,
-              onTap: null,
-              cs: cs,
-              secondary: true,
+          // Bouton principal : Utiliser dans Panda AI
+          if (_activationMessage != null)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: cs.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: cs.primary.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, size: 14, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _activationMessage!,
+                      style: TextStyle(fontSize: 11, color: cs.primary),
+                    ),
+                  ),
+                ],
+              ),
             ),
+
+          if (widget.profile != null)
+            _buildInferenceConfigPreview(cs),
+          const SizedBox(height: 10),
+
+          _MainButton(
+            label: _activating
+                ? 'Activation…'
+                : '🧠  Utiliser dans Panda AI',
+            icon: Icons.smart_toy_outlined,
+            onTap: _activating ? null : () => _activateModel(cs),
+            cs: cs,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _MainButton(
-              label: 'Supprimer',
-              icon: Icons.delete_outline,
-              onTap: () async {
-                await ModelDownloadManager.instance
-                    .deleteModel(m.id, _selectedQuant!.level);
-                setState(() {});
-              },
-              cs: cs,
-              danger: true,
-            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _MainButton(
+                  label: '✓ Installé',
+                  icon: Icons.check_circle_outline,
+                  onTap: null,
+                  cs: cs,
+                  secondary: true,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MainButton(
+                  label: 'Supprimer',
+                  icon: Icons.delete_outline,
+                  onTap: () async {
+                    await ModelDownloadManager.instance
+                        .deleteModel(m.id, _selectedQuant!.level);
+                    setState(() {});
+                  },
+                  cs: cs,
+                  danger: true,
+                ),
+              ),
+            ],
           ),
         ],
       );
@@ -592,6 +638,94 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
       storage: _storage,
     );
     setState(() {});
+  }
+
+  // ── Activation dans Panda AI ───────────────────────────────────────────────
+
+  Future<void> _activateModel(ColorScheme cs) async {
+    if (_selectedQuant == null || widget.profile == null) return;
+    setState(() { _activating = true; _activationMessage = null; });
+    try {
+      final result = await ModelActivationService.activate(
+        modelEntry:   m,
+        quantLevel:   _selectedQuant!.level,
+        profile:      widget.profile!,
+        setAsDefault: false,
+      );
+      if (!mounted) return;
+      setState(() {
+        _activating = false;
+        _activationMessage = result.alreadyExisted
+            ? 'Paramètres mis à jour dans Panda AI'
+            : result.setAsDefault
+                ? '${m.name} activé et sélectionné comme modèle de chat ✓'
+                : '${m.name} ajouté à Panda AI ✓';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _activating = false;
+        _activationMessage = 'Erreur : $e';
+      });
+    }
+  }
+
+  // ── Aperçu config d'inférence ─────────────────────────────────────────────
+
+  Widget _buildInferenceConfigPreview(ColorScheme cs) {
+    if (_selectedQuant == null || widget.profile == null) {
+      return const SizedBox.shrink();
+    }
+    final config = InferenceConfigService.compute(
+      model:   m,
+      quant:   _selectedQuant!,
+      profile: widget.profile!,
+    );
+    final lines = InferenceConfigService.summary(config, widget.profile!);
+    final dark  = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xff2a2a2a) : const Color(0xfff2f6ff),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: cs.primary.withOpacity(0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.tune, size: 13, color: cs.primary),
+              const SizedBox(width: 6),
+              Text(
+                'Config d\'inférence auto-calculée',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: cs.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...lines.map(
+            (l) => Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Row(
+                children: [
+                  Text('·  ', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                  Expanded(
+                    child: Text(l,
+                        style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _remainingTime(DownloadTask task) {
