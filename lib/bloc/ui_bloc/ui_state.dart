@@ -164,6 +164,7 @@ Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
     case 'gorq':
     case 'groq': return Groq(apiKey: apiKey, model: modelName);
     case 'deepseek': return DeepSeek(apiKey: apiKey, model: modelName);
+    case 'mistral': return Mistral(apiKey: apiKey, model: modelName);
     case 'togetherai': return TogetherAi(apiKey: apiKey, model: modelName);
     case 'perplexity': return Perplexity(apiKey: apiKey, model: modelName);
     case 'openrouter': return OpenRouter(apiKey: apiKey, model: modelName);

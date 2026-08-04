@@ -1108,6 +1108,14 @@ class DeepSeek extends OpenAiCompatible {
   DeepSeek({required this.apiKey, required this.model});
 }
 
+class Mistral extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://api.mistral.ai/v1";
+  @override
+  final String apiKey, model;
+  Mistral({required this.apiKey, required this.model});
+}
+
 class TogetherAi extends OpenAiCompatible {
   @override
   String get baseUrl => "https://api.together.xyz/v1";

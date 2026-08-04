@@ -135,7 +135,6 @@ class _SelectTypeState extends State<SelectType>
   // ── Agent UI state ───────────────────────────────────────────────
   /// 'ask' | 'agent' | 'normal'
   String _agentChatMode      = 'ask';
-  String? _agentSelectedModelId;
   final List<Map<String,String>> _agentAttachments = [];
 
   // ── Floating agent overlay ────────────────────────────────────────
@@ -3132,21 +3131,17 @@ class _SelectTypeState extends State<SelectType>
     final inputBg = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
     final inputBorder = isDark ? const Color(0xff404040) : const Color(0xffdddddd);
 
-    // Resolve display name for selected model
+    // Panda Agent is provider-first. The selected model is an internal
+    // implementation detail populated from that provider's live catalog.
     final aiState = context.watch<AIBloc>().state;
-    final allModelIds = aiState.config.keys.toList();
-    final effectiveModelId = _agentSelectedModelId != null &&
-            aiState.config.containsKey(_agentSelectedModelId)
-        ? _agentSelectedModelId!
-        : (aiState.modelSelected['chat'] as String? ?? '');
-    final modelDisplayName = effectiveModelId.isNotEmpty &&
-            aiState.config.containsKey(effectiveModelId)
-        ? ((aiState.config[effectiveModelId] is Map)
-                ? (aiState.config[effectiveModelId] as Map)['modelName']
-                    ?.toString()
-                : null) ??
-            effectiveModelId
-        : 'Choisir modèle';
+    final selectedProviderId = aiState.modelSelected['chat']?.toString();
+    final selectedConfig = selectedProviderId == null
+        ? null
+        : aiState.config[selectedProviderId];
+    final providerName = selectedConfig is Map
+        ? (selectedConfig['provider'] ?? selectedConfig['apiProvider'] ?? '')
+              .toString()
+        : '';
 
     return Container(
       width: asPage ? double.infinity : 300,
@@ -3374,37 +3369,33 @@ class _SelectTypeState extends State<SelectType>
 
                     const SizedBox(width: 4),
 
-                    // ── Model selector pill ────────────────────────────
-                    GestureDetector(
-                      onTap: () => _showAgentModelSheet(
-                          context, appTheme, allModelIds, aiState),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xff3a3a3a)
-                              : const Color(0xffe0e0e0),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Broken.cpu, size: 11, color: muted),
-                          const SizedBox(width: 4),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.22),
-                            child: Text(
-                              modelDisplayName,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: muted,
-                                  fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                          const SizedBox(width: 2),
-                          Icon(Broken.arrow_down_2, size: 10, color: muted),
-                        ]),
+                    // ── Active provider pill (no model selector) ────────
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xff3a3a3a)
+                            : const Color(0xffe0e0e0),
+                        borderRadius: BorderRadius.circular(10),
                       ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Broken.cpu, size: 11, color: muted),
+                        const SizedBox(width: 4),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.sizeOf(context).width * 0.22,
+                          ),
+                          child: Text(
+                            providerName.isEmpty ? 'Aucun provider' : providerName,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: muted,
+                                fontWeight: FontWeight.w500),
+                          ),
+                        ),
+                      ]),
                     ),
 
                     const Spacer(),
@@ -3517,148 +3508,6 @@ class _SelectTypeState extends State<SelectType>
             ),
           const SizedBox(height: 16),
         ],
-      ),
-    );
-  }
-
-  /// Bottom sheet — choose AI model for this conversation.
-  void _showAgentModelSheet(
-    BuildContext context,
-    AppTheme appTheme,
-    List<String> modelIds,
-    AIState aiState,
-  ) {
-    final isDark  = appTheme.isDark;
-    final bg      = isDark ? const Color(0xff252526) : const Color(0xfffafafa);
-    final fg      = isDark ? Colors.grey[300]! : Colors.grey[800]!;
-    final muted   = isDark ? Colors.grey[500]! : Colors.grey[500]!;
-    final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: bg,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 36, height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 8),
-                decoration: BoxDecoration(
-                  color: muted.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Text('Choisir un modèle',
-                  style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: fg)),
-            ),
-            const Divider(height: 1),
-            if (modelIds.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Icon(Broken.cpu, size: 28, color: muted),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Aucun modèle configuré.\nOuvrez Paramètres → IA pour en ajouter un.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: muted),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _openAgentSettingsTab();
-                      },
-                      icon: Icon(Broken.setting_2, size: 15, color: _kAccent),
-                      label: const Text('Ouvrir Paramètres Agent',
-                          style: TextStyle(color: _kAccent)),
-                    ),
-                  ],
-                ),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: modelIds.length,
-                  itemBuilder: (_, i) {
-                    final id = modelIds[i];
-                    final rawCfg = aiState.config[id];
-                    final cfg = rawCfg is Map
-                        ? Map<String, dynamic>.from(rawCfg)
-                        : const <String, dynamic>{};
-                    final name = cfg['modelName']?.toString() ?? id;
-                    final provider = cfg['provider']?.toString() ?? '';
-                    final isSelected = (_agentSelectedModelId == id) ||
-                        (_agentSelectedModelId == null &&
-                            aiState.modelSelected['chat'] == id);
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(
-                        _providerIcon(provider),
-                        size: 18,
-                        color: isSelected ? _kAccent : muted,
-                      ),
-                      title: Text(name,
-                          style: TextStyle(
-                              fontSize: 13,
-                              color: fg,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.normal)),
-                      subtitle: provider.isNotEmpty
-                          ? Text(provider,
-                              style:
-                                  TextStyle(fontSize: 11, color: muted))
-                          : null,
-                      trailing: isSelected
-                          ? Icon(Broken.tick_circle,
-                              size: 16, color: _kAccent)
-                          : null,
-                      onTap: () {
-                        setState(() => _agentSelectedModelId = id);
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                ),
-              ),
-            const SizedBox(height: 8),
-            // Add model shortcut
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _openAgentSettingsTab();
-                },
-                icon: Icon(Broken.add_circle, size: 14, color: _kAccent),
-                label: const Text('Ajouter un modèle',
-                    style: TextStyle(color: _kAccent, fontSize: 13)),
-                style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: borderC),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -4137,10 +3986,14 @@ class _SelectTypeState extends State<SelectType>
       case 'openai':     return OpenAI(apiKey: apiKey, model: modelName);
       case 'grok':       return Grok(apiKey: apiKey, model: modelName);
       case 'deepseek':   return DeepSeek(apiKey: apiKey, model: modelName);
+      case 'mistral':    return Mistral(apiKey: apiKey, model: modelName);
       case 'togetherai': return TogetherAi(apiKey: apiKey, model: modelName);
       case 'perplexity': return Perplexity(apiKey: apiKey, model: modelName);
       case 'openrouter': return OpenRouter(apiKey: apiKey, model: modelName);
       case 'fireworks':  return FireWorks(apiKey: apiKey, model: modelName);
+      case 'pandagateway':
+        final port = (cfg['port'] as num?)?.toInt() ?? 8000;
+        return PandaGateway(apiKey: apiKey, model: modelName, port: port);
       case 'localllama':
         final mp = (cfg['modelPath'] ?? '').toString().trim();
         if (mp.isEmpty) return null;
@@ -4414,8 +4267,6 @@ class _SelectTypeState extends State<SelectType>
   Future<void> _agentSendInternal(String text, int requestId) async {
     PandaLog.d('PandaAgent', 'Preparing model and conversation');
 
-    // Utilise uniquement le modèle explicitement sélectionné.
-    // Ne bascule jamais silencieusement vers un autre provider.
     final aiState = context.read<AIBloc>().state;
     PandaLog.d(
       'PandaAgent',
@@ -4425,11 +4276,14 @@ class _SelectTypeState extends State<SelectType>
 
     Models? model;
     String? modelResolutionError;
-    String? selectedId = _agentSelectedModelId;
-    selectedId ??= aiState.modelSelected['chat']?.toString();
+    final selectedId = aiState.modelSelected['chat']?.toString();
     final selectedConfig =
         selectedId == null ? null : aiState.config[selectedId];
-    if (selectedConfig is Map) {
+    // Panda Agent only consumes provider profiles created by the provider-first
+    // settings flow. Older IDE model profiles must not silently control Agent.
+    final isAgentProviderProfile =
+        selectedId != null && selectedId.startsWith('agent_');
+    if (isAgentProviderProfile && selectedConfig is Map) {
       try {
         final normalizedConfig = Map<String, dynamic>.from(selectedConfig);
         PandaLog.d(
@@ -4466,7 +4320,8 @@ class _SelectTypeState extends State<SelectType>
         _agentMessages.add({
           'role': 'agent',
           'text': modelResolutionError ??
-          'Aucun modèle sélectionné pour Panda Agent. Choisissez un modèle dans le panneau Agent ou les paramètres IA.',
+          'Aucun provider validé pour Panda Agent. Ouvrez Paramètres Agent, '
+          'entrez votre clé puis validez la connexion.',
           'thinking': '',
           'phase': 'error',
         });

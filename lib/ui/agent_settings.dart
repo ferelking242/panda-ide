@@ -1,8 +1,8 @@
 /// AgentSettings — page dédiée aux paramètres de Panda Agent.
 ///
 /// Différent des paramètres IDE (settings.dart).
-/// Gère : providers IA, clés API, limites journalières,
-///         mémoire, sélection de modèle, outils actifs.
+/// Gère : providers IA, clés API, catalogues de modèles,
+///         mémoire, outils actifs.
 library;
 
 import 'dart:convert';
@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../bloc/repo_bloc/repo_bloc.dart';
@@ -18,6 +19,7 @@ import '../core/broken_icons.dart';
 import '../utils/ai.dart';
 import '../utils/constants.dart';
 import '../utils/agentic_tool_catalog.dart';
+import '../utils/copilot_chat.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const _kAccent  = Color(0xff5090c8);
@@ -31,7 +33,6 @@ class _ProviderDef {
   final String description;
   final IconData icon;
   final Color color;
-  final List<String> models;
   final String docsUrl;
   final bool hasApiKey;
   final String apiKeyHint;
@@ -42,7 +43,6 @@ class _ProviderDef {
     required this.description,
     required this.icon,
     required this.color,
-    required this.models,
     required this.docsUrl,
     this.hasApiKey = true,
     this.apiKeyHint = 'sk-...',
@@ -56,7 +56,6 @@ const _providers = <_ProviderDef>[
     description: 'GPT-4o, o1, o3 — le plus utilisé',
     icon: Broken.global,
     color: Color(0xff10a37f),
-    models: ['gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'o3-mini', 'gpt-4-turbo'],
     docsUrl: 'https://platform.openai.com/api-keys',
     apiKeyHint: 'sk-...',
   ),
@@ -66,7 +65,6 @@ const _providers = <_ProviderDef>[
     description: 'Claude 3.5 Sonnet, Haiku, Opus',
     icon: Broken.cpu,
     color: Color(0xffb87333),
-    models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229'],
     docsUrl: 'https://console.anthropic.com/settings/keys',
     apiKeyHint: 'sk-ant-...',
   ),
@@ -76,7 +74,6 @@ const _providers = <_ProviderDef>[
     description: 'Gemini 2.0 Flash, 1.5 Pro',
     icon: Broken.global_search,
     color: Color(0xff4285f4),
-    models: ['gemini-2.0-flash-exp', 'gemini-2.5-pro-preview', 'gemini-1.5-pro', 'gemini-1.5-flash'],
     docsUrl: 'https://aistudio.google.com/app/apikey',
     apiKeyHint: 'AIza...',
   ),
@@ -86,7 +83,6 @@ const _providers = <_ProviderDef>[
     description: 'DeepSeek-V3, R1 — très bon rapport qualité/coût',
     icon: Broken.search_normal,
     color: Color(0xff4b6ef5),
-    models: ['deepseek-chat', 'deepseek-coder', 'deepseek-reasoner'],
     docsUrl: 'https://platform.deepseek.com/api_keys',
     apiKeyHint: 'sk-...',
   ),
@@ -96,7 +92,6 @@ const _providers = <_ProviderDef>[
     description: 'Grok-2, Grok Beta',
     icon: Broken.code_circle,
     color: Color(0xff1da1f2),
-    models: ['grok-2', 'grok-2-mini', 'grok-beta'],
     docsUrl: 'https://console.x.ai/',
     apiKeyHint: 'xai-...',
   ),
@@ -106,7 +101,6 @@ const _providers = <_ProviderDef>[
     description: 'Accès unifié à 200+ modèles',
     icon: Broken.routing_2,
     color: Color(0xff8b5cf6),
-    models: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash-exp', 'deepseek/deepseek-r1'],
     docsUrl: 'https://openrouter.ai/keys',
     apiKeyHint: 'sk-or-...',
   ),
@@ -116,7 +110,6 @@ const _providers = <_ProviderDef>[
     description: 'Mistral Large, Codestral',
     icon: Broken.wind,
     color: Color(0xffff7000),
-    models: ['mistral-large-latest', 'codestral-latest', 'mistral-small-latest'],
     docsUrl: 'https://console.mistral.ai/api-keys',
     apiKeyHint: '...',
   ),
@@ -126,7 +119,6 @@ const _providers = <_ProviderDef>[
     description: 'Llama, Mixtral et autres open-source',
     icon: Broken.people,
     color: Color(0xff00c9b1),
-    models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'mistralai/Mixtral-8x7B', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
     docsUrl: 'https://api.together.xyz/settings/api-keys',
     apiKeyHint: '...',
   ),
@@ -136,7 +128,6 @@ const _providers = <_ProviderDef>[
     description: 'Sonar — recherche web intégrée',
     icon: Broken.search_zoom_in,
     color: Color(0xff20b2aa),
-    models: ['llama-3.1-sonar-large-128k-online', 'llama-3.1-sonar-small-128k-online'],
     docsUrl: 'https://www.perplexity.ai/settings/api',
     apiKeyHint: 'pplx-...',
   ),
@@ -146,8 +137,8 @@ const _providers = <_ProviderDef>[
     description: 'Accès ChatGPT/Claude via Panda Browser Gateway local',
     icon: Broken.routing_2,
     color: Color(0xff5090c8),
-    models: ['gpt-4o', 'gpt-4o-mini', 'claude-3-5-sonnet', 'claude-3-haiku'],
     docsUrl: '',
+    hasApiKey: false,
     apiKeyHint: 'Token Panda Open Gateway (optionnel)',
   ),
   _ProviderDef(
@@ -156,7 +147,6 @@ const _providers = <_ProviderDef>[
     description: 'Modèles Copilot via votre session GitHub',
     icon: Broken.message_programming,
     color: Color(0xff8b5cf6),
-    models: ['auto'],
     docsUrl: 'https://github.com/features/copilot',
     hasApiKey: false,
   ),
@@ -166,7 +156,6 @@ const _providers = <_ProviderDef>[
     description: 'Endpoint OpenAI-compatible (Ollama, LM Studio…)',
     icon: Broken.cpu_setting,
     color: Color(0xff888888),
-    models: [],
     docsUrl: '',
     apiKeyHint: 'optionnel',
   ),
@@ -186,14 +175,13 @@ class _AgentSettingsState extends State<AgentSettings>
   late TabController _tab;
   // Controllers for adding new provider
   String _selectedProviderId = 'openai';
-  String _selectedModelId   = '';
   final _apiKeyCtrl         = TextEditingController();
   final _customUrlCtrl      = TextEditingController();
-  final _customModelCtrl    = TextEditingController();
   bool _obscureKey          = true;
   bool _testingKey          = false;
   bool? _testKeyResult;
   String _testKeyMessage    = '';
+  List<Map<String, dynamic>> _availableModels = const [];
 
   // Per-provider daily limit controllers (key = provider+model id)
   final Map<String, TextEditingController> _limitCtrls = {};
@@ -209,9 +197,6 @@ class _AgentSettingsState extends State<AgentSettings>
   void initState() {
     super.initState();
     _tab = TabController(length: 4, vsync: this);
-    _selectedModelId = _providers.first.models.isNotEmpty
-        ? _providers.first.models.first
-        : '';
     _loadMemorySettings();
   }
 
@@ -236,149 +221,240 @@ class _AgentSettingsState extends State<AgentSettings>
     _tab.dispose();
     _apiKeyCtrl.dispose();
     _customUrlCtrl.dispose();
-    _customModelCtrl.dispose();
     _memoryNotesCtrl.dispose();
     _systemPromptCtrl.dispose();
     for (final c in _limitCtrls.values) { c.dispose(); }
     super.dispose();
   }
 
-  // ── Test API key ────────────────────────────────────────────────────────────
+  // ── Validate provider and fetch its live model catalog ─────────────────────
   Future<void> _testApiKey() async {
-    if (_apiKeyCtrl.text.trim().isEmpty) return;
-    setState(() { _testingKey = true; _testKeyResult = null; });
-    try {
-      final provDef = _providers.firstWhere((p) => p.id == _selectedProviderId,
-          orElse: () => _providers.first);
-      String url = '';
-      Map<String, String> headers = {};
-      String body = '';
-
-      switch (_selectedProviderId) {
-        case 'openai':
-        case 'grok':
-        case 'deepseek':
-        case 'togetherai':
-        case 'perplexity':
-        case 'openrouter':
-        case 'mistral':
-          final urls = {
-            'openai': 'https://api.openai.com/v1/models',
-            'grok': 'https://api.x.ai/v1/models',
-            'deepseek': 'https://api.deepseek.com/models',
-            'togetherai': 'https://api.together.xyz/v1/models',
-            'perplexity': 'https://api.perplexity.ai/models',
-            'openrouter': 'https://openrouter.ai/api/v1/models',
-            'mistral': 'https://api.mistral.ai/v1/models',
-          };
-          url = urls[_selectedProviderId] ?? '';
-          headers = { 'Authorization': 'Bearer ${_apiKeyCtrl.text.trim()}' };
-          break;
-        case 'claude':
-          url = 'https://api.anthropic.com/v1/models';
-          headers = {
-            'x-api-key': _apiKeyCtrl.text.trim(),
-            'anthropic-version': '2023-06-01',
-          };
-          break;
-        case 'gemini':
-          url = 'https://generativelanguage.googleapis.com/v1beta/models?key=${_apiKeyCtrl.text.trim()}';
-          break;
-        default:
-          url = _customUrlCtrl.text.trim();
-          if (url.isNotEmpty) {
-            headers = { 'Authorization': 'Bearer ${_apiKeyCtrl.text.trim()}' };
-          }
-      }
-
-      if (url.isEmpty) {
-        setState(() {
-          _testingKey = false;
-          _testKeyResult = null;
-          _testKeyMessage = 'Entrez une URL pour tester.';
-        });
-        return;
-      }
-
-      final resp = await http.get(Uri.parse(url), headers: headers)
-          .timeout(const Duration(seconds: 10));
-      setState(() {
-        _testingKey = false;
-        _testKeyResult = resp.statusCode < 400;
-        _testKeyMessage = resp.statusCode < 400
-            ? '✅ Clé valide (HTTP ${resp.statusCode})'
-            : '❌ Erreur HTTP ${resp.statusCode}';
-      });
-    } catch (e) {
-      setState(() {
-        _testingKey = false;
-        _testKeyResult = false;
-        _testKeyMessage = '❌ $e';
-      });
-    }
-  }
-
-  // ── Add model to AIBloc ─────────────────────────────────────────────────────
-  void _addModel(BuildContext context) {
-    final provDef = _providers.firstWhere((p) => p.id == _selectedProviderId,
-        orElse: () => _providers.first);
-    final apiKey  = _apiKeyCtrl.text.trim();
-    final model   = _selectedProviderId == 'custom'
-        ? _customModelCtrl.text.trim()
-        : _selectedModelId;
-
-    if (model.isEmpty) {
-      _showSnack(context, 'Choisissez un modèle.', isError: true);
-      return;
-    }
-    if (provDef.hasApiKey && apiKey.isEmpty && _selectedProviderId != 'custom') {
-      _showSnack(context, 'Entrez la clé API.', isError: true);
-      return;
-    }
+    final provider = _providers.firstWhere(
+      (p) => p.id == _selectedProviderId,
+      orElse: () => _providers.first,
+    );
+    final apiKey = _apiKeyCtrl.text.trim();
     if (_selectedProviderId == 'copilot') {
       final githubSignedIn = context.read<GithubAuthCubit>().state.isSignedIn;
       final copilotSignedIn = context.read<CopilotBloc>().state.isSignedIn;
       if (!githubSignedIn && !copilotSignedIn) {
-        _showSnack(
-          context,
-          'Connectez GitHub ou Copilot avant d’ajouter ce provider.',
-          isError: true,
-        );
+        setState(() {
+          _testKeyResult = false;
+          _testKeyMessage =
+              'Connectez GitHub ou Copilot avant de valider ce provider.';
+        });
         return;
       }
     }
+    if (provider.hasApiKey && apiKey.isEmpty) {
+      setState(() {
+        _testKeyResult = false;
+        _testKeyMessage = 'Entrez la clé API avant de valider.';
+      });
+      return;
+    }
     if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) {
-      _showSnack(context, 'Entrez l\'URL de l\'endpoint.', isError: true);
+      setState(() {
+        _testKeyResult = false;
+        _testKeyMessage = 'Entrez l’URL de l’endpoint avant de valider.';
+      });
+      return;
+    }
+
+    setState(() {
+      _testingKey = true;
+      _testKeyResult = null;
+      _testKeyMessage = 'Connexion au provider et récupération du catalogue…';
+      _availableModels = const [];
+    });
+    try {
+      final models = await _fetchLiveModels(
+        provider: _selectedProviderId,
+        apiKey: apiKey,
+        customUrl: _customUrlCtrl.text.trim(),
+      ).timeout(const Duration(seconds: 20));
+      if (models.isEmpty) {
+        throw StateError('Le provider n’a retourné aucun modèle exploitable.');
+      }
+      await _saveProviderConfig(
+        context,
+        provider: provider,
+        apiKey: apiKey,
+        models: models,
+      );
+      setState(() {
+        _testingKey = false;
+        _testKeyResult = true;
+        _availableModels = models;
+        _testKeyMessage =
+            '✓ Clé valide — ${models.length} vrais modèles récupérés. '
+            'Le premier modèle compatible est utilisé automatiquement.';
+      });
+      _showSnack(context, '${provider.name} — provider activé ✓');
+    } catch (e) {
+      setState(() {
+        _testingKey = false;
+        _testKeyResult = false;
+        _testKeyMessage = '✕ Impossible de valider ce provider : $e';
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchLiveModels({
+    required String provider,
+    required String apiKey,
+    required String customUrl,
+  }) async {
+    if (provider == 'copilot') {
+      final auth = await CopilotChat.loadAuthContext();
+      if (auth == null) {
+        throw StateError('Connectez votre compte GitHub/Copilot.');
+      }
+      final payload = await CopilotChat(
+        authToken: auth.authToken,
+        initialApiEndpoint: auth.apiEndpoint,
+      ).getCopilotModels();
+      return _normalizeModelCatalog(payload);
+    }
+
+    final urls = <String, String>{
+      'openai': 'https://api.openai.com/v1/models',
+      'claude': 'https://api.anthropic.com/v1/models',
+      'gemini':
+          'https://generativelanguage.googleapis.com/v1beta/models?key=$apiKey',
+      'deepseek': 'https://api.deepseek.com/models',
+      'grok': 'https://api.x.ai/v1/models',
+      'openrouter': 'https://openrouter.ai/api/v1/models',
+      'mistral': 'https://api.mistral.ai/v1/models',
+      'togetherai': 'https://api.together.xyz/v1/models',
+      'perplexity': 'https://api.perplexity.ai/models',
+      'pandagateway': 'http://127.0.0.1:8000/v1/models',
+    };
+    var url = urls[provider] ?? customUrl;
+    if (provider == 'custom') {
+      final parsed = Uri.tryParse(url);
+      if (parsed == null || !parsed.hasScheme) {
+        throw StateError('URL custom invalide.');
+      }
+      final normalizedUrl = url.replaceFirst(RegExp(r'/+$'), '');
+      if (normalizedUrl.endsWith('/chat/completions')) {
+        url = '${normalizedUrl.substring(
+          0,
+          normalizedUrl.length - '/chat/completions'.length,
+        )}/models';
+      } else if (normalizedUrl.endsWith('/responses')) {
+        url = '${normalizedUrl.substring(
+          0,
+          normalizedUrl.length - '/responses'.length,
+        )}/models';
+      } else if (!normalizedUrl.endsWith('/models')) {
+        url = '$normalizedUrl/models';
+      }
+    }
+    if (url.isEmpty) throw StateError('Aucun endpoint de catalogue configuré.');
+
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      if (provider == 'claude') ...{
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      } else if (provider != 'gemini') ...{
+        if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
+      },
+    };
+    final response = await http
+        .get(Uri.parse(url), headers: headers)
+        .timeout(const Duration(seconds: 15));
+    if (response.statusCode >= 400) {
+      throw StateError('HTTP ${response.statusCode}: ${response.body}');
+    }
+    return _normalizeModelCatalog(jsonDecode(response.body));
+  }
+
+  List<Map<String, dynamic>> _normalizeModelCatalog(dynamic payload) {
+    final raw = payload is Map
+        ? (payload['data'] is List
+            ? payload['data']
+            : payload['models'] is List
+                ? payload['models']
+                : const [])
+        : payload is List
+            ? payload
+            : const [];
+    final models = <Map<String, dynamic>>[];
+    for (final item in raw) {
+      final model = item is Map
+          ? Map<String, dynamic>.from(item)
+          : <String, dynamic>{'id': item.toString()};
+      final id = (model['id'] ?? model['name'] ?? '').toString().trim();
+      if (id.isEmpty) continue;
+      model['id'] = id.startsWith('models/') ? id.substring(7) : id;
+      model['displayName'] = (model['displayName'] ??
+              model['display_name'] ??
+              model['name'] ??
+              id)
+          .toString();
+      models.add(model);
+    }
+    return models;
+  }
+
+  Future<void> _saveProviderConfig(
+    BuildContext context, {
+    required _ProviderDef provider,
+    required String apiKey,
+    required List<Map<String, dynamic>> models,
+  }) async {
+    final usable = models.firstWhere(
+      (model) => _looksChatCapable(model),
+      orElse: () => models.first,
+    );
+    final modelName = usable['id'].toString();
+    if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) {
       return;
     }
 
     final aiBloc  = context.read<AIBloc>();
     final newCfg  = Map<String, dynamic>.from(aiBloc.state.config);
-    final modelId = '${_selectedProviderId}_${model.replaceAll('/', '_')}';
+    final modelId = 'agent_${_selectedProviderId}';
 
     newCfg[modelId] = {
       'provider':   _selectedProviderId,
       'apiProvider': _selectedProviderId,
       if (_selectedProviderId != 'copilot') 'apiKey': apiKey,
-      'modelName':  model,
-      'model':      model,
+      'modelName':  modelName,
+      'model':      modelName,
+      'availableModels': models,
       if (_selectedProviderId == 'custom') 'url': _customUrlCtrl.text.trim(),
     };
 
     aiBloc.add(AIConfigEvent(newCfg));
-    _saveAiConfig(context, newCfg);
+    await _saveAiConfig(context, newCfg);
 
-    // Set as default chat model if none selected. Copilot is resolved from
-    // the secure GitHub session at request time; no token is persisted here.
     final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
-    if (selected['chat'] == null || (selected['chat'] as String).isEmpty) {
-      selected['chat'] = modelId;
-      aiBloc.add(ModelSelectEvent(selected));
-    }
+    selected['chat'] = modelId;
+    aiBloc.add(ModelSelectEvent(selected));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('modelSelected', jsonEncode(selected));
+  }
 
-    _showSnack(context, '${provDef.name} — $model ajouté ✓');
-    _apiKeyCtrl.clear();
-    setState(() { _testKeyResult = null; });
+  bool _looksChatCapable(Map<String, dynamic> model) {
+    final id = model['id'].toString().toLowerCase();
+    final methods = model['supported_generation_methods'];
+    if (methods is List && methods.isNotEmpty) {
+      return methods.any((method) =>
+          method.toString().toLowerCase().contains('generatecontent'));
+    }
+    final endpoints = model['supported_endpoints'];
+    if (endpoints is List && endpoints.isNotEmpty) {
+      return endpoints.any((endpoint) {
+        final value = endpoint.toString().toLowerCase();
+        return value.contains('chat/completions') || value.contains('/responses');
+      });
+    }
+    return !RegExp(
+      r'(embedding|embed|moderation|whisper|transcri|tts|speech|audio|image)',
+    ).hasMatch(id);
   }
 
   Future<void> _saveAiConfig(
@@ -400,16 +476,6 @@ class _AgentSettingsState extends State<AgentSettings>
       aiBloc.add(ModelSelectEvent(selected));
     }
     _showSnack(context, 'Modèle supprimé.');
-  }
-
-  void _setDefaultModel(BuildContext context, String modelId) {
-    final aiBloc   = context.read<AIBloc>();
-    final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
-    selected['chat'] = modelId;
-    aiBloc.add(ModelSelectEvent(selected));
-    SharedPreferences.getInstance().then((p) =>
-        p.setString('modelSelected', jsonEncode(selected)));
-    _showSnack(context, 'Modèle par défaut mis à jour ✓');
   }
 
   void _showSnack(BuildContext context, String msg, {bool isError = false}) {
@@ -510,15 +576,15 @@ class _AgentSettingsState extends State<AgentSettings>
       Color card, Color fg, Color muted, Color border) {
     return BlocBuilder<AIBloc, AIState>(
       builder: (ctx, aiState) {
-        final configuredModels = aiState.config.entries.toList();
-        final defaultChatModel = aiState.modelSelected['chat'] as String? ?? '';
-
+        final configuredModels = aiState.config.entries
+            .where((entry) => entry.key.startsWith('agent_'))
+            .toList();
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
             // ── Models configured ──────────────────────────────────────
             if (configuredModels.isNotEmpty) ...[
-              _sectionLabel('MODÈLES CONFIGURÉS', muted),
+              _sectionLabel('PROVIDERS CONNECTÉS', muted),
               const SizedBox(height: 8),
               ...configuredModels.map((entry) {
                 final id  = entry.key;
@@ -530,13 +596,11 @@ class _AgentSettingsState extends State<AgentSettings>
                 final pDef     = _providers.firstWhere(
                     (p) => p.id == provider,
                     orElse: () => _providers.last);
-                final isDefault = id == defaultChatModel;
                 return _ModelCard(
                   id: id, name: name, provider: provider,
-                  pDef: pDef, isDefault: isDefault,
+                  pDef: pDef,
                   isDark: isDark, card: card, fg: fg, muted: muted,
                   border: border,
-                  onSetDefault: () => _setDefaultModel(ctx, id),
                   onRemove: () => _removeModel(ctx, id),
                 );
               }),
@@ -544,7 +608,7 @@ class _AgentSettingsState extends State<AgentSettings>
             ],
 
             // ── Add new model ──────────────────────────────────────────
-            _sectionLabel('AJOUTER UN MODÈLE', muted),
+            _sectionLabel('CONNECTER UN PROVIDER', muted),
             const SizedBox(height: 10),
 
             // Provider selector
@@ -556,66 +620,14 @@ class _AgentSettingsState extends State<AgentSettings>
                 _selectedProviderId = id;
                 _testKeyResult = null;
                 _testKeyMessage = '';
-                final pDef = _providers.firstWhere((p) => p.id == id,
-                    orElse: () => _providers.first);
-                _selectedModelId = pDef.models.isNotEmpty
-                    ? pDef.models.first : '';
+                _availableModels = const [];
               }),
             ),
             const SizedBox(height: 12),
 
-            // Model selector
-            Builder(builder: (_) {
-              final pDef = _providers.firstWhere(
-                  (p) => p.id == _selectedProviderId,
-                  orElse: () => _providers.first);
-              if (_selectedProviderId == 'custom') {
-                return _SettingsField(
-                  controller: _customModelCtrl,
-                  label: 'Nom du modèle',
-                  hint: 'llama3, qwen2.5-coder, mistral…',
-                  isDark: isDark, card: card, fg: fg, muted: muted,
-                  border: border,
-                );
-              }
-              if (_selectedProviderId == 'copilot') {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ModelDropdown(
-                      models: pDef.models,
-                      selected: _selectedModelId,
-                      isDark: isDark,
-                      card: card,
-                      fg: fg,
-                      muted: muted,
-                      border: border,
-                      onChanged: (m) =>
-                          setState(() => _selectedModelId = m),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Le modèle réel est choisi depuis le catalogue de votre compte Copilot au moment de l’envoi. '
-                      'Copilot Free reste soumis aux limites GitHub.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: muted,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                );
-              }
-              return _ModelDropdown(
-                models: pDef.models,
-                selected: _selectedModelId,
-                isDark: isDark, card: card, fg: fg, muted: muted, border: border,
-                onChanged: (m) => setState(() => _selectedModelId = m),
-              );
-            }),
-            const SizedBox(height: 12),
-
-            // API key / URL
+            // Endpoint and credential. Model selection is intentionally absent:
+            // validation fetches the provider's live catalog and picks the
+            // first chat-capable model automatically.
             Builder(builder: (_) {
               final pDef = _providers.firstWhere(
                   (p) => p.id == _selectedProviderId,
@@ -654,67 +666,90 @@ class _AgentSettingsState extends State<AgentSettings>
                       ),
                     ]),
                     const SizedBox(height: 8),
-                    Row(children: [
-                      OutlinedButton.icon(
-                        onPressed: _testingKey ? null : _testApiKey,
-                        icon: _testingKey
-                            ? SizedBox(
-                                width: 12, height: 12,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: _kAccent))
-                            : const Icon(Broken.flash_circle, size: 14),
-                        label: Text(_testingKey ? 'Test…' : 'Tester la clé'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _kAccent,
-                          side: BorderSide(color: border),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          textStyle: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      if (pDef.docsUrl.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        TextButton.icon(
-                          onPressed: () {},
-                          icon: Icon(Broken.export_3, size: 12, color: muted),
-                          label: Text('Obtenir une clé',
-                              style: TextStyle(fontSize: 12, color: muted)),
-                        ),
-                      ],
-                    ]),
-                    if (_testKeyMessage.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(_testKeyMessage,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _testKeyResult == true
-                                  ? _kSuccess
-                                  : _kDanger,
-                            )),
-                      ),
-                    const SizedBox(height: 12),
                   ],
+                  Row(children: [
+                    OutlinedButton.icon(
+                      onPressed: _testingKey ? null : _testApiKey,
+                      icon: _testingKey
+                          ? const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: _kAccent,
+                              ),
+                            )
+                          : const Icon(Broken.flash_circle, size: 14),
+                      label: Text(
+                        _testingKey
+                            ? 'Connexion…'
+                            : 'Valider et récupérer les modèles',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _kAccent,
+                        side: BorderSide(color: border),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        textStyle: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                    if (pDef.docsUrl.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      TextButton.icon(
+                        onPressed: () => launchUrl(Uri.parse(pDef.docsUrl)),
+                        icon: Icon(Broken.export_3, size: 12, color: muted),
+                        label: Text(
+                          'Obtenir une clé',
+                          style: TextStyle(fontSize: 12, color: muted),
+                        ),
+                      ),
+                    ],
+                  ]),
+                  if (_testKeyMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        _testKeyMessage,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _testKeyResult == true
+                              ? _kSuccess
+                              : _kDanger,
+                        ),
+                      ),
+                    ),
+                  if (_availableModels.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      'Catalogue réel (${_availableModels.length} modèles)',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: fg,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _availableModels
+                          .take(12)
+                          .map((model) =>
+                              '${model['displayName']}  —  ${model['id']}')
+                          .join('\n'),
+                      maxLines: 12,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        height: 1.4,
+                        color: muted,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
                 ],
               );
             }),
-
-            // Add button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _addModel(context),
-                icon: const Icon(Broken.add_circle, size: 16),
-                label: const Text('Ajouter ce modèle'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kAccent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-            ),
             const SizedBox(height: 32),
           ],
         );
@@ -1268,161 +1303,23 @@ class _ProviderPicker extends StatelessWidget {
   }
 }
 
-/// Model dropdown — utilise un BottomSheet au lieu de DropdownButton.
-/// DropdownButton échoue silencieusement sur certains appareils Android
-/// (overlay bloqué par le touch event system). Le BottomSheet fonctionne
-/// nativement sur mobile comme sur desktop.
-class _ModelDropdown extends StatelessWidget {
-  final List<String> models;
-  final String selected;
-  final bool isDark;
-  final Color card, fg, muted, border;
-  final ValueChanged<String> onChanged;
-
-  const _ModelDropdown({
-    required this.models,
-    required this.selected,
-    required this.isDark,
-    required this.card,
-    required this.fg,
-    required this.muted,
-    required this.border,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (models.isEmpty) return const SizedBox.shrink();
-    final eff = models.contains(selected) ? selected : models.first;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _show(context, eff),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: border),
-        ),
-        child: Row(children: [
-          Expanded(
-            child: Text(
-              eff,
-              style: TextStyle(fontSize: 13, color: fg),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Icon(Broken.arrow_down_2, size: 14, color: muted),
-        ]),
-      ),
-    );
-  }
-
-  void _show(BuildContext context, String eff) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.3,
-        maxChildSize: 0.85,
-        expand: false,
-        builder: (ctx, scroll) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Handle
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(top: 10, bottom: 10),
-                decoration: BoxDecoration(
-                  color: muted.withOpacity(0.35),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Text(
-                'Choisir un modèle',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: fg,
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: ListView.builder(
-                controller: scroll,
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 24),
-                itemCount: models.length,
-                itemBuilder: (_, i) {
-                  final m = models[i];
-                  final isSel = m == eff;
-                  return ListTile(
-                    dense: true,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    leading: Icon(
-                      isSel ? Broken.tick_circle : Broken.cpu,
-                      size: 16,
-                      color: isSel ? _kAccent : muted,
-                    ),
-                    title: Text(
-                      m,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: fg,
-                        fontWeight:
-                            isSel ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                    ),
-                    selected: isSel,
-                    selectedTileColor: _kAccent.withOpacity(0.08),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      onChanged(m);
-                    },
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _ModelCard extends StatelessWidget {
   final String id, name, provider;
   final _ProviderDef pDef;
-  final bool isDefault, isDark;
+  final bool isDark;
   final Color card, fg, muted, border;
-  final VoidCallback onSetDefault, onRemove;
+  final VoidCallback onRemove;
 
   const _ModelCard({
     required this.id,
     required this.name,
     required this.provider,
     required this.pDef,
-    required this.isDefault,
     required this.isDark,
     required this.card,
     required this.fg,
     required this.muted,
     required this.border,
-    required this.onSetDefault,
     required this.onRemove,
   });
 
@@ -1434,12 +1331,7 @@ class _ModelCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: card,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: isDefault
-              ? _kAccent.withOpacity(0.5)
-              : border,
-          width: isDefault ? 1.5 : 1,
-        ),
+        border: Border.all(color: border),
       ),
       child: Row(children: [
         Container(
@@ -1464,33 +1356,12 @@ class _ModelCard extends StatelessWidget {
                           fontWeight: FontWeight.w500,
                           color: fg)),
                 ),
-                if (isDefault)
-                  Container(
-                    margin: const EdgeInsets.only(left: 6),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _kAccent.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Text('défaut',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: _kAccent,
-                            fontWeight: FontWeight.w600)),
-                  ),
               ]),
               Text(pDef.name,
                   style: TextStyle(fontSize: 11, color: muted)),
             ],
           ),
         ),
-        if (!isDefault)
-          IconButton(
-            icon: Icon(Broken.tick_circle, size: 16, color: muted),
-            tooltip: 'Définir par défaut',
-            onPressed: onSetDefault,
-          ),
         IconButton(
           icon: Icon(Broken.trash, size: 15, color: _kDanger.withOpacity(0.7)),
           tooltip: 'Supprimer',
