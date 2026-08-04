@@ -112,6 +112,17 @@ jobs:
             -type f -name 'ggml.c' -print 2>/dev/null | sort -u)
           test "$ggml_count" -gt 0
 
+          arc_config_count=0
+          while IFS= read -r arc_config; do
+            arc_config_count=$((arc_config_count + 1))
+            printf '\nCLANG_ENABLE_OBJC_ARC = NO\n' >> "$arc_config"
+            grep -q 'CLANG_ENABLE_OBJC_ARC = NO' "$arc_config"
+          done < <(find ios/Pods \
+            -type f -path '*Target Support Files*' \
+            -name '*.xcconfig' -iname '*llama_flutter_android*' \
+            -print 2>/dev/null | sort -u)
+          test "$arc_config_count" -gt 0
+
           shader="$(find "$HOME/.pub-cache" ios/Pods \
             -name 'ggml-metal-ios.metal' \
             -print -quit)"
