@@ -180,9 +180,24 @@ jobs:
               if (!/llama_cpp_src\/ggml\/src\/ggml-backend-dl\.cpp/) {
                 s#    '\''llama_cpp_src/ggml/src/ggml-backend-reg\.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-backend-reg.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-backend-dl.cpp'\'',#;
               }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-backend-meta\.cpp/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-backend.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-backend.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-backend-meta.cpp'\'',#;
+              }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-cpu\/traits\.cpp/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-cpu/ops.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-cpu/ops.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/traits.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/unary-ops.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/vec.cpp'\'',#;
+              }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-cpu\/arch\/arm\/quants\.c/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-cpu/repack.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-cpu/repack.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/arch/arm/quants.c'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/arch/arm/repack.cpp'\'',#;
+              }
             ' "$podspec"
             grep -Fq "llama_cpp_src/src/models/*.cpp" "$podspec"
             grep -Fq "llama_cpp_src/ggml/src/ggml-backend-dl.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-backend-meta.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/traits.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/unary-ops.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/vec.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/arch/arm/quants.c" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/arch/arm/repack.cpp" "$podspec"
           done < <(find -L "$HOME/.pub-cache" ios/.symlinks \
             -type f -name 'llama_flutter_android.podspec' \
             -print 2>/dev/null | sort -u)
