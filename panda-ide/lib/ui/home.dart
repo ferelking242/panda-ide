@@ -40,6 +40,7 @@ import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
+import '../local_models/ui/local_models_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
 import '../ui/gateway_panel.dart';
@@ -1200,6 +1201,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
         _RailItem(icon: Broken.magic_star,          label: 'Panda Agent',       idx: 10),
+        _RailItem(icon: Broken.cpu_setting,         label: 'Local Models',      idx: 11),
       ];
 
       return Container(
@@ -1287,6 +1289,24 @@ class _SelectTypeState extends State<SelectType>
                     // Panda Agent always opens directly in the editor.
                     if (item.idx == 10) {
                       _openAgentTab();
+                      return;
+                    }
+                    // Local Models opens as an editor tab.
+                    if (item.idx == 11) {
+                      setState(() {
+                        if (!_openTabs.any((t) => t.id == 'local_models')) {
+                          _openTabs.add(const _TabDef(
+                              id:    'local_models',
+                              title: 'Local Models',
+                              icon:  Broken.cpu_setting));
+                          _activeTabIdx = _openTabs.length - 1;
+                        } else {
+                          _activeTabIdx =
+                              _openTabs.indexWhere((t) => t.id == 'local_models');
+                        }
+                        _sidebarState = 1;
+                        _activeRail   = 0;
+                      });
                       return;
                     }
                     setState(() {
@@ -3061,6 +3081,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
     }
+    if (tab.id == 'local_models') {
+      return const LocalModelsPage(embedded: true);
+    }
     if (tab.id == 'gateway') {
       return const GatewayPanel();
     }
@@ -3128,6 +3151,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
+    }
+    if (tab.id == 'local_models') {
+      return const LocalModelsPage(embedded: true);
     }
     if (tab.id == 'gateway') {
       return const GatewayPanel();

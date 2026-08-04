@@ -1,0 +1,338 @@
+{
+  "version": "2026.08.04",
+  "models": [
+    {
+      "id": "qwen2.5-coder-7b-instruct",
+      "name": "Qwen2.5 Coder 7B",
+      "author": "Qwen",
+      "hf_repo": "bartowski/Qwen2.5-Coder-7B-Instruct-GGUF",
+      "description": "Modèle de codage de Alibaba Cloud, spécialisé dans la génération et l'explication de code. Supporte 92 langages de programmation. Excellent pour la complétion inline, la revue de code et la génération de tests unitaires. Supporte le tool calling et un contexte de 128K tokens.",
+      "categories": ["coding", "tool_calling", "reasoning"],
+      "tags": ["python", "javascript", "typescript", "rust", "go", "java", "128k", "tool-use"],
+      "released_at": "2024-11-15T00:00:00Z",
+      "capabilities": {
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": true,
+        "context_length": 131072,
+        "coding_score": 5,
+        "min_ram_gb": 8
+      },
+      "quantizations": [
+        { "level": "Q2_K",   "size_gb": 2.0,  "hf_filename": "Qwen2.5-Coder-7B-Instruct-Q2_K.gguf",   "sha256": "", "min_ram_gb": 4 },
+        { "level": "Q4_K_S", "size_gb": 3.9,  "hf_filename": "Qwen2.5-Coder-7B-Instruct-Q4_K_S.gguf", "sha256": "", "min_ram_gb": 6 },
+        { "level": "Q4_K_M", "size_gb": 4.68, "hf_filename": "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 8 },
+        { "level": "Q5_K_M", "size_gb": 5.4,  "hf_filename": "Qwen2.5-Coder-7B-Instruct-Q5_K_M.gguf", "sha256": "", "min_ram_gb": 10 },
+        { "level": "Q8_0",   "size_gb": 7.7,  "hf_filename": "Qwen2.5-Coder-7B-Instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 12 }
+      ]
+    },
+    {
+      "id": "qwen2.5-coder-1.5b-instruct",
+      "name": "Qwen2.5 Coder 1.5B",
+      "author": "Qwen",
+      "hf_repo": "bartowski/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+      "description": "Version légère du Qwen2.5 Coder, idéale pour les appareils avec peu de RAM. Parfait pour la complétion de code rapide et les suggestions inline. Très rapide sur tous les appareils Android.",
+      "categories": ["coding"],
+      "tags": ["python", "javascript", "léger", "rapide", "complétion"],
+      "released_at": "2024-11-15T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": false,
+        "reasoning": false,
+        "context_length": 32768,
+        "coding_score": 4,
+        "min_ram_gb": 2
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 0.96, "hf_filename": "Qwen2.5-Coder-1.5B-Instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 2 },
+        { "level": "Q8_0",   "size_gb": 1.63, "hf_filename": "Qwen2.5-Coder-1.5B-Instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 3 }
+      ]
+    },
+    {
+      "id": "qwen2.5-coder-3b-instruct",
+      "name": "Qwen2.5 Coder 3B",
+      "author": "Qwen",
+      "hf_repo": "bartowski/Qwen2.5-Coder-3B-Instruct-GGUF",
+      "description": "Compromis idéal entre performance et taille. Excellent rapport qualité/ressources pour le coding sur appareils 6-8 GB de RAM. Supporte le tool calling.",
+      "categories": ["coding", "tool_calling"],
+      "tags": ["python", "javascript", "rust", "outil"],
+      "released_at": "2024-11-15T00:00:00Z",
+      "capabilities": {
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": false,
+        "context_length": 32768,
+        "coding_score": 4,
+        "min_ram_gb": 4
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 1.86, "hf_filename": "Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 4 },
+        { "level": "Q8_0",   "size_gb": 3.22, "hf_filename": "Qwen2.5-Coder-3B-Instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 6 }
+      ]
+    },
+    {
+      "id": "phi-4-mini-instruct",
+      "name": "Phi-4 Mini Instruct",
+      "author": "Microsoft",
+      "hf_repo": "bartowski/Phi-4-mini-instruct-GGUF",
+      "description": "Modèle compact de Microsoft avec des capacités remarquables pour sa taille. Excellent en raisonnement mathématique et logique, très bon pour le coding. Idéal pour les appareils 4-8 GB.",
+      "categories": ["coding", "reasoning", "general"],
+      "tags": ["maths", "logique", "raisonnement", "microsoft", "compact"],
+      "released_at": "2025-02-10T00:00:00Z",
+      "capabilities": {
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": true,
+        "context_length": 131072,
+        "coding_score": 4,
+        "min_ram_gb": 4
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 2.28, "hf_filename": "Phi-4-mini-instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 4 },
+        { "level": "Q8_0",   "size_gb": 3.88, "hf_filename": "Phi-4-mini-instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 6 }
+      ]
+    },
+    {
+      "id": "gemma-3-4b-it",
+      "name": "Gemma 3 4B Instruct",
+      "author": "Google",
+      "hf_repo": "bartowski/gemma-3-4b-it-GGUF",
+      "description": "Modèle multimodal de Google avec support de l'analyse d'images. Excellent équilibre entre coding, chat général et raisonnement. Support natif de la vision pour analyser des screenshots de code.",
+      "categories": ["coding", "vision", "general"],
+      "tags": ["vision", "images", "google", "multimodal", "screenshots"],
+      "released_at": "2025-03-12T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": true,
+        "reasoning": false,
+        "context_length": 131072,
+        "coding_score": 3,
+        "min_ram_gb": 6
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 2.49, "hf_filename": "gemma-3-4b-it-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 6 },
+        { "level": "Q8_0",   "size_gb": 4.27, "hf_filename": "gemma-3-4b-it-Q8_0.gguf",   "sha256": "", "min_ram_gb": 8 }
+      ]
+    },
+    {
+      "id": "llama-3.2-3b-instruct",
+      "name": "Llama 3.2 3B Instruct",
+      "author": "Meta",
+      "hf_repo": "bartowski/Llama-3.2-3B-Instruct-GGUF",
+      "description": "Modèle de Meta, excellent pour la discussion générale et l'assistance au développement. Léger et rapide. Bon compromis pour les appareils milieu de gamme.",
+      "categories": ["general", "coding"],
+      "tags": ["meta", "chat", "rapide", "polyvalent"],
+      "released_at": "2024-09-25T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": false,
+        "reasoning": false,
+        "context_length": 131072,
+        "coding_score": 3,
+        "min_ram_gb": 4
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 1.79, "hf_filename": "Llama-3.2-3B-Instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 4 },
+        { "level": "Q8_0",   "size_gb": 3.09, "hf_filename": "Llama-3.2-3B-Instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 6 }
+      ]
+    },
+    {
+      "id": "llama-3.1-8b-instruct",
+      "name": "Llama 3.1 8B Instruct",
+      "author": "Meta",
+      "hf_repo": "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+      "description": "Le modèle open-source de référence de Meta. Excellent pour tout type de tâche : coding, analyse, chat, raisonnement. Recommandé pour les appareils 12 GB+ de RAM.",
+      "categories": ["general", "coding", "reasoning"],
+      "tags": ["meta", "référence", "polyvalent", "open-source"],
+      "released_at": "2024-07-23T00:00:00Z",
+      "capabilities": {
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": true,
+        "context_length": 131072,
+        "coding_score": 4,
+        "min_ram_gb": 8
+      },
+      "quantizations": [
+        { "level": "Q4_K_S", "size_gb": 4.35, "hf_filename": "Meta-Llama-3.1-8B-Instruct-Q4_K_S.gguf", "sha256": "", "min_ram_gb": 8 },
+        { "level": "Q4_K_M", "size_gb": 4.92, "hf_filename": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 10 },
+        { "level": "Q8_0",   "size_gb": 8.54, "hf_filename": "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 16 }
+      ]
+    },
+    {
+      "id": "deepseek-r1-1.5b",
+      "name": "DeepSeek R1 1.5B",
+      "author": "DeepSeek",
+      "hf_repo": "bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF",
+      "description": "Modèle de raisonnement ultra-léger de DeepSeek. Basé sur la distillation du modèle R1 original. Étonnamment capable pour sa taille, idéal pour les problèmes de logique et de maths sur appareils légers.",
+      "categories": ["reasoning"],
+      "tags": ["raisonnement", "maths", "logique", "léger", "deepseek", "r1"],
+      "released_at": "2025-01-20T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": false,
+        "reasoning": true,
+        "context_length": 32768,
+        "coding_score": 3,
+        "min_ram_gb": 2
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 0.99, "hf_filename": "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 2 },
+        { "level": "Q8_0",   "size_gb": 1.67, "hf_filename": "DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf",   "sha256": "", "min_ram_gb": 3 }
+      ]
+    },
+    {
+      "id": "deepseek-r1-7b",
+      "name": "DeepSeek R1 7B",
+      "author": "DeepSeek",
+      "hf_repo": "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF",
+      "description": "Modèle de raisonnement puissant de DeepSeek, distillé depuis R1. Excellent pour résoudre des problèmes complexes, du code difficile et des démonstrations mathématiques. Pense étape par étape.",
+      "categories": ["reasoning", "coding"],
+      "tags": ["raisonnement", "chain-of-thought", "maths", "deepseek", "r1"],
+      "released_at": "2025-01-20T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": false,
+        "reasoning": true,
+        "context_length": 131072,
+        "coding_score": 4,
+        "min_ram_gb": 8
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 4.68, "hf_filename": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 8 },
+        { "level": "Q8_0",   "size_gb": 8.06, "hf_filename": "DeepSeek-R1-Distill-Qwen-7B-Q8_0.gguf",   "sha256": "", "min_ram_gb": 12 }
+      ]
+    },
+    {
+      "id": "mistral-7b-instruct-v0.3",
+      "name": "Mistral 7B Instruct v0.3",
+      "author": "Mistral AI",
+      "hf_repo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
+      "description": "Modèle de référence de Mistral AI. Très bon pour le coding et la discussion générale. Supporte le tool calling et la complétion de fonctions. Excellent rapport performance/taille.",
+      "categories": ["general", "coding", "tool_calling"],
+      "tags": ["mistral", "tool-calling", "fonctions", "polyvalent"],
+      "released_at": "2024-06-05T00:00:00Z",
+      "capabilities": {
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": false,
+        "context_length": 32768,
+        "coding_score": 4,
+        "min_ram_gb": 8
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 4.37, "hf_filename": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 8 },
+        { "level": "Q8_0",   "size_gb": 7.70, "hf_filename": "Mistral-7B-Instruct-v0.3-Q8_0.gguf",   "sha256": "", "min_ram_gb": 12 }
+      ]
+    },
+    {
+      "id": "qwen2.5-0.5b-instruct",
+      "name": "Qwen2.5 0.5B Instruct",
+      "author": "Qwen",
+      "hf_repo": "bartowski/Qwen2.5-0.5B-Instruct-GGUF",
+      "description": "Le plus petit modèle Qwen2.5 — ultra léger pour les appareils avec très peu de RAM (< 4 GB). Idéal pour des suggestions simples et des tâches basiques. Vitesse maximale.",
+      "categories": ["general", "coding"],
+      "tags": ["ultra-léger", "rapide", "4gb", "suggestions"],
+      "released_at": "2024-09-19T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": false,
+        "reasoning": false,
+        "context_length": 32768,
+        "coding_score": 2,
+        "min_ram_gb": 1
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 0.38, "hf_filename": "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 1 },
+        { "level": "Q8_0",   "size_gb": 0.59, "hf_filename": "Qwen2.5-0.5B-Instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 2 }
+      ]
+    },
+    {
+      "id": "gemma-3-1b-it",
+      "name": "Gemma 3 1B Instruct",
+      "author": "Google",
+      "hf_repo": "bartowski/gemma-3-1b-it-GGUF",
+      "description": "Modèle ultra compact de Google. Très bon rapport qualité/taille pour un modèle aussi petit. Convient pour des assistances simples sur les appareils d'entrée de gamme.",
+      "categories": ["general"],
+      "tags": ["google", "gemma", "ultra-léger", "compact"],
+      "released_at": "2025-03-12T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": false,
+        "reasoning": false,
+        "context_length": 32768,
+        "coding_score": 2,
+        "min_ram_gb": 1
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 0.81, "hf_filename": "gemma-3-1b-it-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 1 },
+        { "level": "Q8_0",   "size_gb": 1.24, "hf_filename": "gemma-3-1b-it-Q8_0.gguf",   "sha256": "", "min_ram_gb": 2 }
+      ]
+    },
+    {
+      "id": "qwen2.5-7b-instruct",
+      "name": "Qwen2.5 7B Instruct",
+      "author": "Qwen",
+      "hf_repo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+      "description": "Version généraliste de Qwen2.5 — excellent pour tout : chat, analyse, traduction, résumé. Très bon contexte de 128K tokens. Supporte le tool calling et le raisonnement avancé.",
+      "categories": ["general", "tool_calling", "reasoning"],
+      "tags": ["chat", "traduction", "résumé", "polyvalent", "128k"],
+      "released_at": "2024-09-19T00:00:00Z",
+      "capabilities": {
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": true,
+        "context_length": 131072,
+        "coding_score": 4,
+        "min_ram_gb": 8
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 4.68, "hf_filename": "Qwen2.5-7B-Instruct-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 8 },
+        { "level": "Q8_0",   "size_gb": 8.1,  "hf_filename": "Qwen2.5-7B-Instruct-Q8_0.gguf",   "sha256": "", "min_ram_gb": 12 }
+      ]
+    },
+    {
+      "id": "llava-1.6-mistral-7b",
+      "name": "LLaVA 1.6 Mistral 7B",
+      "author": "haotian-liu",
+      "hf_repo": "cjpais/llava-1.6-mistral-7b-gguf",
+      "description": "Modèle multimodal vision-langage. Analyse des images, des screenshots d'erreurs de code, des diagrammes et des maquettes d'UI. Idéal pour debugger en montrant une capture d'écran.",
+      "categories": ["vision"],
+      "tags": ["vision", "images", "screenshots", "multimodal", "debug-visuel"],
+      "released_at": "2024-02-01T00:00:00Z",
+      "capabilities": {
+        "tool_calling": false,
+        "vision": true,
+        "reasoning": false,
+        "context_length": 32768,
+        "coding_score": 3,
+        "min_ram_gb": 8
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 4.37, "hf_filename": "llava-v1.6-mistral-7b.Q4_K_M.gguf", "sha256": "", "min_ram_gb": 8 }
+      ]
+    },
+    {
+      "id": "hermes-3-llama-3.1-8b",
+      "name": "Hermes 3 Llama 3.1 8B",
+      "author": "NousResearch",
+      "hf_repo": "bartowski/Hermes-3-Llama-3.1-8B-GGUF",
+      "description": "Fine-tune de Llama 3.1 8B spécialisé pour le tool calling et les agents autonomes. Excellent pour des tâches complexes en plusieurs étapes. Compatible avec les formats de function calling d'OpenAI.",
+      "categories": ["tool_calling", "reasoning", "coding"],
+      "tags": ["agent", "tool-calling", "fonctions", "openai-compatible", "hermes"],
+      "released_at": "2024-09-01T00:00:00Z",
+      "capabilities": {
+        "tool_calling": true,
+        "vision": false,
+        "reasoning": true,
+        "context_length": 131072,
+        "coding_score": 4,
+        "min_ram_gb": 8
+      },
+      "quantizations": [
+        { "level": "Q4_K_M", "size_gb": 4.92, "hf_filename": "Hermes-3-Llama-3.1-8B-Q4_K_M.gguf", "sha256": "", "min_ram_gb": 8 },
+        { "level": "Q8_0",   "size_gb": 8.54, "hf_filename": "Hermes-3-Llama-3.1-8B-Q8_0.gguf",   "sha256": "", "min_ram_gb": 14 }
+      ]
+    }
+  ]
+}
