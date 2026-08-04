@@ -47,6 +47,29 @@ jobs:
       - name: Install pods and patch Llama iOS bridge
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          podfile = Path("ios/Podfile")
+          text = podfile.read_text()
+          marker = "  # Panda IDE: disable ARC for the Llama Metal sources.\n"
+          hook = (
+              marker
+              + "  installer.pods_project.targets.each do |target|\n"
+              + "    if target.name.downcase.include?('llama_flutter_android')\n"
+              + "      target.build_configurations.each do |config|\n"
+              + "        config.build_settings['CLANG_ENABLE_OBJC_ARC'] = 'NO'\n"
+              + "      end\n"
+              + "    end\n"
+              + "  end\n"
+          )
+          needle = "post_install do |installer|\n"
+          if marker not in text:
+              if needle not in text:
+                  raise SystemExit("post_install hook not found in ios/Podfile")
+              text = text.replace(needle, needle + hook, 1)
+              podfile.write_text(text)
+          PY
           (cd ios && pod install)
           patch_count=0
           while IFS= read -r plugin; do
@@ -111,17 +134,6 @@ jobs:
           done < <(find -L "$HOME/.pub-cache" ios/.symlinks ios/Pods \
             -type f -name 'ggml.c' -print 2>/dev/null | sort -u)
           test "$ggml_count" -gt 0
-
-          arc_config_count=0
-          while IFS= read -r arc_config; do
-            arc_config_count=$((arc_config_count + 1))
-            printf '\nCLANG_ENABLE_OBJC_ARC = NO\n' >> "$arc_config"
-            grep -q 'CLANG_ENABLE_OBJC_ARC = NO' "$arc_config"
-          done < <(find ios/Pods \
-            -type f -path '*Target Support Files*' \
-            -name '*.xcconfig' -iname '*llama_flutter_android*' \
-            -print 2>/dev/null | sort -u)
-          test "$arc_config_count" -gt 0
 
           shader="$(find "$HOME/.pub-cache" ios/Pods \
             -name 'ggml-metal-ios.metal' \
