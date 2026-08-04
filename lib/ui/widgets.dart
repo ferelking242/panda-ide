@@ -11148,6 +11148,14 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       case FireWorks():
       case PandaGateway():
       case CustomModel():
+      case Cohere():
+      case Cerebras():
+      case Novita():
+      case Hyperbolic():
+      case SambaNova():
+      case Qwen():
+      case Ollama():
+      case LmStudio():
         for (final line in chunk.split('\n')) {
           if (line.startsWith('data: ')) {
             final data = line.substring(6).trim();
@@ -11221,6 +11229,14 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       case FireWorks():
       case PandaGateway():
       case CustomModel():
+      case Cohere():
+      case Cerebras():
+      case Novita():
+      case Hyperbolic():
+      case SambaNova():
+      case Qwen():
+      case Ollama():
+      case LmStudio():
         final messages = _buildChatHistory(history);
         messages.add({"role": "user", "content": prompt});
         return {
