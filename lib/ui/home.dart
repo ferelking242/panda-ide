@@ -5409,7 +5409,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
         name.contains('edit') || name.contains('Edit')) return Broken.edit;
     if (name.contains('delete') || name.contains('Delete')) return Broken.trash;
     if (name.contains('shell') || name.contains('Shell') ||
-        name.contains('command') || name.contains('Command')) return Broken.terminal_1;
+        name.contains('command') || name.contains('Command')) return Broken.command_square;
     if (name.contains('git') || name.contains('Git')) return Broken.code_circle;
     if (name.contains('search') || name.contains('Search') ||
         name.contains('grep') || name.contains('Grep') ||
