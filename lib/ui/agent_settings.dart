@@ -1,10 +1,12 @@
-/// AgentSettings — page dédiée aux paramètres de Panda Agent.
+/// AgentSettings — Agent panel avec Chat, Tools et Subagents.
 ///
-/// Différent des paramètres IDE (settings.dart).
-/// Gère : providers IA, clés API, catalogues de modèles,
-///         mémoire, outils actifs.
+/// Structure inspirée de Replit :
+///   • Chat        — interface de chat standalone avec AgentRunner
+///   • Tools       — liste outils style Replit + Settings (providers, mémoire, apparence)
+///   • Subagents   — tableau de tâches Ready / Active / Draft
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +22,8 @@ import '../utils/ai.dart';
 import '../utils/constants.dart';
 import '../utils/agentic_tool_catalog.dart';
 import '../utils/copilot_chat.dart';
+import '../utils/panda_log.dart';
+import 'agent_runner.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const _kAccent  = Color(0xff5090c8);
@@ -133,22 +137,23 @@ const _providers = <_ProviderDef>[
   ),
   _ProviderDef(
     id: 'pandagateway',
-    name: 'Panda Open Gateway',
-    description: 'Accès ChatGPT/Claude via Panda Browser Gateway local',
-    icon: Broken.routing_2,
+    name: 'Panda Gateway',
+    description: 'Accès unifié sans clé API (abonnement Panda)',
+    icon: Broken.cpu_setting,
     color: Color(0xff5090c8),
     docsUrl: '',
     hasApiKey: false,
-    apiKeyHint: 'Token Panda Open Gateway (optionnel)',
+    apiKeyHint: 'optionnel',
   ),
   _ProviderDef(
     id: 'copilot',
     name: 'GitHub Copilot',
-    description: 'Modèles Copilot via votre session GitHub',
+    description: 'GPT-4o via votre abonnement GitHub Copilot',
     icon: Broken.message_programming,
     color: Color(0xff8b5cf6),
-    docsUrl: 'https://github.com/features/copilot',
+    docsUrl: 'https://github.com/settings/copilot',
     hasApiKey: false,
+    apiKeyHint: 'optionnel',
   ),
   _ProviderDef(
     id: 'groq',
@@ -198,55 +203,17 @@ const _providers = <_ProviderDef>[
   _ProviderDef(
     id: 'hyperbolic',
     name: 'Hyperbolic',
-    description: 'Llama, Qwen, DeepSeek — GPU cloud low-cost',
-    icon: Broken.chart_2,
-    color: Color(0xff6366f1),
+    description: 'Llama, DeepSeek — inference GPU économique',
+    icon: Broken.flash_circle,
+    color: Color(0xffe11d48),
     docsUrl: 'https://app.hyperbolic.xyz/settings',
     apiKeyHint: 'eyJ...',
   ),
   _ProviderDef(
-    id: 'sambanova',
-    name: 'SambaNova',
-    description: 'Llama 3.3, DeepSeek R1 — inference ultra-rapide',
-    icon: Broken.flash_circle,
-    color: Color(0xffec4899),
-    docsUrl: 'https://cloud.sambanova.ai/apis',
-    apiKeyHint: '...',
-  ),
-  _ProviderDef(
-    id: 'qwen',
-    name: 'Qwen (Alibaba)',
-    description: 'Qwen2.5, QwQ — modèles Alibaba Cloud',
-    icon: Broken.global_search,
-    color: Color(0xffff6900),
-    docsUrl: 'https://bailian.console.aliyun.com/?tab=model#/api-key',
-    apiKeyHint: 'sk-...',
-  ),
-  _ProviderDef(
-    id: 'ollama',
-    name: 'Ollama (local)',
-    description: 'Modèles locaux via Ollama — aucune clé requise',
-    icon: Broken.cpu_setting,
-    color: Color(0xff64748b),
-    docsUrl: 'https://ollama.com',
-    hasApiKey: false,
-    apiKeyHint: '',
-  ),
-  _ProviderDef(
-    id: 'lmstudio',
-    name: 'LM Studio (local)',
-    description: 'Modèles locaux via LM Studio — aucune clé requise',
-    icon: Broken.cpu_setting,
-    color: Color(0xff475569),
-    docsUrl: 'https://lmstudio.ai',
-    hasApiKey: false,
-    apiKeyHint: '',
-  ),
-  _ProviderDef(
     id: 'custom',
-    name: 'Custom / OpenAI-compatible',
-    description: 'N\'importe quel endpoint OpenAI-compatible avec URL + token',
-    icon: Broken.setting_2,
+    name: 'Custom / Local',
+    description: 'Endpoint OpenAI-compatible (Ollama, LM Studio…)',
+    icon: Broken.code_1,
     color: Color(0xff888888),
     docsUrl: '',
     apiKeyHint: 'optionnel',
@@ -263,9 +230,27 @@ class AgentSettings extends StatefulWidget {
 }
 
 class _AgentSettingsState extends State<AgentSettings>
-    with SingleTickerProviderStateMixin {
-  late TabController _tab;
-  // Controllers for adding new provider
+    with TickerProviderStateMixin {
+
+  // ── Main tab controller ─────────────────────────────────────────────────
+  late TabController _tab; // Chat | Tools | Subagents
+
+  // ── Chat tab state ──────────────────────────────────────────────────────
+  final List<Map<String, dynamic>> _chatMessages = [];
+  final _chatInputCtrl  = TextEditingController();
+  final _chatScrollCtrl = ScrollController();
+  bool       _chatGenerating   = false;
+  AgentPhase _chatPhase        = AgentPhase.idle;
+  String     _chatStreamBuf    = '';
+  String     _chatThinkingBuf  = '';
+  int        _chatSerial       = 0;
+  final      _chatRunner       = AgentRunner();
+  String     _chatMode         = 'agent'; // 'ask' | 'agent' | 'normal'
+
+  // ── Tools tab state ─────────────────────────────────────────────────────
+  bool _showToolsSettings = false; // false = tool list, true = settings sub-view
+
+  // Provider/model state (used in Tools > Settings)
   String _selectedProviderId = 'openai';
   final _apiKeyCtrl         = TextEditingController();
   final _customUrlCtrl      = TextEditingController();
@@ -275,28 +260,36 @@ class _AgentSettingsState extends State<AgentSettings>
   String _testKeyMessage    = '';
   List<Map<String, dynamic>> _availableModels = const [];
 
-  // Per-provider daily limit controllers (key = provider+model id)
-  final Map<String, TextEditingController> _limitCtrls = {};
-
   // Memory settings
-  final _memoryNotesCtrl = TextEditingController();
-  bool _memoryEnabled    = true;
+  final _memoryNotesCtrl   = TextEditingController();
+  final _systemPromptCtrl  = TextEditingController();
+  bool _memoryEnabled      = true;
 
-  // System prompt override
-  final _systemPromptCtrl = TextEditingController();
+  // ── Subagents tab state ─────────────────────────────────────────────────
+  final List<Map<String, dynamic>> _readyTasks  = [];
+  final List<Map<String, dynamic>> _activeTasks = [];
+  final List<Map<String, dynamic>> _draftTasks  = [];
+  int _subagentSerial = 0;
+  bool _showNewTaskBanner = true;
+
+  // ── Settings sub-tab (inside Tools > Settings) ──────────────────────────
+  late TabController _settingsSubTab; // Providers | Mémoire | Apparence
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab            = TabController(length: 3, vsync: this);
+    _settingsSubTab = TabController(length: 3, vsync: this);
+    _chatInputCtrl.addListener(() => setState(() {}));
     _loadMemorySettings();
   }
 
   Future<void> _loadMemorySettings() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
-      _memoryEnabled     = prefs.getBool('agent_memory_enabled') ?? true;
-      _memoryNotesCtrl.text = prefs.getString('agent_memory_notes') ?? '';
+      _memoryEnabled         = prefs.getBool('agent_memory_enabled') ?? true;
+      _memoryNotesCtrl.text  = prefs.getString('agent_memory_notes') ?? '';
       _systemPromptCtrl.text = prefs.getString('agent_system_prompt') ?? '';
     });
   }
@@ -311,84 +304,277 @@ class _AgentSettingsState extends State<AgentSettings>
   @override
   void dispose() {
     _tab.dispose();
+    _settingsSubTab.dispose();
+    _chatInputCtrl.dispose();
+    _chatScrollCtrl.dispose();
     _apiKeyCtrl.dispose();
     _customUrlCtrl.dispose();
     _memoryNotesCtrl.dispose();
     _systemPromptCtrl.dispose();
-    for (final c in _limitCtrls.values) { c.dispose(); }
+    _chatRunner.cancel();
     super.dispose();
   }
 
-  // ── Validate provider and fetch its live model catalog ─────────────────────
-  Future<void> _testApiKey() async {
-    final provider = _providers.firstWhere(
-      (p) => p.id == _selectedProviderId,
-      orElse: () => _providers.first,
-    );
-    final apiKey = _apiKeyCtrl.text.trim();
-    if (_selectedProviderId == 'copilot') {
-      final githubSignedIn = context.read<GithubAuthCubit>().state.isSignedIn;
-      final copilotSignedIn = context.read<CopilotBloc>().state.isSignedIn;
-      if (!githubSignedIn && !copilotSignedIn) {
-        setState(() {
-          _testKeyResult = false;
-          _testKeyMessage =
-              'Connectez GitHub ou Copilot avant de valider ce provider.';
-        });
-        return;
+  // ══════════════════════════════════════════════════════════════════════════
+  // CHAT — send logic
+  // ══════════════════════════════════════════════════════════════════════════
+
+  void _chatScrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_chatScrollCtrl.hasClients) {
+        _chatScrollCtrl.animateTo(
+          _chatScrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+        );
       }
-    }
-    if (provider.hasApiKey && apiKey.isEmpty) {
+    });
+  }
+
+  Future<void> _chatSend() async {
+    final text = _chatInputCtrl.text.trim();
+    if (text.isEmpty || _chatGenerating) return;
+    final requestId = ++_chatSerial;
+
+    final aiState = context.read<AIBloc>().state;
+    final selectedId = aiState.modelSelected['chat']?.toString();
+    final selectedConfig = selectedId == null ? null : aiState.config[selectedId];
+    final isAgentProfile = selectedId != null && selectedId.startsWith('agent_');
+
+    if (!isAgentProfile || selectedConfig == null) {
       setState(() {
-        _testKeyResult = false;
-        _testKeyMessage = 'Entrez la clé API avant de valider.';
+        _chatMessages.add({'role': 'user', 'text': text});
+        _chatMessages.add({
+          'role': 'agent',
+          'text': 'Aucun provider configuré. Allez dans Tools → Settings → Providers pour ajouter un provider.',
+          'thinking': '',
+          'phase': 'error',
+        });
+        _chatInputCtrl.clear();
       });
-      return;
-    }
-    if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) {
-      setState(() {
-        _testKeyResult = false;
-        _testKeyMessage = 'Entrez l’URL de l’endpoint avant de valider.';
-      });
+      _chatScrollToBottom();
       return;
     }
 
     setState(() {
-      _testingKey = true;
-      _testKeyResult = null;
-      _testKeyMessage = 'Connexion au provider et récupération du catalogue…';
-      _availableModels = const [];
+      _chatGenerating = true;
+      _chatPhase      = AgentPhase.thinking;
     });
+
     try {
-      final models = await _fetchLiveModels(
-        provider: _selectedProviderId,
-        apiKey: apiKey,
-        customUrl: _customUrlCtrl.text.trim(),
-      ).timeout(const Duration(seconds: 20));
-      if (models.isEmpty) {
-        throw StateError('Le provider n’a retourné aucun modèle exploitable.');
+      Models? model;
+      try {
+        final cfg = Map<String, dynamic>.from(selectedConfig as Map);
+        model = await _resolveModel(cfg);
+      } catch (e) {
+        setState(() {
+          _chatGenerating = false;
+          _chatPhase      = AgentPhase.error;
+          _chatMessages.add({'role': 'user', 'text': text});
+          _chatMessages.add({'role': 'agent', 'text': 'Erreur résolution modèle : $e', 'thinking': '', 'phase': 'error'});
+          _chatInputCtrl.clear();
+        });
+        _chatScrollToBottom();
+        return;
       }
-      await _saveProviderConfig(
-        context,
-        provider: provider,
-        apiKey: apiKey,
-        models: models,
+
+      if (model == null) {
+        setState(() {
+          _chatGenerating = false;
+          _chatPhase      = AgentPhase.error;
+          _chatMessages.add({'role': 'user', 'text': text});
+          _chatMessages.add({'role': 'agent', 'text': 'Modèle non disponible. Vérifiez votre configuration dans Tools → Settings.', 'thinking': '', 'phase': 'error'});
+          _chatInputCtrl.clear();
+        });
+        _chatScrollToBottom();
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final memoryEnabled = prefs.getBool('agent_memory_enabled') ?? true;
+      final memoryNotes   = memoryEnabled ? (prefs.getString('agent_memory_notes') ?? '').trim() : '';
+      final customPrompt  = (prefs.getString('agent_system_prompt') ?? '').trim();
+      final parts         = <String>[
+        if (customPrompt.isNotEmpty) customPrompt,
+        if (memoryNotes.isNotEmpty) 'Persistent context:\n$memoryNotes',
+      ];
+
+      final history = <Map<String, dynamic>>[];
+      for (final m in _chatMessages) {
+        final role    = m['role']?.toString();
+        final content = m['text']?.toString() ?? '';
+        if ((role == 'user' || role == 'agent') && content.isNotEmpty) {
+          history.add({'role': role == 'user' ? 'user' : 'assistant', 'content': content});
+        }
+      }
+      final messages = [...history, {'role': 'user', 'content': text}];
+
+      setState(() {
+        _chatMessages.add({'role': 'user', 'text': text});
+        _chatMessages.add({'role': 'agent', 'text': '', 'thinking': '', 'phase': 'streaming', 'toolCalls': <Map<String, dynamic>>[]});
+        _chatInputCtrl.clear();
+        _chatStreamBuf   = '';
+        _chatThinkingBuf = '';
+        _chatPhase       = AgentPhase.streaming;
+      });
+
+      final agentIdx = _chatMessages.length - 1;
+
+      _chatRunner.run(
+        model: model,
+        messages: messages,
+        context: context,
+        workspacePath: '',
+        agentMode: _chatMode,
+        systemPromptOverride: parts.isEmpty ? null : parts.join('\n\n'),
+      ).listen(
+        (chunk) {
+          if (!mounted || requestId != _chatSerial) return;
+          setState(() {
+            switch (chunk.phase) {
+              case AgentPhase.thinking:
+                _chatPhase = AgentPhase.thinking;
+                _chatThinkingBuf += chunk.text;
+                _chatMessages[agentIdx]['thinking'] = _chatThinkingBuf;
+              case AgentPhase.toolRunning:
+                _chatPhase = AgentPhase.toolRunning;
+                final calls = List<Map<String,dynamic>>.from(
+                  (_chatMessages[agentIdx]['toolCalls'] as List?)?.cast<Map<String,dynamic>>() ?? []);
+                calls.add({'name': chunk.toolName ?? '', 'args': chunk.toolArgs ?? {}, 'result': null, 'status': 'running'});
+                _chatMessages[agentIdx]['toolCalls'] = calls;
+              case AgentPhase.toolDone:
+                final calls = List<Map<String,dynamic>>.from(
+                  (_chatMessages[agentIdx]['toolCalls'] as List?)?.cast<Map<String,dynamic>>() ?? []);
+                final idx = calls.lastIndexWhere((c) => c['name'] == chunk.toolName && c['status'] == 'running');
+                if (idx >= 0) {
+                  calls[idx] = {...calls[idx], 'result': chunk.toolResult ?? '', 'status': 'done'};
+                }
+                _chatMessages[agentIdx]['toolCalls'] = calls;
+              case AgentPhase.streaming:
+                _chatPhase = AgentPhase.streaming;
+                _chatStreamBuf += chunk.text;
+                _chatMessages[agentIdx]['text'] = _chatStreamBuf;
+              case AgentPhase.done:
+                _chatPhase      = AgentPhase.done;
+                _chatGenerating = false;
+                _chatMessages[agentIdx]['phase'] = 'done';
+              case AgentPhase.error:
+                _chatPhase      = AgentPhase.error;
+                _chatGenerating = false;
+                _chatMessages[agentIdx]['text']  = _chatStreamBuf.isNotEmpty ? _chatStreamBuf : 'Erreur : ${chunk.text}';
+                _chatMessages[agentIdx]['phase'] = 'error';
+              case AgentPhase.idle:
+                break;
+            }
+          });
+          _chatScrollToBottom();
+        },
+        onError: (e) {
+          PandaLog.e('AgentSettings', 'Stream error', error: e);
+          if (!mounted || requestId != _chatSerial) return;
+          setState(() {
+            _chatGenerating = false;
+            _chatPhase      = AgentPhase.error;
+            _chatMessages[agentIdx]['text']  = 'Erreur : $e';
+            _chatMessages[agentIdx]['phase'] = 'error';
+          });
+        },
+        onDone: () {
+          if (!mounted || requestId != _chatSerial || !_chatGenerating) return;
+          setState(() {
+            _chatGenerating = false;
+            if (_chatPhase != AgentPhase.error) {
+              _chatPhase = AgentPhase.done;
+              _chatMessages[agentIdx]['phase'] = 'done';
+            }
+          });
+        },
       );
-      setState(() {
-        _testingKey = false;
-        _testKeyResult = true;
-        _availableModels = models;
-        _testKeyMessage =
-            '✓ Clé valide — ${models.length} vrais modèles récupérés. '
-            'Le premier modèle compatible est utilisé automatiquement.';
-      });
-      _showSnack(context, '${provider.name} — provider activé ✓');
     } catch (e) {
+      PandaLog.e('AgentSettings', 'Chat send error', error: e);
+      if (mounted) {
+        setState(() {
+          _chatGenerating = false;
+          _chatPhase      = AgentPhase.error;
+        });
+      }
+    }
+  }
+
+  Future<Models?> _resolveModel(Map<String, dynamic> cfg) async {
+    final provider = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString().toLowerCase();
+    if (provider != 'copilot') {
+      return _modelFromAiConfig(cfg);
+    }
+    final auth = await CopilotChat.loadAuthContext();
+    if (auth == null) return null;
+    final client = CopilotChat(authToken: auth.authToken, initialApiEndpoint: auth.apiEndpoint);
+    final payload  = await client.getCopilotModels();
+    final models   = (payload['data'] as List?)
+        ?.whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .where((m) => m['id'] != null)
+        .toList() ?? [];
+    final modelName = models.isNotEmpty ? models.first['id'].toString() : '';
+    if (modelName.isEmpty) return null;
+    return Copilot(authToken: auth.authToken, apiEndpoint: auth.apiEndpoint, model: modelName);
+  }
+
+  void _chatStop() {
+    _chatSerial++;
+    _chatRunner.cancel();
+    if (!mounted) return;
+    setState(() {
+      _chatGenerating = false;
+      _chatPhase      = AgentPhase.idle;
+      if (_chatMessages.isNotEmpty && _chatMessages.last['role'] == 'agent' && _chatMessages.last['phase'] == 'streaming') {
+        _chatMessages.last['text']  = _chatStreamBuf.isEmpty ? 'Arrêté.' : _chatStreamBuf;
+        _chatMessages.last['phase'] = 'error';
+      }
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PROVIDER SETTINGS — validate & save
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Future<void> _testApiKey() async {
+    final provider = _providers.firstWhere((p) => p.id == _selectedProviderId, orElse: () => _providers.first);
+    final apiKey   = _apiKeyCtrl.text.trim();
+
+    if (_selectedProviderId == 'copilot') {
+      final githubSignedIn  = context.read<GithubAuthCubit>().state.isSignedIn;
+      final copilotSignedIn = context.read<CopilotBloc>().state.isSignedIn;
+      if (!githubSignedIn && !copilotSignedIn) {
+        setState(() { _testKeyResult = false; _testKeyMessage = 'Connectez GitHub ou Copilot avant de valider ce provider.'; });
+        return;
+      }
+    }
+    if (provider.hasApiKey && apiKey.isEmpty) {
+      setState(() { _testKeyResult = false; _testKeyMessage = 'Entrez la clé API avant de valider.'; });
+      return;
+    }
+    if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) {
+      setState(() { _testKeyResult = false; _testKeyMessage = 'Entrez l\'URL de l\'endpoint avant de valider.'; });
+      return;
+    }
+
+    setState(() { _testingKey = true; _testKeyResult = null; _testKeyMessage = 'Connexion au provider…'; _availableModels = const []; });
+
+    try {
+      final models = await _fetchLiveModels(provider: _selectedProviderId, apiKey: apiKey, customUrl: _customUrlCtrl.text.trim())
+          .timeout(const Duration(seconds: 20));
+      if (models.isEmpty) throw StateError('Aucun modèle retourné.');
+      await _saveProviderConfig(context, provider: provider, apiKey: apiKey, models: models);
       setState(() {
-        _testingKey = false;
-        _testKeyResult = false;
-        _testKeyMessage = '✕ Impossible de valider ce provider : $e';
+        _testingKey      = false;
+        _testKeyResult   = true;
+        _availableModels = models;
+        _testKeyMessage  = '✓ ${models.length} modèles récupérés. Provider activé.';
       });
+      _showSnack(context, '${provider.name} activé ✓');
+    } catch (e) {
+      setState(() { _testingKey = false; _testKeyResult = false; _testKeyMessage = '✕ Impossible de valider : $e'; });
     }
   }
 
@@ -399,13 +585,8 @@ class _AgentSettingsState extends State<AgentSettings>
   }) async {
     if (provider == 'copilot') {
       final auth = await CopilotChat.loadAuthContext();
-      if (auth == null) {
-        throw StateError('Connectez votre compte GitHub/Copilot.');
-      }
-      final payload = await CopilotChat(
-        authToken: auth.authToken,
-        initialApiEndpoint: auth.apiEndpoint,
-      ).getCopilotModels();
+      if (auth == null) throw StateError('Connectez votre compte GitHub/Copilot.');
+      final payload = await CopilotChat(authToken: auth.authToken, initialApiEndpoint: auth.apiEndpoint).getCopilotModels();
       return _normalizeModelCatalog(payload);
     }
 
@@ -419,106 +600,71 @@ class _AgentSettingsState extends State<AgentSettings>
       'mistral':     'https://api.mistral.ai/v1/models',
       'togetherai':  'https://api.together.xyz/v1/models',
       'perplexity':  'https://api.perplexity.ai/models',
-      'pandagateway':'http://127.0.0.1:8000/v1/models',
       'groq':        'https://api.groq.com/openai/v1/models',
       'fireworks':   'https://api.fireworks.ai/inference/v1/models',
-      'cohere':      'https://api.cohere.com/compatibility/v1/models',
+      'cohere':      'https://api.cohere.com/v2/models',
       'cerebras':    'https://api.cerebras.ai/v1/models',
       'novita':      'https://api.novita.ai/v3/openai/models',
       'hyperbolic':  'https://api.hyperbolic.xyz/v1/models',
-      'sambanova':   'https://api.sambanova.ai/v1/models',
-      'qwen':        'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
-      'ollama':      'http://127.0.0.1:11434/v1/models',
-      'lmstudio':    'http://127.0.0.1:1234/v1/models',
+      'pandagateway': '${AppConstants.aiGatewayUrl}/v1/models',
     };
-    var url = urls[provider] ?? customUrl;
+
     if (provider == 'custom') {
-      final parsed = Uri.tryParse(url);
-      if (parsed == null || !parsed.hasScheme) {
-        throw StateError('URL custom invalide.');
-      }
-      final normalizedUrl = url.replaceFirst(RegExp(r'/+$'), '');
-      if (normalizedUrl.endsWith('/chat/completions')) {
-        url = '${normalizedUrl.substring(
-          0,
-          normalizedUrl.length - '/chat/completions'.length,
-        )}/models';
-      } else if (normalizedUrl.endsWith('/responses')) {
-        url = '${normalizedUrl.substring(
-          0,
-          normalizedUrl.length - '/responses'.length,
-        )}/models';
-      } else if (!normalizedUrl.endsWith('/models')) {
-        url = '$normalizedUrl/models';
-      }
+      final base = customUrl.replaceFirst(RegExp(r'/chat/completions$'), '');
+      final modelsUrl = '$base/models';
+      final resp = await http.get(Uri.parse(modelsUrl), headers: {'Authorization': 'Bearer $apiKey', 'Content-Type': 'application/json'});
+      return _normalizeModelCatalog(jsonDecode(resp.body) as Map<String, dynamic>);
     }
-    if (url.isEmpty) throw StateError('Aucun endpoint de catalogue configuré.');
 
-    final headers = <String, String>{
-      'Accept': 'application/json',
-      if (provider == 'claude') ...{
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      } else if (provider != 'gemini') ...{
-        if (apiKey.isNotEmpty) 'Authorization': 'Bearer $apiKey',
-      },
-    };
-    final response = await http
-        .get(Uri.parse(url), headers: headers)
-        .timeout(const Duration(seconds: 15));
-    if (response.statusCode >= 400) {
-      throw StateError('HTTP ${response.statusCode}: ${response.body}');
+    final url = urls[provider];
+    if (url == null) throw UnsupportedError('Provider inconnu : $provider');
+
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (provider == 'claude') {
+      headers['x-api-key']         = apiKey;
+      headers['anthropic-version']  = '2023-06-01';
+    } else if (provider != 'gemini' && provider != 'pandagateway') {
+      headers['Authorization'] = 'Bearer $apiKey';
+    } else if (provider == 'pandagateway') {
+      headers['x-user-token'] = apiKey;
     }
-    return _normalizeModelCatalog(jsonDecode(response.body));
+
+    final resp = await http.get(Uri.parse(url), headers: headers);
+    if (resp.statusCode != 200) throw StateError('HTTP ${resp.statusCode}: ${resp.body.substring(0, resp.body.length.clamp(0, 200))}');
+    return _normalizeModelCatalog(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
-  List<Map<String, dynamic>> _normalizeModelCatalog(dynamic payload) {
-    final raw = payload is Map
-        ? (payload['data'] is List
-            ? payload['data']
-            : payload['models'] is List
-                ? payload['models']
-                : const [])
-        : payload is List
-            ? payload
-            : const [];
+  List<Map<String, dynamic>> _normalizeModelCatalog(Map<String, dynamic> raw) {
+    final data   = raw['data'] ?? raw['models'] ?? raw;
     final models = <Map<String, dynamic>>[];
-    for (final item in raw) {
-      final model = item is Map
-          ? Map<String, dynamic>.from(item)
-          : <String, dynamic>{'id': item.toString()};
-      final id = (model['id'] ?? model['name'] ?? '').toString().trim();
-      if (id.isEmpty) continue;
-      model['id'] = id.startsWith('models/') ? id.substring(7) : id;
-      model['displayName'] = (model['displayName'] ??
-              model['display_name'] ??
-              model['name'] ??
-              id)
-          .toString();
-      models.add(model);
+    if (data is List) {
+      for (final item in data) {
+        if (item is Map) {
+          final m = Map<String, dynamic>.from(item);
+          models.add({
+            'id': m['id'] ?? m['name'] ?? '',
+            'displayName': m['displayName'] ?? m['display_name'] ?? m['id'] ?? m['name'] ?? '',
+            'supported_generation_methods': m['supported_generation_methods'],
+            'supported_endpoints': m['supported_endpoints'],
+          });
+        }
+      }
     }
-    return models;
+    return models.where((m) => m['id'].toString().isNotEmpty && _looksChatCapable(m)).toList();
   }
 
-  Future<void> _saveProviderConfig(
-    BuildContext context, {
+  Future<void> _saveProviderConfig(BuildContext context, {
     required _ProviderDef provider,
     required String apiKey,
     required List<Map<String, dynamic>> models,
   }) async {
-    final usable = models.firstWhere(
-      (model) => _looksChatCapable(model),
-      orElse: () => models.first,
-    );
+    final usable    = models.firstWhere((m) => _looksChatCapable(m), orElse: () => models.first);
     final modelName = usable['id'].toString();
-    if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) {
-      return;
-    }
+    if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) return;
 
     final aiBloc  = context.read<AIBloc>();
     final newCfg  = Map<String, dynamic>.from(aiBloc.state.config);
     final modelId = 'agent_${_selectedProviderId}';
-
     newCfg[modelId] = {
       'provider':   _selectedProviderId,
       'apiProvider': _selectedProviderId,
@@ -528,55 +674,48 @@ class _AgentSettingsState extends State<AgentSettings>
       'availableModels': models,
       if (_selectedProviderId == 'custom') 'url': _customUrlCtrl.text.trim(),
     };
-
     aiBloc.add(AIConfigEvent(newCfg));
-    await _saveAiConfig(context, newCfg);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('aiConfig', jsonEncode(newCfg));
 
     final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
     selected['chat'] = modelId;
     aiBloc.add(ModelSelectEvent(selected));
-    final prefs = await SharedPreferences.getInstance();
     await prefs.setString('modelSelected', jsonEncode(selected));
   }
 
   bool _looksChatCapable(Map<String, dynamic> model) {
-    final id = model['id'].toString().toLowerCase();
+    final id      = model['id'].toString().toLowerCase();
     final methods = model['supported_generation_methods'];
     if (methods is List && methods.isNotEmpty) {
-      return methods.any((method) =>
-          method.toString().toLowerCase().contains('generatecontent'));
+      return methods.any((m) => m.toString().toLowerCase().contains('generatecontent'));
     }
     final endpoints = model['supported_endpoints'];
     if (endpoints is List && endpoints.isNotEmpty) {
-      return endpoints.any((endpoint) {
-        final value = endpoint.toString().toLowerCase();
-        return value.contains('chat/completions') || value.contains('/responses');
+      return endpoints.any((e) {
+        final v = e.toString().toLowerCase();
+        return v.contains('chat/completions') || v.contains('/responses');
       });
     }
-    return !RegExp(
-      r'(embedding|embed|moderation|whisper|transcri|tts|speech|audio|image)',
-    ).hasMatch(id);
+    return !RegExp(r'(embedding|embed|moderation|whisper|transcri|tts|speech|audio|image)').hasMatch(id);
   }
 
-  Future<void> _saveAiConfig(
-      BuildContext context, Map<String, dynamic> config) async {
+  Future<void> _saveAiConfig(BuildContext context, Map<String, dynamic> config) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('aiConfig', jsonEncode(config));
   }
 
   void _removeModel(BuildContext context, String modelId) {
     final aiBloc = context.read<AIBloc>();
-    final newCfg = Map<String, dynamic>.from(aiBloc.state.config)
-      ..remove(modelId);
+    final newCfg = Map<String, dynamic>.from(aiBloc.state.config)..remove(modelId);
     aiBloc.add(AIConfigEvent(newCfg));
     _saveAiConfig(context, newCfg);
-    // If removed was selected, clear
     final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
     if (selected['chat'] == modelId) {
       selected.remove('chat');
       aiBloc.add(ModelSelectEvent(selected));
     }
-    _showSnack(context, 'Modèle supprimé.');
+    _showSnack(context, 'Provider supprimé.');
   }
 
   void _showSnack(BuildContext context, String msg, {bool isError = false}) {
@@ -587,7 +726,9 @@ class _AgentSettingsState extends State<AgentSettings>
     ));
   }
 
-  // ── Build ───────────────────────────────────────────────────────────────────
+  // ══════════════════════════════════════════════════════════════════════════
+  // BUILD
+  // ══════════════════════════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -596,12 +737,13 @@ class _AgentSettingsState extends State<AgentSettings>
     final fg     = isDark ? Colors.grey[200]! : Colors.grey[900]!;
     final muted  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final border = isDark ? const Color(0xff3a3a3a) : const Color(0xffe0e0e0);
+    final hdrBg  = isDark ? const Color(0xff252526) : const Color(0xffececec);
 
     final body = Column(
       children: [
-        // ── Tab bar header (always shown) ────────────────────────────────
+        // ── Tab bar header ─────────────────────────────────────────────
         Container(
-          color: isDark ? const Color(0xff252526) : Colors.white,
+          color: hdrBg,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -623,11 +765,7 @@ class _AgentSettingsState extends State<AgentSettings>
                       child: const Icon(Broken.cpu_setting, color: _kAccent, size: 18),
                     ),
                     const SizedBox(width: 10),
-                    Text('Panda Agent — Paramètres',
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: fg)),
+                    Text('Panda Agent', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg)),
                   ]),
                 ),
               TabBar(
@@ -637,23 +775,23 @@ class _AgentSettingsState extends State<AgentSettings>
                 indicatorColor: _kAccent,
                 indicatorSize: TabBarIndicatorSize.label,
                 tabs: const [
-                  Tab(text: 'Providers IA'),
-                  Tab(text: 'Mémoire'),
-                  Tab(text: 'Outils'),
-                  Tab(text: 'Apparence'),
+                  Tab(text: 'Chat'),
+                  Tab(text: 'Tools'),
+                  Tab(text: 'Subagents'),
                 ],
               ),
             ],
           ),
         ),
+
+        // ── Tab body ──────────────────────────────────────────────────
         Expanded(
           child: TabBarView(
             controller: _tab,
             children: [
-              _buildProvidersTab(context, isDark, bg, card, fg, muted, border),
-              _buildMemoryTab(context, isDark, bg, card, fg, muted, border),
+              _buildChatTab(context, isDark, bg, card, fg, muted, border),
               _buildToolsTab(context, isDark, bg, card, fg, muted, border),
-              _buildAppearanceTab(context, isDark, bg, card, fg, muted, border),
+              _buildSubagentsTab(context, isDark, bg, card, fg, muted, border),
             ],
           ),
         ),
@@ -663,86 +801,588 @@ class _AgentSettingsState extends State<AgentSettings>
     if (widget.embedded) {
       return Container(color: bg, child: body);
     }
+    return Scaffold(backgroundColor: bg, body: body);
+  }
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: body,
+  // ══════════════════════════════════════════════════════════════════════════
+  // TAB 1 — Chat
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildChatTab(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final inputBg     = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
+    final inputBorder = isDark ? const Color(0xff404040) : const Color(0xffdddddd);
+
+    return Column(
+      children: [
+        // ── Chat area ─────────────────────────────────────────────────
+        Expanded(
+          child: _chatMessages.isEmpty
+              ? _buildChatEmpty(isDark, fg, muted)
+              : _buildChatMessages(isDark, fg, muted),
+        ),
+
+        // ── Input area ────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+          decoration: BoxDecoration(
+            color: inputBg,
+            border: Border(top: BorderSide(color: inputBorder)),
+          ),
+          child: Column(
+            children: [
+              // Mode selector
+              Row(
+                children: [
+                  _modeChip('ask',    'Ask',    isDark, muted, fg),
+                  const SizedBox(width: 6),
+                  _modeChip('agent',  'Agent',  isDark, muted, fg),
+                  const SizedBox(width: 6),
+                  _modeChip('normal', 'Normal', isDark, muted, fg),
+                  const Spacer(),
+                  if (_chatMessages.isNotEmpty)
+                    InkWell(
+                      onTap: () => setState(() { _chatMessages.clear(); }),
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        child: Icon(Broken.add_square, size: 14, color: muted),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Text input
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xff1e1e1e) : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: inputBorder),
+                      ),
+                      child: TextField(
+                        controller: _chatInputCtrl,
+                        maxLines: 4,
+                        minLines: 1,
+                        style: TextStyle(fontSize: 13, color: fg),
+                        decoration: InputDecoration(
+                          hintText: _chatMode == 'agent'
+                              ? 'Demandez à Panda Agent de coder…'
+                              : _chatMode == 'ask'
+                                  ? 'Posez une question sur le code…'
+                                  : 'Message…',
+                          hintStyle: TextStyle(fontSize: 12, color: muted),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: InputBorder.none,
+                          isDense: true,
+                        ),
+                        onSubmitted: (_) => _chatSend(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  if (_chatGenerating)
+                    InkWell(
+                      onTap: _chatStop,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: _kDanger.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Broken.stop_circle, size: 16, color: _kDanger),
+                      ),
+                    )
+                  else
+                    InkWell(
+                      onTap: _chatInputCtrl.text.trim().isNotEmpty ? _chatSend : null,
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: _chatInputCtrl.text.trim().isNotEmpty
+                              ? _kAccent
+                              : _kAccent.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Broken.send_1, size: 16, color: Colors.white),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _modeChip(String mode, String label, bool isDark, Color muted, Color fg) {
+    final active = _chatMode == mode;
+    return GestureDetector(
+      onTap: () => setState(() => _chatMode = mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: active ? _kAccent.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: active ? _kAccent.withOpacity(0.5) : Colors.transparent),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(fontSize: 11, color: active ? _kAccent : muted, fontWeight: active ? FontWeight.w600 : FontWeight.w400),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChatEmpty(bool isDark, Color fg, Color muted) {
+    const suggestions = ['Explique ce code', 'Crée un fichier Flutter', 'Optimise cette fonction', 'Écris des tests'];
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+      children: [
+        Center(
+          child: Column(
+            children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                  color: _kAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(Broken.message_programming, color: _kAccent, size: 28),
+              ),
+              const SizedBox(height: 12),
+              Text('Panda Agent', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: fg)),
+              const SizedBox(height: 6),
+              Text('Comment puis-je vous aider ?', style: TextStyle(fontSize: 12, color: muted)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text('SUGGESTIONS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: muted)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6, runSpacing: 6,
+          children: suggestions.map((s) => GestureDetector(
+            onTap: () { _chatInputCtrl.text = s; _chatSend(); },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xff2d2d2d) : const Color(0xffe8e8e8),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd)),
+              ),
+              child: Text(s, style: TextStyle(fontSize: 12, color: fg)),
+            ),
+          )).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildChatMessages(bool isDark, Color fg, Color muted) {
+    return ListView.builder(
+      controller: _chatScrollCtrl,
+      padding: const EdgeInsets.all(12),
+      itemCount: _chatMessages.length,
+      itemBuilder: (_, i) {
+        final msg        = _chatMessages[i];
+        final isMe       = msg['role'] == 'user';
+        final phase      = msg['phase'] as String? ?? 'done';
+        final text       = msg['text'] as String? ?? '';
+        final think      = msg['thinking'] as String? ?? '';
+        final isStreaming = phase == 'streaming';
+        final isError    = phase == 'error';
+
+        if (isMe) {
+          return Align(
+            alignment: Alignment.centerRight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 4, bottom: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  constraints: const BoxConstraints(maxWidth: 280),
+                  decoration: BoxDecoration(
+                    color: _kAccent.withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(text, style: const TextStyle(fontSize: 13, color: Colors.white)),
+                ),
+                _ChatActionBtn(
+                  icon: Broken.copy,
+                  label: 'Copier',
+                  muted: muted,
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: text));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Copié !', style: TextStyle(fontSize: 12)),
+                      duration: Duration(seconds: 1),
+                    ));
+                  },
+                ),
+                const SizedBox(height: 4),
+              ],
+            ),
+          );
+        }
+
+        // Agent message
+        return Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            constraints: const BoxConstraints(maxWidth: 320),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Phase chip
+                if (isStreaming) ...[
+                  if (think.isNotEmpty) _ChatPhaseChip(label: '🤔 Réflexion…', isDark: isDark),
+                  if (think.isEmpty) _ChatPhaseChip(label: '✍️ Génération…', isDark: isDark),
+                  const SizedBox(height: 4),
+                ],
+
+                // Thinking block
+                if (think.isNotEmpty)
+                  _ChatThinkingBlock(thinking: think, isDark: isDark, fg: fg, muted: muted),
+
+                // Tool calls
+                ...() {
+                  final calls = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                  return calls.map((call) => _ChatToolCallBlock(
+                    toolName: call['name'] as String? ?? '',
+                    status: call['status'] as String? ?? 'running',
+                    result: call['result'] as String?,
+                    isDark: isDark, fg: fg, muted: muted,
+                  ));
+                }(),
+
+                // Response bubble
+                if (text.isNotEmpty || isStreaming)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isError
+                          ? Colors.red.withOpacity(isDark ? 0.2 : 0.1)
+                          : isDark ? const Color(0xff2d2d2d) : const Color(0xffe8e8e8),
+                      borderRadius: BorderRadius.circular(8),
+                      border: isError ? Border.all(color: Colors.red.withOpacity(0.4)) : null,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            text.isEmpty && isStreaming ? ' ' : text,
+                            style: TextStyle(fontSize: 13, color: isError ? Colors.red[400] : fg),
+                          ),
+                        ),
+                        if (isStreaming) ...[
+                          const SizedBox(width: 2),
+                          _ChatBlinkingCursor(color: fg),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                // Action row
+                if (!isStreaming && (text.isNotEmpty || isError))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (text.isNotEmpty)
+                          _ChatActionBtn(
+                            icon: Broken.copy,
+                            label: 'Copier',
+                            muted: muted,
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: text));
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                                content: Text('Copié !', style: TextStyle(fontSize: 12)),
+                                duration: Duration(seconds: 1),
+                              ));
+                            },
+                          ),
+                        if (i > 0 && _chatMessages[i - 1]['role'] == 'user')
+                          _ChatActionBtn(
+                            icon: Broken.refresh,
+                            label: 'Réessayer',
+                            muted: muted,
+                            onTap: () {
+                              if (_chatGenerating) return;
+                              final userText = _chatMessages[i - 1]['text'] as String? ?? '';
+                              if (userText.isEmpty) return;
+                              setState(() {
+                                if (i < _chatMessages.length) _chatMessages.removeAt(i);
+                                if ((i - 1) < _chatMessages.length) _chatMessages.removeAt(i - 1);
+                                _chatInputCtrl.text = userText;
+                              });
+                              _chatSend();
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // TAB 1 — Providers & modèles
+  // TAB 2 — Tools (Replit-style list + Settings sub-view)
   // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildProvidersTab(BuildContext context, bool isDark, Color bg,
+  Widget _buildToolsTab(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: _showToolsSettings
+          ? _buildToolsSettings(context, isDark, bg, card, fg, muted, border)
+          : _buildToolsList(context, isDark, bg, card, fg, muted, border),
+    );
+  }
+
+  /// Replit-style tool list.
+  Widget _buildToolsList(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+
+    // Tools displayed in the list
+    final toolItems = [
+      _ToolItem(icon: Broken.setting_2, color: const Color(0xff888888), name: 'Settings', desc: 'Providers IA, mémoire, apparence', onTap: () => setState(() => _showToolsSettings = true)),
+    ];
+
+    // Tool specs from catalog
+    final specItems = agenticToolSpecs.map((spec) => _ToolSpecItem(spec: spec)).toList();
+
+    return BlocBuilder<AIChatUIBloc, AIChatUIState>(
+      builder: (ctx, uiState) {
+        final selections = uiState.agenticToolSelections;
+        return ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            // Settings row at top
+            for (final item in toolItems)
+              _buildToolRow(
+                icon: item.icon,
+                color: item.color,
+                name: item.name,
+                desc: item.desc,
+                isDark: isDark,
+                fg: fg,
+                muted: muted,
+                border: border,
+                trailing: Icon(Broken.arrow_right_2, size: 14, color: muted),
+                onTap: item.onTap,
+              ),
+
+            // Divider
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(children: [
+                Text('OUTILS DE L\'AGENT', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: muted)),
+                const SizedBox(width: 8),
+                Expanded(child: Divider(color: border, height: 1)),
+              ]),
+            ),
+
+            // Tool toggles
+            ...specItems.map((item) {
+              final enabled = selections[item.spec.name] ?? true;
+              return _buildToolRow(
+                icon: item.spec.requiresWriteAccess ? Broken.edit_2 : Broken.flash_circle,
+                color: item.spec.requiresWriteAccess ? const Color(0xffe05252).withOpacity(0.8) : _kAccent,
+                name: item.spec.label,
+                desc: item.spec.description,
+                isDark: isDark,
+                fg: fg,
+                muted: muted,
+                border: border,
+                trailing: Switch(
+                  value: enabled,
+                  activeColor: _kAccent,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  onChanged: (v) {
+                    final updated = Map<String, bool>.from(selections)..[item.spec.name] = v;
+                    ctx.read<AIChatUIBloc>().add(AIChatUIEvent(
+                      chatMode: uiState.chatMode,
+                      promptText: uiState.promptText,
+                      scrollOffset: uiState.scrollOffset,
+                      isGenerating: uiState.isGenerating,
+                      agenticToolSelections: updated,
+                      selectedModelId: uiState.selectedModelId,
+                    ));
+                  },
+                ),
+                onTap: null,
+              );
+            }),
+
+            const SizedBox(height: 32),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildToolRow({
+    required IconData icon,
+    required Color color,
+    required String name,
+    required String desc,
+    required bool isDark,
+    required Color fg,
+    required Color muted,
+    required Color border,
+    required Widget trailing,
+    required VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: border, width: 0.5)),
+        ),
+        child: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 18, color: color),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: fg)),
+                const SizedBox(height: 2),
+                Text(desc, style: TextStyle(fontSize: 12, color: muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+          trailing,
+        ]),
+      ),
+    );
+  }
+
+  /// Settings sub-view (Providers + Mémoire + Apparence).
+  Widget _buildToolsSettings(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final hdrBg = isDark ? const Color(0xff252526) : const Color(0xffececec);
+
+    return Column(
+      children: [
+        // Back header
+        Container(
+          color: hdrBg,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Back button row
+              Row(children: [
+                IconButton(
+                  icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
+                  onPressed: () => setState(() => _showToolsSettings = false),
+                  tooltip: 'Retour',
+                ),
+                Text('Settings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+              ]),
+              // Sub-tab bar
+              TabBar(
+                controller: _settingsSubTab,
+                labelColor: _kAccent,
+                unselectedLabelColor: muted,
+                indicatorColor: _kAccent,
+                indicatorSize: TabBarIndicatorSize.label,
+                isScrollable: true,
+                tabs: const [
+                  Tab(text: 'Providers'),
+                  Tab(text: 'Mémoire'),
+                  Tab(text: 'Apparence'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _settingsSubTab,
+            children: [
+              _buildProvidersContent(context, isDark, bg, card, fg, muted, border),
+              _buildMemoryContent(context, isDark, bg, card, fg, muted, border),
+              _buildAppearanceContent(context, isDark, bg, card, fg, muted, border),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Providers content ────────────────────────────────────────────────────
+  Widget _buildProvidersContent(BuildContext context, bool isDark, Color bg,
       Color card, Color fg, Color muted, Color border) {
     return BlocBuilder<AIBloc, AIState>(
       builder: (ctx, aiState) {
-        final configuredModels = aiState.config.entries
-            .where((entry) => entry.key.startsWith('agent_'))
-            .toList();
+        final configured = aiState.config.entries.where((e) => e.key.startsWith('agent_')).toList();
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ── Models configured ──────────────────────────────────────
-            if (configuredModels.isNotEmpty) ...[
+            if (configured.isNotEmpty) ...[
               _sectionLabel('PROVIDERS CONNECTÉS', muted),
               const SizedBox(height: 8),
-              ...configuredModels.map((entry) {
-                final id  = entry.key;
-                final cfg = entry.value is Map
-                    ? Map<String, dynamic>.from(entry.value as Map)
-                    : <String, dynamic>{};
+              ...configured.map((entry) {
+                final id       = entry.key;
+                final cfg      = entry.value is Map ? Map<String, dynamic>.from(entry.value as Map) : <String, dynamic>{};
                 final name     = cfg['modelName']?.toString() ?? id;
                 final provider = cfg['provider']?.toString() ?? '';
-                final pDef     = _providers.firstWhere(
-                    (p) => p.id == provider,
-                    orElse: () => _providers.last);
-                return _ModelCard(
-                  id: id, name: name, provider: provider,
-                  pDef: pDef,
-                  isDark: isDark, card: card, fg: fg, muted: muted,
-                  border: border,
-                  onRemove: () => _removeModel(ctx, id),
-                );
+                final pDef     = _providers.firstWhere((p) => p.id == provider, orElse: () => _providers.last);
+                return _ModelCard(id: id, name: name, provider: provider, pDef: pDef, isDark: isDark, card: card, fg: fg, muted: muted, border: border, onRemove: () => _removeModel(ctx, id));
               }),
               const SizedBox(height: 20),
             ],
 
-            // ── Add new model ──────────────────────────────────────────
             _sectionLabel('CONNECTER UN PROVIDER', muted),
             const SizedBox(height: 10),
 
-            // Provider selector
             _ProviderPicker(
               providers: _providers,
               selected: _selectedProviderId,
               isDark: isDark, card: card, fg: fg, muted: muted, border: border,
               onChanged: (id) => setState(() {
                 _selectedProviderId = id;
-                _testKeyResult = null;
+                _testKeyResult  = null;
                 _testKeyMessage = '';
                 _availableModels = const [];
               }),
             ),
             const SizedBox(height: 12),
 
-            // Endpoint and credential. Model selection is intentionally absent:
-            // validation fetches the provider's live catalog and picks the
-            // first chat-capable model automatically.
             Builder(builder: (_) {
-              final pDef = _providers.firstWhere(
-                  (p) => p.id == _selectedProviderId,
-                  orElse: () => _providers.first);
+              final pDef = _providers.firstWhere((p) => p.id == _selectedProviderId, orElse: () => _providers.first);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (_selectedProviderId == 'custom') ...[
                     _SettingsField(
                       controller: _customUrlCtrl,
-                      label: 'URL endpoint (ex: http://localhost:11434/v1/chat/completions)',
+                      label: 'URL endpoint',
                       hint: 'http://localhost:11434/v1/chat/completions',
-                      isDark: isDark, card: card, fg: fg, muted: muted,
-                      border: border,
+                      isDark: isDark, card: card, fg: fg, muted: muted, border: border,
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -754,97 +1394,74 @@ class _AgentSettingsState extends State<AgentSettings>
                           label: 'Clé API',
                           hint: pDef.apiKeyHint,
                           obscure: _obscureKey,
-                          isDark: isDark, card: card, fg: fg, muted: muted,
-                          border: border,
+                          isDark: isDark, card: card, fg: fg, muted: muted, border: border,
                           suffix: IconButton(
-                            icon: Icon(
-                              _obscureKey ? Broken.eye : Broken.eye_slash,
-                              size: 16, color: muted),
-                            onPressed: () =>
-                                setState(() => _obscureKey = !_obscureKey),
+                            icon: Icon(_obscureKey ? Broken.eye_slash : Broken.eye, size: 16, color: muted),
+                            onPressed: () => setState(() => _obscureKey = !_obscureKey),
                           ),
                         ),
                       ),
-                    ]),
-                    const SizedBox(height: 8),
-                  ],
-                  Row(children: [
-                    OutlinedButton.icon(
-                      onPressed: _testingKey ? null : _testApiKey,
-                      icon: _testingKey
-                          ? const SizedBox(
-                              width: 12,
-                              height: 12,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: _kAccent,
-                              ),
-                            )
-                          : const Icon(Broken.flash_circle, size: 14),
-                      label: Text(
-                        _testingKey
-                            ? 'Connexion…'
-                            : 'Valider et récupérer les modèles',
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: _kAccent,
-                        side: BorderSide(color: border),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        textStyle: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    if (pDef.docsUrl.isNotEmpty) ...[
                       const SizedBox(width: 8),
-                      TextButton.icon(
-                        onPressed: () => launchUrl(Uri.parse(pDef.docsUrl)),
-                        icon: Icon(Broken.export_3, size: 12, color: muted),
-                        label: Text(
-                          'Obtenir une clé',
-                          style: TextStyle(fontSize: 12, color: muted),
-                        ),
+                      IconButton(
+                        icon: const Icon(Broken.link, size: 16),
+                        tooltip: 'Docs',
+                        onPressed: pDef.docsUrl.isNotEmpty ? () => launchUrl(Uri.parse(pDef.docsUrl)) : null,
                       ),
-                    ],
-                  ]),
-                  if (_testKeyMessage.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
+                    ]),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_selectedProviderId == 'copilot') ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _kAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: _kAccent.withOpacity(0.2)),
+                      ),
                       child: Text(
-                        _testKeyMessage,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _testKeyResult == true
-                              ? _kSuccess
-                              : _kDanger,
-                        ),
+                        'Nécessite GitHub Copilot. Connectez votre compte GitHub dans la sidebar Git.',
+                        style: TextStyle(fontSize: 12, color: fg),
                       ),
                     ),
+                    const SizedBox(height: 12),
+                  ],
+                  // Validate button
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _kAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: _testingKey ? null : _testApiKey,
+                      child: _testingKey
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Valider et activer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  if (_testKeyMessage.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: (_testKeyResult == true ? _kSuccess : _kDanger).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: (_testKeyResult == true ? _kSuccess : _kDanger).withOpacity(0.3)),
+                      ),
+                      child: Text(_testKeyMessage, style: TextStyle(fontSize: 12, color: _testKeyResult == true ? _kSuccess : _kDanger)),
+                    ),
+                  ],
                   if (_availableModels.isNotEmpty) ...[
                     const SizedBox(height: 10),
-                    Text(
-                      'Catalogue réel (${_availableModels.length} modèles)',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: fg,
-                      ),
-                    ),
+                    Text('Catalogue (${_availableModels.length} modèles)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
                     const SizedBox(height: 5),
                     Text(
-                      _availableModels
-                          .take(12)
-                          .map((model) =>
-                              '${model['displayName']}  —  ${model['id']}')
-                          .join('\n'),
+                      _availableModels.take(12).map((m) => '${m['displayName']}  —  ${m['id']}').join('\n'),
                       maxLines: 12,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.4,
-                        color: muted,
-                      ),
+                      style: TextStyle(fontSize: 11, height: 1.4, color: muted),
                     ),
                   ],
                   const SizedBox(height: 12),
@@ -858,10 +1475,8 @@ class _AgentSettingsState extends State<AgentSettings>
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // TAB 2 — Mémoire
-  // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildMemoryTab(BuildContext context, bool isDark, Color bg,
+  // ── Memory content ───────────────────────────────────────────────────────
+  Widget _buildMemoryContent(BuildContext context, bool isDark, Color bg,
       Color card, Color fg, Color muted, Color border) {
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -876,64 +1491,39 @@ class _AgentSettingsState extends State<AgentSettings>
               Row(children: [
                 Icon(Broken.cpu_setting, size: 18, color: _kAccent),
                 const SizedBox(width: 8),
-                Text('Mémoire persistante',
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: fg)),
+                Text('Mémoire persistante', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
                 const Spacer(),
                 Switch(
                   value: _memoryEnabled,
                   activeColor: _kAccent,
-                  onChanged: (v) {
-                    setState(() => _memoryEnabled = v);
-                    _saveMemorySettings();
-                  },
+                  onChanged: (v) { setState(() => _memoryEnabled = v); _saveMemorySettings(); },
                 ),
               ]),
               const SizedBox(height: 4),
-              Text(
-                'L\'agent mémorise les faits importants entre les conversations.',
-                style: TextStyle(fontSize: 12, color: muted),
-              ),
+              Text('L\'agent mémorise les faits importants entre les conversations.', style: TextStyle(fontSize: 12, color: muted)),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        _sectionLabel('NOTES MÉMORABLES (CONTEXTE PERMANENT)', muted),
+        _sectionLabel('NOTES PERMANENTES', muted),
         const SizedBox(height: 8),
         _SettingsCard(
           isDark: isDark, card: card, border: border,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Informations que l\'agent doit toujours connaître '
-                '(votre stack, préférences, contraintes…)',
-                style: TextStyle(fontSize: 12, color: muted),
-              ),
+              Text('Informations permanentes injectées dans chaque conversation.', style: TextStyle(fontSize: 12, color: muted)),
               const SizedBox(height: 10),
               TextField(
                 controller: _memoryNotesCtrl,
                 maxLines: 6,
-                style: TextStyle(fontSize: 13, color: fg,
-                    fontFamily: 'monospace'),
+                style: TextStyle(fontSize: 13, color: fg, fontFamily: 'monospace'),
                 decoration: InputDecoration(
-                  hintText: 'Ex : "Utilise toujours Dart null-safety. '
-                      'Mon projet est une app Flutter mobile…"',
+                  hintText: 'Ex : "Utilise toujours Dart null-safety…"',
                   hintStyle: TextStyle(fontSize: 12, color: muted),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _kAccent),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: border),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _kAccent)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
                   contentPadding: const EdgeInsets.all(12),
                   isDense: true,
                 ),
@@ -950,31 +1540,18 @@ class _AgentSettingsState extends State<AgentSettings>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Remplace le prompt système par défaut de Panda Agent.',
-                style: TextStyle(fontSize: 12, color: muted),
-              ),
+              Text('Remplace le prompt système par défaut de Panda Agent.', style: TextStyle(fontSize: 12, color: muted)),
               const SizedBox(height: 10),
               TextField(
                 controller: _systemPromptCtrl,
                 maxLines: 5,
-                style: TextStyle(fontSize: 12, color: fg,
-                    fontFamily: 'monospace'),
+                style: TextStyle(fontSize: 12, color: fg, fontFamily: 'monospace'),
                 decoration: InputDecoration(
                   hintText: 'Laissez vide pour utiliser le prompt par défaut…',
                   hintStyle: TextStyle(fontSize: 12, color: muted),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: _kAccent),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(color: border),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _kAccent)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
                   contentPadding: const EdgeInsets.all(12),
                   isDense: true,
                 ),
@@ -988,152 +1565,49 @@ class _AgentSettingsState extends State<AgentSettings>
     );
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // TAB 3 — Outils
-  // ══════════════════════════════════════════════════════════════════════════
-  Widget _buildToolsTab(BuildContext context, bool isDark, Color bg,
-      Color card, Color fg, Color muted, Color border) {
-    return BlocBuilder<AIChatUIBloc, AIChatUIState>(
-      builder: (ctx, uiState) {
-        final selections = uiState.agenticToolSelections;
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _sectionLabel('OUTILS DE L\'AGENT', muted),
-            const SizedBox(height: 4),
-            Text(
-              'Choisissez quels outils Panda Agent peut utiliser.',
-              style: TextStyle(fontSize: 12, color: muted),
-            ),
-            const SizedBox(height: 12),
-            ...agenticToolSpecs.map((spec) {
-              final enabled = selections[spec.name] ?? true;
-              return _SettingsCard(
-                isDark: isDark, card: card, border: border,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
-                child: Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: _kAccent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Icon(Broken.flash_circle,
-                        size: 14, color: _kAccent),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(spec.name,
-                            style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: fg)),
-                        Text(spec.description,
-                            style: TextStyle(
-                                fontSize: 11, color: muted),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: enabled,
-                    activeColor: _kAccent,
-                    onChanged: (v) {
-                      final updated = Map<String, bool>.from(selections);
-                      updated[spec.name] = v;
-                      ctx.read<AIChatUIBloc>().add(AIChatUIEvent(
-                        chatMode: uiState.chatMode,
-                        promptText: uiState.promptText,
-                        scrollOffset: uiState.scrollOffset,
-                        isGenerating: uiState.isGenerating,
-                        agenticToolSelections: updated,
-                        selectedModelId: uiState.selectedModelId,
-                      ));
-                    },
-                  ),
-                ]),
-              );
-            }),
-            const SizedBox(height: 32),
-          ],
-        );
-      },
-    );
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-  Widget _sectionLabel(String label, Color muted) => Text(
-        label,
-        style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.1,
-            color: muted),
-      );
-
-  // ── TAB 4 — Apparence du chat ──────────────────────────────────────────────
-  Widget _buildAppearanceTab(BuildContext context, bool isDark, Color bg,
+  // ── Appearance content ────────────────────────────────────────────────────
+  Widget _buildAppearanceContent(BuildContext context, bool isDark, Color bg,
       Color card, Color fg, Color muted, Color border) {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         _SettingsCard(
-          isDark: isDark,
-          card: card,
-          border: border,
+          isDark: isDark, card: card, border: border,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Messages utilisateur',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              Text('Messages utilisateur', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
               const SizedBox(height: 12),
-              Text('Couleur des bulles',
-                  style: TextStyle(fontSize: 12, color: muted)),
+              Text('Couleur des bulles', style: TextStyle(fontSize: 12, color: muted)),
               const SizedBox(height: 6),
-              Wrap(spacing: 8, children: [
-                for (final c in [
-                  const Color(0xff4f8ef7),
-                  const Color(0xff5856d6),
-                  const Color(0xff34c759),
-                  const Color(0xffff2d55),
-                  const Color(0xffff9500),
-                  const Color(0xff636366),
-                ])
-                  _ColorSwatch(
-                    color: c,
-                    selected: false,
-                    onTap: () {},
-                  ),
-              ]),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final c in [
+                    const Color(0xff4f8ef7), const Color(0xff5856d6),
+                    const Color(0xff34c759), const Color(0xffff2d55),
+                    const Color(0xffff9500), const Color(0xff636366),
+                  ])
+                    _ColorSwatch(color: c, selected: false, onTap: () {}),
+                ],
+              ),
             ],
           ),
         ),
         const SizedBox(height: 12),
         _SettingsCard(
-          isDark: isDark,
-          card: card,
-          border: border,
+          isDark: isDark, card: card, border: border,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Messages agent',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              Text('Messages agent', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
               const SizedBox(height: 12),
-              Text('Affichage du markdown',
-                  style: TextStyle(fontSize: 12, color: muted)),
+              Text('Affichage du markdown', style: TextStyle(fontSize: 12, color: muted)),
               const SizedBox(height: 6),
               SwitchListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
-                title: Text('Rendu Markdown',
-                    style: TextStyle(fontSize: 12, color: fg)),
+                title: Text('Rendu Markdown', style: TextStyle(fontSize: 12, color: fg)),
                 value: true,
                 activeColor: _kAccent,
                 onChanged: (_) {},
@@ -1143,79 +1617,272 @@ class _AgentSettingsState extends State<AgentSettings>
         ),
         const SizedBox(height: 12),
         _SettingsCard(
-          isDark: isDark,
-          card: card,
-          border: border,
+          isDark: isDark, card: card, border: border,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Mise en page',
-                  style: TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+              Text('Mise en page', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
               const SizedBox(height: 12),
-              Text('Taille de police',
-                  style: TextStyle(fontSize: 12, color: muted)),
+              Text('Taille de police', style: TextStyle(fontSize: 12, color: muted)),
               const SizedBox(height: 6),
-              Slider(
-                min: 10,
-                max: 18,
-                value: 13,
-                divisions: 8,
-                activeColor: _kAccent,
-                label: '13',
-                onChanged: (_) {},
-              ),
+              Slider(min: 10, max: 18, value: 13, divisions: 8, activeColor: _kAccent, label: '13', onChanged: (_) {}),
               const SizedBox(height: 8),
-              Text('Rayon des bulles',
-                  style: TextStyle(fontSize: 12, color: muted)),
+              Text('Rayon des bulles', style: TextStyle(fontSize: 12, color: muted)),
               const SizedBox(height: 6),
-              Slider(
-                min: 0,
-                max: 20,
-                value: 8,
-                divisions: 4,
-                activeColor: _kAccent,
-                label: '8',
-                onChanged: (_) {},
-              ),
+              Slider(min: 0, max: 20, value: 8, divisions: 4, activeColor: _kAccent, label: '8', onChanged: (_) {}),
             ],
           ),
+        ),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  // ── Section label ─────────────────────────────────────────────────────────
+  Widget _sectionLabel(String label, Color muted) => Text(
+    label,
+    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.1, color: muted),
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TAB 3 — Subagents (Ready / Active / Draft)
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildSubagentsTab(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        // New task banner
+        if (_showNewTaskBanner)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xff252526) : Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: _kAccent.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Broken.cpu_setting, size: 16, color: _kAccent),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'New',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => setState(() => _showNewTaskBanner = false),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Icon(Broken.close_square, size: 16, color: muted),
+                  ),
+                ]),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (final icon in [Broken.cpu_setting, Broken.code_1, Broken.flash_circle, Broken.global, Broken.diagram])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: Container(
+                          width: 28, height: 28,
+                          decoration: BoxDecoration(
+                            color: [
+                              const Color(0xff4285f4), const Color(0xff10a37f),
+                              const Color(0xfff97316), const Color(0xff8b5cf6),
+                              const Color(0xffe05252),
+                            ][([Broken.cpu_setting, Broken.code_1, Broken.flash_circle, Broken.global, Broken.diagram].indexOf(icon))].withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Icon(icon, size: 14, color: [
+                            const Color(0xff4285f4), const Color(0xff10a37f),
+                            const Color(0xfff97316), const Color(0xff8b5cf6),
+                            const Color(0xffe05252),
+                          ][([Broken.cpu_setting, Broken.code_1, Broken.flash_circle, Broken.global, Broken.diagram].indexOf(icon))]),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('Les background tasks permettent d\'accomplir plus en parallèle.', style: TextStyle(fontSize: 13, color: fg)),
+                const SizedBox(height: 4),
+                Text('Créez votre première tâche !', style: TextStyle(fontSize: 13, color: fg)),
+                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () => _addDraftTask(fg),
+                  child: Text('View documentation', style: TextStyle(fontSize: 13, color: _kAccent)),
+                ),
+              ],
+            ),
+          ),
+
+        // Section: Ready
+        _buildTaskSection('Ready', _readyTasks, isDark, fg, muted, border, card),
+        const SizedBox(height: 12),
+
+        // Section: Active
+        _buildTaskSection('Active', _activeTasks, isDark, fg, muted, border, card),
+        const SizedBox(height: 12),
+
+        // Section: Draft
+        _buildTaskSection('Draft', _draftTasks, isDark, fg, muted, border, card,
+            addButton: true,
+            onAdd: () => _addDraftTask(fg)),
+        const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  Widget _buildTaskSection(
+    String title,
+    List<Map<String, dynamic>> tasks,
+    bool isDark,
+    Color fg,
+    Color muted,
+    Color border,
+    Color card, {
+    bool addButton = false,
+    VoidCallback? onAdd,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xff252526) : Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
+          ),
+          child: tasks.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('No ${title.toLowerCase()} tasks', style: TextStyle(fontSize: 13, color: muted)),
+                      if (addButton)
+                        GestureDetector(
+                          onTap: onAdd,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: _kAccent.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: _kAccent.withOpacity(0.3)),
+                            ),
+                            child: Row(mainAxisSize: MainAxisSize.min, children: [
+                              const Icon(Broken.add_square, size: 12, color: _kAccent),
+                              const SizedBox(width: 4),
+                              const Text('New task', style: TextStyle(fontSize: 12, color: _kAccent, fontWeight: FontWeight.w500)),
+                            ]),
+                          ),
+                        ),
+                    ],
+                  ),
+                )
+              : Column(
+                  children: tasks.asMap().entries.map((entry) {
+                    final idx  = entry.key;
+                    final task = entry.value;
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        border: idx < tasks.length - 1
+                            ? Border(bottom: BorderSide(color: border, width: 0.5))
+                            : null,
+                      ),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(task['title'] as String? ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: fg)),
+                              if ((task['desc'] as String? ?? '').isNotEmpty)
+                                Text(task['desc'] as String? ?? '', style: TextStyle(fontSize: 11, color: muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            setState(() { tasks.removeAt(idx); });
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: Icon(Broken.close_square, size: 14, color: muted),
+                          ),
+                        ),
+                      ]),
+                    );
+                  }).toList(),
+                ),
         ),
       ],
     );
   }
+
+  void _addDraftTask(Color fg) {
+    _subagentSerial++;
+    final id = 'task-$_subagentSerial';
+    setState(() {
+      _draftTasks.add({'id': id, 'title': 'Nouvelle tâche', 'desc': 'Description…', 'status': 'draft'});
+      _showNewTaskBanner = false;
+    });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sub-widgets
+// Helper data classes
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ToolItem {
+  final IconData icon;
+  final Color color;
+  final String name;
+  final String desc;
+  final VoidCallback onTap;
+  const _ToolItem({required this.icon, required this.color, required this.name, required this.desc, required this.onTap});
+}
+
+class _ToolSpecItem {
+  final AgenticToolSpec spec;
+  const _ToolSpecItem({required this.spec});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared sub-widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SettingsCard extends StatelessWidget {
-  final bool  isDark;
+  final bool isDark;
   final Color card, border;
   final Widget child;
   final EdgeInsets padding;
   const _SettingsCard({
-    required this.isDark,
-    required this.card,
-    required this.border,
-    required this.child,
-    this.padding = const EdgeInsets.all(14),
+    required this.isDark, required this.card, required this.border,
+    required this.child, this.padding = const EdgeInsets.all(14),
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: padding,
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: border),
-      ),
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    padding: padding,
+    decoration: BoxDecoration(
+      color: card,
+      borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: border),
+    ),
+    child: child,
+  );
 }
 
 class _SettingsField extends StatelessWidget {
@@ -1225,58 +1892,41 @@ class _SettingsField extends StatelessWidget {
   final bool isDark;
   final Color card, fg, muted, border;
   final Widget? suffix;
-
   const _SettingsField({
-    required this.controller,
-    required this.label,
-    required this.hint,
-    required this.isDark,
-    required this.card,
-    required this.fg,
-    required this.muted,
-    required this.border,
-    this.obscure = false,
-    this.suffix,
+    required this.controller, required this.label, required this.hint,
+    this.obscure = false, required this.isDark, required this.card,
+    required this.fg, required this.muted, required this.border, this.suffix,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: muted)),
-        const SizedBox(height: 4),
-        TextField(
-          controller: controller,
-          obscureText: obscure,
-          style: TextStyle(fontSize: 13, color: fg),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(fontSize: 12, color: muted),
-            suffixIcon: suffix,
-            filled: true,
-            fillColor: card,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            isDense: true,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide(color: border),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: _kAccent),
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: muted, letterSpacing: 0.5)),
+      const SizedBox(height: 6),
+      Container(
+        decoration: BoxDecoration(
+          color: card, borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: border),
+        ),
+        child: Row(children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              obscureText: obscure,
+              style: TextStyle(fontSize: 13, color: fg),
+              decoration: InputDecoration(
+                hintText: hint, hintStyle: TextStyle(fontSize: 12, color: muted),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                border: InputBorder.none, isDense: true,
+              ),
             ),
           ),
-        ),
-      ],
-    );
-  }
+          if (suffix != null) suffix!,
+        ]),
+      ),
+    ],
+  );
 }
 
 class _ProviderPicker extends StatelessWidget {
@@ -1285,121 +1935,50 @@ class _ProviderPicker extends StatelessWidget {
   final bool isDark;
   final Color card, fg, muted, border;
   final ValueChanged<String> onChanged;
-
   const _ProviderPicker({
-    required this.providers,
-    required this.selected,
-    required this.isDark,
-    required this.card,
-    required this.fg,
-    required this.muted,
-    required this.border,
+    required this.providers, required this.selected, required this.isDark,
+    required this.card, required this.fg, required this.muted, required this.border,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    final sel = providers.firstWhere((p) => p.id == selected,
-        orElse: () => providers.first);
-    return GestureDetector(
-      onTap: () => _show(context),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: card,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: border),
-        ),
-        child: Row(children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: sel.color.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Icon(sel.icon, size: 14, color: sel.color),
+    final pDef = providers.firstWhere((p) => p.id == selected, orElse: () => providers.first);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Provider', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: muted, letterSpacing: 0.5)),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: card, borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(sel.name,
-                    style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: fg)),
-                Text(sel.description,
-                    style: TextStyle(fontSize: 11, color: muted)),
-              ],
-            ),
-          ),
-          Icon(Broken.arrow_down_2, size: 14, color: muted),
-        ]),
-      ),
-    );
-  }
-
-  void _show(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.7,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
-        expand: false,
-        builder: (ctx, scroll) => ListView.builder(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-          itemCount: providers.length + 1,
-          itemBuilder: (_, i) {
-            if (i == 0) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text('Choisir un provider',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: fg)),
-              );
-            }
-            final p = providers[i - 1];
-            final isSel = p.id == selected;
-            return ListTile(
-              dense: true,
-              leading: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: p.color.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
+          child: DropdownButton<String>(
+            value: selected,
+            isExpanded: true,
+            underline: const SizedBox.shrink(),
+            dropdownColor: card,
+            style: TextStyle(fontSize: 13, color: fg),
+            items: providers.map((p) => DropdownMenuItem(
+              value: p.id,
+              child: Row(children: [
+                Container(
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(color: p.color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                  child: Icon(p.icon, size: 14, color: p.color),
                 ),
-                child: Icon(p.icon, size: 16, color: p.color),
-              ),
-              title: Text(p.name,
-                  style: TextStyle(
-                      fontSize: 13,
-                      color: fg,
-                      fontWeight: isSel
-                          ? FontWeight.w600
-                          : FontWeight.normal)),
-              subtitle: Text(p.description,
-                  style: TextStyle(fontSize: 11, color: muted)),
-              trailing: isSel
-                  ? const Icon(Broken.tick_circle,
-                      size: 16, color: _kAccent)
-                  : null,
-              onTap: () {
-                Navigator.pop(ctx);
-                onChanged(p.id);
-              },
-            );
-          },
+                const SizedBox(width: 10),
+                Expanded(child: Text(p.name, style: TextStyle(fontSize: 13, color: fg))),
+              ]),
+            )).toList(),
+            onChanged: (v) { if (v != null) onChanged(v); },
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        Text(pDef.description, style: TextStyle(fontSize: 11, color: muted)),
+      ],
     );
   }
 }
@@ -1410,106 +1989,232 @@ class _ModelCard extends StatelessWidget {
   final bool isDark;
   final Color card, fg, muted, border;
   final VoidCallback onRemove;
-
   const _ModelCard({
-    required this.id,
-    required this.name,
-    required this.provider,
-    required this.pDef,
-    required this.isDark,
-    required this.card,
-    required this.fg,
-    required this.muted,
-    required this.border,
+    required this.id, required this.name, required this.provider,
+    required this.pDef, required this.isDark, required this.card,
+    required this.fg, required this.muted, required this.border,
     required this.onRemove,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: card,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: border),
+  Widget build(BuildContext context) => Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: card, borderRadius: BorderRadius.circular(10),
+      border: Border.all(color: border),
+    ),
+    child: Row(children: [
+      Container(
+        width: 32, height: 32,
+        decoration: BoxDecoration(color: pDef.color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+        child: Icon(pDef.icon, size: 16, color: pDef.color),
       ),
-      child: Row(children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: pDef.color.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: Icon(pDef.icon, size: 14, color: pDef.color),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Expanded(
-                  child: Text(name,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: fg)),
-                ),
-              ]),
-              Text(pDef.name,
-                  style: TextStyle(fontSize: 11, color: muted)),
-            ],
-          ),
-        ),
-        IconButton(
-          icon: Icon(Broken.trash, size: 15, color: _kDanger.withOpacity(0.7)),
-          tooltip: 'Supprimer',
-          onPressed: onRemove,
-        ),
-      ]),
-    );
-  }
+      const SizedBox(width: 10),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(pDef.name, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg)),
+          Text(name, style: TextStyle(fontSize: 11, color: muted), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+      IconButton(
+        icon: Icon(Broken.trash, size: 15, color: _kDanger.withOpacity(0.7)),
+        tooltip: 'Supprimer',
+        onPressed: onRemove,
+      ),
+    ]),
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _ColorSwatch — clickable color dot for theme colour picker
-// ─────────────────────────────────────────────────────────────────────────────
 class _ColorSwatch extends StatelessWidget {
   final Color color;
   final bool selected;
   final VoidCallback onTap;
-
-  const _ColorSwatch({
-    required this.color,
-    required this.selected,
-    required this.onTap,
-  });
+  const _ColorSwatch({required this.color, required this.selected, required this.onTap});
 
   @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
+      width: 28, height: 28,
+      decoration: BoxDecoration(
+        color: color, shape: BoxShape.circle,
+        border: Border.all(color: selected ? Colors.white : Colors.transparent, width: 2.5),
+        boxShadow: selected ? [BoxShadow(color: color.withOpacity(0.6), blurRadius: 6, spreadRadius: 1)] : [],
+      ),
+      child: selected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
+    ),
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Chat sub-widgets (local to this file, avoid duplicating from home.dart)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ChatActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color muted;
+  final VoidCallback onTap;
+  const _ChatActionBtn({required this.icon, required this.label, required this.muted, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(4),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 12, color: muted),
+        const SizedBox(width: 3),
+        Text(label, style: TextStyle(fontSize: 11, color: muted)),
+      ]),
+    ),
+  );
+}
+
+class _ChatPhaseChip extends StatelessWidget {
+  final String label;
+  final bool isDark;
+  const _ChatPhaseChip({required this.label, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: _kAccent.withOpacity(0.1),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Text(label, style: const TextStyle(fontSize: 11, color: _kAccent)),
+  );
+}
+
+class _ChatThinkingBlock extends StatefulWidget {
+  final String thinking;
+  final bool isDark;
+  final Color fg, muted;
+  const _ChatThinkingBlock({required this.thinking, required this.isDark, required this.fg, required this.muted});
+  @override
+  State<_ChatThinkingBlock> createState() => _ChatThinkingBlockState();
+}
+
+class _ChatThinkingBlockState extends State<_ChatThinkingBlock> {
+  bool _expanded = false;
+  @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        width: 28,
-        height: 28,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: selected ? Colors.white : Colors.transparent,
-            width: 2.5,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        color: _kAccent.withOpacity(widget.isDark ? 0.06 : 0.04),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _kAccent.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(children: [
+                Icon(Broken.cpu_setting, size: 12, color: _kAccent),
+                const SizedBox(width: 6),
+                Text('Réflexion', style: TextStyle(fontSize: 11, color: _kAccent, fontWeight: FontWeight.w500)),
+                const Spacer(),
+                Icon(_expanded ? Broken.arrow_up_2 : Broken.arrow_down_2, size: 12, color: _kAccent),
+              ]),
+            ),
           ),
-          boxShadow: selected
-              ? [BoxShadow(color: color.withOpacity(0.6), blurRadius: 6, spreadRadius: 1)]
-              : [],
-        ),
-        child: selected
-            ? const Icon(Icons.check, size: 14, color: Colors.white)
-            : null,
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: Text(widget.thinking, style: TextStyle(fontSize: 11, color: widget.muted, height: 1.4, fontFamily: 'monospace')),
+            ),
+        ],
       ),
     );
   }
+}
+
+class _ChatToolCallBlock extends StatefulWidget {
+  final String toolName, status;
+  final String? result;
+  final bool isDark;
+  final Color fg, muted;
+  const _ChatToolCallBlock({required this.toolName, required this.status, this.result, required this.isDark, required this.fg, required this.muted});
+  @override
+  State<_ChatToolCallBlock> createState() => _ChatToolCallBlockState();
+}
+
+class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
+  bool _expanded = false;
+  @override
+  Widget build(BuildContext context) {
+    final isRunning = widget.status == 'running';
+    final color = isRunning ? const Color(0xfff97316) : _kSuccess;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: InkWell(
+        onTap: widget.result != null ? () => setState(() => _expanded = !_expanded) : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                if (isRunning) SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5, color: color))
+                else Icon(Broken.tick_circle, size: 11, color: color),
+                const SizedBox(width: 6),
+                Expanded(child: Text(widget.toolName, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500))),
+                if (widget.result != null)
+                  Icon(_expanded ? Broken.arrow_up_2 : Broken.arrow_down_2, size: 11, color: widget.muted),
+              ]),
+              if (_expanded && widget.result != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(widget.result!.substring(0, widget.result!.length.clamp(0, 500)),
+                      style: TextStyle(fontSize: 10, color: widget.muted, fontFamily: 'monospace', height: 1.4)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatBlinkingCursor extends StatefulWidget {
+  final Color color;
+  const _ChatBlinkingCursor({required this.color});
+  @override
+  State<_ChatBlinkingCursor> createState() => _ChatBlinkingCursorState();
+}
+
+class _ChatBlinkingCursorState extends State<_ChatBlinkingCursor> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500))..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.0, end: 1.0).animate(_ctrl);
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _anim,
+    child: Container(width: 2, height: 14, color: widget.color),
+  );
 }

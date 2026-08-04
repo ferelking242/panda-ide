@@ -3074,7 +3074,10 @@ class _SelectTypeState extends State<SelectType>
       return const Settings(embedded: true);
     }
     if (tab.id == 'agent-settings') {
-      return const AgentSettings(embedded: true);
+      return BlocProvider(
+        create: (_) => AIChatUIBloc(),
+        child: const AgentSettings(embedded: true),
+      );
     }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];
@@ -3139,7 +3142,10 @@ class _SelectTypeState extends State<SelectType>
       return const Settings(embedded: true);
     }
     if (tab.id == 'agent-settings') {
-      return const AgentSettings(embedded: true);
+      return BlocProvider(
+        create: (_) => AIChatUIBloc(),
+        child: const AgentSettings(embedded: true),
+      );
     }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];
