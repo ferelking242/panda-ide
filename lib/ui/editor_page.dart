@@ -1608,6 +1608,350 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
     return true;
   }
 
+  Widget _buildEditorHeader(
+    BuildContext context,
+    AppTheme appTheme,
+    ActiveEditorState editorState,
+    TabController? tabController,
+    bool autoSaveEnabled,
+    bool hasDirtyFiles,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        color: appTheme.editorPageDrawerBg,
+        border: Border(
+          bottom: BorderSide(
+            color: Colors.grey.withValues(alpha: 0.2),
+            width: 0.5,
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          Builder(
+            builder: (ctx) => IconButton(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: BlocBuilder<DiagnosticsTickBloc, int>(
+                builder: (context, _) {
+                  final openErrorCount = _openEditorsErrorCount(
+                    editorState.activeEditors,
+                  );
+                  return _buildBadgedIcon(
+                    icon: Icon(
+                      Icons.menu_rounded,
+                      size: 20,
+                      color: appTheme.editorPageToolColor,
+                    ),
+                    count: openErrorCount,
+                    appTheme: appTheme,
+                  );
+                },
+              ),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+              tooltip: 'Open tools',
+            ),
+          ),
+          if (editorState.activeEditors.isNotEmpty && tabController != null)
+            Expanded(
+              child: TabBar(
+                labelPadding: EdgeInsets.zero,
+                padding: EdgeInsets.zero,
+                indicator: BoxDecoration(
+                  border: Border(
+                    top: const BorderSide(color: Color(0xff157dcc), width: 2),
+                    left: BorderSide(
+                      color: appTheme.isDark ? Colors.grey : Colors.blueGrey[600]!,
+                      width: 0.2,
+                    ),
+                    right: BorderSide(
+                      color: appTheme.isDark ? Colors.grey : Colors.blueGrey[600]!,
+                      width: 0.2,
+                    ),
+                  ),
+                ),
+                labelColor: appTheme.selectScreenCardTextColor,
+                unselectedLabelColor: appTheme.isDark ? null : Colors.grey[400],
+                dividerColor: Colors.transparent,
+                controller: tabController,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                onTap: (value) {
+                  _syncActiveEditorWithTabIndex(value);
+                  mruOrder.remove(value);
+                  mruOrder.insert(0, value);
+                  if (tabController != null && tabController!.index != value) {
+                    tabController!.animateTo(value);
+                  }
+                },
+                tabs: List.generate(
+                  editorState.activeEditors.length,
+                  (index) => Tab(
+                    height: 32,
+                    child: Row(
+                      children: [
+                        _buildTabIconForEditor(
+                          editorState.activeEditors[index],
+                          appTheme,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Text(
+                            _displayFileName(editorState.activeEditors[index]),
+                            softWrap: false,
+                            maxLines: 1,
+                          ),
+                        ),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 24,
+                            minHeight: 24,
+                          ),
+                          onPressed: () async {
+                            final List<ActiveEditor> currentState =
+                                List.from(editorState.activeEditors);
+                            if (currentState.length <= 1) {
+                              context
+                                  .read<ActiveEditorBloc>()
+                                  .add(ActiveEditorEvent([]));
+                              context
+                                  .read<ActiveEditorBloc>()
+                                  .add(CloseActiveEditor());
+                              return;
+                            }
+                            try {
+                              await currentState[index].dispose();
+                            } catch (e) {
+                              debugPrint('Error disposing editor: $e');
+                            }
+                            if (currentState[index]
+                                    .customTitle
+                                    ?.contains("(Working Tree)") ==
+                                true) {
+                              try {
+                                await currentState[index].file.delete();
+                              } catch (e) {
+                                debugPrint(e.toString());
+                              }
+                            }
+                            final wasActive = currentState[index].isActive;
+                            currentState.removeAt(index);
+                            mruOrder.remove(index);
+                            mruOrder = mruOrder
+                                .map((i) => i > index ? i - 1 : i)
+                                .toList();
+                            if (currentState.isNotEmpty && wasActive) {
+                              int newActive =
+                                  mruOrder.isNotEmpty ? mruOrder[0] : 0;
+                              for (int i = 0;
+                                  i < currentState.length;
+                                  i++) {
+                                currentState[i].isActive = i == newActive;
+                              }
+                            }
+                            if (context.mounted) {
+                              context
+                                  .read<ActiveEditorBloc>()
+                                  .add(ActiveEditorEvent(currentState));
+                            }
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              final newIndex = currentState.indexWhere(
+                                (item) => item.isActive == true,
+                              );
+                              if (tabController != null &&
+                                  newIndex >= 0 &&
+                                  newIndex < tabController!.length) {
+                                tabController!.animateTo(newIndex);
+                              }
+                            });
+                          },
+                          icon: Icon(
+                            Icons.close,
+                            size: 14,
+                            color: appTheme.editorPageToolColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            const Spacer(),
+          if (!autoSaveEnabled)
+            IconButton(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+              onPressed: hasDirtyFiles
+                  ? () => _saveActiveEditor(context, editorState.activeEditors)
+                  : null,
+              icon: Icon(
+                Icons.save_outlined,
+                size: 18,
+                color: hasDirtyFiles
+                    ? appTheme.editorPageToolSelectedColor
+                    : appTheme.editorPageToolColor.withValues(alpha: 0.4),
+              ),
+              tooltip: 'Save',
+            ),
+          if (_hasViteProject)
+            IconButton(
+              tooltip: 'Open Vite Preview',
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+              onPressed:
+                  _isOpeningVitePreview ? null : () => _openVitePreview(),
+              icon: _isOpeningVitePreview
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      Icons.slideshow,
+                      size: 18,
+                      color: appTheme.editorPageToolColor,
+                    ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRunPanel(
+    BuildContext context,
+    AppTheme appTheme,
+    ActiveEditorState editorState,
+    TabController? tabController,
+  ) {
+    return BlocBuilder<SelectedRuntimeEnvironmentCubit,
+        SelectedRunEnvironmentState>(
+      builder: (context, runtimeState) {
+        final cubitState = context.read<SelectedRuntimeEnvironmentCubit>();
+        final currentlyRuntimeID = runtimeState.currentlyRuntimeID;
+        return Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'RUN',
+                  style: TextStyle(
+                    fontWeight:
+                        appTheme.isDark ? FontWeight.w300 : FontWeight.w500,
+                    color: appTheme.selectScreenCardTextColor,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (editorState.activeEditors.isNotEmpty)
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final ae = tabController != null &&
+                              tabController.index <
+                                  editorState.activeEditors.length
+                          ? editorState.activeEditors[tabController.index]
+                          : editorState.activeEditors.firstWhere(
+                              (e) => e.isActive,
+                              orElse: () => editorState.activeEditors.first,
+                            );
+                      final filePath = ae.file;
+                      if (isPreviewFilePath(filePath.path)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content:
+                                  Text('Preview files cannot be executed.')),
+                        );
+                        return;
+                      }
+                      final lang = languages.firstWhere(
+                        (l) => l.extension.contains(
+                            path.extension(filePath.path)
+                                .replaceFirst('.', '')),
+                        orElse: () => languages[0],
+                      );
+                      if (currentlyRuntimeID != null) {
+                        runCodeInTermux(
+                            context,
+                            '${lang.command ?? ""} ${filePath.path}',
+                            widget.rootDir,
+                            termuxInfo?.id);
+                      } else {
+                        runCode(context,
+                            '${lang.command ?? ""} ${filePath.path}',
+                            widget.rootDir);
+                      }
+                    },
+                    icon: const Icon(Icons.play_arrow, size: 18),
+                    label: Text(
+                      'Run current file',
+                      style: TextStyle(
+                          color: appTheme.selectScreenCardTextColor),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          appTheme.editorPageToolSelectedBgColor,
+                      foregroundColor:
+                          appTheme.editorPageToolSelectedColor,
+                    ),
+                  )
+                else
+                  Text(
+                    'Open a file to run',
+                    style: TextStyle(
+                        color: Colors.grey[appTheme.isDark ? 500 : 600]),
+                  ),
+                if (termuxInfo != null && termuxInfo!.isConnected) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'RUNTIME',
+                    style: TextStyle(
+                      fontWeight: appTheme.isDark
+                          ? FontWeight.w300
+                          : FontWeight.w500,
+                      color: appTheme.selectScreenCardTextColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  RadioListTile<int?>(
+                    dense: true,
+                    value: null,
+                    groupValue: currentlyRuntimeID,
+                    onChanged: (_) => cubitState.updateId(null),
+                    title: Text(
+                      'Panda (built-in)',
+                      style: TextStyle(
+                          color: appTheme.selectScreenCardTextColor,
+                          fontSize: 13),
+                    ),
+                    activeColor: appTheme.editorPageToolSelectedColor,
+                  ),
+                  RadioListTile<int?>(
+                    dense: true,
+                    value: termuxInfo!.id,
+                    groupValue: currentlyRuntimeID,
+                    onChanged: (_) => cubitState.updateId(termuxInfo!.id),
+                    title: Text(
+                      'Termux',
+                      style: TextStyle(
+                          color: appTheme.selectScreenCardTextColor,
+                          fontSize: 13),
+                    ),
+                    activeColor: appTheme.editorPageToolSelectedColor,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppTheme appTheme = context.read<AppThemeBloc>().state.appTheme;
@@ -2055,6 +2399,21 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                                         vertical: 5,
                                       ),
                                     ),
+                                    drawerButtons(
+                                      () => context.read<StackBloc>().add(
+                                        StackIndexChange(stackValue: 6),
+                                      ),
+                                      Icon(
+                                        Icons.play_circle_outline,
+                                        size: 26,
+                                        color: state.stackIndex == 6
+                                          ? appTheme.editorPageToolSelectedColor
+                                          : appTheme.editorPageToolColor,
+                                      ),
+                                      bgColor: state.stackIndex == 6
+                                        ? appTheme.editorPageToolSelectedBgColor
+                                        : Colors.transparent,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -2472,6 +2831,12 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                                         : '',
                                       workspacePath: widget.rootDir,
                                     ),
+                                    _buildRunPanel(
+                                      context,
+                                      appTheme,
+                                      editorState,
+                                      tabController,
+                                    ),
                                   ],
                                 ),
                               ),
@@ -2480,972 +2845,19 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                         );
                       },
                     ),
-                    appBar: AppBar(
-                      leading: Builder(
-                        builder: (leadingContext) {
-                          return IconButton(
-                            onPressed: () => Scaffold.of(leadingContext).openDrawer(),
-                            icon: BlocBuilder<DiagnosticsTickBloc, int>(
-                              builder: (context, _) {
-                                final openErrorCount = _openEditorsErrorCount(
-                                  editorState.activeEditors,
-                                );
-                                return _buildBadgedIcon(
-                                  icon: Icon(
-                                    Icons.menu_rounded,
-                                    color: appTheme.editorPageToolColor,
-                                  ),
-                                  count: openErrorCount,
-                                  appTheme: appTheme,
-                                );
-                              },
-                            ),
-                            tooltip: 'Open tools',
-                          );
-                        },
-                      ),
-                      title: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: tabController == null
-                            ? Text(
-                                editorState.activeEditors.isNotEmpty
-                                    ? _displayFileName(
-                                        editorState.activeEditors[0],
-                                      )
-                                    : '',
-                                style: TextStyle(
-                                  color: appTheme.selectScreenCardTextColor,
-                                ),
-                              )
-                            : AnimatedBuilder(
-                                animation: tabController!,
-                                builder: (context, _) {
-                                  int idx = tabController!.index;
-                                  if (idx < 0 || idx >= editorState.activeEditors.length) {
-                                    idx = 0;
-                                  }
-                                  final fileName =
-                                      editorState.activeEditors.isNotEmpty
-                                      ? _displayFileName(
-                                          editorState.activeEditors[idx],
-                                        )
-                                      : '';
-                                  return Text(
-                                    fileName,
-                                    style: TextStyle(
-                                      color: appTheme.selectScreenCardTextColor,
-                                    ),
-                                  );
-                                },
-                              ),
-                      ),
-                      bottom: editorState.activeEditors.isNotEmpty
-                          ? TabBar(
-                              labelPadding: EdgeInsets.zero,
-                              padding: EdgeInsets.zero,
-                              indicator: BoxDecoration(
-                                border: Border(
-                                  top: BorderSide(
-                                    color: Color(0xff157dcc),
-                                    width: 2,
-                                  ),
-                                  left: BorderSide(
-                                    color: appTheme.isDark
-                                        ? Colors.grey
-                                        : Colors.blueGrey[600]!,
-                                    width: 0.2,
-                                  ),
-                                  right: BorderSide(
-                                    color: appTheme.isDark
-                                        ? Colors.grey
-                                        : Colors.blueGrey[600]!,
-                                    width: 0.2,
-                                  ),
-                                ),
-                              ),
-                              labelColor: appTheme.selectScreenCardTextColor,
-                              unselectedLabelColor: appTheme.isDark
-                                  ? null
-                                  : Colors.grey[400],
-                              dividerColor: Colors.transparent,
-                              controller: tabController,
-                              isScrollable: true,
-                              tabAlignment: TabAlignment.start,
-                              onTap: (value) {
-                                _syncActiveEditorWithTabIndex(value);
-                                mruOrder.remove(value);
-                                mruOrder.insert(0, value);
-                                if (tabController != null &&
-                                    tabController!.index != value) {
-                                  tabController!.animateTo(value);
-                                }
-                              },
-                              tabs: List.generate(
-                                editorState.activeEditors.length,
-                                (index) {
-                                  return Tab(
-                                    height: 32,
-                                    child: Row(
-                                      children: [
-                                        _buildTabIconForEditor(
-                                          editorState.activeEditors[index],
-                                          appTheme,
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 8,
-                                          ),
-                                          child: Text(
-                                            _displayFileName(
-                                              editorState.activeEditors[index],
-                                            ),
-                                            softWrap: false,
-                                            maxLines: 1,
-                                          ),
-                                        ),
-                                        IconButton(
-                                          padding: EdgeInsets.zero,
-                                          onPressed: () async {
-                                            final List<ActiveEditor>
-                                            currentState = List.from(
-                                              editorState.activeEditors,
-                                            );
-                                            if (currentState.length <= 1) {
-                                              context.read<ActiveEditorBloc>().add(ActiveEditorEvent([]));
-                                              context.read<ActiveEditorBloc>().add(CloseActiveEditor());
-                                              return;
-                                            }
 
-                                            try {
-                                              await currentState[index].dispose();
-                                            } catch (e) {
-                                              debugPrint('Error disposing editor: $e');
-                                            }
-
-                                            if (currentState[index].customTitle?.contains("(Working Tree)",) == true) {
-                                              try {
-                                                await currentState[index].file.delete();
-                                              } catch (e) {
-                                                debugPrint(e.toString());
-                                              }
-                                            }
-
-                                            final wasActive = currentState[index].isActive;
-                                            currentState.removeAt(index);
-                                            mruOrder.remove(index);
-                                            mruOrder = mruOrder
-                                                .map(
-                                                  (i) => i > index ? i - 1 : i,
-                                                )
-                                                .toList();
-                                            if (currentState.isNotEmpty &&
-                                                wasActive) {
-                                              int newActive =
-                                                  mruOrder.isNotEmpty
-                                                  ? mruOrder[0]
-                                                  : 0;
-                                              for (
-                                                int i = 0;
-                                                i < currentState.length;
-                                                i++
-                                              ) {
-                                                currentState[i].isActive =
-                                                    i == newActive;
-                                              }
-                                            }
-                                            if (context.mounted) {
-                                              context.read<ActiveEditorBloc>().add(ActiveEditorEvent(currentState));
-                                            }
-
-                                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                                              final newIndex = currentState.indexWhere(
-                                                (item) => item.isActive == true);
-                                              if (tabController != null && newIndex >= 0 && newIndex < tabController!.length) {
-                                                tabController!.animateTo(newIndex,);
-                                              }
-                                            });
-                                          },
-                                          icon: Icon(Icons.close, size: 20),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              ),
-                            )
-                          : null,
-                      actions: [
-                        if (!autoSaveEnabled)
-                          OutlinedButton.icon(
-                            onPressed: hasDirtyFiles
-                              ? () => _saveActiveEditor(context, editorState.activeEditors)
-                              : null,
-                            icon: Icon(
-                              Icons.save_outlined,
-                              size: 17,
-                              color: hasDirtyFiles
-                                ? appTheme.editorPageToolSelectedColor
-                                : appTheme.editorPageToolColor.withValues(alpha: 0.6),
-                            ),
-                            label: Text(
-                              'Save',
-                              style: TextStyle(
-                                color: hasDirtyFiles
-                                  ? appTheme.editorPageToolSelectedColor
-                                  : appTheme.editorPageToolColor.withValues(alpha: 0.6),
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.2,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 8,
-                              ),
-                              backgroundColor: hasDirtyFiles
-                                ? appTheme.editorPageToolSelectedBgColor.withValues(alpha: 0.35)
-                                : appTheme.editorPageDrawerBg,
-                              side: BorderSide(
-                                color: hasDirtyFiles
-                                  ? appTheme.editorPageToolColor.withValues(alpha: 0.45)
-                                  : appTheme.editorPageToolColor.withValues(alpha: 0.25),
-                                width: 1,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                          ),
-                        if (_hasViteProject)
-                          IconButton(
-                            tooltip: 'Open Vite Preview',
-                            onPressed: _isOpeningVitePreview
-                              ? null
-                              : () => _openVitePreview(),
-                            icon: _isOpeningVitePreview
-                              ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              : const Icon(Icons.slideshow),
-                          ),
-                        BlocBuilder<SelectedRuntimeEnvironmentCubit, SelectedRunEnvironmentState>(
-                          builder: (context, runtimeState) {
-                            final cubitState = context.read<SelectedRuntimeEnvironmentCubit>();
-                            final currentlyRuntimeID = runtimeState.currentlyRuntimeID;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 7),
-                            child: Row(
-                              children: [
-                                InkWell(
-                                  onTap: () async {
-                                    if (editorState.activeEditors.isEmpty) return;
-                                    if (currentlyRuntimeID != null) {
-                                      final activeEditorForRun = tabController != null && tabController!.index < editorState.activeEditors.length
-                                      ? editorState.activeEditors[tabController!.index]
-                                      : editorState.activeEditors.firstWhere(
-                                          (item) => item.isActive == true,
-                                          orElse: () => editorState.activeEditors.first,
-                                        );
-                                      final filePath = activeEditorForRun.file;
-                                      final lang = languages.firstWhere(
-                                          (language) => language.extension.contains(path.extension(filePath.path).replaceFirst(".", "")),
-                                          orElse: () => languages[0],
-                                        );
-                                      final String command = lang.command ?? '';
-
-                                      final String extension = path.extension(
-                                        filePath.path,
-                                      );
-
-                                      switch (extension) {
-                                        case ".c":
-                                        case ".c++":
-                                        case ".cpp":
-                                        case ".cc":
-                                          runCodeInTermux(
-                                            context,
-                                            "$command ${filePath.path} -o \$HOME/rox-bin.out && \$HOME/rox-bin.out",
-                                            widget.rootDir,
-                                            termuxInfo?.id
-                                          );
-                                          break;
-                                        case '.java':
-                                          final String compileCommand = "javac ${filePath.path} -d .";
-                                          final String runCommand = "java ${path.basenameWithoutExtension(filePath.path)}";
-                                          runCodeInTermux(context, "$compileCommand && $runCommand", widget.rootDir, termuxInfo?.id);
-                                          break;
-                                        case '.kts':
-                                          final String compileCommand = 'echo Compiling... && kotlinc ${filePath.path} -include-runtime -d ./temp.jar';
-                                          final String runCommand = 'java -jar ./temp.jar';
-                                          runCodeInTermux(context, "$compileCommand && $runCommand", widget.rootDir, termuxInfo?.id);
-                                          break;
-                                        case '.ts':
-                                          final String compileCommand = "tsc ${filePath.path} --outDir .";
-                                          final String runCommand = "node ./${path.basenameWithoutExtension(filePath.path)}.js";
-                                          runCodeInTermux(context, "$compileCommand && $runCommand", widget.rootDir, termuxInfo?.id);
-                                          break;
-                                        case ".rs":
-                                          final cargoFile = File("${widget.rootDir}/Cargo.toml");
-                                
-                                          if (cargoFile.existsSync()) {
-                                            final mainRs = File("${widget.rootDir}/src/main.rs");
-                                            final libRs = File("${widget.rootDir}/src/lib.rs");
-                                
-                                            final hasLibTarget = libRs.existsSync();
-                                
-                                            if (!hasLibTarget && !mainRs.existsSync()) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text("No src/main.rs or src/lib.rs found in this Cargo project."),
-                                                ),
-                                              );
-                                              return;
-                                            }
-                                            runCodeInTermux(context, "cargo run", widget.rootDir, termuxInfo?.id);
-                                            break;
-                                          }
-
-                                          runCodeInTermux(
-                                            context,
-                                            "rustc ${filePath.path} -o \$HOME/rox-bin.out && \$HOME/rox-bin.out",
-                                            widget.rootDir,
-                                            termuxInfo?.id
-                                          );
-                                          break;
-                                        default: 
-                                          Navigator.of(context).push(
-                                            PageRouteBuilder(
-                                              pageBuilder:(context, animation, scondaryAnimation) => SetupTerminal(
-                                                projectDir: widget.rootDir,
-                                                termuxId: termuxInfo?.id,
-                                                commandToExecuteInSSH: "$command ${filePath.path}",
-                                              ),
-                                              transitionsBuilder:(context, animation, secondaryAnimation, child,) {
-                                                return SizeTransition(
-                                                  sizeFactor: animation,
-                                                  child: child,
-                                                );
-                                              },
-                                            ),
-                                          );
-                                      }
-                                      return;
-                                    }
-
-                                    final temp = Directory(tempDir);
-                                    if (!temp.existsSync()) {
-                                      temp.createSync(recursive: true);
-                                    }
-                                    final activeEditorForRun = tabController != null && tabController!.index < editorState.activeEditors.length
-                                      ? editorState.activeEditors[tabController!.index]
-                                      : editorState.activeEditors.firstWhere(
-                                          (item) => item.isActive == true,
-                                          orElse: () => editorState.activeEditors.first,
-                                        );
-                                    final filePath = activeEditorForRun.file;
-                                    final viteTs = File(
-                                      path.join(widget.rootDir, 'vite.config.ts'),
-                                    );
-                                    final viteJs = File(
-                                      path.join(widget.rootDir, 'vite.config.js'),
-                                    );
-                                    final nextTs = File(
-                                      path.join(widget.rootDir, 'next.config.ts'),
-                                    );
-                                    final nextJs = File(
-                                      path.join(widget.rootDir, 'next.config.js'),
-                                    );
-                                
-                                    final packageJson = File(
-                                      path.join(widget.rootDir, 'package.json'),
-                                    );
-                                
-                                    final hasVite = await viteTs.exists() || await viteJs.exists();
-                                    final hasNext = await nextTs.exists() || await nextJs.exists();
-                                    final hasPkg = await packageJson.exists();
-                                
-                                    if (hasVite && hasPkg && context.mounted) {
-                                      runCode(
-                                        context,
-                                        "node node_modules/vite/bin/vite.js",
-                                        widget.rootDir,
-                                      );
-                                      return;
-                                    }
-                                
-                                    if (hasNext && hasPkg && context.mounted) {
-                                      runCode(
-                                        context,
-                                        "npm install --ignore-scripts && npm uninstall lightningcss && node node_modules/next/dist/bin/next dev --webpack",
-                                        widget.rootDir,
-                                      );
-                                      return;
-                                    }
-                                
-                                    if (isPreviewFilePath(filePath.path) && context.mounted) {
-                                      final message = isPdfFilePath(filePath.path)
-                                        ? 'PDF files can be previewed but are not executable.'
-                                        : 'Image/SVG files can be previewed but are not executable.';
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(message)),
-                                      );
-                                      return;
-                                    }
-                                
-                                    final String extension = path.extension(
-                                      filePath.path,
-                                    );
-
-                                    if (!context.mounted) return;
-                                    switch (extension) {
-                                      case '.html':
-                                        if (context.mounted) {
-                                          Navigator.of(context).push(
-                                            PageRouteBuilder(
-                                              pageBuilder: (context, animation, scondaryAnimation) => WebViewScreen(htmlFile: filePath),
-                                              transitionsBuilder:(context, animation, secondaryAnimation, child,) {
-                                                return SizeTransition(
-                                                  sizeFactor: animation,
-                                                  child: child,
-                                                );
-                                              },
-                                            ),
-                                          );
-                                        }
-                                        break;
-                                      case '.c':
-                                        final String compileCommand = "clang -fPIC -shared ${filePath.path} -o ${temp.path}/libtemp.so";
-                                        final String runCommand = 'clangloader ${temp.path}/libtemp.so';
-                                        runCode(context, "$compileCommand && $runCommand", widget.rootDir);
-                                        break;
-                                      case '.cpp':
-                                      case '.c++':
-                                      case '.cc':
-                                        final String compileCommand = "clang++ -fPIC -shared ${filePath.path} -o ${temp.path}/libtemp.so";
-                                        final String runCommand = 'clangloader ${temp.path}/libtemp.so';
-                                        runCode(context, "$compileCommand && $runCommand", widget.rootDir);
-                                        break;
-                                      case '.java':
-                                        final String compileCommand = "javac ${filePath.path} -d ${temp.path}";
-                                        final String runCommand = "cd ${temp.path} && java ${path.basenameWithoutExtension(filePath.path)}";
-                                        runCode(context, "$compileCommand && $runCommand", widget.rootDir);
-                                        break;
-                                      case '.kt':
-                                      case '.kts':
-                                        final String compileCommand = 'echo Compiling... && kotlinc ${filePath.path} -include-runtime -d ${temp.path}/temp.jar';
-                                        final String runCommand = 'java -jar ${temp.path}/temp.jar';
-                                        runCode(context, "$compileCommand && $runCommand", widget.rootDir);
-                                        break;
-                                      case '.ts':
-                                        final String compileCommand = "tsc ${filePath.path} --outDir ${temp.path}";
-                                        final String runCommand = "node ${temp.path}/${path.basenameWithoutExtension(filePath.path)}.js";
-                                        runCode(context, "$compileCommand && $runCommand", widget.rootDir);
-                                        break;
-                                      case '.go':
-                                        try {
-                                          final soPath = path.join(tempDir, '.panda-go-run.so');
-                                
-                                          final command =
-                                              'export GOROOT="$runtimesDir/go" '
-                                              '&& export PATH="\$GOROOT/bin:\$PATH" '
-                                              '&& export CC="clang" '
-                                              '&& export GOOS="android" '
-                                              '&& export GOARCH="arm64" '
-                                              '&& echo "Compiling..." '
-                                              '&& go_bak="\$(mktemp)" '
-                                              '&& cp "${filePath.path}" "\$go_bak" '
-                                              '&& cleanup(){ '
-                                              'cp "\$go_bak" "${filePath.path}"; '
-                                                'rm -f "\$go_bak" "$soPath" "${filePath.path}.panda.tmp"; '
-                                              '}; '
-                                              'trap cleanup EXIT '
-                                
-                                              '&& if ! grep -q \'import "C"\' "${filePath.path}"; then '
-                                                  'tmp_go="${filePath.path}.panda.tmp"; '
-                                                  'if grep -q "^import (" "${filePath.path}"; then '
-                                                    "awk 'BEGIN{done=0} {print} !done && /^import \\(\$/ {print \"    \\\"C\\\"\"; done=1}' \"${filePath.path}\" > \"\$tmp_go\" && mv \"\$tmp_go\" \"${filePath.path}\"; "
-                                                  'elif grep -q "^import " "${filePath.path}"; then '
-                                                    "awk 'BEGIN{done=0} !done && /^import / {print \"import \\\"C\\\"\"; done=1} {print}' \"${filePath.path}\" > \"\$tmp_go\" && mv \"\$tmp_go\" \"${filePath.path}\"; "
-                                                  'else '
-                                                    "awk 'BEGIN{done=0} !done && /^package / {print; print \"\"; print \"import \\\"C\\\"\"; done=1; next} {print}' \"${filePath.path}\" > \"\$tmp_go\" && mv \"\$tmp_go\" \"${filePath.path}\"; "
-                                                  'fi; '
-                                              'fi '
-                                
-                                              '&& if ! grep -q "__entry" "${filePath.path}"; then '
-                                                  "printf '\\n//export __entry\\nfunc __entry() {\\n    main()\\n}\\n' >> \"${filePath.path}\"; "
-                                              'fi '
-                                
-                                                '&& rm -f "$soPath" '
-                                              '&& GOOS=android GOARCH=arm64 CGO_ENABLED=1 '
-                                              'go build -buildmode=c-shared -o "$soPath" "${filePath.path}" '
-                                              '&& rustloader "$soPath"';
-                                
-                                          runCode(context, command, widget.rootDir);
-                                
-                                        } catch (e) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text("Go run failed: ${e.toString()}")),
-                                          );
-                                        }
-                                        break;
-                                      case '.rs':
-                                        try {
-                                          final cargoFile = File("${widget.rootDir}/Cargo.toml");
-                                          String command = "";
-                                
-                                          if (cargoFile.existsSync()) {
-                                            final mainRs = File("${widget.rootDir}/src/main.rs");
-                                            final libRs = File("${widget.rootDir}/src/lib.rs");
-                                
-                                            final hasLibTarget = libRs.existsSync();
-                                
-                                            if (!hasLibTarget && !mainRs.existsSync()) {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                  content: Text("No src/main.rs or src/lib.rs found in this Cargo project."),
-                                                ),
-                                              );
-                                              return;
-                                            }
-                                
-                                            final targetPath = hasLibTarget ? libRs.path : mainRs.path;
-                                
-                                            command =
-'''
-set -e
-cargo_bak="\$(mktemp)"
-target_bak="\$(mktemp)"
-cargo_cfg_bak="\$(mktemp)"
-generated_lib=""
-cp "${cargoFile.path}" "\$cargo_bak"
-cp "$targetPath" "\$target_bak"
-if [ -f .cargo/config.toml ]; then cp .cargo/config.toml "\$cargo_cfg_bak"; else : > "\$cargo_cfg_bak"; fi
-cleanup(){
-cp "\$target_bak" "$targetPath";
-cp "\$cargo_bak" "${cargoFile.path}";
-if [ -s "\$cargo_cfg_bak" ]; then
-  mkdir -p .cargo;
-  cp "\$cargo_cfg_bak" .cargo/config.toml;
-else
-  rm -f .cargo/config.toml;
-  rmdir .cargo 2>/dev/null || true;
-fi;
-if [ -n "\$generated_lib" ]; then
-  rm -f "\$generated_lib";
-fi;
-rm -f "\$target_bak" "\$cargo_bak" "\$cargo_cfg_bak";
-};
-trap cleanup EXIT
-mkdir -p .cargo
-printf '[target.aarch64-linux-android]\nlinker = "clang"\n' > .cargo/config.toml
-if [ ${hasLibTarget ? 1 : 0} -eq 1 ]; then
-if ! grep -q "fn __entry" "$targetPath"; then
-  if grep -Eq 'fn[[:space:]]+main' "$targetPath"; then
-    printf '\n#[unsafe(no_mangle)]\npub extern "C" fn __entry() {\n    let _ = std::panic::catch_unwind(|| {\n        let _ = main();\n    });\n}\n' >> "$targetPath";
-  else
-    echo "Error: src/lib.rs needs either __entry() or main() for Panda run.";
-    exit 1;
-  fi
-fi
-else
-if ! grep -Eq 'fn[[:space:]]+main' "$targetPath"; then
-  echo "Error: main() not found in src/main.rs.";
-  exit 1;
-fi
-generated_lib="${widget.rootDir}/src/.panda_entry_lib.rs"
-cat > "\$generated_lib" <<'EOF'
-include!("main.rs");
-
-#[unsafe(no_mangle)]
-pub extern "C" fn __entry() {
-  let _ = std::panic::catch_unwind(|| {
-      let _ = main();
-  });
-}
-EOF
-if ! grep -Eq '^[[:space:]]*[lib][[:space:]]*\$' "${cargoFile.path}"; then
-  printf '\n[lib]\npath = "src/.panda_entry_lib.rs"\ncrate-type = ["cdylib"]\n' >> "${cargoFile.path}";
-fi
-fi
-cargo rustc --release --lib -- --crate-type=cdylib
-so_file="\$(find target -type f -name 'lib*.so' | head -n 1)"
-[ -n "\$so_file" ]
-cp "\$so_file" "$tempDir/librustapp.so"
-rustloader "$tempDir/librustapp.so"
-''';
-                                
-                                          } else {
-                                            final soPath = path.join(tempDir, '.panda-rust-run.so');
-                                
-                                            command =
-'''
-set -e
-rust_bak="\$(mktemp)"
-cp "${filePath.path}" "\$rust_bak"
-cleanup(){
-cp "\$rust_bak" "${filePath.path}";
-rm -f "\$rust_bak" "$soPath";
-};
-trap cleanup EXIT
-if ! grep -Eq 'fn[[:space:]]+main' "${filePath.path}"; then
-echo "Error: main() not found. This runner requires a main function.";
-exit 1;
-fi
-if ! grep -q "fn __entry" "${filePath.path}"; then
-printf '\n#[unsafe(no_mangle)]\npub extern "C" fn __entry() {\n    let _ = std::panic::catch_unwind(|| {\n        let _ = main();\n    });\n}\n' >> "${filePath.path}";
-fi
-rustc --crate-type=cdylib "${filePath.path}" -o "$soPath" -C linker=clang --sysroot "$runtimesDir/rust"
-rustloader "$soPath"
-''';
-                                          }
-                                
-                                          runCode(context, command, widget.rootDir);
-                                
-                                        } catch (e) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text("Rust run failed: ${e.toString()}")),
-                                          );
-                                        }
-                                
-                                        break;
-                                      case '.md':
-                                        Navigator.of(context).push(
-                                          PageRouteBuilder(
-                                            pageBuilder:(context, animation, scondaryAnimation) => MdView(
-                                              data: filePath.readAsStringSync(),
-                                              appTheme: appTheme,
-                                              theme: context.read<ConfigBloc>().state,
-                                            ),
-                                            transitionsBuilder:(context, animation, secondaryAnimation, child) {
-                                              return SizeTransition(
-                                                sizeFactor: animation,
-                                                child: child,
-                                              );
-                                            },
-                                          ),
-                                        );
-                                        break;
-                                      default:
-                                        final lang = languages.firstWhere(
-                                          (language) => language.extension.contains(path.extension(filePath.path).replaceFirst(".", "")),
-                                          orElse: () => languages[0],
-                                        );
-                                        final String command = lang.command ?? '';
-                                        Navigator.of(context).push(
-                                          PageRouteBuilder(
-                                            pageBuilder:(context, animation, scondaryAnimation) => SetupTerminal(
-                                              projectDir: widget.rootDir,
-                                              args: ["-c", "$command ${filePath.path}"],
-                                            ),
-                                            transitionsBuilder:(context, animation, secondaryAnimation, child,) {
-                                              return SizeTransition(
-                                                sizeFactor: animation,
-                                                child: child,
-                                              );
-                                            },
-                                          ),
-                                        );
-                                    }
-                                  },
-                                  child: runtimeState.currentlyRuntimeID == null
-                                    ? Icon(Icons.play_arrow)
-                                    : Stack(
-                                      children: [
-                                        Icon(Icons.play_arrow),
-                                        Positioned(
-                                          bottom: 2,
-                                          right: 0,
-                                          child: Container(
-                                            decoration: BoxDecoration(
-                                              border: BoxBorder.all(
-                                                color: appTheme.selectScreenCardTextColor,
-                                              )
-                                            ),
-                                            child: SvgPicture.asset(
-                                              "assets/icons/Termux.svg",
-                                              height: 11,
-                                              width: 11
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                ),
-                                if (termuxInfo != null && termuxInfo!.isConnected) 
-                                  MenuAnchor(
-                                    style: MenuStyle(
-                                      backgroundColor: WidgetStatePropertyAll(appTheme.selectScreenCardsBg),
-                                      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: .circular(6)))
-                                    ),
-                                    animated: true,
-                                    onAnimationStatusChanged: (status) {
-                                      _runtimeSelectionStatus = status;
-                                    },
-                                    menuChildren: [
-                                      MenuItemButton(
-                                        onPressed: () => cubitState.updateId(null),
-                                        leadingIcon: Icon(
-                                          Icons.phone_android_outlined,
-                                          color: appTheme.selectScreenCardTextColor,
-                                        ),
-                                        trailingIcon: currentlyRuntimeID == null ? Icon(
-                                            Icons.check_circle,
-                                            color: Colors.green,
-                                            size: 16
-                                          )
-                                          : null,
-                                        child: Text(
-                                          "Panda",
-                                          style: TextStyle(
-                                            color: appTheme.selectScreenCardTextColor
-                                          )
-                                        ),
-                                      ),
-                                      
-                                      MenuItemButton(
-                                        onPressed: () => cubitState.updateId(termuxInfo!.id),
-                                        leadingIcon: SvgPicture.asset(
-                                          "assets/icons/Termux.svg",
-                                          height: 20,
-                                          width: 20
-                                        ),
-                                        trailingIcon: currentlyRuntimeID == termuxInfo!.id ? Icon(
-                                            Icons.check_circle,
-                                            color: Colors.green,
-                                            size: 16
-                                          )
-                                          : null,
-                                        child: Text(
-                                          termuxInfo!.name,
-                                          style: TextStyle(
-                                            color: appTheme.selectScreenCardTextColor
-                                          )
-                                        ),
-                                      ),
-
-                                      //TODO
-                                      Opacity(
-                                        opacity: 0.45,
-                                        child: MenuItemButton(
-                                          onPressed: null,
-
-                                          leadingIcon: Padding(
-                                            padding: const EdgeInsets.only(left: 3),
-                                            child: FaIcon(
-                                              FontAwesomeIcons.server,
-                                              color: appTheme.selectScreenCardTextColor,
-                                              size: 20,
-                                            ),
-                                          ),
-
-                                          child: Row(
-                                            children: [
-                                              Text(
-                                                "Remote server",
-                                                style: TextStyle(
-                                                  color: appTheme.selectScreenCardTextColor,
-                                                ),
-                                              ),
-
-                                              const SizedBox(width: 8),
-
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 6,
-                                                  vertical: 2,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.grey.withAlpha(40),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: const Text(
-                                                  "Coming Soon",
-                                                  style: TextStyle(
-                                                    fontSize: 10,
-                                                    color: Colors.grey,
-                                                  ),
-                                                ),
-                                              )
-                                            ],
-                                          ),
-                                        ),
-                                      )
-                                    ],
-                                    builder: (context, controller, child) => InkWell(
-                                      onTap: () {
-                                        if(_runtimeSelectionStatus.isForwardOrCompleted){
-                                          controller.close();
-                                        } else {
-                                          controller.open();
-                                        }
-                                      },
-                                      child: Icon(
-                                        Icons.arrow_drop_down_rounded,
-                                        color: appTheme.selectScreenCardTextColor
-                                      )
-                                    ),
-                                  )
-                                ],
-                              ),
-                          );
-                          }
+                    body: Column(
+                      children: [
+                        _buildEditorHeader(
+                          context,
+                          appTheme,
+                          editorState,
+                          tabController,
+                          autoSaveEnabled,
+                          hasDirtyFiles,
                         ),
-                        BlocBuilder<CurrentlySelectedTerminalCubit, SelectedTerminalState>(
-                          builder: (context, selectedTerminalState) {
-                            int? currentlySelectedTerminalID = selectedTerminalState.currentlySelectedID;
-                            bool isTermux = selectedTerminalState.isTermux;
-                            final cubitState = context.read<CurrentlySelectedTerminalCubit>();
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 6),
-                              child: Row(
-                                children: [
-                                  InkWell(
-                                    onTap: () {
-                                      Navigator.of(context).push(
-                                        PageRouteBuilder(
-                                          pageBuilder: (context, animation, scondaryAnimation) =>
-                                            SetupTerminal(
-                                              projectDir: widget.rootDir,
-                                              sshId: !isTermux ? currentlySelectedTerminalID : null,
-                                              termuxId: isTermux ? currentlySelectedTerminalID : null,
-                                            ),
-                                          transitionsBuilder:(context, animation, secondaryAnimation, child,) {
-                                            return SizeTransition(
-                                              sizeFactor: animation,
-                                              child: child,
-                                            );
-                                          },
-                                        ),
-                                      );
-                                    },
-                                    child: currentlySelectedTerminalID == null
-                                      ? Icon(Icons.terminal)
-                                      : isTermux
-                                        ? SvgPicture.asset(
-                                          "assets/icons/Termux.svg",
-                                          height: 30,
-                                          width: 30
-                                        )
-                                        : Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.cloud,
-                                              size: 32,
-                                            ),
-                                            Positioned(
-                                              bottom: 2,
-                                              child: Icon(
-                                                Icons.terminal,
-                                                size: 22,
-                                                color: appTheme.appBarTheme.backgroundColor
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                  ),
-                                  if(sshServerList.isNotEmpty || (termuxInfo != null && termuxInfo!.isConnected)) MenuAnchor(
-                                    style: MenuStyle(
-                                      backgroundColor: WidgetStatePropertyAll(appTheme.selectScreenCardsBg),
-                                      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: .circular(6)))
-                                    ),
-                                    animated: true,
-                                    onAnimationStatusChanged: (status) {
-                                      _terminalSelectionStatus = status;
-                                    },
-                                    menuChildren: [
-                                      MenuItemButton(
-                                        onPressed: () => cubitState.updateId(null, false),
-                                        leadingIcon: Icon(
-                                          Icons.terminal,
-                                          color: appTheme.selectScreenCardTextColor
-                                        ),
-                                        trailingIcon: currentlySelectedTerminalID == null ? Icon(
-                                            Icons.check_circle,
-                                            color: Colors.green,
-                                            size: 16
-                                          )
-                                          : null,
-                                        child: Text(
-                                          "Built-in terminal",
-                                          style: TextStyle(
-                                            color: appTheme.selectScreenCardTextColor
-                                          )
-                                        ),
-                                      ),
-                                      ...sshServerList.map((server) {
-                                        return MenuItemButton(
-                                          onPressed: () => cubitState.updateId(server.id, false),
-                                          leadingIcon: Padding(
-                                            padding: const EdgeInsets.only(left: 3),
-                                            child: FaIcon(
-                                              FontAwesomeIcons.server,
-                                              color: appTheme.selectScreenCardTextColor,
-                                              size: 20
-                                            ),
-                                          ),
-                                          trailingIcon: currentlySelectedTerminalID == server.id
-                                            ? Icon(
-                                              Icons.check_circle,
-                                              color: Colors.green,
-                                              size: 16
-                                            )
-                                            : null,
-                                          child: Text(
-                                            server.name,
-                                            style: TextStyle(
-                                              color: appTheme.selectScreenCardTextColor
-                                            )
-                                          ),
-                                        );
-                                      }),
-                              
-                                      if(termuxInfo != null && termuxInfo!.isConnected)
-                                      MenuItemButton(
-                                        onPressed: () => cubitState.updateId(termuxInfo!.id, true),
-                                        leadingIcon: SvgPicture.asset(
-                                          "assets/icons/Termux.svg",
-                                          height: 20,
-                                          width: 20
-                                        ),
-                                        trailingIcon: currentlySelectedTerminalID == termuxInfo!.id ? Icon(
-                                            Icons.check_circle,
-                                            color: Colors.green,
-                                            size: 16
-                                          )
-                                          : null,
-                                        child: Text(
-                                          termuxInfo!.name,
-                                          style: TextStyle(
-                                            color: appTheme.selectScreenCardTextColor
-                                          )
-                                        ),
-                                      )
-                                    ],
-                                    builder: (context, controller, child) => InkWell(
-                                      onTap: () {
-                                        if(_terminalSelectionStatus.isForwardOrCompleted){
-                                          controller.close();
-                                        } else {
-                                          controller.open();
-                                        }
-                                      },
-                                      child: Icon(
-                                        Icons.arrow_drop_down_rounded,
-                                        color: appTheme.selectScreenCardTextColor
-                                      )
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        )
-                      ],
-                    ),
-                    body: editorState.activeEditors.isNotEmpty
+                        Expanded(
+                          child: editorState.activeEditors.isNotEmpty
                   ? TabBarView(
                       controller: tabController,
                       children: editorState.activeEditors.map((editor) {
@@ -3508,6 +2920,9 @@ rustloader "$soPath"
                           ],
                         ),
                       ),
+                    ),
+                        ),
+                      ],
                     ),
                   ),
                 );
