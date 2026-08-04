@@ -62,14 +62,24 @@ class AgentRunner {
   http.Client? _client;
 
   static const String _systemPrompt =
-      'You are Panda Agent, an expert coding assistant embedded in a mobile IDE. '
-      'You have access to tools that let you read files, write files, run shell commands, '
-      'search code, clone repositories, and more. '
-      'When asked to perform tasks (clone a repo, create files, run commands), USE the tools — '
-      'do not just describe what to do. '
-      'Answer concisely, in the same language as the user. '
-      'For code blocks use markdown fences. '
-      'Do not repeat the question.';
+      'You are Panda Agent, an expert autonomous coding assistant embedded in Panda IDE — '
+      'a professional mobile IDE for Android. '
+      'You ALWAYS use your tools proactively — never describe what you would do, just do it. '
+      '\n\n'
+      'TOOL USAGE RULES (critical):\n'
+      '• Before answering any question about a file or project, READ the file first with readFile.\n'
+      '• To understand the project structure, use listFiles or globSearchFiles first.\n'
+      '• To search for code, use grepInFiles or searchInFiles — never guess file locations.\n'
+      '• To create or modify files, use writeFile or editFile — never show code without writing it.\n'
+      '• To run commands (pub get, flutter build, git clone…), use runShellCommand.\n'
+      '• Chain multiple tool calls as needed — you have up to 12 turns.\n'
+      '• If a tool fails, try an alternative approach, do not give up.\n'
+      '\n'
+      'OUTPUT RULES:\n'
+      '• Answer in the same language as the user (French if user speaks French).\n'
+      '• Be concise — no fluff, no "I will now…" preamble.\n'
+      '• Use markdown fences for all code blocks.\n'
+      '• After completing a task, summarize what was done in 1-2 sentences.';
 
   /// Annule la requête en cours (si elle existe).
   void cancel() {
@@ -126,9 +136,9 @@ class AgentRunner {
   }) async {
     _client = http.Client();
     try {
-      final shouldUseTools = context != null &&
-          agentMode != 'normal' &&
-          (agentMode == 'agent' || _shouldUseTools(messages));
+      // Tools are always available in agent and ask modes.
+      // Only 'normal' (free conversation) mode disables them entirely.
+      final shouldUseTools = context != null && agentMode != 'normal';
       final agenticTools = shouldUseTools
           ? AgenticTools(workspacePath: workspacePath, context: context)
           : null;
@@ -221,7 +231,7 @@ class AgentRunner {
       if (resp.statusCode >= 400) {
         ctrl.add(AgentChunk(
           phase: AgentPhase.error,
-          text: 'HTTP ${resp.statusCode}: ${resp.body}',
+          text: _friendlyHttpError(resp.statusCode, resp.body),
         ));
         return;
       }
@@ -436,7 +446,7 @@ class AgentRunner {
       if (resp.statusCode >= 400) {
         ctrl.add(AgentChunk(
           phase: AgentPhase.error,
-          text: 'HTTP ${resp.statusCode}: ${resp.body}',
+          text: _friendlyHttpError(resp.statusCode, resp.body),
         ));
         return;
       }
@@ -686,6 +696,42 @@ class AgentRunner {
       }
     } catch (e) {
       return 'Error executing $functionName: $e';
+    }
+  }
+
+  /// Converts an HTTP error code + body into a user-friendly error message.
+  static String _friendlyHttpError(int statusCode, String body) {
+    // Try to extract message from JSON body
+    String? extracted;
+    try {
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      extracted = json['error']?['message']?.toString()
+          ?? json['message']?.toString()
+          ?? json['error']?.toString();
+    } catch (_) {}
+
+    switch (statusCode) {
+      case 400:
+        return 'Requête invalide (400). ${extracted ?? body}';
+      case 401:
+        return 'Clé API invalide ou expirée (401). Vérifiez votre clé dans Paramètres Agent.';
+      case 402:
+        final detail = extracted ?? 'Insufficient Balance';
+        return 'Solde insuffisant (402) — $detail\n\n'
+            'Votre compte n\'a plus de crédits. Rechargez votre solde sur '
+            'la plateforme du provider (ex : platform.deepseek.com, platform.openai.com…).';
+      case 403:
+        return 'Accès refusé (403). ${extracted ?? 'Votre clé n\'a pas les permissions nécessaires.'}';
+      case 404:
+        return 'Endpoint introuvable (404). Vérifiez l\'URL du provider.';
+      case 429:
+        return 'Limite de débit atteinte (429). ${extracted ?? 'Attendez quelques secondes et réessayez.'}';
+      case 500:
+      case 502:
+      case 503:
+        return 'Erreur serveur ($statusCode). ${extracted ?? 'Le provider est temporairement indisponible.'}';
+      default:
+        return 'HTTP $statusCode: ${extracted ?? body}';
     }
   }
 

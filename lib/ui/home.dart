@@ -3374,33 +3374,48 @@ class _SelectTypeState extends State<SelectType>
 
                     const SizedBox(width: 4),
 
-                    // ── Active provider pill (no model selector) ────────
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xff3a3a3a)
-                            : const Color(0xffe0e0e0),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Broken.cpu, size: 11, color: muted),
-                        const SizedBox(width: 4),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.sizeOf(context).width * 0.22,
-                          ),
-                          child: Text(
-                            providerName.isEmpty ? 'Aucun provider' : providerName,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: muted,
-                                fontWeight: FontWeight.w500),
-                          ),
+                    // ── Model selector pill ────────────────────────────
+                    GestureDetector(
+                      onTap: () => _showModelPickerSheet(context, appTheme),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xff3a3a3a)
+                              : const Color(0xffe0e0e0),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                      ]),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(Broken.cpu, size: 11, color: muted),
+                          const SizedBox(width: 4),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.sizeOf(context).width * 0.25,
+                            ),
+                            child: Builder(builder: (_) {
+                              // Show selected model name if available
+                              final selCfg = selectedConfig is Map
+                                  ? Map<String, dynamic>.from(selectedConfig as Map)
+                                  : null;
+                              final modelLabel = selCfg != null
+                                  ? (selCfg['modelName'] ?? selCfg['model'] ?? providerName)
+                                        .toString()
+                                  : '';
+                              return Text(
+                                modelLabel.isEmpty ? 'Modèle' : modelLabel,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: muted,
+                                    fontWeight: FontWeight.w500),
+                              );
+                            }),
+                          ),
+                          const SizedBox(width: 2),
+                          Icon(Broken.arrow_down_2, size: 10, color: muted),
+                        ]),
+                      ),
                     ),
 
                     const Spacer(),
@@ -3414,11 +3429,18 @@ class _SelectTypeState extends State<SelectType>
                       }
                       totalChars += _agentInputCtrl.text.length;
                       final estTokens = (totalChars / 4).round();
-                      final label = estTokens < 1000
-                          ? '~$estTokens t'
-                          : '~${(estTokens / 1000).toStringAsFixed(1)}k t';
+                      final String label;
+                      if (estTokens == 0) {
+                        label = '';
+                      } else if (estTokens < 1000) {
+                        label = '~${estTokens}tok';
+                      } else {
+                        label = '~${(estTokens / 1000).toStringAsFixed(1)}k';
+                      }
+                      if (label.isEmpty) return const SizedBox.shrink();
                       return Tooltip(
-                        message: 'Tokens estimés dans le contexte (~chars/4)',
+                        message: 'Tokens estimés dans la conversation ($estTokens ≈ chars÷4). '
+                            'Au-delà de 80k, le modèle peut ignorer le début du contexte.',
                         child: Text(
                           label,
                           style: TextStyle(
@@ -3544,6 +3566,282 @@ class _SelectTypeState extends State<SelectType>
         ],
       ),
     );
+  }
+
+  /// Bottom sheet — hierarchical model picker (Provider → Models).
+  void _showModelPickerSheet(BuildContext context, AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff252526) : const Color(0xfffafafa);
+    final fg      = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffe0e0e0);
+    final card    = isDark ? const Color(0xff2d2d2d) : Colors.white;
+
+    final aiState     = context.read<AIBloc>().state;
+    final selectedId  = aiState.modelSelected['chat']?.toString();
+    final agentEntries = aiState.config.entries
+        .where((e) => e.key.startsWith('agent_'))
+        .toList();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: bg,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.35,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (ctx, scroll) {
+          if (agentEntries.isEmpty) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Broken.cpu_setting, size: 36, color: muted),
+                    const SizedBox(height: 12),
+                    Text('Aucun provider configuré',
+                        style: TextStyle(fontSize: 14, color: fg,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Text('Ouvrez Paramètres Agent pour ajouter un provider.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 12, color: muted)),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _openAgentSettingsTab();
+                      },
+                      icon: const Icon(Broken.setting_2, size: 14),
+                      label: const Text('Paramètres Agent'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return ListView(
+            controller: scroll,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 36, height: 4,
+                  margin: const EdgeInsets.only(top: 10, bottom: 8),
+                  decoration: BoxDecoration(
+                    color: muted.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text('Choisir un modèle',
+                    style: TextStyle(fontSize: 15,
+                        fontWeight: FontWeight.w600, color: fg)),
+              ),
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+
+              // One section per configured provider
+              for (final entry in agentEntries) ...[
+                Builder(builder: (_) {
+                  final cfg = entry.value is Map
+                      ? Map<String, dynamic>.from(entry.value as Map)
+                      : <String, dynamic>{};
+                  final providerRaw = (cfg['provider'] ?? cfg['apiProvider'] ?? entry.key)
+                      .toString();
+                  final currentModel = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
+                  final models = (cfg['availableModels'] as List?)
+                      ?.map((m) => m is Map ? Map<String, dynamic>.from(m) : <String, dynamic>{})
+                      .where((m) => m['id'] != null && m['id'].toString().isNotEmpty)
+                      .toList() ?? <Map<String, dynamic>>[];
+
+                  final isSelectedProvider = selectedId == entry.key;
+                  final icon = _providerIcon(providerRaw);
+                  final pColor = _providerColor(providerRaw);
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Provider header ──────────────────────────────
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(children: [
+                          Container(
+                            padding: const EdgeInsets.all(5),
+                            decoration: BoxDecoration(
+                              color: pColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(icon, size: 13, color: pColor),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            providerRaw.substring(0, 1).toUpperCase() +
+                                providerRaw.substring(1),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isSelectedProvider ? _kAccent : fg,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          if (isSelectedProvider) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _kAccent.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text('actif',
+                                  style: TextStyle(
+                                      fontSize: 9,
+                                      color: _kAccent,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ]),
+                      ),
+
+                      // ── Models list ──────────────────────────────────
+                      if (models.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 26, bottom: 8),
+                          child: Text(
+                            currentModel.isNotEmpty ? currentModel : 'Aucun modèle',
+                            style: TextStyle(fontSize: 12, color: muted),
+                          ),
+                        )
+                      else
+                        ...models.map((model) {
+                          final modelId = model['id'].toString();
+                          final displayName = (model['displayName'] ??
+                                  model['display_name'] ??
+                                  model['name'] ??
+                                  modelId)
+                              .toString();
+                          final isSelected = isSelectedProvider &&
+                              currentModel == modelId;
+                          return InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () {
+                              Navigator.pop(ctx);
+                              _selectAgentModel(
+                                  context, entry.key, cfg, modelId);
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(
+                                  left: 26, bottom: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? _kAccent.withOpacity(0.1)
+                                    : card,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? _kAccent.withOpacity(0.4)
+                                      : border,
+                                ),
+                              ),
+                              child: Row(children: [
+                                Expanded(
+                                  child: Text(
+                                    displayName,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isSelected ? _kAccent : fg,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isSelected)
+                                  const Icon(Broken.tick_circle,
+                                      size: 14, color: _kAccent),
+                              ]),
+                            ),
+                          );
+                        }),
+                      Divider(color: border, height: 16),
+                    ],
+                  );
+                }),
+              ],
+
+              // ── Add provider shortcut ──────────────────────────────
+              const SizedBox(height: 4),
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openAgentSettingsTab();
+                },
+                icon: Icon(Broken.add_circle, size: 14, color: muted),
+                label: Text('Ajouter un provider',
+                    style: TextStyle(fontSize: 12, color: muted)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Selects [modelId] within provider [providerKey], updates AIBloc.
+  void _selectAgentModel(
+    BuildContext context,
+    String providerKey,
+    Map<String, dynamic> cfg,
+    String modelId,
+  ) {
+    final aiBloc = context.read<AIBloc>();
+    final newCfg = Map<String, dynamic>.from(aiBloc.state.config);
+    final updatedProviderCfg = Map<String, dynamic>.from(cfg);
+    updatedProviderCfg['modelName'] = modelId;
+    updatedProviderCfg['model']     = modelId;
+    newCfg[providerKey] = updatedProviderCfg;
+    aiBloc.add(AIConfigEvent(newCfg));
+
+    final newSelected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
+    newSelected['chat'] = providerKey;
+    aiBloc.add(ModelSelectEvent(newSelected));
+
+    // Persist both
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('aiConfig', jsonEncode(newCfg));
+      prefs.setString('modelSelected', jsonEncode(newSelected));
+    });
+  }
+
+  /// Returns a branded color for a provider string.
+  Color _providerColor(String provider) {
+    final p = provider.toLowerCase();
+    if (p.contains('openai') || p.contains('gpt')) return const Color(0xff10a37f);
+    if (p.contains('claude') || p.contains('anthropic')) return const Color(0xffb87333);
+    if (p.contains('gemini') || p.contains('google')) return const Color(0xff4285f4);
+    if (p.contains('grok')) return const Color(0xff1da1f2);
+    if (p.contains('deepseek')) return const Color(0xff4b6ef5);
+    if (p.contains('mistral')) return const Color(0xffff7000);
+    if (p.contains('openrouter')) return const Color(0xff8b5cf6);
+    if (p.contains('copilot')) return const Color(0xff8b5cf6);
+    if (p.contains('together')) return const Color(0xff00c9b1);
+    if (p.contains('perplexity')) return const Color(0xff20b2aa);
+    if (p.contains('panda') || p.contains('gateway')) return _kAccent;
+    return const Color(0xff888888);
   }
 
   /// Returns a representative icon for a given provider string.
@@ -4176,6 +4474,28 @@ class _SelectTypeState extends State<SelectType>
     }
   }
 
+  /// Auto-saves the current conversation to history after each AI response.
+  /// Silently no-ops if there are fewer than 2 messages or if already saving.
+  void _autoSaveConversation() {
+    if (_agentMessages.length < 2) return;
+    // Build conversation pairs (user + agent)
+    final conversations = <AIConversation>[];
+    for (var i = 0; i < _agentMessages.length - 1; i += 2) {
+      final user  = _agentMessages[i];
+      final agent = i + 1 < _agentMessages.length ? _agentMessages[i + 1] : null;
+      final userText  = user['text'] as String? ?? '';
+      final agentText = agent?['text'] as String? ?? '';
+      if (userText.isEmpty) continue;
+      conversations.add(AIConversation(userText, agentText.isEmpty ? null : agentText));
+    }
+    if (conversations.isEmpty) return;
+    final title = (_agentMessages.first['text'] as String? ?? 'Chat').trim();
+    context.read<ChatSessionBloc>().add(UpdateCurrentSession(
+      conversations: conversations,
+      title: title.length > 50 ? title.substring(0, 50) : title,
+    ));
+  }
+
   void _agentNewConversation() {
     // Save current conversation to ChatSessionBloc
     if (_agentMessages.isNotEmpty) {
@@ -4648,6 +4968,8 @@ class _SelectTypeState extends State<SelectType>
               }
               _sendAnimCtrl.stop();
             });
+            // Auto-save conversation to history after each complete exchange
+            _autoSaveConversation();
           },
         );
   }
