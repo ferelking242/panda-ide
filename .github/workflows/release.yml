@@ -144,16 +144,6 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Patch llama Metal shader for Xcode
-        run: |
-          set -euo pipefail
-          podspec="$(find "$HOME/.pub-cache" \
-            -path '*/Llama-Flutter-*/ios/llama_flutter_android.podspec' \
-            -print -quit)"
-          test -n "$podspec"
-          perl -0pi -e 's|        -e "/__embed_ggml-common.h__/d" \\\n|        -e "/__embed_ggml-common.h__/d" \\\n        -e \x27/#include "ggml-common.h"/d\x27 \\\n|' "$podspec"
-          grep -q '/#include "ggml-common.h"/d' "$podspec"
-
       - name: Prepare and patch generated Metal shader
         run: |
           set -euo pipefail
@@ -162,8 +152,20 @@ jobs:
             -name 'ggml-metal-ios.metal' \
             -print -quit)"
           test -n "$shader"
-          sed -i '' '/#include "ggml-common.h"/d' "$shader"
+          common_header="$(cd "$(dirname "$shader")/.." && pwd)/ggml-common.h"
+          test -f "$common_header"
+          awk -v header="$common_header" '
+            /#include "ggml-common.h"/ {
+              while ((getline line < header) > 0) print line
+              close(header)
+              next
+            }
+            { print }
+          ' "$shader" > "${shader}.tmp"
+          mv "${shader}.tmp" "$shader"
           ! grep -q '#include "ggml-common.h"' "$shader"
+          grep -q 'block_q1_0' "$shader"
+          grep -q 'QK4_0' "$shader"
 
       - name: Build iOS app
         env:
