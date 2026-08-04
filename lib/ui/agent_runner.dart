@@ -23,11 +23,12 @@ import '../utils/panda_log.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 enum AgentPhase {
-  idle,       // en attente d'un message
-  thinking,   // le modèle "réfléchit" (extended thinking / reasoning)
-  streaming,  // texte en cours de génération
-  done,       // réponse complète
-  error,      // erreur réseau ou parsing
+  idle,        // en attente d'un message
+  thinking,    // le modèle "réfléchit" (extended thinking / reasoning)
+  toolRunning, // un outil est en cours d'exécution
+  streaming,   // texte en cours de génération
+  done,        // réponse complète
+  error,       // erreur réseau ou parsing
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,7 +38,9 @@ enum AgentPhase {
 class AgentChunk {
   final AgentPhase phase;
   final String text;
-  const AgentChunk({required this.phase, this.text = ''});
+  /// Nom de l'outil en cours (seulement pour phase == toolRunning)
+  final String? toolName;
+  const AgentChunk({required this.phase, this.text = '', this.toolName});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -273,7 +276,7 @@ class AgentRunner {
             ? Map<String, dynamic>.from(fc['args'] as Map)
             : <String, dynamic>{};
 
-        ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $name\n'));
+        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: name));
         PandaLog.toolCall('Gemini', name, args);
 
         final result = await _dispatchTool(
@@ -491,7 +494,7 @@ class AgentRunner {
           args = Map<String, dynamic>.from(rawArgs);
         }
 
-        ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $functionName\n'));
+        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: functionName));
         PandaLog.toolCall('SSE', functionName, args);
         final result = await _dispatchTool(
           tools,

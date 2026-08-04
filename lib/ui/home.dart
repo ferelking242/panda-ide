@@ -13,6 +13,7 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/broken_icons.dart';
@@ -129,6 +130,7 @@ class _SelectTypeState extends State<SelectType>
   bool       _agentGenerating   = false;
   String     _agentThinkingBuf  = '';
   String     _agentStreamBuf    = '';
+  String     _agentCurrentTool  = '';
   final      _agentRunner       = AgentRunner();
   int        _agentRequestSerial = 0;
 
@@ -3169,6 +3171,9 @@ class _SelectTypeState extends State<SelectType>
                   () => _agentNewConversation()),
               _agentHdrBtn(Broken.clock, 'Historique', muted,
                   () => setState(() => _showHistoryPanel = !_showHistoryPanel)),
+              if (_agentMessages.isNotEmpty)
+                _agentHdrBtn(Broken.document_download, 'Exporter Markdown', muted,
+                    () => _exportAgentMarkdown()),
               _agentHdrBtn(Broken.setting_2, 'Paramètres Agent', muted, () {
                 _openAgentSettingsTab();
               }),
@@ -3805,11 +3810,16 @@ class _SelectTypeState extends State<SelectType>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Phase chip (thinking / streaming)
+                // Phase chip (thinking / toolRunning / streaming)
                 if (isStreaming && think.isNotEmpty)
                   _AgentPhaseChip(
                       phase: AgentPhase.thinking, isDark: isDark),
-                if (isStreaming && think.isEmpty)
+                if (isStreaming && think.isEmpty && (msg['toolName'] as String? ?? '').isNotEmpty)
+                  _AgentPhaseChip(
+                      phase: AgentPhase.toolRunning,
+                      isDark: isDark,
+                      toolName: msg['toolName'] as String? ?? ''),
+                if (isStreaming && think.isEmpty && (msg['toolName'] as String? ?? '').isEmpty)
                   _AgentPhaseChip(
                       phase: AgentPhase.streaming, isDark: isDark),
 
@@ -4084,6 +4094,70 @@ class _SelectTypeState extends State<SelectType>
   }
 
   // ── Nouvelle conversation ────────────────────────────────────────────────
+  // ── Export conversation as Markdown ──────────────────────────────────────
+  Future<void> _exportAgentMarkdown() async {
+    if (_agentMessages.isEmpty) return;
+    final buf = StringBuffer();
+    final now = DateTime.now();
+    final dateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} '
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    buf.writeln('# Panda Agent — $dateStr');
+    buf.writeln();
+    for (final msg in _agentMessages) {
+      final role = msg['role'] as String? ?? '';
+      final text = msg['text'] as String? ?? '';
+      if (role == 'user') {
+        buf.writeln('## 👤 Vous');
+        buf.writeln();
+        buf.writeln(text);
+        buf.writeln();
+      } else {
+        buf.writeln('## 🐼 Panda Agent');
+        buf.writeln();
+        final think = msg['thinking'] as String? ?? '';
+        if (think.isNotEmpty) {
+          buf.writeln('<details><summary>Réflexion</summary>');
+          buf.writeln();
+          buf.writeln(think);
+          buf.writeln('</details>');
+          buf.writeln();
+        }
+        if (text.isNotEmpty) buf.writeln(text);
+        buf.writeln();
+      }
+    }
+
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      final ts  =
+          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+          '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+      final file = File('${dir.path}/panda-agent-$ts.md');
+      await file.writeAsString(buf.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Exporté → ${file.path}',
+            style: const TextStyle(fontSize: 12)),
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Copier le chemin',
+          onPressed: () =>
+              Clipboard.setData(ClipboardData(text: file.path)),
+        ),
+      ));
+    } catch (_) {
+      // Fallback : copier le Markdown dans le presse-papier
+      await Clipboard.setData(ClipboardData(text: buf.toString()));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Markdown copié dans le presse-papier',
+            style: TextStyle(fontSize: 12)),
+        duration: Duration(seconds: 2),
+      ));
+    }
+  }
+
   void _agentNewConversation() {
     // Save current conversation to ChatSessionBloc
     if (_agentMessages.isNotEmpty) {
@@ -4470,17 +4544,24 @@ class _SelectTypeState extends State<SelectType>
                   _agentPhase = AgentPhase.thinking;
                   _agentThinkingBuf += chunk.text;
                   _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
+                case AgentPhase.toolRunning:
+                  _agentPhase = AgentPhase.toolRunning;
+                  _agentCurrentTool = chunk.toolName ?? '';
+                  _agentMessages[agentIdx]['toolName'] = _agentCurrentTool;
                 case AgentPhase.streaming:
                   _agentPhase = AgentPhase.streaming;
+                  _agentCurrentTool = '';
                   _agentStreamBuf += chunk.text;
                   _agentMessages[agentIdx]['text'] = _agentStreamBuf;
                 case AgentPhase.done:
                   _agentPhase = AgentPhase.done;
+                  _agentCurrentTool = '';
                   _agentGenerating = false;
                   _agentMessages[agentIdx]['phase'] = 'done';
                   _sendAnimCtrl.stop();
                 case AgentPhase.error:
                   _agentPhase = AgentPhase.error;
+                  _agentCurrentTool = '';
                   _agentGenerating = false;
                   _sendAnimCtrl.stop();
                   _agentMessages[agentIdx]['text'] =
@@ -5249,7 +5330,12 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 class _AgentPhaseChip extends StatefulWidget {
   final AgentPhase phase;
   final bool       isDark;
-  const _AgentPhaseChip({required this.phase, required this.isDark});
+  final String     toolName;
+  const _AgentPhaseChip({
+    required this.phase,
+    required this.isDark,
+    this.toolName = '',
+  });
 
   @override
   State<_AgentPhaseChip> createState() => _AgentPhaseChipState();
@@ -5277,13 +5363,27 @@ class _AgentPhaseChipState extends State<_AgentPhaseChip>
 
   @override
   Widget build(BuildContext context) {
-    final (String label, Color color) = switch (widget.phase) {
-      AgentPhase.thinking  => ('Réflexion\u2026',  Colors.purple),
-      AgentPhase.streaming => ('Génération\u2026', _kAccent),
-      AgentPhase.error     => ('Erreur',            Colors.red),
-      _                    => ('',                  Colors.green),
-    };
-    if (label.isEmpty) return const SizedBox.shrink();
+    final String rawLabel;
+    final Color color;
+    switch (widget.phase) {
+      case AgentPhase.thinking:
+        rawLabel = 'Réflexion\u2026';
+        color    = Colors.purple;
+      case AgentPhase.toolRunning:
+        rawLabel = widget.toolName.isNotEmpty ? widget.toolName : 'Outil\u2026';
+        color    = Colors.orange;
+      case AgentPhase.streaming:
+        rawLabel = 'Génération\u2026';
+        color    = _kAccent;
+      case AgentPhase.error:
+        rawLabel = 'Erreur';
+        color    = Colors.red;
+      default:
+        rawLabel = '';
+        color    = Colors.green;
+    }
+    if (rawLabel.isEmpty) return const SizedBox.shrink();
+    final label = rawLabel;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
