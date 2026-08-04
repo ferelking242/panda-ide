@@ -158,6 +158,9 @@ class _SelectTypeState extends State<SelectType>
   // ── Conversation history ──────────────────────────────────────────
   bool _showHistoryPanel = false;
 
+  // ── Conversation title (editable) ────────────────────────────────
+  String _agentConversationTitle = 'Nouvelle conversation';
+
   // ── Sidebar search ────────────────────────────────────────────────
   final _sidebarSearchCtrl = TextEditingController();
   List<File> _sidebarSearchResults = [];
@@ -3217,46 +3220,73 @@ class _SelectTypeState extends State<SelectType>
       width: asPage ? double.infinity : 300,
       decoration: BoxDecoration(
         color: panelBg,
-        border: Border(left: BorderSide(color: borderC)),
+        border: Border(left: BorderSide(color: borderC, width: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Header ─────────────────────────────────────────────────────
+          // ── Header: conversation name + chevron menu ───────────────────
           Container(
-            height: 38,
+            height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            color: hdrBg,
+            decoration: BoxDecoration(
+              color: panelBg,
+              border: Border(bottom: BorderSide(color: borderC.withOpacity(0.5), width: 0.5)),
+            ),
             child: Row(children: [
-              Text('PANDA AGENT',
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                      color: muted)),
-              const Spacer(),
-              _agentHdrBtn(Broken.add_square, 'Nouvelle conversation', muted,
-                  () => _agentNewConversation()),
-              _agentHdrBtn(Broken.clock, 'Historique', muted,
-                  () => setState(() => _showHistoryPanel = !_showHistoryPanel)),
-              if (_agentMessages.isNotEmpty)
-                _agentHdrBtn(Broken.document_download, 'Exporter Markdown', muted,
-                    () => _exportAgentMarkdown()),
-              _agentHdrBtn(Broken.setting_2, 'Paramètres Agent', muted, () {
-                _openAgentSettingsTab();
-              }),
-              _agentHdrBtn(
-                Broken.maximize_4,
-                'Mode flottant',
-                muted,
-                () => setState(() {
-                  _agentFloating = true;
-                  _rightPanelOpen = false;
-                }),
+              // ── Conversation name (tap to rename) ──────────────────────
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _renameConversation(context, appTheme),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: _kAccent.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Center(
+                          child: Icon(Broken.magic_star, size: 12, color: _kAccent),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          _agentConversationTitle,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: fg,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              if (!asPage)
-                _agentHdrBtn(Broken.close_square, 'Fermer', muted,
-                    () => setState(() => _rightPanelOpen = false)),
+              // ── Chevron → dropdown menu ────────────────────────────────
+              GestureDetector(
+                onTap: () => _showAgentHeaderMenu(context, appTheme, asPage),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (!asPage)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 4),
+                        child: GestureDetector(
+                          onTap: () => setState(() => _rightPanelOpen = false),
+                          child: Icon(Broken.close_square, size: 15, color: muted),
+                        ),
+                      ),
+                    Icon(Broken.arrow_down_2, size: 15, color: muted),
+                  ]),
+                ),
+              ),
             ]),
           ),
 
@@ -4698,8 +4728,219 @@ class _SelectTypeState extends State<SelectType>
       _agentMessages.clear();
       _agentAttachments.clear();
       _showHistoryPanel = false;
+      _agentConversationTitle = 'Nouvelle conversation';
     });
   }
+
+  // ── Rename conversation ───────────────────────────────────────────────────
+  void _renameConversation(BuildContext context, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final ctrl = TextEditingController(text: _agentConversationTitle);
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xff252526) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text('Renommer la conversation',
+            style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.grey[200] : Colors.grey[900])),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.grey[200] : Colors.grey[900]),
+          decoration: InputDecoration(
+            hintText: 'Nom de la conversation',
+            hintStyle: TextStyle(
+                color: isDark ? Colors.grey[600] : Colors.grey[500]),
+            filled: true,
+            fillColor: isDark ? const Color(0xff1e1e1e) : const Color(0xfff5f5f5),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
+          onSubmitted: (v) {
+            if (v.trim().isNotEmpty) {
+              setState(() => _agentConversationTitle = v.trim());
+            }
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Annuler',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[500] : Colors.grey[600])),
+          ),
+          TextButton(
+            onPressed: () {
+              final v = ctrl.text.trim();
+              if (v.isNotEmpty) {
+                setState(() => _agentConversationTitle = v);
+              }
+              Navigator.pop(ctx);
+            },
+            child: Text('Renommer',
+                style: TextStyle(
+                    fontSize: 13,
+                    color: _kAccent,
+                    fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Agent header chevron menu ─────────────────────────────────────────────
+  void _showAgentHeaderMenu(
+      BuildContext context, AppTheme appTheme, bool asPage) {
+    final isDark = appTheme.isDark;
+    final bg = isDark ? const Color(0xff2d2d2d) : Colors.white;
+    final fg = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(top: 10, bottom: 8),
+              decoration: BoxDecoration(
+                color: muted.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          // Conversation name display
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Row(children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _kAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Center(child: Icon(Broken.magic_star, size: 13, color: _kAccent)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _agentConversationTitle,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: fg),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ]),
+          ),
+          const Divider(height: 1),
+          // Actions
+          _menuItem(
+            icon: Broken.edit_2,
+            label: 'Renommer',
+            color: fg,
+            muted: muted,
+            onTap: () {
+              Navigator.pop(context);
+              _renameConversation(context, appTheme);
+            },
+          ),
+          _menuItem(
+            icon: Broken.add_square,
+            label: 'Nouvelle conversation',
+            color: fg,
+            muted: muted,
+            onTap: () {
+              Navigator.pop(context);
+              _agentNewConversation();
+            },
+          ),
+          _menuItem(
+            icon: Broken.clock,
+            label: 'Historique',
+            color: fg,
+            muted: muted,
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _showHistoryPanel = !_showHistoryPanel);
+            },
+          ),
+          _menuItem(
+            icon: Broken.maximize_4,
+            label: 'Mode flottant',
+            color: fg,
+            muted: muted,
+            onTap: () {
+              Navigator.pop(context);
+              setState(() {
+                _agentFloating = true;
+                _rightPanelOpen = false;
+              });
+            },
+          ),
+          if (_agentMessages.isNotEmpty)
+            _menuItem(
+              icon: Broken.document_download,
+              label: 'Exporter Markdown',
+              color: fg,
+              muted: muted,
+              onTap: () {
+                Navigator.pop(context);
+                _exportAgentMarkdown();
+              },
+            ),
+          _menuItem(
+            icon: Broken.setting_2,
+            label: 'Paramètres Agent',
+            color: fg,
+            muted: muted,
+            onTap: () {
+              Navigator.pop(context);
+              _openAgentSettingsTab();
+            },
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _menuItem({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required Color muted,
+    required VoidCallback onTap,
+  }) =>
+      ListTile(
+        dense: true,
+        leading: Icon(icon, size: 18, color: muted),
+        title: Text(label,
+            style: TextStyle(fontSize: 13, color: color)),
+        onTap: onTap,
+      );
 
   // ── History panel ────────────────────────────────────────────────────────
   Widget _buildHistoryPanel(AppTheme appTheme) {
@@ -4836,6 +5077,10 @@ class _SelectTypeState extends State<SelectType>
     setState(() {
       _agentGenerating = true;
       _agentPhase = AgentPhase.thinking;
+      // Auto-title from first message
+      if (_agentMessages.isEmpty && _agentConversationTitle == 'Nouvelle conversation') {
+        _agentConversationTitle = text.length > 32 ? text.substring(0, 32) : text;
+      }
     });
     PandaLog.i(
       'PandaAgent',
