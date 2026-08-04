@@ -163,18 +163,18 @@ jobs:
             if ! grep -q 'func detectGpu' "$plugin"; then
               sed '$d' "$plugin" > "${plugin}.tmp"
               cat >> "${plugin}.tmp" <<'SWIFT'
-    func detectGpu(completion: @escaping (Result<GpuInfo, Error>) -> Void) {
-        completion(.success(GpuInfo(
-            vulkanSupported: false,
-            gpuName: "None",
-            vulkanApiVersion: -1,
-            deviceLocalMemoryBytes: -1,
-            freeRamBytes: -1,
-            recommendedGpuLayers: 0
-        )))
-    }
-}
-SWIFT
+              func detectGpu(completion: @escaping (Result<GpuInfo, Error>) -> Void) {
+                  completion(.success(GpuInfo(
+                      vulkanSupported: false,
+                      gpuName: "None",
+                      vulkanApiVersion: -1,
+                      deviceLocalMemoryBytes: -1,
+                      freeRamBytes: -1,
+                      recommendedGpuLayers: 0
+                  )))
+              }
+          }
+          SWIFT
               mv "${plugin}.tmp" "$plugin"
             fi
             grep -q 'LlamaHostApi' "$plugin"
