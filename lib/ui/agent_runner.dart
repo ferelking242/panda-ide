@@ -10,9 +10,11 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
 
 import '../utils/ai.dart';
 import '../utils/agentic_tools.dart';
@@ -61,25 +63,164 @@ class AgentChunk {
 class AgentRunner {
   http.Client? _client;
 
-  static const String _systemPrompt =
-      'You are Panda Agent, an expert autonomous coding assistant embedded in Panda IDE — '
-      'a professional mobile IDE for Android. '
-      'You ALWAYS use your tools proactively — never describe what you would do, just do it. '
-      '\n\n'
-      'TOOL USAGE RULES (critical):\n'
-      '• Before answering any question about a file or project, READ the file first with readFile.\n'
-      '• To understand the project structure, use listFiles or globSearchFiles first.\n'
-      '• To search for code, use grepInFiles or searchInFiles — never guess file locations.\n'
-      '• To create or modify files, use writeFile or editFile — never show code without writing it.\n'
-      '• To run commands (pub get, flutter build, git clone…), use runShellCommand.\n'
-      '• Chain multiple tool calls as needed — you have up to 12 turns.\n'
-      '• If a tool fails, try an alternative approach, do not give up.\n'
-      '\n'
-      'OUTPUT RULES:\n'
-      '• Answer in the same language as the user (French if user speaks French).\n'
-      '• Be concise — no fluff, no "I will now…" preamble.\n'
-      '• Use markdown fences for all code blocks.\n'
-      '• After completing a task, summarize what was done in 1-2 sentences.';
+  /// Génère dynamiquement le system prompt à partir du contexte réel du projet.
+  /// Appelé dans [_run] après que les toolSchemas sont connus.
+  static String _buildSystemPrompt(
+    String workspacePath,
+    List<Map<String, dynamic>> toolSchemas,
+  ) {
+    // ── Détection du projet ────────────────────────────────────────────────
+    final StringBuffer projectSection = StringBuffer();
+    final StringBuffer repoSection   = StringBuffer();
+
+    if (workspacePath.isNotEmpty) {
+      final dir = Directory(workspacePath);
+      if (dir.existsSync()) {
+        final projectName = path.basename(workspacePath);
+
+        // Détecter le type de projet
+        String projectType = 'Inconnu';
+        String extraCtx = '';
+        if (File('$workspacePath/pubspec.yaml').existsSync()) {
+          projectType = 'Flutter / Dart';
+          extraCtx = 'Pour compiler : `flutter build apk`. Pour les tests : `flutter test`.';
+        } else if (File('$workspacePath/package.json').existsSync()) {
+          projectType = 'Node.js / TypeScript';
+          extraCtx = 'Pour installer : `npm install`. Pour démarrer : `npm run dev`.';
+        } else if (File('$workspacePath/Cargo.toml').existsSync()) {
+          projectType = 'Rust';
+          extraCtx = 'Pour compiler : `cargo build`. Pour les tests : `cargo test`.';
+        } else if (File('$workspacePath/go.mod').existsSync()) {
+          projectType = 'Go';
+          extraCtx = 'Pour compiler : `go build ./...`. Pour les tests : `go test ./...`.';
+        } else if (File('$workspacePath/pom.xml').existsSync() ||
+                   File('$workspacePath/build.gradle').existsSync()) {
+          projectType = 'Java / Android';
+          extraCtx = 'Pour compiler : `./gradlew build`.';
+        } else if (File('$workspacePath/requirements.txt').existsSync() ||
+                   File('$workspacePath/pyproject.toml').existsSync()) {
+          projectType = 'Python';
+          extraCtx = 'Pour installer : `pip install -r requirements.txt`. Pour lancer : `python main.py`.';
+        }
+
+        projectSection
+          ..writeln('## PROJET OUVERT')
+          ..writeln('Nom : $projectName')
+          ..writeln('Type : $projectType')
+          ..writeln('Chemin : $workspacePath')
+          ..writeln(extraCtx);
+
+        // Carte du dépôt (top-level + 1 niveau)
+        try {
+          final entries = dir
+              .listSync(followLinks: false)
+              .where((e) {
+                final n = path.basename(e.path);
+                return !n.startsWith('.') &&
+                    n != 'build' &&
+                    n != '.dart_tool' &&
+                    n != 'node_modules' &&
+                    n != '__pycache__' &&
+                    n != 'target';
+              })
+              .toList()
+            ..sort((a, b) {
+              // Dossiers d'abord, puis fichiers, puis tri alphabétique
+              final aIsDir = a is Directory;
+              final bIsDir = b is Directory;
+              if (aIsDir && !bIsDir) return -1;
+              if (!aIsDir && bIsDir) return 1;
+              return path.basename(a.path).compareTo(path.basename(b.path));
+            });
+
+          repoSection.writeln('## STRUCTURE DU PROJET');
+          repoSection.writeln('```');
+          for (final entry in entries.take(25)) {
+            final name = path.basename(entry.path);
+            if (entry is Directory) {
+              repoSection.writeln('📁 $name/');
+              try {
+                final subEntries = Directory(entry.path)
+                    .listSync(followLinks: false)
+                    .where((e) => !path.basename(e.path).startsWith('.'))
+                    .toList()
+                  ..sort((a, b) =>
+                      path.basename(a.path).compareTo(path.basename(b.path)));
+                for (final sub in subEntries.take(12)) {
+                  final subName = path.basename(sub.path);
+                  final icon = sub is Directory ? '📁' : '📄';
+                  repoSection.writeln('   $icon $subName');
+                }
+                if (subEntries.length > 12) {
+                  repoSection.writeln('   … (${subEntries.length - 12} autres)');
+                }
+              } catch (_) {}
+            } else {
+              repoSection.writeln('📄 $name');
+            }
+          }
+          if (entries.length > 25) {
+            repoSection.writeln('… (${entries.length - 25} autres entrées)');
+          }
+          repoSection.writeln('```');
+        } catch (_) {}
+      }
+    }
+
+    // ── Liste des outils avec descriptions ────────────────────────────────
+    final toolLines = toolSchemas
+        .map((t) {
+          final fn = t['function'];
+          if (fn is! Map) return null;
+          final name = fn['name']?.toString() ?? '';
+          final desc = fn['description']?.toString() ?? '';
+          final params = fn['parameters'];
+          final required = (params is Map)
+              ? ((params['required'] as List?)?.join(', ') ?? '')
+              : '';
+          final suffix = required.isNotEmpty ? ' [requis: $required]' : '';
+          return '  • **$name**$suffix — $desc';
+        })
+        .whereType<String>()
+        .join('\n');
+
+    // ── Assemblage final ───────────────────────────────────────────────────
+    return '''
+Tu es **Panda Agent**, assistant de développement expert intégré à Panda IDE.
+Tu es autonome : tu accèdes au système de fichiers, tu modifies du code, tu lances des commandes.
+
+${projectSection.isNotEmpty ? projectSection.toString() : ''}
+${repoSection.isNotEmpty ? repoSection.toString() : ''}
+## OUTILS DISPONIBLES (${toolSchemas.length})
+$toolLines
+
+## RÈGLES CRITIQUES — lire attentivement
+1. **Toujours agir, jamais décrire.** Si tu peux appeler un outil, appelle-le. Pas de "Je vais lire…", lis directement.
+2. **readFile AVANT editFile.** Sans exception. Ne modifie jamais un fichier sans l'avoir lu intégralement d'abord.
+3. **Ne jamais inventer.** Si tu ne sais pas ce qu'un fichier contient → readFile. Si tu ne sais pas où il est → grepInFiles ou globSearchFiles.
+4. **Enchaîne sans permission.** Tu as jusqu'à 12 tours de tools. Continue d'enchaîner les appels jusqu'à ce que la tâche soit complète.
+5. **Gère les erreurs.** Si un outil renvoie une erreur → réessaie différemment. Ne renonce jamais après un seul échec.
+6. **Après runShellCommand** → lis la sortie COMPLÈTE. Si elle contient des erreurs, corrige-les avant de répondre.
+7. **Erreurs de compilation** → identifie les fichiers concernés → readFile → corrige → runShellCommand pour vérifier.
+
+## WORKFLOW STANDARD
+```
+Tâche reçue
+  ↓ globSearchFiles / listFiles  (comprendre la structure)
+  ↓ grepInFiles                  (trouver le code concerné)
+  ↓ readFile                     (lire les fichiers ciblés)
+  ↓ editFile / writeFile         (modifier)
+  ↓ runShellCommand              (valider: build, test, lint)
+  ↓ Réponse courte (1-2 phrases)
+```
+
+## FORMAT DE RÉPONSE
+- **Langue** : réponds dans la langue de l'utilisateur (français si l'utilisateur parle français).
+- **Code** : uniquement dans des blocs ` ```langage `.
+- **Concision** : annonce l'action en 1 phrase, puis fais-la. Pas de prose inutile.
+- **Fin de tâche** : résumé en 1-2 phrases de ce qui a été fait.
+''';
+  }
 
   /// Annule la requête en cours (si elle existe).
   void cancel() {
@@ -109,14 +250,10 @@ class AgentRunner {
           (message) => Map<String, dynamic>.from(message),
         )
         .toList();
-    final effectiveSystemPrompt = systemPromptOverride == null ||
-            systemPromptOverride.trim().isEmpty
-        ? _systemPrompt
-        : '$_systemPrompt\n\nAdditional Panda Agent context:\n$systemPromptOverride';
     unawaited(_run(
       model: model,
       messages: normalizedMessages,
-      systemPrompt: effectiveSystemPrompt,
+      systemPromptOverride: systemPromptOverride,
       ctrl: ctrl,
       context: context,
       workspacePath: workspacePath,
@@ -128,7 +265,7 @@ class AgentRunner {
   Future<void> _run({
     required Models model,
     required List<Map<String, dynamic>> messages,
-    required String systemPrompt,
+    String? systemPromptOverride,
     required StreamController<AgentChunk> ctrl,
     BuildContext? context,
     String workspacePath = '',
@@ -146,6 +283,14 @@ class AgentRunner {
             readAccessOnly: agentMode != 'agent',
           ) ??
           const <Map<String, dynamic>>[];
+
+      // ── Génération dynamique du system prompt ───────────────────────────
+      final basePrompt = _buildSystemPrompt(workspacePath, toolSchemas);
+      final systemPrompt = (systemPromptOverride == null ||
+              systemPromptOverride.trim().isEmpty)
+          ? basePrompt
+          : '$basePrompt\n\n## CONTEXTE PERSONNALISÉ\n$systemPromptOverride';
+
       PandaLog.i(
         'AgentRunner',
         'Starting run — provider=${model.runtimeType} '
