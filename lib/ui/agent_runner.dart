@@ -112,7 +112,12 @@ class AgentRunner {
           readAccessOnly: agentMode != 'agent',
         ) ??
         const <Map<String, dynamic>>[];
-    PandaLog.i('AgentRunner', 'Starting run — provider=${model.runtimeType} tools=${agenticTools != null}');
+    PandaLog.i(
+      'AgentRunner',
+      'Starting run — provider=${model.runtimeType} '
+      'mode=$agentMode tools=${agenticTools != null} '
+      'toolCount=${toolSchemas.length} workspace=$workspacePath',
+    );
     try {
       if (model is Gemini) {
         await _runGemini(
@@ -148,7 +153,7 @@ class AgentRunner {
     } finally {
       _client?.close();
       _client = null;
-      PandaLog.d('AgentRunner', 'Run complete');
+      PandaLog.i('AgentRunner', 'Run complete');
       await ctrl.close();
     }
   }
@@ -373,9 +378,18 @@ class AgentRunner {
         }
         final elapsed = DateTime.now().millisecondsSinceEpoch - startMs;
         if (chunkCount == 0) {
-          PandaLog.w('SSE', 'Stream ended with ZERO chunks in ${elapsed}ms — possible silent auth error or empty response');
+          const message =
+              'Le modèle a fermé le flux sans envoyer de contenu '
+              '(réponse vide ou session refusée).';
+          PandaLog.e('SSE', 'Stream ended with ZERO chunks in ${elapsed}ms');
+          if (!ctrl.isClosed) {
+            ctrl.add(const AgentChunk(
+              phase: AgentPhase.error,
+              text: message,
+            ));
+          }
         } else {
-          PandaLog.d('SSE', 'Stream done — $chunkCount chunks in ${elapsed}ms');
+          PandaLog.i('SSE', 'Stream done — $chunkCount chunks in ${elapsed}ms');
         }
         return;
       }

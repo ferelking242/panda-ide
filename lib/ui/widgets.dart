@@ -11134,6 +11134,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }
         
       case OpenAI():
+      case Copilot():
       case Grok():
       case Groq():
       case DeepSeek():
@@ -11205,6 +11206,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           "messages": messages,
         };
       case OpenAI():
+      case Copilot():
       case Grok():
       case Groq():
       case DeepSeek():

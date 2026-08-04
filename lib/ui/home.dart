@@ -4281,6 +4281,10 @@ class _SelectTypeState extends State<SelectType>
     final text = _agentInputCtrl.text.trim();
     if (text.isEmpty || _agentGenerating) return;
     _sendAnimCtrl.repeat(reverse: true);
+    PandaLog.i(
+      'PandaAgent',
+      'Send requested — chars=${text.length} mode=$_agentChatMode',
+    );
 
     // Récupère le modèle sélectionné dans le panel (ou le chatModel par défaut)
     final aiState = context.read<AIBloc>().state;
@@ -4383,18 +4387,29 @@ class _SelectTypeState extends State<SelectType>
     final agentIdx = _agentMessages.length - 1;
 
     // Récupère le workspacePath depuis les entrées récentes (premier projet ouvert)
-    String workspacePath = '';
+    // The active editor is the source of truth. Recent projects are only a
+    // fallback for the welcome state; relying on recents alone can give the
+    // agent an empty workspace after a project was opened in a tab.
+    String workspacePath = _activeProjectDir() ?? '';
     try {
-      final recentState = context.read<RecentBloc>().state;
-      final recentEntry = recentState.recent.firstWhere(
-        (e) => (e as Map?)?['type'] == 'project',
-        orElse: () => recentState.recent.isNotEmpty ? recentState.recent.first : null,
-      );
-      if (recentEntry != null) {
-        workspacePath = (recentEntry as Map)['rootDir']?.toString() ??
-            recentEntry['path']?.toString() ?? '';
+      if (workspacePath.isEmpty) {
+        final recentState = context.read<RecentBloc>().state;
+        final recentProject = recentState.recent.cast<dynamic>().firstWhere(
+          (e) => (e as Map?)?['type'] == 'project',
+          orElse: () => null,
+        );
+        if (recentProject is Map) {
+          workspacePath = recentProject['rootDir']?.toString() ??
+              recentProject['path']?.toString() ?? '';
+        }
       }
-    } catch (_) {}
+    } catch (error) {
+      PandaLog.w('PandaAgent', 'Could not resolve workspace path: $error');
+    }
+    PandaLog.i(
+      'PandaAgent',
+      'Workspace resolved — ${workspacePath.isEmpty ? '<none>' : workspacePath}',
+    );
 
     _agentRunner
         .run(
@@ -4441,6 +4456,7 @@ class _SelectTypeState extends State<SelectType>
             _agentScrollToBottom();
           },
           onError: (e) {
+            PandaLog.e('PandaAgent', 'Stream error', error: e);
             if (!mounted) return;
             setState(() {
               _agentGenerating = false;
@@ -4450,6 +4466,7 @@ class _SelectTypeState extends State<SelectType>
             });
           },
           onDone: () {
+            PandaLog.i('PandaAgent', 'Stream closed');
             if (!mounted || !_agentGenerating) return;
             setState(() {
               _agentGenerating = false;

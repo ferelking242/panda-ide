@@ -31,7 +31,11 @@ abstract final class PandaLog {
   static PandaLevel minLevel = PandaLevel.verbose;
 
   /// Niveau minimum écrit dans le fichier log (release + debug).
-  static PandaLevel fileMinLevel = PandaLevel.info;
+  ///
+  /// AgentRunner uses debug entries for request/stream/tool diagnostics.
+  /// Keeping this at verbose makes the exported log useful for diagnosing
+  /// hangs instead of recording only warnings after the failure.
+  static PandaLevel fileMinLevel = PandaLevel.verbose;
 
   static IOSink? _fileSink;
   static String? _openLogDate;
@@ -153,6 +157,8 @@ abstract final class PandaLog {
       }
       _fileSink?.writeln(line);
       if (body != null && body.isNotEmpty) _fileSink?.writeln('         $body');
+      final flush = _fileSink?.flush();
+      if (flush != null) unawaited(flush);
     } catch (_) {}
   }
 
