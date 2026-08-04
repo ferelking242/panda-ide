@@ -44,30 +44,49 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Patch Llama iOS Swift bridge
-        run: |
-          set -euo pipefail
-          plugin="$(find "$HOME/.pub-cache" \
-            -path '*/Llama-Flutter-*/ios/Classes/LlamaFlutterAndroidPlugin.swift' \
-            -print -quit)"
-          test -n "$plugin"
-          perl -0pi -e '
-            s/LlamaHostApiProtocol/LlamaHostApi/g;
-            s/\.onLoadProgress\(progress\)/.onLoadProgress(progress: progress)/g;
-            s/\.onError\(error\.localizedDescription\)/.onError(error: error.localizedDescription)/g;
-            s/\.onToken\(token\)/.onToken(token: token)/g;
-            s/\bpublic (class|func|static func)/$1/g;
-          ' "$plugin"
-          grep -q 'class LlamaFlutterAndroidPlugin: NSObject, FlutterPlugin, LlamaHostApi' "$plugin"
-          ! grep -q 'LlamaHostApiProtocol' "$plugin"
-          grep -q 'onLoadProgress(progress: progress)' "$plugin"
-          grep -q 'onError(error: error.localizedDescription)' "$plugin"
-          grep -q 'onToken(token: token)' "$plugin"
-
-      - name: Prepare and patch generated Metal shader
+      - name: Install pods and patch Llama iOS bridge
         run: |
           set -euo pipefail
           (cd ios && pod install)
+          patch_count=0
+          while IFS= read -r plugin; do
+            patch_count=$((patch_count + 1))
+            perl -0pi -e '
+              s/LlamaHostApiProtocol/LlamaHostApi/g;
+              s/\.onLoadProgress\(progress\)\s*\{\}/.onLoadProgress(progress: progress) { _ in }/g;
+              s/\.onError\(error\.localizedDescription\)\s*\{\}/.onError(error: error.localizedDescription) { _ in }/g;
+              s/\.onToken\(token\)\s*\{\}/.onToken(token: token) { _ in }/g;
+              s/\.onDone\s*\{\}/.onDone { _ in }/g;
+              s/^(\s*)public func /$1func /mg;
+            ' "$plugin"
+            if ! grep -q 'func detectGpu' "$plugin"; then
+              sed '$d' "$plugin" > "${plugin}.tmp"
+              cat >> "${plugin}.tmp" <<'SWIFT'
+    func detectGpu(completion: @escaping (Result<GpuInfo, Error>) -> Void) {
+        completion(.success(GpuInfo(
+            vulkanSupported: false,
+            gpuName: "None",
+            vulkanApiVersion: -1,
+            deviceLocalMemoryBytes: -1,
+            freeRamBytes: -1,
+            recommendedGpuLayers: 0
+        )))
+    }
+}
+SWIFT
+              mv "${plugin}.tmp" "$plugin"
+            fi
+            grep -q 'LlamaHostApi' "$plugin"
+            ! grep -q 'LlamaHostApiProtocol' "$plugin"
+            grep -q 'onLoadProgress(progress: progress)' "$plugin"
+            grep -q 'onError(error: error.localizedDescription)' "$plugin"
+            grep -q 'onToken(token: token)' "$plugin"
+            grep -q 'func detectGpu' "$plugin"
+          done < <(find -L "$HOME/.pub-cache" ios/.symlinks ios/Pods \
+            -type f -name 'LlamaFlutterAndroidPlugin.swift' \
+            -print 2>/dev/null | sort -u)
+          test "$patch_count" -gt 0
+
           shader="$(find "$HOME/.pub-cache" ios/Pods \
             -name 'ggml-metal-ios.metal' \
             -print -quit)"
