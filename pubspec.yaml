@@ -71,91 +71,35 @@ flutter:
     - assets/extension_host/api/debug.js
     - assets/gateway/
   fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
+    # ── Broken (Iconsax) icon fonts ─────────────────────────────────────
     - family: broken
       fonts:
         - asset: assets/fonts/broken.ttf
     - family: broken_filled
       fonts:
         - asset: assets/fonts/broken_filled.ttf
+    # ── Monospace code fonts ─────────────────────────────────────────────
     - family: firaCode
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/FiraCode-Medium.ttf
     - family: cascadia
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/CascadiaCodePL-Regular.ttf
     - family: hack
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/Hack-Regular.ttf
     - family: dejaVuSansMono
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/DejaVuSansMono.ttf
     - family: inconsolata
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/Inconsolata-Regular.ttf
     - family: jetBrainsMono
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/JetBrainsMono-Medium.ttf
     - family: proggy
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/ProggyVector-Regular.ttf
     - family: sourceCodePro
       fonts:
-    # ── Broken (Iconsax) icon font ──────────────────────────────────────
-    - family: broken
-      fonts:
-        - asset: assets/fonts/broken.ttf
-    - family: broken_filled
-      fonts:
-        - asset: assets/fonts/broken_filled.ttf
         - asset: assets/fonts/SourceCodePro-Medium.ttf
-    

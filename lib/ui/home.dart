@@ -3400,6 +3400,35 @@ class _SelectTypeState extends State<SelectType>
 
                     const Spacer(),
 
+                    // ── Context token estimate ─────────────────────────
+                    Builder(builder: (ctx) {
+                      int totalChars = 0;
+                      for (final msg in _agentMessages) {
+                        totalChars += (msg['text'] as String? ?? '').length;
+                        totalChars += (msg['thinking'] as String? ?? '').length;
+                      }
+                      totalChars += _agentInputCtrl.text.length;
+                      final estTokens = (totalChars / 4).round();
+                      final label = estTokens < 1000
+                          ? '~$estTokens t'
+                          : '~${(estTokens / 1000).toStringAsFixed(1)}k t';
+                      return Tooltip(
+                        message: 'Tokens estimés dans le contexte (~chars/4)',
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: estTokens > 80000
+                                ? Colors.red[400]
+                                : estTokens > 40000
+                                    ? Colors.orange[400]
+                                    : muted,
+                          ),
+                        ),
+                      );
+                    }),
+                    const SizedBox(width: 6),
+
                     // ── Send / Stop ────────────────────────────────────
                     if (_agentGenerating)
                       GestureDetector(

@@ -408,6 +408,39 @@ class AgenticTools {
     }
   }
 
+  /// Shows a confirmation dialog before a destructive operation.
+  /// Returns true if the user confirms, false if cancelled or context is gone.
+  Future<bool> _confirmDestructive({
+    required String title,
+    required String body,
+  }) async {
+    if (!context.mounted) return false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+          const SizedBox(width: 8),
+          Expanded(child: Text(title, style: const TextStyle(fontSize: 15))),
+        ]),
+        content: Text(body, style: const TextStyle(fontSize: 13)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirmer'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   Future<ToolResult<void>> deleteFile(String filePath) async {
     try {
       final canonicalPath = _canonicalFilePath(filePath);
@@ -420,6 +453,14 @@ class AgenticTools {
       final file = File(canonicalPath);
       if (!await file.exists()) {
         return ToolResult.error('File not found: $filePath');
+      }
+
+      final confirmed = await _confirmDestructive(
+        title: 'Supprimer le fichier ?',
+        body: 'L\'agent veut supprimer :\n$filePath\n\nCette action est irréversible.',
+      );
+      if (!confirmed) {
+        return ToolResult.error('Suppression annulée par l\'utilisateur.');
       }
 
       await file.delete();
@@ -1482,12 +1523,33 @@ class AgenticTools {
     }
   }
 
+  // Commands that require explicit user confirmation before running.
+  static const _kDangerousCommands = {
+    'rm', 'rmdir', 'sudo', 'chmod', 'chown', 'mkfs', 'dd',
+    'shutdown', 'reboot', 'halt', 'poweroff', 'kill', 'killall',
+    'format', 'fdisk', 'parted', 'shred', 'wipe', 'truncate',
+    'curl', 'wget', // network downloads
+    'apt', 'apt-get', 'dpkg', 'brew', 'pip', 'npm', 'yarn', 'gradle',
+  };
+
   Future<ToolResult<Map<String, String>>> runShellCommand(
     String command, [
     List<String> args = const [],
     Map<String, String> envs = const {},
   ]) async {
     try {
+      final baseCmd = command.split('/').last.split(' ').first.toLowerCase();
+      if (_kDangerousCommands.contains(baseCmd)) {
+        final argsStr = args.isEmpty ? '' : ' ${args.join(' ')}';
+        final confirmed = await _confirmDestructive(
+          title: 'Exécuter une commande système ?',
+          body: 'L\'agent veut exécuter :\n\n`$command$argsStr`\n\nVérifiez que cette commande est sûre.',
+        );
+        if (!confirmed) {
+          return ToolResult.error('Commande annulée par l\'utilisateur.');
+        }
+      }
+
       final env = await _buildAgentShellEnvironment(workspacePath);
 
       env.addAll(envs);

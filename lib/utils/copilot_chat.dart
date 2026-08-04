@@ -200,10 +200,34 @@ class CopilotChat {
     return null;
   }
 
+  /// The effective Copilot API bearer token. Starts as [authToken] and is
+  /// silently replaced when the server returns 401 (token expired).
+  String _effectiveToken;
+
   CopilotChat({
     required this.authToken,
     String? initialApiEndpoint,
-  }) : _apiEndpoint = initialApiEndpoint;
+  })  : _effectiveToken = authToken,
+        _apiEndpoint = initialApiEndpoint;
+
+  /// Attempts to obtain a fresh Copilot API token using the stored GitHub
+  /// OAuth token and, if successful, updates [_effectiveToken].
+  Future<bool> _tryRefreshToken() async {
+    try {
+      final freshContext =
+          await CopilotChat.loadAuthContext(preferGithubToken: true);
+      if (freshContext == null) return false;
+      if (freshContext.authToken.isEmpty) return false;
+      _effectiveToken = freshContext.authToken;
+      if (freshContext.apiEndpoint != null &&
+          freshContext.apiEndpoint!.isNotEmpty) {
+        _apiEndpoint = freshContext.apiEndpoint;
+      }
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   Map<String, String> _commonHeaders({
     bool isJsonBody = false,
@@ -215,7 +239,7 @@ class CopilotChat {
     }
 
     return {
-      'Authorization': 'Bearer $authToken',
+      'Authorization': 'Bearer $_effectiveToken',
       'Accept': 'application/json',
       'Copilot-Integration-Id': 'vscode-chat',
       'User-Agent': 'Panda/2.3.0',
@@ -610,7 +634,23 @@ class CopilotChat {
       );
       request.body = jsonEncode(requestBody);
 
-      final streamedResponse = await _currentClient!.send(request);
+      var streamedResponse = await _currentClient!.send(request);
+
+      // On 401 (token expired), try once to refresh and retry.
+      if (streamedResponse.statusCode == 401) {
+        await streamedResponse.stream.drain<void>();
+        final refreshed = await _tryRefreshToken();
+        if (refreshed) {
+          _currentClient = http.Client();
+          final retryRequest =
+              http.Request('POST', Uri.parse('$apiEndpoint$chatPath'));
+          retryRequest.headers.addAll(
+            _commonHeaders(isJsonBody: true, chatMode: chatMode),
+          );
+          retryRequest.body = jsonEncode(requestBody);
+          streamedResponse = await _currentClient!.send(retryRequest);
+        }
+      }
 
       if (streamedResponse.statusCode != 200) {
         final body = await streamedResponse.stream.bytesToString();
