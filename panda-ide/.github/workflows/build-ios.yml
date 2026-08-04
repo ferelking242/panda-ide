@@ -1,0 +1,206 @@
+name: Build iOS (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ios:
+    name: Build unsigned iOS IPA
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Generate iOS host project
+        run: flutter create . --platforms ios --org com.panda
+
+      - name: Set iOS deployment target
+        run: |
+          set -euo pipefail
+          if grep -qE "^platform :ios" ios/Podfile; then
+            sed -i '' "s/^platform :ios.*/platform :ios, '14.0'/" ios/Podfile
+          else
+            printf "platform :ios, '14.0'\n" | cat - ios/Podfile > ios/Podfile.tmp
+            mv ios/Podfile.tmp ios/Podfile
+          fi
+          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*;/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g" \
+            ios/Runner.xcodeproj/project.pbxproj
+          grep -qE "^platform :ios, ['\"]14\\.0['\"]" ios/Podfile
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Install pods and patch Llama iOS bridge
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          podfile = Path("ios/Podfile")
+          text = podfile.read_text()
+          marker = "  # Panda IDE: disable ARC for the Llama Metal sources.\n"
+          hook = (
+              marker
+              + "  installer.pods_project.targets.each do |target|\n"
+              + "    if target.name.downcase.include?('llama_flutter_android')\n"
+              + "      target.build_configurations.each do |config|\n"
+              + "        config.build_settings['CLANG_ENABLE_OBJC_ARC'] = 'NO'\n"
+              + "      end\n"
+              + "    end\n"
+              + "  end\n"
+          )
+          needle = "post_install do |installer|\n"
+          if marker not in text:
+              if needle not in text:
+                  raise SystemExit("post_install hook not found in ios/Podfile")
+              text = text.replace(needle, needle + hook, 1)
+              podfile.write_text(text)
+          PY
+          podspec_count=0
+          while IFS= read -r podspec; do
+            podspec_count=$((podspec_count + 1))
+            perl -0pi -e '
+              if (!/llama_cpp_src\/src\/models\/\*\.cpp/) {
+                s#    '\''llama_cpp_src/src/\*\.cpp'\'',#    '\''llama_cpp_src/src/*.cpp'\'',\n    '\''llama_cpp_src/src/models/*.cpp'\'',#;
+              }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-backend-dl\.cpp/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-backend-reg\.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-backend-reg.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-backend-dl.cpp'\'',#;
+              }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-backend-meta\.cpp/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-backend.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-backend.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-backend-meta.cpp'\'',#;
+              }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-cpu\/traits\.cpp/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-cpu/ops.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-cpu/ops.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/traits.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/unary-ops.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/vec.cpp'\'',#;
+              }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-cpu\/arch\/arm\/quants\.c/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-cpu/repack.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-cpu/repack.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/arch/arm/quants.c'\'',\n    '\''llama_cpp_src/ggml/src/ggml-cpu/arch/arm/repack.cpp'\'',#;
+              }
+            ' "$podspec"
+            grep -Fq "llama_cpp_src/src/models/*.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-backend-dl.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-backend-meta.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/traits.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/unary-ops.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/vec.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/arch/arm/quants.c" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-cpu/arch/arm/repack.cpp" "$podspec"
+          done < <(find -L "$HOME/.pub-cache" ios/.symlinks \
+            -type f -name 'llama_flutter_android.podspec' \
+            -print 2>/dev/null | sort -u)
+          test "$podspec_count" -gt 0
+          (cd ios && pod install)
+          patch_count=0
+          while IFS= read -r plugin; do
+            patch_count=$((patch_count + 1))
+            perl -0pi -e '
+              s/LlamaHostApiProtocol/LlamaHostApi/g;
+              s/\.onLoadProgress\(progress\)\s*\{\}/.onLoadProgress(progress: progress) { _ in }/g;
+              s/\.onError\(error\.localizedDescription\)\s*\{\}/.onError(error: error.localizedDescription) { _ in }/g;
+              s/\.onToken\(token\)\s*\{\}/.onToken(token: token) { _ in }/g;
+              s/\.onDone\s*\{\}/.onDone { _ in }/g;
+              s/^(\s*)public func /$1func /mg;
+            ' "$plugin"
+            if ! grep -q 'func detectGpu' "$plugin"; then
+              sed '$d' "$plugin" > "${plugin}.tmp"
+              cat >> "${plugin}.tmp" <<'SWIFT'
+              func detectGpu(completion: @escaping (Result<GpuInfo, Error>) -> Void) {
+                  completion(.success(GpuInfo(
+                      vulkanSupported: false,
+                      gpuName: "None",
+                      vulkanApiVersion: -1,
+                      deviceLocalMemoryBytes: -1,
+                      freeRamBytes: -1,
+                      recommendedGpuLayers: 0
+                  )))
+              }
+          }
+          SWIFT
+              mv "${plugin}.tmp" "$plugin"
+            fi
+            grep -q 'LlamaHostApi' "$plugin"
+            ! grep -q 'LlamaHostApiProtocol' "$plugin"
+            grep -q 'onLoadProgress(progress: progress)' "$plugin"
+            grep -q 'onError(error: error.localizedDescription)' "$plugin"
+            grep -q 'onToken(token: token)' "$plugin"
+            grep -q 'func detectGpu' "$plugin"
+          done < <(find -L "$HOME/.pub-cache" ios/.symlinks ios/Pods \
+            -type f -name 'LlamaFlutterAndroidPlugin.swift' \
+            -print 2>/dev/null | sort -u)
+          test "$patch_count" -gt 0
+
+          ggml_count=0
+          while IFS= read -r ggml_source; do
+            if grep -q 'const char \* ggml_version' "$ggml_source" && \
+               grep -q 'const char \* ggml_commit' "$ggml_source"; then
+              ggml_count=$((ggml_count + 1))
+              if ! grep -q '#define GGML_VERSION' "$ggml_source"; then
+                {
+                  printf '%s\n' \
+                    '#ifndef GGML_VERSION' \
+                    '#define GGML_VERSION "0.9.11"' \
+                    '#endif' \
+                    '#ifndef GGML_COMMIT' \
+                    '#define GGML_COMMIT "unknown"' \
+                    '#endif'
+                  cat "$ggml_source"
+                } > "${ggml_source}.tmp"
+                mv "${ggml_source}.tmp" "$ggml_source"
+              fi
+              grep -q '#define GGML_VERSION' "$ggml_source"
+              grep -q '#define GGML_COMMIT' "$ggml_source"
+            fi
+          done < <(find -L "$HOME/.pub-cache" ios/.symlinks ios/Pods \
+            -type f -name 'ggml.c' -print 2>/dev/null | sort -u)
+          test "$ggml_count" -gt 0
+
+          shader="$(find "$HOME/.pub-cache" ios/Pods \
+            -name 'ggml-metal-ios.metal' \
+            -print -quit)"
+          test -n "$shader"
+          common_header="$(cd "$(dirname "$shader")/.." && pwd)/ggml-common.h"
+          test -f "$common_header"
+          awk -v header="$common_header" '
+            /#include "ggml-common.h"/ {
+              while ((getline line < header) > 0) print line
+              close(header)
+              next
+            }
+            { print }
+          ' "$shader" > "${shader}.tmp"
+          mv "${shader}.tmp" "$shader"
+          ! grep -q '#include "ggml-common.h"' "$shader"
+          grep -q 'block_q1_0' "$shader"
+          grep -q 'QK4_0' "$shader"
+
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign --no-pub
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          rm -rf Payload release-assets
+          mkdir -p Payload release-assets
+          cp -R build/ios/iphoneos/Runner.app Payload/Runner.app
+          ditto -c -k --sequesterRsrc --keepParent Payload \
+            release-assets/panda-ide-ios-unsigned.ipa
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: panda-ide-ios-unsigned
+          path: release-assets/*.ipa
+          retention-days: 30
