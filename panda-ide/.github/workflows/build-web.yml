@@ -1,0 +1,86 @@
+name: Build Web + Deploy GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Patch code_forge for web (BigInt → int)
+        # code_forge uses flutter_rust_bridge's PlatformInt64 which is BigInt on
+        # web. The _findMatchingBracket method tries to assign BigInt? to int? —
+        # we patch it here to do an explicit .toInt() conversion.
+        run: |
+          FILE=$(find $HOME/.pub-cache -path "*/code_forge-*/lib/code_forge/code_area.dart" -type f | head -1)
+          if [ -n "$FILE" ]; then
+            echo "Patching $FILE"
+            # Fix: final result = match == -1 ? null : match;
+            # The match variable is PlatformInt64 (BigInt on web, int on native).
+            # Assigning it to an int? variable fails on web without an explicit cast.
+            sed -i \
+              's/final result = match == -1 ? null : match;/final result = match == null ? null : (match is BigInt ? (match as BigInt).toInt() : match as int);/' \
+              "$FILE"
+            echo "Patch applied."
+          else
+            echo "code_forge code_area.dart not found — skipping patch."
+          fi
+
+      - name: Enable web support
+        # Le dossier web/ n'est pas commité — Flutter le génère à la volée.
+        # Cette commande est idempotente : elle crée web/ sans toucher au reste.
+        run: flutter create . --platforms web
+
+      - name: Build Web
+        run: |
+          flutter build web \
+            --release \
+            --no-tree-shake-icons \
+            --base-href "/panda-ide/"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+        with:
+          # Activates GitHub Pages automatically if not already enabled
+          enablement: true
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
