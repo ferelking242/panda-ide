@@ -26,6 +26,7 @@ enum AgentPhase {
   idle,        // en attente d'un message
   thinking,    // le modèle "réfléchit" (extended thinking / reasoning)
   toolRunning, // un outil est en cours d'exécution
+  toolDone,    // un outil vient de terminer (résultat disponible)
   streaming,   // texte en cours de génération
   done,        // réponse complète
   error,       // erreur réseau ou parsing
@@ -38,9 +39,19 @@ enum AgentPhase {
 class AgentChunk {
   final AgentPhase phase;
   final String text;
-  /// Nom de l'outil en cours (seulement pour phase == toolRunning)
+  /// Nom de l'outil (toolRunning / toolDone)
   final String? toolName;
-  const AgentChunk({required this.phase, this.text = '', this.toolName});
+  /// Arguments passés à l'outil (toolRunning)
+  final Map<String, dynamic>? toolArgs;
+  /// Résultat retourné par l'outil (toolDone)
+  final String? toolResult;
+  const AgentChunk({
+    required this.phase,
+    this.text = '',
+    this.toolName,
+    this.toolArgs,
+    this.toolResult,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,7 +287,7 @@ class AgentRunner {
             ? Map<String, dynamic>.from(fc['args'] as Map)
             : <String, dynamic>{};
 
-        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: name));
+        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: name, toolArgs: args));
         PandaLog.toolCall('Gemini', name, args);
 
         final result = await _dispatchTool(
@@ -290,6 +301,7 @@ class AgentRunner {
           return 'Error: tool $name exceeded 45 s timeout';
         });
         PandaLog.toolResult('Gemini', name, result);
+        ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: name, toolResult: result));
         toolResults.add({
           'tool_call_id': name,
           'role': 'tool',
@@ -494,7 +506,7 @@ class AgentRunner {
           args = Map<String, dynamic>.from(rawArgs);
         }
 
-        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: functionName));
+        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: functionName, toolArgs: args));
         PandaLog.toolCall('SSE', functionName, args);
         final result = await _dispatchTool(
           tools,
@@ -507,6 +519,7 @@ class AgentRunner {
           return 'Error: tool $functionName exceeded 45 s timeout';
         });
         PandaLog.toolResult('SSE', functionName, result);
+        ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: functionName, toolResult: result));
         toolResults.add(result);
       }
 

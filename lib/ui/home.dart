@@ -3810,18 +3810,20 @@ class _SelectTypeState extends State<SelectType>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Phase chip (thinking / toolRunning / streaming)
-                if (isStreaming && think.isNotEmpty)
-                  _AgentPhaseChip(
-                      phase: AgentPhase.thinking, isDark: isDark),
-                if (isStreaming && think.isEmpty && (msg['toolName'] as String? ?? '').isNotEmpty)
-                  _AgentPhaseChip(
-                      phase: AgentPhase.toolRunning,
-                      isDark: isDark,
-                      toolName: msg['toolName'] as String? ?? ''),
-                if (isStreaming && think.isEmpty && (msg['toolName'] as String? ?? '').isEmpty)
-                  _AgentPhaseChip(
-                      phase: AgentPhase.streaming, isDark: isDark),
+                // Phase chip — only when no tool calls to avoid double indicator
+                () {
+                  final hasCalls = (msg['toolCalls'] as List?)?.isNotEmpty ?? false;
+                  if (isStreaming && think.isNotEmpty)
+                    return _AgentPhaseChip(phase: AgentPhase.thinking, isDark: isDark);
+                  if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isNotEmpty)
+                    return _AgentPhaseChip(
+                        phase: AgentPhase.toolRunning,
+                        isDark: isDark,
+                        toolName: msg['toolName'] as String? ?? '');
+                  if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isEmpty)
+                    return _AgentPhaseChip(phase: AgentPhase.streaming, isDark: isDark);
+                  return const SizedBox.shrink();
+                }(),
 
                 // Thinking block (collapsible)
                 if (think.isNotEmpty)
@@ -3830,6 +3832,22 @@ class _SelectTypeState extends State<SelectType>
                       isDark: isDark,
                       fg: fg,
                       muted: muted),
+
+                // Tool call blocks (expandable, Replit-style)
+                ...() {
+                  final calls = (msg['toolCalls'] as List?)
+                      ?.cast<Map<String, dynamic>>() ?? [];
+                  return calls.map((call) => _ToolCallBlock(
+                    toolName: call['name'] as String? ?? '',
+                    args: (call['args'] as Map?)
+                        ?.cast<String, dynamic>() ?? {},
+                    result: call['result'] as String?,
+                    status: call['status'] as String? ?? 'running',
+                    isDark: isDark,
+                    fg: fg,
+                    muted: muted,
+                  ));
+                }(),
 
                 // Bulle réponse
                 if (text.isNotEmpty || isStreaming)
@@ -4548,6 +4566,34 @@ class _SelectTypeState extends State<SelectType>
                   _agentPhase = AgentPhase.toolRunning;
                   _agentCurrentTool = chunk.toolName ?? '';
                   _agentMessages[agentIdx]['toolName'] = _agentCurrentTool;
+                  // Append a running tool call entry
+                  final runningCalls = List<Map<String,dynamic>>.from(
+                    (_agentMessages[agentIdx]['toolCalls'] as List?)
+                        ?.cast<Map<String,dynamic>>() ?? []);
+                  runningCalls.add({
+                    'name': chunk.toolName ?? '',
+                    'args': chunk.toolArgs ?? {},
+                    'result': null,
+                    'status': 'running',
+                  });
+                  _agentMessages[agentIdx]['toolCalls'] = runningCalls;
+                case AgentPhase.toolDone:
+                  _agentCurrentTool = '';
+                  // Find last entry with matching name and update it
+                  final doneCalls = List<Map<String,dynamic>>.from(
+                    (_agentMessages[agentIdx]['toolCalls'] as List?)
+                        ?.cast<Map<String,dynamic>>() ?? []);
+                  final idx = doneCalls.lastIndexWhere(
+                    (c) => c['name'] == chunk.toolName && c['status'] == 'running',
+                  );
+                  if (idx >= 0) {
+                    doneCalls[idx] = {
+                      ...doneCalls[idx],
+                      'result': chunk.toolResult ?? '',
+                      'status': 'done',
+                    };
+                  }
+                  _agentMessages[agentIdx]['toolCalls'] = doneCalls;
                 case AgentPhase.streaming:
                   _agentPhase = AgentPhase.streaming;
                   _agentCurrentTool = '';
@@ -5319,6 +5365,170 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
                       fontStyle: FontStyle.italic,
                       color: widget.fg.withOpacity(0.7))),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _ToolCallBlock — bloc expandable pour un appel d'outil (style Replit)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ToolCallBlock extends StatefulWidget {
+  final String toolName;
+  final Map<String, dynamic> args;
+  final String? result;
+  final String status; // 'running' | 'done' | 'error'
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  const _ToolCallBlock({
+    required this.toolName,
+    required this.args,
+    required this.result,
+    required this.status,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  State<_ToolCallBlock> createState() => _ToolCallBlockState();
+}
+
+class _ToolCallBlockState extends State<_ToolCallBlock> {
+  bool _expanded = false;
+
+  // Icône par catégorie d'outil
+  static IconData _iconFor(String name) {
+    if (name.contains('read') || name.contains('Read')) return Broken.document_text;
+    if (name.contains('write') || name.contains('Write') ||
+        name.contains('edit') || name.contains('Edit')) return Broken.edit;
+    if (name.contains('delete') || name.contains('Delete')) return Broken.trash;
+    if (name.contains('shell') || name.contains('Shell') ||
+        name.contains('command') || name.contains('Command')) return Broken.terminal_1;
+    if (name.contains('git') || name.contains('Git')) return Broken.code_circle;
+    if (name.contains('search') || name.contains('Search') ||
+        name.contains('grep') || name.contains('Grep') ||
+        name.contains('glob') || name.contains('Glob')) return Broken.search_normal;
+    if (name.contains('list') || name.contains('List')) return Broken.folder;
+    if (name.contains('web') || name.contains('Web') ||
+        name.contains('link') || name.contains('Link')) return Broken.global;
+    return Broken.code_1;
+  }
+
+  // Résumé compact des args (1 ligne max)
+  static String _argsSummary(Map<String, dynamic> args) {
+    if (args.isEmpty) return '';
+    final first = args.values.first?.toString() ?? '';
+    final preview = first.length > 40 ? '${first.substring(0, 40)}\u2026' : first;
+    return preview;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark   = widget.isDark;
+    final isRunning = widget.status == 'running';
+    final isError   = widget.result?.startsWith('Error') ?? false;
+
+    final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    final bgC     = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
+    final iconC   = isRunning
+        ? Colors.orange
+        : isError
+            ? Colors.red[400]!
+            : Colors.green[400]!;
+
+    return GestureDetector(
+      onTap: widget.result != null
+          ? () => setState(() => _expanded = !_expanded)
+          : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 4),
+        decoration: BoxDecoration(
+          color: bgC,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: borderC),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── Header row ─────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              child: Row(
+                children: [
+                  // Status indicator
+                  if (isRunning)
+                    SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: Colors.orange,
+                      ),
+                    )
+                  else
+                    Icon(_iconFor(widget.toolName), size: 12, color: iconC),
+                  const SizedBox(width: 6),
+                  // Tool name
+                  Text(
+                    widget.toolName,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      fontFamily: 'monospace',
+                      color: widget.fg,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  // Args preview
+                  Expanded(
+                    child: Text(
+                      _argsSummary(widget.args),
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10, color: widget.muted),
+                    ),
+                  ),
+                  // Expand chevron (only when result available)
+                  if (widget.result != null)
+                    Icon(
+                      _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                      size: 12,
+                      color: widget.muted,
+                    ),
+                ],
+              ),
+            ),
+            // ── Expanded result ────────────────────────────────────────
+            if (_expanded && widget.result != null)
+              Container(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xff1e1e1e)
+                        : const Color(0xfffafafa),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: borderC),
+                  ),
+                  child: SelectableText(
+                    widget.result!.length > 2000
+                        ? '${widget.result!.substring(0, 2000)}\n\u2026 (tronqué)'
+                        : widget.result!,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      color: isError ? Colors.red[400] : widget.fg,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
