@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 
 import '../bloc/ui_bloc/ui_bloc.dart';
+import '../bloc/repo_bloc/repo_bloc.dart';
 import '../core/broken_icons.dart';
 import '../utils/ai.dart';
 import '../utils/constants.dart';
@@ -148,6 +149,16 @@ const _providers = <_ProviderDef>[
     models: ['gpt-4o', 'gpt-4o-mini', 'claude-3-5-sonnet', 'claude-3-haiku'],
     docsUrl: '',
     apiKeyHint: 'Token Panda Open Gateway (optionnel)',
+  ),
+  _ProviderDef(
+    id: 'copilot',
+    name: 'GitHub Copilot',
+    description: 'Modèles Copilot via votre session GitHub',
+    icon: Broken.message_programming,
+    color: Color(0xff8b5cf6),
+    models: ['auto'],
+    docsUrl: 'https://github.com/features/copilot',
+    hasApiKey: false,
   ),
   _ProviderDef(
     id: 'custom',
@@ -324,6 +335,18 @@ class _AgentSettingsState extends State<AgentSettings>
       _showSnack(context, 'Entrez la clé API.', isError: true);
       return;
     }
+    if (_selectedProviderId == 'copilot') {
+      final githubSignedIn = context.read<GithubAuthCubit>().state.isSignedIn;
+      final copilotSignedIn = context.read<CopilotBloc>().state.isSignedIn;
+      if (!githubSignedIn && !copilotSignedIn) {
+        _showSnack(
+          context,
+          'Connectez GitHub ou Copilot avant d’ajouter ce provider.',
+          isError: true,
+        );
+        return;
+      }
+    }
     if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) {
       _showSnack(context, 'Entrez l\'URL de l\'endpoint.', isError: true);
       return;
@@ -336,7 +359,7 @@ class _AgentSettingsState extends State<AgentSettings>
     newCfg[modelId] = {
       'provider':   _selectedProviderId,
       'apiProvider': _selectedProviderId,
-      'apiKey':     apiKey,
+      if (_selectedProviderId != 'copilot') 'apiKey': apiKey,
       'modelName':  model,
       'model':      model,
       if (_selectedProviderId == 'custom') 'url': _customUrlCtrl.text.trim(),
@@ -345,7 +368,8 @@ class _AgentSettingsState extends State<AgentSettings>
     aiBloc.add(AIConfigEvent(newCfg));
     _saveAiConfig(context, newCfg);
 
-    // Set as default chat model if none selected
+    // Set as default chat model if none selected. Copilot is resolved from
+    // the secure GitHub session at request time; no token is persisted here.
     final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
     if (selected['chat'] == null || (selected['chat'] as String).isEmpty) {
       selected['chat'] = modelId;
@@ -550,6 +574,34 @@ class _AgentSettingsState extends State<AgentSettings>
                   hint: 'llama3, qwen2.5-coder, mistral…',
                   isDark: isDark, card: card, fg: fg, muted: muted,
                   border: border,
+                );
+              }
+              if (_selectedProviderId == 'copilot') {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ModelDropdown(
+                      models: pDef.models,
+                      selected: _selectedModelId,
+                      isDark: isDark,
+                      card: card,
+                      fg: fg,
+                      muted: muted,
+                      border: border,
+                      onChanged: (m) =>
+                          setState(() => _selectedModelId = m),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Le modèle réel est choisi depuis le catalogue de votre compte Copilot au moment de l’envoi. '
+                      'Copilot Free reste soumis aux limites GitHub.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: muted,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
                 );
               }
               return _ModelDropdown(

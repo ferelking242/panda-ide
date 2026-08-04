@@ -151,6 +151,12 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     description: 'Searches the web for relevant information.',
     requiresWriteAccess: false,
   ),
+  AgenticToolSpec(
+    name: 'runShellCommand',
+    label: 'Run terminal command',
+    description: 'Runs a command in the project terminal and returns its output.',
+    requiresWriteAccess: true,
+  ),
 ];
 
 Map<String, bool> normalizeAgenticToolSelections(

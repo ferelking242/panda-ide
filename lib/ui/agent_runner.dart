@@ -73,15 +73,21 @@ class AgentRunner {
     String? systemPromptOverride,
     BuildContext? context,
     String workspacePath = '',
+    String agentMode = 'agent',
   }) {
     final ctrl = StreamController<AgentChunk>();
+    final effectiveSystemPrompt = systemPromptOverride == null ||
+            systemPromptOverride.trim().isEmpty
+        ? _systemPrompt
+        : '$_systemPrompt\n\nAdditional Panda Agent context:\n$systemPromptOverride';
     _run(
       model: model,
       messages: messages,
-      systemPrompt: systemPromptOverride ?? _systemPrompt,
+      systemPrompt: effectiveSystemPrompt,
       ctrl: ctrl,
       context: context,
       workspacePath: workspacePath,
+      agentMode: agentMode,
     );
     return ctrl.stream;
   }
@@ -93,25 +99,47 @@ class AgentRunner {
     required StreamController<AgentChunk> ctrl,
     BuildContext? context,
     String workspacePath = '',
+    String agentMode = 'agent',
   }) async {
     _client = http.Client();
-    final shouldUseTools = context != null && _shouldUseTools(messages);
+    final shouldUseTools = context != null &&
+        agentMode != 'normal' &&
+        (agentMode == 'agent' || _shouldUseTools(messages));
     final agenticTools = shouldUseTools
         ? AgenticTools(workspacePath: workspacePath, context: context)
         : null;
+    final toolSchemas = agenticTools?.getTools(
+          readAccessOnly: agentMode != 'agent',
+        ) ??
+        const <Map<String, dynamic>>[];
     PandaLog.i('AgentRunner', 'Starting run — provider=${model.runtimeType} tools=${agenticTools != null}');
     try {
       if (model is Gemini) {
-        await _runGemini(model, messages, systemPrompt, ctrl, agenticTools);
+        await _runGemini(
+          model,
+          messages,
+          systemPrompt,
+          ctrl,
+          agenticTools,
+          toolSchemas,
+          allowWrites: agentMode == 'agent',
+        );
       } else if (model is LocalLlama) {
         ctrl.add(const AgentChunk(
           phase: AgentPhase.error,
           text: 'LocalLlama n\'est pas supporté en mode agent pour l\'instant.',
         ));
       } else {
-        await _runSse(model, messages, systemPrompt, ctrl, agenticTools);
+        await _runSse(
+          model,
+          messages,
+          systemPrompt,
+          ctrl,
+          agenticTools,
+          toolSchemas,
+          allowWrites: agentMode == 'agent',
+        );
       }
-      ctrl.add(const AgentChunk(phase: AgentPhase.done));
     } catch (e) {
       PandaLog.e('AgentRunner', 'Uncaught error in _run', error: e);
       if (!ctrl.isClosed) {
@@ -132,8 +160,9 @@ class AgentRunner {
     String systemPrompt,
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
+    List<Map<String, dynamic>> toolSchemas,
+    {required bool allowWrites}
   ) async {
-    final toolSchemas = tools?.getTools() ?? [];
     final conversationMessages = [
       {'role': 'system', 'content': systemPrompt},
       ...messages,
@@ -233,7 +262,12 @@ class AgentRunner {
         ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $name\n'));
         PandaLog.toolCall('Gemini', name, args);
 
-        final result = await _dispatchTool(tools, name, args)
+        final result = await _dispatchTool(
+          tools,
+          name,
+          args,
+          allowWrites: allowWrites,
+        )
             .timeout(const Duration(seconds: 45), onTimeout: () {
           PandaLog.w('Gemini', 'Tool $name timed out after 45 s');
           return 'Error: tool $name exceeded 45 s timeout';
@@ -265,8 +299,9 @@ class AgentRunner {
     String systemPrompt,
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
+    List<Map<String, dynamic>> toolSchemas,
+    {required bool allowWrites}
   ) async {
-    final toolSchemas = tools?.getTools() ?? [];
     final conversationMessages = [
       {'role': 'system', 'content': systemPrompt},
       ...messages,
@@ -435,7 +470,12 @@ class AgentRunner {
 
         ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: '→ $functionName\n'));
         PandaLog.toolCall('SSE', functionName, args);
-        final result = await _dispatchTool(tools, functionName, args)
+        final result = await _dispatchTool(
+          tools,
+          functionName,
+          args,
+          allowWrites: allowWrites,
+        )
             .timeout(const Duration(seconds: 45), onTimeout: () {
           PandaLog.w('SSE', 'Tool $functionName timed out after 45 s');
           return 'Error: tool $functionName exceeded 45 s timeout';
@@ -460,8 +500,22 @@ class AgentRunner {
     AgenticTools tools,
     String functionName,
     Map<String, dynamic> args,
+    {required bool allowWrites}
   ) async {
     try {
+      const mutatingTools = {
+        'writeFile',
+        'deleteFile',
+        'renamePath',
+        'rename',
+        'insertAtLine',
+        'replaceAllInFile',
+        'editFile',
+        'runShellCommand',
+      };
+      if (!allowWrites && mutatingTools.contains(functionName)) {
+        return 'Blocked: this tool changes the workspace and is unavailable in Ask mode.';
+      }
       switch (functionName) {
         case 'activeEditorFile':
           final res = await tools.activeEditorFile();

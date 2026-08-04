@@ -27,6 +27,7 @@ import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
 import '../utils/ai.dart';
+import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
 import '../ui/github_page.dart';
 import '../utils/constants.dart';
@@ -3586,6 +3587,7 @@ class _SelectTypeState extends State<SelectType>
   /// Returns a representative icon for a given provider string.
   IconData _providerIcon(String provider) {
     final p = provider.toLowerCase();
+    if (p.contains('copilot')) return Broken.message_programming;
     if (p.contains('openai') || p.contains('gpt')) return Broken.global;
     if (p.contains('claude') || p.contains('anthropic')) return Broken.cpu;
     if (p.contains('gemini') || p.contains('google')) return Broken.global_search;
@@ -3594,6 +3596,65 @@ class _SelectTypeState extends State<SelectType>
     if (p.contains('mistral')) return Broken.wind;
     if (p.contains('local') || p.contains('llama')) return Broken.cpu_setting;
     return Broken.cpu;
+  }
+
+  /// Resolves the selected Agent model at send time.
+  ///
+  /// Copilot is deliberately different from API-key providers: GitHub issues
+  /// a short-lived Copilot token, so it must never be persisted in AI config.
+  /// The configured model is normally `auto`; in that case we select the first
+  /// chat-capable model returned by GitHub's live catalog.
+  Future<Models?> _resolveAgentModel(
+    Map<String, dynamic> cfg,
+  ) async {
+    final provider = (cfg['provider'] ?? cfg['apiProvider'] ?? '')
+        .toString()
+        .toLowerCase();
+    if (provider != 'copilot') {
+      return _modelFromAiConfig(cfg);
+    }
+
+    final auth = await CopilotChat.loadAuthContext();
+    if (auth == null) return null;
+
+    final client = context.read<CopilotChatBloc>().chatClient ??
+        CopilotChat(
+          authToken: auth.authToken,
+          initialApiEndpoint: auth.apiEndpoint,
+        );
+    final configuredModel = (cfg['modelName'] ?? cfg['model'] ?? '')
+        .toString()
+        .trim();
+    var modelName = configuredModel;
+    if (modelName.isEmpty || modelName == 'auto') {
+      final payload = await client.getCopilotModels();
+      final models = (payload['data'] as List?)
+          ?.whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) => item['id'] != null)
+          .where((item) => item['model_picker_enabled'] != false)
+          .where((item) {
+            final endpoints = item['supported_endpoints'];
+            if (endpoints is! List || endpoints.isEmpty) return true;
+            return endpoints.any((endpoint) {
+              final value = endpoint.toString().toLowerCase();
+              return value.contains('chat/completions') ||
+                  value.contains('/responses');
+            });
+          })
+          .toList() ??
+          const <Map<String, dynamic>>[];
+      modelName = models.isNotEmpty
+          ? models.first['id'].toString()
+          : '';
+    }
+    if (modelName.isEmpty) return null;
+
+    return Copilot(
+      authToken: auth.authToken,
+      apiEndpoint: auth.apiEndpoint,
+      model: modelName,
+    );
   }
 
   Widget _buildAgentEmptyState(bool isDark, Color muted, Color fg) {
@@ -4216,7 +4277,7 @@ class _SelectTypeState extends State<SelectType>
     return 'Il y a ${diff.inDays}j';
   }
 
-  void _agentSend() {
+  Future<void> _agentSend() async {
     final text = _agentInputCtrl.text.trim();
     if (text.isEmpty || _agentGenerating) return;
     _sendAnimCtrl.repeat(reverse: true);
@@ -4226,21 +4287,49 @@ class _SelectTypeState extends State<SelectType>
 
     // Priorité : modèle choisi dans le panel > chatModel de l'AIBloc
     Models? model;
-    if (_agentSelectedModelId != null &&
-        aiState.config.containsKey(_agentSelectedModelId)) {
-      final cfg = aiState.config[_agentSelectedModelId!];
-      if (cfg is Map<String, dynamic>) {
-        model = _modelFromAiConfig(cfg);
+    String? modelResolutionError;
+    final selectedId = _agentSelectedModelId ??
+        aiState.modelSelected['chat']?.toString() ??
+        aiState.config.entries
+            .map((entry) => entry)
+            .firstWhere(
+              (entry) =>
+                  (entry.value as Map?)?['provider']?.toString().toLowerCase() ==
+                  'copilot',
+              orElse: () => const MapEntry<String, dynamic>('', null),
+            )
+            .key;
+    final selectedConfig =
+        selectedId == null ? null : aiState.config[selectedId];
+    final selectedIsCopilot = selectedConfig is Map &&
+        selectedConfig['provider']?.toString().toLowerCase() == 'copilot';
+    if (selectedConfig is Map) {
+      try {
+        model = await _resolveAgentModel(
+          Map<String, dynamic>.from(selectedConfig),
+        );
+        if (model == null &&
+            selectedConfig['provider']?.toString().toLowerCase() == 'copilot') {
+          modelResolutionError =
+              'GitHub Copilot n’est pas disponible avec cette session ou ce compte.';
+        }
+      } catch (error) {
+        modelResolutionError = 'Impossible de charger Copilot : $error';
       }
     }
-    model ??= aiState.chatModel;
+    // Never silently switch away from Copilot when its account/session is
+    // unavailable; that would make the provider selector misleading.
+    if (!selectedIsCopilot) {
+      model ??= aiState.chatModel;
+    }
 
     if (model == null) {
+      _sendAnimCtrl.stop();
       setState(() {
         _agentMessages.add({'role': 'user', 'text': text});
         _agentMessages.add({
           'role': 'agent',
-          'text':
+          'text': modelResolutionError ??
               'Aucun modèle IA configuré. Ouvrez Paramètres (⚙) pour en ajouter un.',
           'thinking': '',
           'phase': 'error',
@@ -4250,6 +4339,19 @@ class _SelectTypeState extends State<SelectType>
       _agentScrollToBottom();
       return;
     }
+
+    final prefs = await SharedPreferences.getInstance();
+    final memoryEnabled = prefs.getBool('agent_memory_enabled') ?? true;
+    final memoryNotes = memoryEnabled
+        ? (prefs.getString('agent_memory_notes') ?? '').trim()
+        : '';
+    final customSystemPrompt = (prefs.getString('agent_system_prompt') ?? '')
+        .trim();
+    final systemPromptParts = <String>[
+      if (customSystemPrompt.isNotEmpty) customSystemPrompt,
+      if (memoryNotes.isNotEmpty)
+        'Persistent project/user context:\n$memoryNotes',
+    ];
 
     // Construit l'historique au format OpenAI
     final history = _agentMessages
@@ -4295,7 +4397,16 @@ class _SelectTypeState extends State<SelectType>
     } catch (_) {}
 
     _agentRunner
-        .run(model: model, messages: messages, context: context, workspacePath: workspacePath)
+        .run(
+          model: model,
+          messages: messages,
+          context: context,
+          workspacePath: workspacePath,
+          agentMode: _agentChatMode,
+          systemPromptOverride: systemPromptParts.isEmpty
+              ? null
+              : systemPromptParts.join('\n\n'),
+        )
         .listen(
           (chunk) {
             if (!mounted) return;

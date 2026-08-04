@@ -1,0 +1,1 @@
+- [GitHub AI providers](github-ai-providers.md) — GitHub Models and GitHub Copilot are separate services; verify their current availability before adding a provider.

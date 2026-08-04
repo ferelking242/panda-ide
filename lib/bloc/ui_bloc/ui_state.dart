@@ -150,22 +150,25 @@ String _extractCustomModelText(dynamic response) {
 }
 
 Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
-  final provider = (modelConfig['provider'] ?? modelConfig['apiProvider'] ?? '').toString();
+  final provider = (modelConfig['provider'] ?? modelConfig['apiProvider'] ?? '')
+      .toString()
+      .toLowerCase();
   final apiKey = (modelConfig['apiKey'] ?? '').toString();
   final modelName = (modelConfig['modelName'] ?? modelConfig['model'] ?? '').toString();
 
   switch (provider) {
-    case 'Gemini': return Gemini(apiKey: apiKey, model: modelName);
-    case 'Claude': return Claude(apiKey: apiKey, model: modelName);
-    case 'OpenAI': return OpenAI(apiKey: apiKey, model: modelName);
-    case 'Grok': return Grok(apiKey: apiKey, model: modelName);
-    case 'Gorq': return Groq(apiKey: apiKey, model: modelName);
-    case 'DeepSeek':return DeepSeek(apiKey: apiKey, model: modelName);
-    case 'TogetherAI': return TogetherAi(apiKey: apiKey, model: modelName);
-    case 'Perplexity': return Perplexity(apiKey: apiKey, model: modelName);
-    case 'OpenRouter': return OpenRouter(apiKey: apiKey, model: modelName);
-    case 'FireWorks': return FireWorks(apiKey: apiKey, model: modelName);
-    case 'LocalLlama':
+    case 'gemini': return Gemini(apiKey: apiKey, model: modelName);
+    case 'claude': return Claude(apiKey: apiKey, model: modelName);
+    case 'openai': return OpenAI(apiKey: apiKey, model: modelName);
+    case 'grok': return Grok(apiKey: apiKey, model: modelName);
+    case 'gorq':
+    case 'groq': return Groq(apiKey: apiKey, model: modelName);
+    case 'deepseek': return DeepSeek(apiKey: apiKey, model: modelName);
+    case 'togetherai': return TogetherAi(apiKey: apiKey, model: modelName);
+    case 'perplexity': return Perplexity(apiKey: apiKey, model: modelName);
+    case 'openrouter': return OpenRouter(apiKey: apiKey, model: modelName);
+    case 'fireworks': return FireWorks(apiKey: apiKey, model: modelName);
+    case 'localllama':
       final path = (modelConfig['modelPath'] ?? '').toString().trim();
       if (path.isEmpty) return null;
       final displayName = modelName.isNotEmpty ? modelName : path.split('/').last;
@@ -179,11 +182,10 @@ Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
 
     // ── Panda Open Gateway (local uvicorn OpenAI-compat server) ──────────────
     case 'pandagateway':
-    case 'PandaGateway':
       final port = (modelConfig['port'] as num?)?.toInt() ?? 8000;
       return PandaGateway(apiKey: apiKey, model: modelName, port: port);
 
-    case 'Custom':
+    case 'custom':
       final url = (modelConfig['url'] ?? '').toString().trim();
       if (url.isEmpty) return null;
 

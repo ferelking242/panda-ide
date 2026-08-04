@@ -966,6 +966,84 @@ class OpenAI extends Models {
   }
 }
 
+/// GitHub Copilot provider for Panda Agent.
+///
+/// The token is the short-lived Copilot token exchanged from the user's
+/// GitHub session. It is intentionally kept in memory and never persisted in
+/// the AI provider configuration.
+class Copilot extends Models {
+  @override
+  ToolCallingMethod get toolCallingMethod => ToolCallingMethod.openAiCompatible;
+
+  final String authToken;
+  final String apiEndpoint;
+  @override
+  final String model;
+
+  Copilot({
+    required this.authToken,
+    required this.model,
+    String? apiEndpoint,
+  }) : apiEndpoint = _normalizeApiEndpoint(
+          apiEndpoint ?? 'https://api.githubcopilot.com',
+        );
+
+  static String _normalizeApiEndpoint(String endpoint) {
+    var normalized = endpoint.trim();
+    while (normalized.endsWith('/')) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+    if (normalized.endsWith('/chat/completions')) {
+      normalized = normalized.substring(
+        0,
+        normalized.length - '/chat/completions'.length,
+      );
+    }
+    return normalized;
+  }
+
+  @override
+  String get url => '$apiEndpoint/chat/completions';
+
+  @override
+  String get chatUrl => url;
+
+  @override
+  String get apiKey => authToken;
+
+  @override
+  Map<String, String> get headers => {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': 'Bearer $authToken',
+        'Accept': 'application/json',
+        'Copilot-Integration-Id': 'vscode-chat',
+        'User-Agent': 'Panda/2.3.0',
+        'Editor-Version': 'Panda/2.3.0',
+        'X-GitHub-Api-Version': '2025-10-01',
+        'X-Initiator': 'agent',
+        'X-Interaction-Type': 'conversation-panel',
+        'OpenAI-Intent': 'conversation-panel',
+      };
+
+  @override
+  Map<String, dynamic> buildRequest(String code) => {
+        'model': model,
+        'messages': [
+          {'role': 'system', 'content': Models.instruction},
+          {'role': 'user', 'content': code},
+        ],
+      };
+
+  @override
+  String responseParser(dynamic response) {
+    try {
+      return response['choices']?[0]?['message']?['content']?.toString() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+}
+
 class Claude extends Models {
   @override
   ToolCallingMethod get toolCallingMethod => ToolCallingMethod.anthropicMessages;
