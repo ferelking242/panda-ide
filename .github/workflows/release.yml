@@ -54,7 +54,6 @@ jobs:
           cache: true
 
       - name: Setup release keystore
-        if: ${{ secrets.KEYSTORE_B64 != '' }}
         run: |
           set -euo pipefail
           echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/app/panda-ide.keystore
