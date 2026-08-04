@@ -3141,8 +3141,11 @@ class _SelectTypeState extends State<SelectType>
         : (aiState.modelSelected['chat'] as String? ?? '');
     final modelDisplayName = effectiveModelId.isNotEmpty &&
             aiState.config.containsKey(effectiveModelId)
-        ? (aiState.config[effectiveModelId]?['modelName'] as String? ??
-            effectiveModelId)
+        ? ((aiState.config[effectiveModelId] is Map)
+                ? (aiState.config[effectiveModelId] as Map)['modelName']
+                    ?.toString()
+                : null) ??
+            effectiveModelId
         : 'Choisir modèle';
 
     return Container(
@@ -3595,9 +3598,12 @@ class _SelectTypeState extends State<SelectType>
                   itemCount: modelIds.length,
                   itemBuilder: (_, i) {
                     final id = modelIds[i];
-                    final cfg = aiState.config[id] as Map<String, dynamic>?;
-                    final name = cfg?['modelName'] as String? ?? id;
-                    final provider = cfg?['provider'] as String? ?? '';
+                    final rawCfg = aiState.config[id];
+                    final cfg = rawCfg is Map
+                        ? Map<String, dynamic>.from(rawCfg)
+                        : const <String, dynamic>{};
+                    final name = cfg['modelName']?.toString() ?? id;
+                    final provider = cfg['provider']?.toString() ?? '';
                     final isSelected = (_agentSelectedModelId == id) ||
                         (_agentSelectedModelId == null &&
                             aiState.modelSelected['chat'] == id);
@@ -4493,16 +4499,21 @@ class _SelectTypeState extends State<SelectType>
     ];
 
     // Construit l'historique au format OpenAI
-    final history = _agentMessages
-        .where((m) =>
-            (m['role'] == 'user' || m['role'] == 'agent') &&
-            (m['text'] as String).isNotEmpty)
-        .map((m) => {
-              'role': m['role'] == 'user' ? 'user' : 'assistant',
-              'content': m['text'] as String,
-            })
-        .toList();
-    final messages = [...history, {'role': 'user', 'content': text}];
+    final history = <Map<String, dynamic>>[];
+    for (final message in _agentMessages) {
+      final role = message['role']?.toString();
+      final content = message['text']?.toString() ?? '';
+      if ((role == 'user' || role == 'agent') && content.isNotEmpty) {
+        history.add(<String, dynamic>{
+          'role': role == 'user' ? 'user' : 'assistant',
+          'content': content,
+        });
+      }
+    }
+    final messages = <Map<String, dynamic>>[
+      ...history,
+      <String, dynamic>{'role': 'user', 'content': text},
+    ];
     PandaLog.d(
       'PandaAgent',
       'Conversation prepared — messages=${messages.length}',

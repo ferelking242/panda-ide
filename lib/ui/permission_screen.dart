@@ -73,6 +73,8 @@ class _PermissionScreenState extends State<PermissionScreen> {
     final result = await _storagePermission().request();
     setState(() => _storageStatus = result);
     if (result == PermissionStatus.granted) {
+      await migratePrivateStorageRootsToPublic();
+      usePublicStorageRoots();
       // Create "Panda IDE" public folder structure now that we have permission
       for (final path in [pandaRootDir, projectDir, templateDir, filesDir, pandaLogsDir]) {
         final dir = Directory(path);

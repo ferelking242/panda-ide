@@ -522,7 +522,9 @@ class _AgentSettingsState extends State<AgentSettings>
               const SizedBox(height: 8),
               ...configuredModels.map((entry) {
                 final id  = entry.key;
-                final cfg = entry.value as Map<String, dynamic>? ?? {};
+                final cfg = entry.value is Map
+                    ? Map<String, dynamic>.from(entry.value as Map)
+                    : <String, dynamic>{};
                 final name     = cfg['modelName']?.toString() ?? id;
                 final provider = cfg['provider']?.toString() ?? '';
                 final pDef     = _providers.firstWhere(

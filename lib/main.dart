@@ -24,6 +24,7 @@ Future<void> main() async {
   // native binaries. Keep iOS focused on the Flutter UI and Agent providers.
   final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   if (isAndroid) {
+    await configureStorageRoots();
     await migrateSharedStorageRoots();
   }
 

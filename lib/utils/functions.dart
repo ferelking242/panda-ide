@@ -195,9 +195,19 @@ Future<void> _remapRecentEntriesToSharedStorage() async {
 
 Future<bool> migrateSharedStorageRoots() async {
   var migrated = false;
-  migrated = await _migrateDirectoryRoot(_legacyProjectDir, projectDir) || migrated;
-  migrated = await _migrateDirectoryRoot(_legacyTemplateDir, templateDir) || migrated;
-  migrated = await _migrateDirectoryRoot(_legacyFilesDir, filesDir) || migrated;
+  // Migration is best-effort. On a fresh Android install the public root may
+  // still be protected until PermissionScreen grants MANAGE_EXTERNAL_STORAGE.
+  for (final pair in [
+    (_legacyProjectDir, projectDir),
+    (_legacyTemplateDir, templateDir),
+    (_legacyFilesDir, filesDir),
+  ]) {
+    try {
+      migrated = await _migrateDirectoryRoot(pair.$1, pair.$2) || migrated;
+    } on FileSystemException {
+      continue;
+    }
+  }
 
   await _remapRecentEntriesToSharedStorage();
 
@@ -210,12 +220,55 @@ Future<bool> migrateSharedStorageRoots() async {
   return migrated;
 }
 
-Future<Directory> setupProjectDir() async {
-  final target = Directory(projectDir);
-  if (!target.existsSync()) {
-    await target.create(recursive: true);
+/// Selects public storage only when Android allows writing to it. This runs
+/// before the permission screen, so a fresh install never crashes on a
+/// permission-protected `/storage/emulated/0` path.
+Future<bool> configureStorageRoots() async {
+  final publicRoot = Directory(publicPandaRootDir);
+  try {
+    await publicRoot.create(recursive: true);
+    final probe = File(path.join(publicRoot.path, '.panda_write_probe'));
+    await probe.writeAsString('ok', flush: true);
+    await probe.delete();
+    usePublicStorageRoots();
+    return true;
+  } on FileSystemException {
+    usePrivateStorageRoots();
+    return false;
   }
-  return target;
+}
+
+Future<void> migratePrivateStorageRootsToPublic() async {
+  final privateRoots = <(String, String)>[
+    ('$appDir/UserFiles/Projects', publicProjectDir),
+    ('$appDir/UserFiles/Templates', publicTemplateDir),
+    ('$appDir/UserFiles/Files', publicFilesDir),
+    ('$appDir/UserFiles/Logs', publicPandaLogsDir),
+  ];
+  for (final pair in privateRoots) {
+    try {
+      await _migrateDirectoryRoot(pair.$1, pair.$2);
+    } on FileSystemException {
+      // Public storage may be unavailable despite the permission result.
+      // The private copy remains valid and startup must continue.
+      continue;
+    }
+  }
+}
+
+Future<Directory> setupProjectDir() async {
+  for (final candidate in [Directory(projectDir)]) {
+    try {
+      await candidate.create(recursive: true);
+      return candidate;
+    } on FileSystemException {
+      continue;
+    }
+  }
+  throw FileSystemException(
+    'Unable to create Panda IDE projects directory',
+    projectDir,
+  );
 }
 
 Future<Directory> setupTempDir() async {
@@ -227,39 +280,59 @@ Future<Directory> setupTempDir() async {
 }
 
 Future<Directory> setupFilesDir() async {
-  final target = Directory(filesDir);
-  if (!target.existsSync()) {
-    await target.create(recursive: true);
+  // The active root is private during first launch and switches to public
+  // storage only after a successful write probe or explicit permission grant.
+  // Never let a permission-protected public path abort startup.
+  final candidates = <Directory>[Directory(filesDir)];
+  Directory? target;
+  for (final candidate in candidates) {
+    try {
+      if (!candidate.existsSync()) {
+        await candidate.create(recursive: true);
+      }
+      final probe = File(path.join(candidate.path, '.panda_write_probe'));
+      await probe.writeAsString('ok', flush: true);
+      await probe.delete();
+      target = candidate;
+      break;
+    } on FileSystemException {
+      continue;
+    }
   }
-  final ggufDir = Directory('${target.path}/gguf');
-  if (!ggufDir.existsSync()) await ggufDir.create(recursive: true);
-
-  final currentFiles = File('${target.path}/.current_files.json');
-
-  if (!await currentFiles.exists()) {
-    await currentFiles.writeAsString(jsonEncode({}));
-    return target;
+  if (target == null) {
+    throw FileSystemException(
+      'Unable to create Panda IDE files directory',
+      candidates.last.path,
+    );
   }
+
+  final ggufDir = Directory(path.join(target.path, 'gguf'));
+  await ggufDir.create(recursive: true);
+  final currentFiles = File(path.join(target.path, '.current_files.json'));
 
   try {
-    final raw = await currentFiles.readAsString();
-    if (raw.trim().isEmpty) {
-      await currentFiles.writeAsString(jsonEncode({}));
+    if (!await currentFiles.exists()) {
+      await currentFiles.writeAsString(jsonEncode({}), flush: true);
       return target;
     }
 
-    final Map<String, dynamic> data = jsonDecode(raw);
-    final Map<String, String> cleaned = {};
-
-    for (final entry in data.entries) {
-      final filePath = '${target.path}/${entry.key}';
-      if (await File(filePath).exists()) {
-        cleaned[entry.key] = entry.value.toString();
-      }
+    final raw = await currentFiles.readAsString();
+    if (raw.trim().isEmpty) {
+      await currentFiles.writeAsString(jsonEncode({}), flush: true);
+      return target;
     }
 
+    final decoded = jsonDecode(raw);
+    final data = decoded is Map ? decoded : const <dynamic, dynamic>{};
+    final cleaned = <String, String>{};
+    for (final entry in data.entries) {
+      final relativePath = entry.key.toString();
+      if (await File(path.join(target.path, relativePath)).exists()) {
+        cleaned[relativePath] = entry.value.toString();
+      }
+    }
     await currentFiles.writeAsString(jsonEncode(cleaned), flush: true);
-  } catch (e) {
+  } catch (_) {
     await currentFiles.writeAsString(jsonEncode({}), flush: true);
   }
 
@@ -267,11 +340,18 @@ Future<Directory> setupFilesDir() async {
 }
 
 Future<Directory> setupTemplateDir() async {
-  final target = Directory(templateDir);
-  if (!target.existsSync()) {
-    await target.create(recursive: true);
+  for (final candidate in [Directory(templateDir)]) {
+    try {
+      await candidate.create(recursive: true);
+      return candidate;
+    } on FileSystemException {
+      continue;
+    }
   }
-  return target;
+  throw FileSystemException(
+    'Unable to create Panda IDE templates directory',
+    templateDir,
+  );
 }
 
 Future<File> setTempFile(String extension) async {

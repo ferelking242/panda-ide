@@ -113,21 +113,6 @@ class _StartScreenState extends State<StartScreen> {
       return;
     }
 
-    // ── Create Panda IDE public folder structure ───────────────────────────
-    for (final path in [pandaRootDir, projectDir, templateDir, filesDir, pandaLogsDir]) {
-      final dir = Directory(path);
-      if (!dir.existsSync()) {
-        try {
-          await dir.create(recursive: true);
-        } catch (e) {
-          PandaLog.w('StartScreen', 'Could not create $path: $e');
-        }
-      }
-    }
-
-    // ── Init file logging ─────────────────────────────────────────────────
-    await PandaLog.initFileLogging();
-
     await NativeChannel.getExternalMediaDir();
     final downdir = Directory(downloadsDir);
     final gitCore = "$binDir/git-core";
@@ -146,9 +131,15 @@ class _StartScreenState extends State<StartScreen> {
       }
     }
 
+    // configureStorageRoots() already selected a writable root. Public roots
+    // are used only after the permission probe succeeds.
+    await Directory(appDir).create(recursive: true);
     await setupFilesDir();
     await setupProjectDir();
     await setupTempDir();
+    await Directory('$appDir/Templates').create(recursive: true);
+    await Directory('$appDir/Logs').create(recursive: true);
+    await PandaLog.initFileLogging();
     await ensureCopilotEnabledPrefInitialized();
     await ensureCopilotSignedPrefInitialized();
     if (mounted) await context.read<PackageCatalogCubit>().syncOnStartup();

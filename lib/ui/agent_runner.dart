@@ -76,13 +76,22 @@ class AgentRunner {
     String agentMode = 'agent',
   }) {
     final ctrl = StreamController<AgentChunk>();
+    // JSON literals containing only strings can arrive here at runtime as
+    // List<Map<String, String>> even though the public API is dynamic-valued.
+    // Rebuild every entry so Iterable.first/lastWhere and tool payloads use
+    // one concrete map type throughout the Agent lifecycle.
+    final normalizedMessages = messages
+        .map<Map<String, dynamic>>(
+          (message) => Map<String, dynamic>.from(message),
+        )
+        .toList();
     final effectiveSystemPrompt = systemPromptOverride == null ||
             systemPromptOverride.trim().isEmpty
         ? _systemPrompt
         : '$_systemPrompt\n\nAdditional Panda Agent context:\n$systemPromptOverride';
     unawaited(_run(
       model: model,
-      messages: messages,
+      messages: normalizedMessages,
       systemPrompt: effectiveSystemPrompt,
       ctrl: ctrl,
       context: context,
@@ -168,8 +177,8 @@ class AgentRunner {
     List<Map<String, dynamic>> toolSchemas,
     {required bool allowWrites}
   ) async {
-    final conversationMessages = [
-      {'role': 'system', 'content': systemPrompt},
+    final conversationMessages = <Map<String, dynamic>>[
+      <String, dynamic>{'role': 'system', 'content': systemPrompt},
       ...messages,
     ];
 
@@ -307,8 +316,8 @@ class AgentRunner {
     List<Map<String, dynamic>> toolSchemas,
     {required bool allowWrites}
   ) async {
-    final conversationMessages = [
-      {'role': 'system', 'content': systemPrompt},
+    final conversationMessages = <Map<String, dynamic>>[
+      <String, dynamic>{'role': 'system', 'content': systemPrompt},
       ...messages,
     ];
 
@@ -665,11 +674,14 @@ class AgentRunner {
   }
 
   bool _shouldUseTools(List<Map<String, dynamic>> messages) {
-    final latestUser = messages.lastWhere(
-      (message) => (message['role']?.toString() ?? '') == 'user',
-      orElse: () => <String, dynamic>{},
-    );
-    final text = latestUser['content']?.toString() ?? '';
+    Map<String, dynamic>? latestUser;
+    for (final message in messages.reversed) {
+      if (message['role']?.toString() == 'user') {
+        latestUser = message;
+        break;
+      }
+    }
+    final text = latestUser?['content']?.toString() ?? '';
     if (text.trim().isEmpty || text.trim().length < 8) {
       return false;
     }
