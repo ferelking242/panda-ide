@@ -2391,6 +2391,32 @@ class AgenticTools {
         {
           "type": "function",
           "function": {
+            "name": "updateProjectMemory",
+            "description":
+                "Writes or updates the project memory file at .panda/memory.md. "
+                "Use after resolving a significant bug, making a technical decision, "
+                "or discovering an important project convention. "
+                "The content is injected at the start of every future conversation. "
+                "Format: Markdown with sections like '## Décisions techniques', "
+                "'## Conventions', '## Fichiers clés', '## Bugs connus'.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "content": {
+                  "type": "string",
+                  "description":
+                      "Full Markdown content to write to .panda/memory.md. "
+                      "This REPLACES the existing file entirely.",
+                },
+              },
+              "required": ["content"],
+            },
+          },
+        },
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
             "name": "runShellCommand",
             "description":
                 "Runs a shell command from the workspace directory and returns stdout/stderr and exit code. IMPORTANT: This app runs on Android, not a full Linux desktop/server environment, so full Linux access is limited. Prefer bundled binaries first. Bundled commands include: clang, clang++, clangloader, node, python, python3, npm, npx, pip, pip3, tsc, kotlinc, git, jar, jarsigner, java, javac, javadoc, javap, jcmd, jconsole, jdb, jdeprscan, jdeps, jfr, jhsdb, jimage, jinfo, jlink, jmap, jmod, jpackage, jps, jrunscript, jstack, jstat, jstatd, jwebserver, keytool, rmiregistry, serialver, bash, sh, ccls, less, pager, git-remote-https, git-remote-http. Basic commands like cd, ls, grep, etc may come from Android PATH and can vary by device. Always plan commands with Android limitations in mind.",
@@ -2418,6 +2444,29 @@ class AgenticTools {
           },
         },
       ]);
+  }
+
+  /// Writes or updates .panda/memory.md in the workspace root.
+  /// Content replaces the file entirely.
+  Future<ToolResult<String>> updateProjectMemory(String content) async {
+    try {
+      if (content.trim().isEmpty) {
+        return ToolResult.error('content must not be empty');
+      }
+      final workspace = _canonicalWorkspacePath();
+      if (workspace.isEmpty) {
+        return ToolResult.error('No workspace path configured');
+      }
+      final pandaDir = Directory('$workspace/.panda');
+      if (!pandaDir.existsSync()) {
+        await pandaDir.create(recursive: true);
+      }
+      final file = File('$workspace/.panda/memory.md');
+      await file.writeAsString(content);
+      return ToolResult.success('$workspace/.panda/memory.md');
+    } catch (e) {
+      return ToolResult.error('Error updating project memory: $e');
+    }
   }
 
   RegExp _globToRegex(String glob) {

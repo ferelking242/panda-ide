@@ -4346,7 +4346,20 @@ class _SelectTypeState extends State<SelectType>
       case 'togetherai': return TogetherAi(apiKey: apiKey, model: modelName);
       case 'perplexity': return Perplexity(apiKey: apiKey, model: modelName);
       case 'openrouter': return OpenRouter(apiKey: apiKey, model: modelName);
+      case 'groq':       return Groq(apiKey: apiKey, model: modelName);
       case 'fireworks':  return FireWorks(apiKey: apiKey, model: modelName);
+      case 'cohere':     return Cohere(apiKey: apiKey, model: modelName);
+      case 'cerebras':   return Cerebras(apiKey: apiKey, model: modelName);
+      case 'novita':     return Novita(apiKey: apiKey, model: modelName);
+      case 'hyperbolic': return Hyperbolic(apiKey: apiKey, model: modelName);
+      case 'sambanova':  return SambaNova(apiKey: apiKey, model: modelName);
+      case 'qwen':       return Qwen(apiKey: apiKey, model: modelName);
+      case 'ollama':
+        final ollamaPort = (cfg['port'] as num?)?.toInt() ?? 11434;
+        return Ollama(model: modelName, port: ollamaPort);
+      case 'lmstudio':
+        final lmsPort = (cfg['port'] as num?)?.toInt() ?? 1234;
+        return LmStudio(model: modelName, port: lmsPort);
       case 'pandagateway':
         final port = (cfg['port'] as num?)?.toInt() ?? 8000;
         return PandaGateway(apiKey: apiKey, model: modelName, port: port);

@@ -198,20 +198,32 @@ $toolLines
 1. **Toujours agir, jamais décrire.** Si tu peux appeler un outil, appelle-le. Pas de "Je vais lire…", lis directement.
 2. **readFile AVANT editFile.** Sans exception. Ne modifie jamais un fichier sans l'avoir lu intégralement d'abord.
 3. **Ne jamais inventer.** Si tu ne sais pas ce qu'un fichier contient → readFile. Si tu ne sais pas où il est → grepInFiles ou globSearchFiles.
-4. **Enchaîne sans permission.** Tu as jusqu'à 12 tours de tools. Continue d'enchaîner les appels jusqu'à ce que la tâche soit complète.
+4. **Enchaîne SANS DEMANDER LA PERMISSION.** Tu as 12 tours de tools. Continue d'enchaîner les appels AUTOMATIQUEMENT jusqu'à ce que la tâche soit 100% complète.
 5. **Gère les erreurs.** Si un outil renvoie une erreur → réessaie différemment. Ne renonce jamais après un seul échec.
-6. **Après runShellCommand** → lis la sortie COMPLÈTE. Si elle contient des erreurs, corrige-les avant de répondre.
-7. **Erreurs de compilation** → identifie les fichiers concernés → readFile → corrige → runShellCommand pour vérifier.
+6. **Après runShellCommand** → lis la sortie COMPLÈTE. Si elle contient des erreurs, corrige-les IMMÉDIATEMENT avant de répondre.
+7. **Erreurs de compilation** → identifie les fichiers concernés → readFile → corrige → runShellCommand pour vérifier. Répète jusqu'à zéro erreur.
+8. **Mémoire projet** → après avoir résolu un bug important ou pris une décision technique majeure → appelle updateProjectMemory avec un résumé Markdown.
 
-## WORKFLOW STANDARD
+## WORKFLOWS ENCHAÎNÉS — exemples obligatoires
+
+**Bug / erreur à corriger :**
 ```
-Tâche reçue
-  ↓ globSearchFiles / listFiles  (comprendre la structure)
-  ↓ grepInFiles                  (trouver le code concerné)
-  ↓ readFile                     (lire les fichiers ciblés)
-  ↓ editFile / writeFile         (modifier)
-  ↓ runShellCommand              (valider: build, test, lint)
-  ↓ Réponse courte (1-2 phrases)
+runShellCommand(build)  →  grepInFiles(erreur)  →  readFile  →  editFile  →  runShellCommand(build)
+```
+
+**Nouvelle fonctionnalité :**
+```
+listFiles  →  grepInFiles(code similaire)  →  readFile(x2)  →  writeFile/editFile  →  runShellCommand(test)
+```
+
+**Comprendre le code :**
+```
+globSearchFiles(pattern)  →  readFilesBatch([fichiers])  →  grepInFiles(symbole)  →  réponse
+```
+
+**Modifier sans casser :**
+```
+readFile(fichier complet)  →  editFile(old_text EXACT, new_text)  →  getLspDiagnostics
 ```
 
 ## FORMAT DE RÉPONSE
@@ -706,6 +718,7 @@ Tâche reçue
         'replaceAllInFile',
         'editFile',
         'runShellCommand',
+        'updateProjectMemory',
       };
       if (!allowWrites && mutatingTools.contains(functionName)) {
         return 'Blocked: this tool changes the workspace and is unavailable in Ask mode.';
@@ -836,6 +849,11 @@ Tâche reçue
           return res.success
               ? jsonEncode(res.data?.map((c) => c.toJson()).toList() ?? [])
               : (res.error ?? 'Error');
+        case 'updateProjectMemory':
+          final res = await tools.updateProjectMemory(args['content']?.toString() ?? '');
+          return res.success
+              ? 'Project memory updated at .panda/memory.md'
+              : (res.error ?? 'Error updating project memory');
         default:
           return 'Unknown tool: $functionName';
       }

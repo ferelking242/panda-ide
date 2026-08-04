@@ -1148,6 +1148,84 @@ class FireWorks extends OpenAiCompatible {
   FireWorks({required this.apiKey, required this.model});
 }
 
+class Cohere extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://api.cohere.com/compatibility/v1";
+  @override
+  final String apiKey, model;
+  Cohere({required this.apiKey, required this.model});
+}
+
+class Cerebras extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://api.cerebras.ai/v1";
+  @override
+  final String apiKey, model;
+  Cerebras({required this.apiKey, required this.model});
+}
+
+class Novita extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://api.novita.ai/v3/openai";
+  @override
+  final String apiKey, model;
+  Novita({required this.apiKey, required this.model});
+}
+
+class Hyperbolic extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://api.hyperbolic.xyz/v1";
+  @override
+  final String apiKey, model;
+  Hyperbolic({required this.apiKey, required this.model});
+}
+
+class SambaNova extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://api.sambanova.ai/v1";
+  @override
+  final String apiKey, model;
+  SambaNova({required this.apiKey, required this.model});
+}
+
+class Qwen extends OpenAiCompatible {
+  @override
+  String get baseUrl => "https://dashscope.aliyuncs.com/compatible-mode/v1";
+  @override
+  final String apiKey, model;
+  Qwen({required this.apiKey, required this.model});
+}
+
+/// Ollama — local inference server (no API key required).
+class Ollama extends OpenAiCompatible {
+  final int port;
+  Ollama({required String model, this.port = 11434}) : _model = model;
+  final String _model;
+  @override
+  String get baseUrl => "http://127.0.0.1:$port/v1";
+  @override
+  String? get apiKey => null;
+  @override
+  String get model => _model;
+  @override
+  Map<String, String> get headers => {"Content-Type": "application/json; charset=utf-8"};
+}
+
+/// LM Studio — local inference server (no API key required).
+class LmStudio extends OpenAiCompatible {
+  final int port;
+  LmStudio({required String model, this.port = 1234}) : _model = model;
+  final String _model;
+  @override
+  String get baseUrl => "http://127.0.0.1:$port/v1";
+  @override
+  String? get apiKey => null;
+  @override
+  String get model => _model;
+  @override
+  Map<String, String> get headers => {"Content-Type": "application/json; charset=utf-8"};
+}
+
 /// PandaGateway — Panda Browser Gateway local server (OpenAI-compatible).
 ///
 /// Routes requests through the local uvicorn server running at

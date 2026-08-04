@@ -157,6 +157,12 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     description: 'Runs a command in the project terminal and returns its output.',
     requiresWriteAccess: true,
   ),
+  AgenticToolSpec(
+    name: 'updateProjectMemory',
+    label: 'Update project memory',
+    description: 'Writes or updates .panda/memory.md — persistent project notes injected at the start of every conversation.',
+    requiresWriteAccess: true,
+  ),
 ];
 
 Map<String, bool> normalizeAgenticToolSelections(
