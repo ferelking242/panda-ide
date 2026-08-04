@@ -1,1 +1,2 @@
 - [GitHub AI providers](github-ai-providers.md) — GitHub Models and GitHub Copilot are separate services; verify their current availability before adding a provider.
+- [Panda Agent stream lifecycle](panda-agent-stream-lifecycle.md) — setup failures before streaming must close the stream and reset the UI instead of leaving generation infinite.
