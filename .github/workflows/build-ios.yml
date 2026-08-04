@@ -70,6 +70,23 @@ jobs:
               text = text.replace(needle, needle + hook, 1)
               podfile.write_text(text)
           PY
+          podspec_count=0
+          while IFS= read -r podspec; do
+            podspec_count=$((podspec_count + 1))
+            perl -0pi -e '
+              if (!/llama_cpp_src\/src\/models\/\*\.cpp/) {
+                s#    '\''llama_cpp_src/src/\*\.cpp'\'',#    '\''llama_cpp_src/src/*.cpp'\'',\n    '\''llama_cpp_src/src/models/*.cpp'\'',#;
+              }
+              if (!/llama_cpp_src\/ggml\/src\/ggml-backend-dl\.cpp/) {
+                s#    '\''llama_cpp_src/ggml/src/ggml-backend-reg\.cpp'\'',#    '\''llama_cpp_src/ggml/src/ggml-backend-reg.cpp'\'',\n    '\''llama_cpp_src/ggml/src/ggml-backend-dl.cpp'\'',#;
+              }
+            ' "$podspec"
+            grep -Fq "llama_cpp_src/src/models/*.cpp" "$podspec"
+            grep -Fq "llama_cpp_src/ggml/src/ggml-backend-dl.cpp" "$podspec"
+          done < <(find -L "$HOME/.pub-cache" ios/.symlinks \
+            -type f -name 'llama_flutter_android.podspec' \
+            -print 2>/dev/null | sort -u)
+          test "$podspec_count" -gt 0
           (cd ios && pod install)
           patch_count=0
           while IFS= read -r plugin; do
