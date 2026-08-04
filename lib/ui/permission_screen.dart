@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/constants.dart';
+import '../utils/functions.dart';
 import 'home.dart';
 
 const _kAccent = Color(0xff5090c8);
