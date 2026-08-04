@@ -244,33 +244,65 @@ Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
   return null;
 }
 
+Map<String, dynamic> normalizeAiConfigMap(Map<dynamic, dynamic> source) {
+  final normalized = <String, dynamic>{};
+  source.forEach((key, value) {
+    final normalizedKey = key.toString();
+    if (value is Map) {
+      normalized[normalizedKey] = normalizeAiConfigMap(value);
+    } else if (value is List) {
+      normalized[normalizedKey] = value.map((item) {
+        if (item is Map) return normalizeAiConfigMap(item);
+        return item;
+      }).toList();
+    } else {
+      normalized[normalizedKey] = value;
+    }
+  });
+  return normalized;
+}
+
 class AIState {
   final Map<String, dynamic> config, modelSelected;
   final bool isEnabled, showSuggestionOntap;
   final Models? completionModel, chatModel;
 
   AIState(
-    this.config,
+    Map<String, dynamic> rawConfig,
     this.isEnabled,
-    this.modelSelected,
+    Map<String, dynamic> rawModelSelected,
     this.showSuggestionOntap
-  ) : completionModel = (() {
-        if (config.isEmpty || modelSelected.isEmpty || modelSelected['code'] == null || config[modelSelected['code']] == null) {
+  ) : config = normalizeAiConfigMap(rawConfig),
+      modelSelected = normalizeAiConfigMap(rawModelSelected),
+      completionModel = (() {
+        final normalizedConfig = normalizeAiConfigMap(rawConfig);
+        final normalizedSelection = normalizeAiConfigMap(rawModelSelected);
+        if (normalizedConfig.isEmpty ||
+            normalizedSelection.isEmpty ||
+            normalizedSelection['code'] == null ||
+            normalizedConfig[normalizedSelection['code']] == null) {
           return null;
         }
-        if (config[modelSelected['code']] is! Map<String, dynamic>) {
+        final rawModelConfig = normalizedConfig[normalizedSelection['code']];
+        if (rawModelConfig is! Map) {
           return null;
         }
-        return _modelFromConfig(config[modelSelected['code']] as Map<String, dynamic>);
+        return _modelFromConfig(normalizeAiConfigMap(rawModelConfig));
       })(),
       chatModel = (() {
-        if (config.isEmpty || modelSelected.isEmpty || modelSelected['chat'] == null || config[modelSelected['chat']] == null) {
+        final normalizedConfig = normalizeAiConfigMap(rawConfig);
+        final normalizedSelection = normalizeAiConfigMap(rawModelSelected);
+        if (normalizedConfig.isEmpty ||
+            normalizedSelection.isEmpty ||
+            normalizedSelection['chat'] == null ||
+            normalizedConfig[normalizedSelection['chat']] == null) {
           return null;
         }
-        if (config[modelSelected['chat']] is! Map<String, dynamic>) {
+        final rawModelConfig = normalizedConfig[normalizedSelection['chat']];
+        if (rawModelConfig is! Map) {
           return null;
         }
-        return _modelFromConfig(config[modelSelected['chat']] as Map<String, dynamic>);
+        return _modelFromConfig(normalizeAiConfigMap(rawModelConfig));
       })();
 
   AIState copyWith({

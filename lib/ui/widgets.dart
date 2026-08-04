@@ -9791,10 +9791,13 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     );
 
     final selectedModel = aiChatUIState.selectedModelId ?? '';
-    final selectedCopilotModel = chatState.models.firstWhere(
-      (model) => model['id'] == selectedModel,
-      orElse: () => const <String, dynamic>{},
-    );
+    Map<String, dynamic> selectedCopilotModel = <String, dynamic>{};
+    for (final candidate in chatState.models) {
+      if (candidate['id']?.toString() == selectedModel) {
+        selectedCopilotModel = Map<String, dynamic>.from(candidate);
+        break;
+      }
+    }
 
     if (selectedCopilotModel.isNotEmpty) {
       _sendCopilotChatPrompt(

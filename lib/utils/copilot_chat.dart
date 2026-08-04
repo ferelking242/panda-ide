@@ -72,23 +72,25 @@ class CopilotChat {
         return CopilotAuthContext(authToken: explicitCopilotToken);
       }
 
-      final copilotEntry = all.entries.cast<MapEntry<String, String?>>().firstWhere(
-        (entry) {
-          final key = entry.key.toLowerCase();
-          final value = entry.value;
-          return key.contains('copilot') && value != null && value.isNotEmpty;
-        },
-        orElse: () => const MapEntry<String, String?>('', null),
-      );
+      String? discoveredCopilotToken;
+      for (final entry in all.entries) {
+        final key = entry.key.toLowerCase();
+        final value = entry.value;
+        if (key.contains('copilot') && value.isNotEmpty) {
+          discoveredCopilotToken = value;
+          break;
+        }
+      }
 
-      if (copilotEntry.value != null && copilotEntry.value!.isNotEmpty) {
+      if (discoveredCopilotToken != null &&
+          discoveredCopilotToken.isNotEmpty) {
         final exchanged = await _exchangeGithubTokenForCopilotContext(
-          copilotEntry.value!,
+          discoveredCopilotToken,
         );
         if (exchanged != null) {
           return exchanged;
         }
-        return CopilotAuthContext(authToken: copilotEntry.value!);
+        return CopilotAuthContext(authToken: discoveredCopilotToken);
       }
 
       final githubToken = all['github_access_token'];
@@ -286,16 +288,19 @@ class CopilotChat {
   }
 
   Set<String> _modelSupportedEndpoints(String model) {
-    if (_cachedModels == null) return const {};
+    final cachedModels = _cachedModels;
+    if (cachedModels == null) return const <String>{};
 
-    final modelData = _cachedModels!.firstWhere(
-      (item) => item['id'] == model,
-      orElse: () => const <String, dynamic>{},
-    );
-
-    if (modelData.isEmpty) return const {};
+    Map<String, dynamic>? modelData;
+    for (final candidate in cachedModels) {
+      if (candidate['id']?.toString() == model) {
+        modelData = candidate;
+        break;
+      }
+    }
+    if (modelData == null || modelData.isEmpty) return const <String>{};
     final endpoints = modelData['supported_endpoints'];
-    if (endpoints is! List) return const {};
+    if (endpoints is! List) return const <String>{};
     return endpoints
       .whereType<String>()
       .map(_normalizeEndpoint)
@@ -548,11 +553,15 @@ class CopilotChat {
             };
       final data = parsed['data'];
       if (data is List) {
-        _cachedModels = data
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+        final normalizedModels = <Map<String, dynamic>>[];
+        for (final item in data) {
+          if (item is Map) {
+            normalizedModels.add(Map<String, dynamic>.from(item));
+          }
+        }
+        _cachedModels = normalizedModels;
       } else {
+        _cachedModels = <Map<String, dynamic>>[];
       }
       return parsed;
     } else {

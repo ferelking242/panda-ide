@@ -284,12 +284,13 @@ class AIBloc extends Bloc<AIEvent, AIState> {
   final bool isEnabled, showSuggestionOntap;
   final CopilotBloc? copilotBloc;
   AIBloc(
-      this.config,
+      Map<String, dynamic> rawConfig,
       this.isEnabled,
       Map<String, dynamic> modelSelectedInput,
       this.showSuggestionOntap,
       {this.copilotBloc}
-    ) : modelSelected = (() {
+    ) : config = normalizeAiConfigMap(rawConfig),
+        modelSelected = (() {
           if (copilotBloc != null && copilotBloc.state.status == CopilotStatus.signedIn) {
             final ms = Map<String, dynamic>.from(modelSelectedInput);
             if (ms['code'] == null || ms['code'] == '') {
@@ -300,10 +301,10 @@ class AIBloc extends Bloc<AIEvent, AIState> {
           return Map<String, dynamic>.from(modelSelectedInput);
         })(),
         super(AIState(
-          config,
+          normalizeAiConfigMap(rawConfig),
           isEnabled,
           (() {
-            final ms = Map<String, dynamic>.from(modelSelectedInput);
+            final ms = normalizeAiConfigMap(modelSelectedInput);
             if (copilotBloc != null && copilotBloc.state.status == CopilotStatus.signedIn) {
               if (ms['code'] == null || ms['code'] == '') ms['code'] = 'copilot';
             }
@@ -311,9 +312,13 @@ class AIBloc extends Bloc<AIEvent, AIState> {
           })(),
           showSuggestionOntap,
         )) {
-    on<AIConfigEvent>((event, emit) => emit(state.copyWith(config: event.config)));
+    on<AIConfigEvent>((event, emit) => emit(
+      state.copyWith(config: normalizeAiConfigMap(event.config)),
+    ));
     on<AIEnableEvent>((event, emit) => emit(state.copyWith(isEnabled: event.isEnabled)));
-    on<ModelSelectEvent>((event, emit) => emit(state.copyWith(modelSelected: event.modelSelected)));
+    on<ModelSelectEvent>((event, emit) => emit(
+      state.copyWith(modelSelected: normalizeAiConfigMap(event.modelSelected)),
+    ));
     on<AIModeEvent>((event, emit) => emit(state.copyWith(showSuggestionOntap: event.showSuggestionOntap)));
 
     copilotBloc?.stream.listen((copilotState) {

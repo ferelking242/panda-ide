@@ -1067,6 +1067,24 @@ class _SelectTypeState extends State<SelectType>
     });
   }
 
+  void _openAgentTab() {
+    setState(() {
+      final existing = _openTabs.indexWhere((tab) => tab.id == 'agent');
+      if (existing == -1) {
+        _openTabs.add(const _TabDef(
+          id: 'agent',
+          title: 'Panda Agent',
+          icon: Broken.magic_star,
+        ));
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = existing;
+      }
+      _sidebarState = 1;
+      _activeRail = 0;
+    });
+  }
+
   // ── Open a file / folder / project as a tab in the new Panda IDE UI ──────
   // ── Active editor helpers ─────────────────────────────────────────────────
   _EditorTabConfig? _activeEditorConfig() {
@@ -1145,6 +1163,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
+        _RailItem(icon: Broken.magic_star,          label: 'Panda Agent',       idx: 10),
       ];
 
       return Container(
@@ -1227,6 +1246,11 @@ class _SelectTypeState extends State<SelectType>
                         _sidebarState = 2;
                       });
                       _ensureCopilotInitialized();
+                      return;
+                    }
+                    // Panda Agent always opens directly in the editor.
+                    if (item.idx == 10) {
+                      _openAgentTab();
                       return;
                     }
                     setState(() {
@@ -4384,7 +4408,8 @@ class _SelectTypeState extends State<SelectType>
   Future<void> _agentSendInternal(String text, int requestId) async {
     PandaLog.d('PandaAgent', 'Preparing model and conversation');
 
-    // Récupère le modèle sélectionné dans le panel (ou le chatModel par défaut)
+    // Utilise uniquement le modèle explicitement sélectionné.
+    // Ne bascule jamais silencieusement vers un autre provider.
     final aiState = context.read<AIBloc>().state;
     PandaLog.d(
       'PandaAgent',
@@ -4392,32 +4417,21 @@ class _SelectTypeState extends State<SelectType>
       'selected=${aiState.modelSelected['chat']}',
     );
 
-    // Priorité : modèle choisi dans le panel > chatModel de l'AIBloc
     Models? model;
     String? modelResolutionError;
-    final selectedId = _agentSelectedModelId ??
-        aiState.modelSelected['chat']?.toString() ??
-        aiState.config.entries
-            .map((entry) => entry)
-            .firstWhere(
-              (entry) =>
-                  (entry.value as Map?)?['provider']?.toString().toLowerCase() ==
-                  'copilot',
-              orElse: () => const MapEntry<String, dynamic>('', null),
-            )
-            .key;
+    String? selectedId = _agentSelectedModelId;
+    selectedId ??= aiState.modelSelected['chat']?.toString();
     final selectedConfig =
         selectedId == null ? null : aiState.config[selectedId];
-    final selectedIsCopilot = selectedConfig is Map &&
-        selectedConfig['provider']?.toString().toLowerCase() == 'copilot';
     if (selectedConfig is Map) {
       try {
+        final normalizedConfig = Map<String, dynamic>.from(selectedConfig);
         PandaLog.d(
           'PandaAgent',
-          'Resolving provider=${selectedConfig['provider']}',
+          'Resolving provider=${normalizedConfig['provider']} modelId=$selectedId',
         );
         model = await _resolveAgentModel(
-          Map<String, dynamic>.from(selectedConfig),
+          normalizedConfig,
         ).timeout(
           const Duration(seconds: 20),
           onTimeout: () => throw TimeoutException(
@@ -4434,15 +4448,9 @@ class _SelectTypeState extends State<SelectType>
               'GitHub Copilot n’est pas disponible avec cette session ou ce compte.';
         }
       } catch (error) {
-        modelResolutionError = 'Impossible de charger Copilot : $error';
+        modelResolutionError = 'Impossible de charger le modèle IA : $error';
       }
     }
-    // Never silently switch away from Copilot when its account/session is
-    // unavailable; that would make the provider selector misleading.
-    if (!selectedIsCopilot) {
-      model ??= aiState.chatModel;
-    }
-
     if (model == null) {
       _sendAnimCtrl.stop();
       setState(() {
@@ -4452,7 +4460,7 @@ class _SelectTypeState extends State<SelectType>
         _agentMessages.add({
           'role': 'agent',
           'text': modelResolutionError ??
-              'Aucun modèle IA configuré. Ouvrez Paramètres (⚙) pour en ajouter un.',
+          'Aucun modèle sélectionné pour Panda Agent. Choisissez un modèle dans le panneau Agent ou les paramètres IA.',
           'thinking': '',
           'phase': 'error',
         });
