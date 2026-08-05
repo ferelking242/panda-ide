@@ -3108,7 +3108,10 @@ class _SelectTypeState extends State<SelectType>
       return _buildWelcomePage(context, appTheme, appThemestate);
     }
     if (tab.id == 'agent') {
-      return _buildPandaAgentPanel(context, appTheme, asPage: true);
+      return BlocProvider(
+        create: (_) => AIChatUIBloc(),
+        child: _buildPandaAgentPanel(context, appTheme, asPage: true),
+      );
     }
     if (tab.id == 'copilot-chat') {
       return _buildCopilotChatPage();
@@ -3179,7 +3182,10 @@ class _SelectTypeState extends State<SelectType>
       return _buildWelcomePage(context, appTheme, appThemestate);
     }
     if (tab.id == 'agent') {
-      return _buildPandaAgentPanel(context, appTheme, asPage: true);
+      return BlocProvider(
+        create: (_) => AIChatUIBloc(),
+        child: _buildPandaAgentPanel(context, appTheme, asPage: true),
+      );
     }
     if (tab.id == 'copilot-chat') {
       return _buildCopilotChatPage();
