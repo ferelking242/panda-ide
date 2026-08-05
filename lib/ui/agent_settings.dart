@@ -223,7 +223,16 @@ const _providers = <_ProviderDef>[
 // ─────────────────────────────────────────────────────────────────────────────
 class AgentSettings extends StatefulWidget {
   final bool embedded;
-  const AgentSettings({super.key, this.embedded = false});
+  /// When true, reuse the provider settings implementation as a standalone
+  /// page. This keeps the provider flow in one place without rendering the
+  /// legacy Chat/Tools/Subagents shell inside Panda Agent.
+  final bool providersOnly;
+
+  const AgentSettings({
+    super.key,
+    this.embedded = false,
+    this.providersOnly = false,
+  });
 
   @override
   State<AgentSettings> createState() => _AgentSettingsState();
@@ -825,6 +834,15 @@ class _AgentSettingsState extends State<AgentSettings>
     final muted  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final border = isDark ? const Color(0xff3a3a3a) : const Color(0xffe0e0e0);
     final hdrBg  = isDark ? const Color(0xff252526) : const Color(0xffececec);
+
+    if (widget.providersOnly) {
+      return Container(
+        color: bg,
+        child: _buildProvidersContent(
+          context, isDark, bg, card, fg, muted, border,
+        ),
+      );
+    }
 
     final body = Column(
       children: [

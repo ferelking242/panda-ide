@@ -161,7 +161,7 @@ class _SelectTypeState extends State<SelectType>
   // ── Conversation title (editable) ────────────────────────────────
   String _agentConversationTitle = 'Nouvelle conversation';
 
-  // ── Panel tabs (0=Chat, 1=Tool, 2=Task, 3=UserSettings) ─────────
+  // ── Panel tabs (0=Chat, 1=Tool, 2=Task, 3=UserSettings, 4=Providers) ─
   int _agentPanelTab     = 0;
   int _agentPanelPrevTab = 0;
 
@@ -934,7 +934,11 @@ class _SelectTypeState extends State<SelectType>
                                         if (_rightPanelOpen)
                                           BlocProvider(
                                             create: (_) => AIChatUIBloc(),
-                                            child: _buildPandaAgentPanel(context, appTheme),
+                                            child: Builder(
+                                              builder: (panelContext) =>
+                                                  _buildPandaAgentPanel(
+                                                    panelContext, appTheme),
+                                            ),
                                           ),
                                       ],
                                     ),
@@ -3110,7 +3114,10 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'agent') {
       return BlocProvider(
         create: (_) => AIChatUIBloc(),
-        child: _buildPandaAgentPanel(context, appTheme, asPage: true),
+        child: Builder(
+          builder: (panelContext) => _buildPandaAgentPanel(
+            panelContext, appTheme, asPage: true),
+        ),
       );
     }
     if (tab.id == 'copilot-chat') {
@@ -3184,7 +3191,10 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'agent') {
       return BlocProvider(
         create: (_) => AIChatUIBloc(),
-        child: _buildPandaAgentPanel(context, appTheme, asPage: true),
+        child: Builder(
+          builder: (panelContext) => _buildPandaAgentPanel(
+            panelContext, appTheme, asPage: true),
+        ),
       );
     }
     if (tab.id == 'copilot-chat') {
@@ -3273,6 +3283,8 @@ class _SelectTypeState extends State<SelectType>
                         ? _buildTasksTabContent(context, appTheme)
                         : _agentPanelTab == 3
                             ? _buildUserSettingsPage(context, appTheme)
+                            : _agentPanelTab == 4
+                                ? _buildAgentProvidersPage(context, appTheme)
                             : _buildChatTabContent(context, appTheme, asPage),
               ),
             ),
@@ -3292,6 +3304,49 @@ class _SelectTypeState extends State<SelectType>
     final muted     = isDark ? Colors.grey[500]! : Colors.grey[500]!;
     final unselBg   = isDark ? const Color(0xff2a2a2a) : const Color(0xffe2e2e2);
     final selBg     = isDark ? const Color(0xff383838) : const Color(0xffd2d2d2);
+
+    if (_agentPanelTab >= 3) {
+      return Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        decoration: BoxDecoration(
+          color: panelBg,
+          border: Border(
+            bottom: BorderSide(color: borderC.withOpacity(0.5), width: 0.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            GestureDetector(
+              onTap: () => setState(() {
+                _agentPanelPrevTab = _agentPanelTab;
+                _agentPanelTab = 1;
+              }),
+              child: SizedBox(
+                width: 32,
+                height: 34,
+                child: Icon(Broken.arrow_left_2, size: 15, color: muted),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(
+              _agentPanelTab == 4 ? Broken.cpu_setting : Broken.setting,
+              size: 15,
+              color: _kAccent,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              _agentPanelTab == 4 ? 'Providers' : 'User Settings',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     Widget bubble({
       required int tabIdx,
@@ -3368,7 +3423,9 @@ class _SelectTypeState extends State<SelectType>
         builder: (ctx, constraints) {
           // Compute widths so all 3 bubbles fill 100% of available space
           // Layout: [back28] [4] [chat] [4] [tools] [4] [tasks]
-          final bubbles = constraints.maxWidth - 28 - 4 - 4 - 4; // remaining for 3 bubbles
+          final double bubbles = (constraints.maxWidth - 28 - 4 - 4 - 4)
+              .clamp(0.0, double.infinity)
+              .toDouble(); // remaining for 3 bubbles
           final double chatW  = _agentPanelTab == 0 ? bubbles * 0.62 : bubbles * 0.19;
           final double toolsW = _agentPanelTab == 1 ? bubbles * 0.62 : bubbles * 0.19;
           final double tasksW = _agentPanelTab == 2 ? bubbles * 0.62 : bubbles * 0.19;
@@ -3415,14 +3472,21 @@ class _SelectTypeState extends State<SelectType>
     final inputBorder= isDark ? const Color(0xff404040) : const Color(0xffdddddd);
 
     final aiState          = context.watch<AIBloc>().state;
-    final selectedProviderId = aiState.modelSelected['chat']?.toString();
-    final selectedConfig   = selectedProviderId == null
-        ? null
-        : aiState.config[selectedProviderId];
+    final selectedProfile = _selectedAgentProfile(aiState);
+    final selectedProviderId = selectedProfile?.key;
+    final selectedConfig   = selectedProfile?.value;
     final providerName     = selectedConfig is Map
         ? (selectedConfig['provider'] ?? selectedConfig['apiProvider'] ?? '')
               .toString()
         : '';
+    final selectedProvider = _providerNameFromConfig(selectedConfig);
+    final missingKey = selectedConfig is Map &&
+        _agentProviderNeedsKey(selectedProvider) &&
+        (selectedConfig['apiKey'] ?? selectedConfig['api_key'] ??
+                selectedConfig['key'] ?? '')
+            .toString()
+            .trim()
+            .isEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3624,11 +3688,13 @@ class _SelectTypeState extends State<SelectType>
                                     .toString()
                                 : '';
                             return Text(
-                              modelLabel.isEmpty ? 'Modèle' : modelLabel,
+                              missingKey
+                                  ? 'No key configured'
+                                  : (modelLabel.isEmpty ? 'Modèle' : modelLabel),
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                   fontSize: 11,
-                                  color: muted,
+                                  color: missingKey ? Colors.orange[400] : muted,
                                   fontWeight: FontWeight.w500),
                             );
                           }),
@@ -4257,6 +4323,15 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
+  /// Reuse the provider form without rendering the legacy AgentSettings shell.
+  Widget _buildAgentProvidersPage(
+      BuildContext context, AppTheme appTheme) {
+    return const AgentSettings(
+      embedded: true,
+      providersOnly: true,
+    );
+  }
+
   // ── Tools tab content ─────────────────────────────────────────────────────
   Widget _buildToolsTabContent(BuildContext context, AppTheme appTheme) {
     final isDark  = appTheme.isDark;
@@ -4268,6 +4343,8 @@ class _SelectTypeState extends State<SelectType>
     final hoverBg = isDark ? const Color(0xff252525) : const Color(0xfff2f2f2);
 
     final tools = [
+      (icon: Broken.cpu_setting, color: _kAccent, title: 'Providers',
+       desc: 'Configure API keys and AI models'),
       (icon: Broken.lock,          color: Colors.orange[400]!,  title: 'Secrets',        desc: 'Store sensitive information (like API keys) securely in your App'),
       (icon: Broken.code_1,        color: Colors.blue[400]!,    title: 'Agent Skills',   desc: 'Manage skills that extend Agent capabilities'),
       (icon: Broken.archive_book,  color: Colors.green[400]!,   title: 'App Storage',    desc: 'Host and save uploads like images, videos, and documents'),
@@ -4304,10 +4381,13 @@ class _SelectTypeState extends State<SelectType>
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: () {
-                      if (t.title == 'Console') {
+                      if (t.title == 'Providers') {
+                        setState(() {
+                          _agentPanelPrevTab = _agentPanelTab;
+                          _agentPanelTab = 4;
+                        });
+                      } else if (t.title == 'Console') {
                         setState(() { _bottomPanelOpen = true; _bottomPanelTab = 0; });
-                      } else if (t.title == 'Database') {
-                        _openAgentSettingsTab();
                       } else if (t.title == 'User Settings') {
                         setState(() {
                           _agentPanelPrevTab = _agentPanelTab;
@@ -4860,7 +4940,11 @@ class _SelectTypeState extends State<SelectType>
                     OutlinedButton.icon(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        _showAddProviderInPanel(context, appTheme);
+                        setState(() {
+                          _rightPanelOpen = true;
+                          _agentPanelPrevTab = _agentPanelTab;
+                          _agentPanelTab = 4;
+                        });
                       },
                       icon: const Icon(Broken.add_circle, size: 14),
                       label: const Text('Ajouter un provider'),
@@ -5032,13 +5116,11 @@ class _SelectTypeState extends State<SelectType>
               TextButton.icon(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  // Ouvrir le panneau et naviguer vers le tab Tool > Settings
                   setState(() {
                     _rightPanelOpen    = true;
                     _agentPanelPrevTab = _agentPanelTab;
-                    _agentPanelTab     = 1; // Tools tab
+                    _agentPanelTab     = 4;
                   });
-                  _showAddProviderInPanel(context, appTheme);
                 },
                 icon: Icon(Broken.add_circle, size: 14, color: muted),
                 label: Text('Ajouter un provider',
@@ -5075,6 +5157,40 @@ class _SelectTypeState extends State<SelectType>
       prefs.setString('aiConfig', jsonEncode(newCfg));
       prefs.setString('modelSelected', jsonEncode(newSelected));
     });
+  }
+
+  MapEntry<String, dynamic>? _selectedAgentProfile(AIState aiState) {
+    final selectedId = aiState.modelSelected['chat']?.toString();
+    if (selectedId != null &&
+        selectedId.startsWith('agent_') &&
+        aiState.config[selectedId] is Map) {
+      return MapEntry<String, dynamic>(selectedId, aiState.config[selectedId]);
+    }
+
+    for (final entry in aiState.config.entries) {
+      if (entry.key.startsWith('agent_') && entry.value is Map) {
+        return MapEntry<String, dynamic>(entry.key, entry.value);
+      }
+    }
+    return null;
+  }
+
+  String _providerNameFromConfig(dynamic config) {
+    if (config is! Map) return '';
+    return (config['provider'] ?? config['apiProvider'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+  }
+
+  bool _agentProviderNeedsKey(String provider) {
+    return provider.isNotEmpty &&
+        provider != 'copilot' &&
+        provider != 'ollama' &&
+        provider != 'lmstudio' &&
+        provider != 'localllama' &&
+        provider != 'custom' &&
+        provider != 'pandagateway';
   }
 
   /// Returns a branded color for a provider string.
@@ -5523,7 +5639,10 @@ class _SelectTypeState extends State<SelectType>
               children: [
                 BlocProvider(
                   create: (_) => AIChatUIBloc(),
-                  child: _buildPandaAgentPanel(context, appTheme, asPage: true),
+                  child: Builder(
+                    builder: (panelContext) => _buildPandaAgentPanel(
+                      panelContext, appTheme, asPage: true),
+                  ),
                 ),
                 Positioned(
                   top: 0, right: 0,
@@ -6491,9 +6610,9 @@ class _SelectTypeState extends State<SelectType>
 
     Models? model;
     String? modelResolutionError;
-    final selectedId = aiState.modelSelected['chat']?.toString();
-    final selectedConfig =
-        selectedId == null ? null : aiState.config[selectedId];
+    final selectedProfile = _selectedAgentProfile(aiState);
+    final selectedId = selectedProfile?.key;
+    final selectedConfig = selectedProfile?.value;
     // Panda Agent only consumes provider profiles created by the provider-first
     // settings flow. Older IDE model profiles must not silently control Agent.
     final isAgentProviderProfile =
@@ -6501,26 +6620,39 @@ class _SelectTypeState extends State<SelectType>
     if (isAgentProviderProfile && selectedConfig is Map) {
       try {
         final normalizedConfig = Map<String, dynamic>.from(selectedConfig);
-        PandaLog.d(
-          'PandaAgent',
-          'Resolving provider=${normalizedConfig['provider']} modelId=$selectedId',
-        );
-        model = await _resolveAgentModel(
-          normalizedConfig,
-        ).timeout(
-          const Duration(seconds: 20),
-          onTimeout: () => throw TimeoutException(
-            'La résolution du modèle IA a expiré.',
-          ),
-        );
-        PandaLog.d(
-          'PandaAgent',
-          'Provider resolved — model=${model?.runtimeType ?? '<none>'}',
-        );
-        if (model == null &&
-            selectedConfig['provider']?.toString().toLowerCase() == 'copilot') {
-          modelResolutionError =
-              'GitHub Copilot n’est pas disponible avec cette session ou ce compte.';
+        final provider = _providerNameFromConfig(normalizedConfig);
+        final apiKey = (normalizedConfig['apiKey'] ??
+                normalizedConfig['api_key'] ??
+                normalizedConfig['key'] ??
+                '')
+            .toString()
+            .trim();
+        if (_agentProviderNeedsKey(provider) && apiKey.isEmpty) {
+          modelResolutionError = 'No key configured for $provider. '
+              'Open Tools → Providers and add your API key.';
+        } else {
+          PandaLog.d(
+            'PandaAgent',
+            'Resolving provider=${normalizedConfig['provider']} modelId=$selectedId',
+          );
+          model = await _resolveAgentModel(
+            normalizedConfig,
+          ).timeout(
+            const Duration(seconds: 20),
+            onTimeout: () => throw TimeoutException(
+              'La résolution du modèle IA a expiré.',
+            ),
+          );
+          PandaLog.d(
+            'PandaAgent',
+            'Provider resolved — model=${model?.runtimeType ?? '<none>'}',
+          );
+          if (model == null &&
+              selectedConfig['provider']?.toString().toLowerCase() ==
+                  'copilot') {
+            modelResolutionError =
+                'GitHub Copilot n’est pas disponible avec cette session ou ce compte.';
+          }
         }
       } catch (error) {
         modelResolutionError = 'Impossible de charger le modèle IA : $error';
