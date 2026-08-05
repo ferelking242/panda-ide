@@ -4184,10 +4184,12 @@ class _SelectTypeState extends State<SelectType>
                               GestureDetector(
                                 onTap: () {
                                   final bloc = context.read<AppThemeBloc>();
-                                  if (opt.label == 'Light') bloc.add(const AppThemeChanged(false));
-                                  else if (opt.label == 'Dark') bloc.add(const AppThemeChanged(true));
-                                  else bloc.add(AppThemeChanged(
-                                      WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark));
+                                  if (opt.label == 'Light') bloc.add(AppThemeEvent(appTheme: LightTheme()));
+                                  else if (opt.label == 'Dark') bloc.add(AppThemeEvent(appTheme: DarkTheme()));
+                                  else {
+                                    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+                                    bloc.add(AppThemeEvent(appTheme: brightness == Brightness.dark ? DarkTheme() : LightTheme()));
+                                  }
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
