@@ -161,6 +161,18 @@ class _SelectTypeState extends State<SelectType>
   // ── Conversation title (editable) ────────────────────────────────
   String _agentConversationTitle = 'Nouvelle conversation';
 
+  // ── Panel tabs (0=Chat, 1=Tool, 2=Task) ──────────────────────────
+  int _agentPanelTab     = 0;
+  int _agentPanelPrevTab = 0;
+
+  // ── Background tasks ──────────────────────────────────────────────
+  final List<Map<String, dynamic>> _agentTasks = [];
+  bool   _agentTasksShowNew = true;
+
+  // ── Tools search ──────────────────────────────────────────────────
+  String _agentToolsSearch = '';
+  final _agentToolsSearchCtrl = TextEditingController();
+
   // ── Sidebar search ────────────────────────────────────────────────
   final _sidebarSearchCtrl = TextEditingController();
   List<File> _sidebarSearchResults = [];
@@ -3197,24 +3209,10 @@ class _SelectTypeState extends State<SelectType>
       {bool asPage = false}) {
     final isDark  = appTheme.isDark;
     final panelBg = isDark ? const Color(0xff1e1e1e) : const Color(0xfffafafa);
-    final hdrBg   = isDark ? const Color(0xff252526) : const Color(0xffececec);
     final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
-    final fg      = isDark ? Colors.grey[300]! : Colors.grey[800]!;
-    final muted   = isDark ? Colors.grey[500]! : Colors.grey[500]!;
-    final inputBg = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
-    final inputBorder = isDark ? const Color(0xff404040) : const Color(0xffdddddd);
 
-    // Panda Agent is provider-first. The selected model is an internal
-    // implementation detail populated from that provider's live catalog.
-    final aiState = context.watch<AIBloc>().state;
-    final selectedProviderId = aiState.modelSelected['chat']?.toString();
-    final selectedConfig = selectedProviderId == null
-        ? null
-        : aiState.config[selectedProviderId];
-    final providerName = selectedConfig is Map
-        ? (selectedConfig['provider'] ?? selectedConfig['apiProvider'] ?? '')
-              .toString()
-        : '';
+    // Watch AI state so chat input can access model info
+    context.watch<AIBloc>();
 
     return Container(
       width: asPage ? double.infinity : 300,
@@ -3225,322 +3223,412 @@ class _SelectTypeState extends State<SelectType>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Header: conversation name + chevron menu ───────────────────
-          Container(
-            height: 44,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: panelBg,
-              border: Border(bottom: BorderSide(color: borderC.withOpacity(0.5), width: 0.5)),
-            ),
-            child: Row(children: [
-              // ── Conversation name (tap to rename) ──────────────────────
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _renameConversation(context, appTheme),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        decoration: BoxDecoration(
-                          color: _kAccent.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Center(
-                          child: Icon(Broken.magic_star, size: 12, color: _kAccent),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          _agentConversationTitle,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: fg,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              // ── Chevron → dropdown menu ────────────────────────────────
-              GestureDetector(
-                onTap: () => _showAgentHeaderMenu(context, appTheme, asPage),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    if (!asPage)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 4),
-                        child: GestureDetector(
-                          onTap: () => setState(() => _rightPanelOpen = false),
-                          child: Icon(Broken.close_square, size: 15, color: muted),
-                        ),
-                      ),
-                    Icon(Broken.arrow_down_2, size: 15, color: muted),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
+          // ── Sliding bubble tab bar ──────────────────────────────────────
+          _buildAgentTabBar(context, appTheme, asPage),
 
-          // ── Chat area ──────────────────────────────────────────────────
+          // ── Tab content with slide transition ───────────────────────────
           Expanded(
-            child: _agentMessages.isEmpty
-                ? _buildAgentEmptyState(isDark, muted, fg)
-                : _buildAgentMessages(isDark, fg, muted),
-          ),
-
-          // ── Attachments strip ──────────────────────────────────────────
-          if (_agentAttachments.isNotEmpty)
-            Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: inputBg,
-                border: Border(top: BorderSide(color: borderC)),
-              ),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: _agentAttachments.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 6),
-                itemBuilder: (_, i) {
-                  final att = _agentAttachments[i];
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xff3a3a3a)
-                          : const Color(0xffe0e0e0),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Broken.document, size: 12, color: muted),
-                      const SizedBox(width: 4),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 80),
-                        child: Text(
-                          att['name'] ?? '',
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(fontSize: 11, color: fg),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      GestureDetector(
-                        onTap: () => setState(
-                            () => _agentAttachments.removeAt(i)),
-                        child: Icon(Broken.close_square,
-                            size: 11, color: muted),
-                      ),
-                    ]),
-                  );
-                },
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 270),
+              transitionBuilder: (child, anim) {
+                final isForward = _agentPanelTab >= _agentPanelPrevTab;
+                final begin = Offset(isForward ? 1.0 : -1.0, 0.0);
+                return SlideTransition(
+                  position: Tween<Offset>(begin: begin, end: Offset.zero)
+                      .animate(CurvedAnimation(
+                          parent: anim, curve: Curves.easeOutCubic)),
+                  child: FadeTransition(opacity: anim, child: child),
+                );
+              },
+              child: KeyedSubtree(
+                key: ValueKey(_agentPanelTab),
+                child: _agentPanelTab == 1
+                    ? _buildToolsTabContent(context, appTheme)
+                    : _agentPanelTab == 2
+                        ? _buildTasksTabContent(context, appTheme)
+                        : _buildChatTabContent(context, appTheme, asPage),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-          // ── Input box ──────────────────────────────────────────────────
+  // ── Tab bar: 3 animated sliding bubbles ──────────────────────────────────
+  Widget _buildAgentTabBar(
+      BuildContext context, AppTheme appTheme, bool asPage) {
+    final isDark    = appTheme.isDark;
+    final panelBg   = isDark ? const Color(0xff1e1e1e) : const Color(0xfffafafa);
+    final borderC   = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    final fg        = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final muted     = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+    final unselBg   = isDark ? const Color(0xff2a2a2a) : const Color(0xffe2e2e2);
+    final selBg     = isDark ? const Color(0xff383838) : const Color(0xffd2d2d2);
+
+    Widget bubble({
+      required int tabIdx,
+      required IconData icon,
+      required String label,
+    }) {
+      final selected = _agentPanelTab == tabIdx;
+      return GestureDetector(
+        onTap: () {
+          if (tabIdx == 0 && selected) {
+            // Tapping already-selected chat tab opens menu
+            _showAgentHeaderMenu(context, appTheme, asPage);
+            return;
+          }
+          setState(() {
+            _agentPanelPrevTab = _agentPanelTab;
+            _agentPanelTab     = tabIdx;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 270),
+          curve: Curves.easeInOutCubic,
+          height: 34,
+          // Chat bubble grows wide, others grow to show label
+          width: selected
+              ? (tabIdx == 0 ? 168.0 : 84.0)
+              : 34.0,
+          clipBehavior: Clip.hardEdge,
+          decoration: BoxDecoration(
+            color: selected ? selBg : unselBg,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon,
+                    size: 14,
+                    color: selected ? fg : muted),
+                if (selected) ...[
+                  const SizedBox(width: 6),
+                  if (tabIdx == 0) ...[
+                    // Conversation name + chevron
+                    Flexible(
+                      child: Text(
+                        _agentConversationTitle,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: fg,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Broken.arrow_down_2, size: 11, color: muted),
+                  ] else ...[
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: fg,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: panelBg,
+        border: Border(
+            bottom: BorderSide(color: borderC.withOpacity(0.5), width: 0.5)),
+      ),
+      child: Row(children: [
+        // Back / close
+        GestureDetector(
+          onTap: () {
+            if (!asPage) setState(() => _rightPanelOpen = false);
+          },
+          child: SizedBox(
+            width: 28,
+            height: 34,
+            child: Icon(Broken.arrow_left_2, size: 15, color: muted),
+          ),
+        ),
+        const SizedBox(width: 4),
+        // Chat bubble
+        bubble(tabIdx: 0, icon: Broken.magic_star,   label: ''),
+        const SizedBox(width: 4),
+        // Tools bubble
+        bubble(tabIdx: 1, icon: Broken.setting_3,    label: 'Tools'),
+        const SizedBox(width: 4),
+        // Tasks bubble
+        bubble(tabIdx: 2, icon: Broken.task_square,  label: 'Tasks'),
+      ]),
+    );
+  }
+
+  // ── Chat tab content (existing chat UI) ───────────────────────────────────
+  Widget _buildChatTabContent(
+      BuildContext context, AppTheme appTheme, bool asPage) {
+    final isDark     = appTheme.isDark;
+    final borderC    = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    final fg         = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final muted      = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+    final inputBg    = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
+    final inputBorder= isDark ? const Color(0xff404040) : const Color(0xffdddddd);
+
+    final aiState          = context.watch<AIBloc>().state;
+    final selectedProviderId = aiState.modelSelected['chat']?.toString();
+    final selectedConfig   = selectedProviderId == null
+        ? null
+        : aiState.config[selectedProviderId];
+    final providerName     = selectedConfig is Map
+        ? (selectedConfig['provider'] ?? selectedConfig['apiProvider'] ?? '')
+              .toString()
+        : '';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ── Messages / empty state ─────────────────────────────────────
+        Expanded(
+          child: _agentMessages.isEmpty
+              ? _buildAgentEmptyState(isDark, muted, fg)
+              : _buildAgentMessages(isDark, fg, muted),
+        ),
+
+        // ── Attachments strip ──────────────────────────────────────────
+        if (_agentAttachments.isNotEmpty)
           Container(
-            margin: const EdgeInsets.all(10),
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: inputBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: inputBorder),
+              border: Border(top: BorderSide(color: borderC)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Text field
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-                  child: TextField(
-                    controller: _agentInputCtrl,
-                    maxLines: 5,
-                    minLines: 1,
-                    style: TextStyle(fontSize: 13, color: fg),
-                    decoration: InputDecoration(
-                      hintText: _agentChatMode == 'agent'
-                          ? 'Décrivez la tâche à réaliser…'
-                          : _agentChatMode == 'ask'
-                              ? 'Posez votre question…'
-                              : 'Écrivez un message…',
-                      hintStyle: TextStyle(fontSize: 13, color: muted),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _agentSend(),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _agentAttachments.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                final att = _agentAttachments[i];
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xff3a3a3a)
+                        : const Color(0xffe0e0e0),
+                    borderRadius: BorderRadius.circular(6),
                   ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Broken.document, size: 12, color: muted),
+                    const SizedBox(width: 4),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 80),
+                      child: Text(
+                        att['name'] ?? '',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 11, color: fg),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _agentAttachments.removeAt(i)),
+                      child: Icon(Broken.close_square, size: 11, color: muted),
+                    ),
+                  ]),
+                );
+              },
+            ),
+          ),
+
+        // ── Input box ─────────────────────────────────────────────────
+        Container(
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: inputBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: inputBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+                child: TextField(
+                  controller: _agentInputCtrl,
+                  maxLines: 5,
+                  minLines: 1,
+                  style: TextStyle(fontSize: 13, color: fg),
+                  decoration: InputDecoration(
+                    hintText: _agentChatMode == 'agent'
+                        ? 'Décrivez la tâche à réaliser…'
+                        : _agentChatMode == 'ask'
+                            ? 'Posez votre question…'
+                            : 'Écrivez un message…',
+                    hintStyle: TextStyle(fontSize: 13, color: muted),
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _agentSend(),
                 ),
-
-                // Bottom toolbar
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
-                  child: Row(children: [
-                    // ── Attachment button ──────────────────────────────
-                    Tooltip(
-                      message: 'Joindre un fichier',
-                      child: InkWell(
-                        onTap: () async {
-                          final res = await FilePicker.pickFiles(
-                            allowMultiple: true,
-                            type: FileType.any,
-                          );
-                          if (res != null && res.files.isNotEmpty) {
-                            setState(() {
-                              for (final f in res.files) {
-                                _agentAttachments.add({
-                                  'name': f.name,
-                                  'path': f.path ?? '',
-                                });
-                              }
-                            });
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: Icon(Broken.paperclip, size: 16, color: muted),
-                        ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
+                child: Row(children: [
+                  // Attachment
+                  Tooltip(
+                    message: 'Joindre un fichier',
+                    child: InkWell(
+                      onTap: () async {
+                        final res = await FilePicker.pickFiles(
+                            allowMultiple: true, type: FileType.any);
+                        if (res != null && res.files.isNotEmpty) {
+                          setState(() {
+                            for (final f in res.files) {
+                              _agentAttachments.add(
+                                  {'name': f.name, 'path': f.path ?? ''});
+                            }
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child:
+                            Icon(Broken.paperclip, size: 16, color: muted),
                       ),
                     ),
-
-                    // ── Voice button ───────────────────────────────────
-                    Tooltip(
-                      message: 'Dicter (micro)',
-                      child: InkWell(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Dictée vocale — bientôt disponible.',
-                                style: TextStyle(fontSize: 13),
-                              ),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: Icon(Broken.microphone, size: 16, color: muted),
-                        ),
+                  ),
+                  // Voice
+                  Tooltip(
+                    message: 'Dicter (micro)',
+                    child: InkWell(
+                      onTap: () => ScaffoldMessenger.of(context)
+                          .showSnackBar(const SnackBar(
+                        content: Text('Dictée vocale — bientôt disponible.',
+                            style: TextStyle(fontSize: 13)),
+                        duration: Duration(seconds: 2),
+                      )),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child:
+                            Icon(Broken.microphone, size: 16, color: muted),
                       ),
                     ),
-
-                    const SizedBox(width: 4),
-
-                    // ── Mode selector pill ─────────────────────────────
-                    GestureDetector(
-                      onTap: () => _showModeSheet(context, appTheme),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xff3a3a3a)
-                              : const Color(0xffe0e0e0),
-                          borderRadius: BorderRadius.circular(10),
+                  ),
+                  const SizedBox(width: 4),
+                  // Mode pill
+                  GestureDetector(
+                    onTap: () => _showModeSheet(context, appTheme),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xff3a3a3a)
+                            : const Color(0xffe0e0e0),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Broken.category, size: 11, color: muted),
+                        const SizedBox(width: 4),
+                        Text(
+                          _agentChatMode == 'ask'
+                              ? 'Ask'
+                              : _agentChatMode == 'agent'
+                                  ? 'Agent'
+                                  : 'Normal',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: muted,
+                              fontWeight: FontWeight.w500),
                         ),
-                        child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                          Icon(Broken.category, size: 11, color: muted),
-                          const SizedBox(width: 4),
-                          Text(
-                            _agentChatMode == 'ask'
-                                ? 'Ask'
-                                : _agentChatMode == 'agent'
-                                    ? 'Agent'
-                                    : 'Normal',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: muted,
-                                fontWeight: FontWeight.w500),
+                        const SizedBox(width: 2),
+                        Icon(Broken.arrow_down_2, size: 10, color: muted),
+                      ]),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // Model pill
+                  GestureDetector(
+                    onTap: () => _showModelPickerSheet(context, appTheme),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xff3a3a3a)
+                            : const Color(0xffe0e0e0),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Icon(Broken.cpu, size: 11, color: muted),
+                        const SizedBox(width: 4),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth:
+                                MediaQuery.sizeOf(context).width * 0.2,
                           ),
-                          const SizedBox(width: 2),
-                          Icon(Broken.arrow_down_2, size: 10, color: muted),
-                        ]),
-                      ),
-                    ),
-
-                    const SizedBox(width: 4),
-
-                    // ── Model selector pill ────────────────────────────
-                    GestureDetector(
-                      onTap: () => _showModelPickerSheet(context, appTheme),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xff3a3a3a)
-                              : const Color(0xffe0e0e0),
-                          borderRadius: BorderRadius.circular(10),
+                          child: Builder(builder: (_) {
+                            final selCfg = selectedConfig is Map
+                                ? Map<String, dynamic>.from(
+                                    selectedConfig as Map)
+                                : null;
+                            final modelLabel = selCfg != null
+                                ? (selCfg['modelName'] ??
+                                        selCfg['model'] ??
+                                        providerName)
+                                    .toString()
+                                : '';
+                            return Text(
+                              modelLabel.isEmpty ? 'Modèle' : modelLabel,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: muted,
+                                  fontWeight: FontWeight.w500),
+                            );
+                          }),
                         ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Broken.cpu, size: 11, color: muted),
-                          const SizedBox(width: 4),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: MediaQuery.sizeOf(context).width * 0.25,
-                            ),
-                            child: Builder(builder: (_) {
-                              // Show selected model name if available
-                              final selCfg = selectedConfig is Map
-                                  ? Map<String, dynamic>.from(selectedConfig as Map)
-                                  : null;
-                              final modelLabel = selCfg != null
-                                  ? (selCfg['modelName'] ?? selCfg['model'] ?? providerName)
-                                        .toString()
-                                  : '';
-                              return Text(
-                                modelLabel.isEmpty ? 'Modèle' : modelLabel,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: muted,
-                                    fontWeight: FontWeight.w500),
-                              );
-                            }),
-                          ),
-                          const SizedBox(width: 2),
-                          Icon(Broken.arrow_down_2, size: 10, color: muted),
-                        ]),
-                      ),
+                        const SizedBox(width: 2),
+                        Icon(Broken.arrow_down_2, size: 10, color: muted),
+                      ]),
                     ),
-
-                    const Spacer(),
-
-                    // ── Context token estimate ─────────────────────────
-                    Builder(builder: (ctx) {
-                      int totalChars = 0;
-                      for (final msg in _agentMessages) {
-                        totalChars += (msg['text'] as String? ?? '').length;
-                        totalChars += (msg['thinking'] as String? ?? '').length;
-                      }
-                      totalChars += _agentInputCtrl.text.length;
-                      final estTokens = (totalChars / 4).round();
-                      final String label;
-                      if (estTokens == 0) {
-                        label = '';
-                      } else if (estTokens < 1000) {
-                        label = '~${estTokens}tok';
-                      } else {
-                        label = '~${(estTokens / 1000).toStringAsFixed(1)}k';
-                      }
-                      if (label.isEmpty) return const SizedBox.shrink();
-                      return Tooltip(
-                        message: 'Tokens estimés dans la conversation ($estTokens ≈ chars÷4). '
-                            'Au-delà de 80k, le modèle peut ignorer le début du contexte.',
-                        child: Text(
-                          label,
+                  ),
+                  const Spacer(),
+                  // Token estimate
+                  Builder(builder: (ctx) {
+                    int totalChars = 0;
+                    for (final msg in _agentMessages) {
+                      totalChars +=
+                          (msg['text'] as String? ?? '').length;
+                      totalChars +=
+                          (msg['thinking'] as String? ?? '').length;
+                    }
+                    totalChars += _agentInputCtrl.text.length;
+                    final estTokens = (totalChars / 4).round();
+                    if (estTokens == 0) return const SizedBox.shrink();
+                    final label = estTokens < 1000
+                        ? '~${estTokens}tok'
+                        : '~${(estTokens / 1000).toStringAsFixed(1)}k';
+                    return Tooltip(
+                      message:
+                          'Tokens estimés ($estTokens ≈ chars÷4). '
+                          'Au-delà de 80k le modèle peut tronquer.',
+                      child: Text(label,
                           style: TextStyle(
                             fontSize: 10,
                             color: estTokens > 80000
@@ -3548,52 +3636,592 @@ class _SelectTypeState extends State<SelectType>
                                 : estTokens > 40000
                                     ? Colors.orange[400]
                                     : muted,
-                          ),
+                          )),
+                    );
+                  }),
+                  const SizedBox(width: 6),
+                  // Send / Stop
+                  if (_agentGenerating)
+                    GestureDetector(
+                      onTap: _agentStop,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      );
-                    }),
-                    const SizedBox(width: 6),
-
-                    // ── Send / Stop ────────────────────────────────────
-                    if (_agentGenerating)
-                      GestureDetector(
-                        onTap: _agentStop,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.red.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(Broken.stop_circle,
-                              size: 18, color: Colors.red[400]),
+                        child: Icon(Broken.stop_circle,
+                            size: 18, color: Colors.red[400]),
+                      ),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: _agentSend,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color:
+                              _agentInputCtrl.text.trim().isEmpty
+                                  ? Colors.transparent
+                                  : _kAccent.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      )
-                    else
-                      GestureDetector(
-                        onTap: _agentSend,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _agentInputCtrl.text.trim().isEmpty
-                                ? Colors.transparent
-                                : _kAccent.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            Broken.send_2,
+                        child: Icon(Broken.send_2,
                             size: 18,
                             color: _agentInputCtrl.text.trim().isEmpty
                                 ? muted
-                                : Colors.white,
-                          ),
+                                : Colors.white),
+                      ),
+                    ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Tools tab content ─────────────────────────────────────────────────────
+  Widget _buildToolsTabContent(BuildContext context, AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff1e1e1e) : const Color(0xfffafafa);
+    final cardBg  = isDark ? const Color(0xff252526) : Colors.white;
+    final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffe5e5e5);
+    final inputBg = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
+
+    final tools = [
+      (icon: Broken.lock,         color: Colors.orange[400]!,  title: 'Secrets',       desc: 'Store sensitive information (like API keys) securely in your App'),
+      (icon: Broken.code_1,       color: Colors.blue[400]!,    title: 'Agent Skills',  desc: 'Manage skills that extend Agent capabilities'),
+      (icon: Broken.archive_book, color: Colors.green[400]!,   title: 'App Storage',   desc: 'Host and save uploads like images, videos, and documents'),
+      (icon: Broken.copy,         color: Colors.purple[400]!,  title: 'Artifacts',     desc: 'Browse generated artifacts and previews'),
+      (icon: Broken.brush_1,      color: Colors.pink[400]!,    title: 'Canvas',        desc: 'Agent-controlled canvas for mockups and wireframes'),
+      (icon: Broken.terminal_1,   color: Colors.teal[400]!,    title: 'Console',       desc: 'View the terminal output after running your code'),
+      (icon: Broken.data,         color: Colors.cyan[400]!,    title: 'Database',      desc: 'Stores structured data such as user profiles, game scores, and product catalogs'),
+      (icon: Broken.code,         color: Colors.indigo[400]!,  title: 'Developer',     desc: 'Internal developer tools, telemetry, and diagnostics'),
+      (icon: Broken.global,       color: Colors.amber[400]!,   title: 'Domains',       desc: 'Manage custom domains for your published project'),
+    ];
+
+    final filtered = _agentToolsSearch.isEmpty
+        ? tools
+        : tools
+            .where((t) =>
+                t.title.toLowerCase().contains(_agentToolsSearch.toLowerCase()) ||
+                t.desc.toLowerCase().contains(_agentToolsSearch.toLowerCase()))
+            .toList();
+
+    return Container(
+      color: bg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Tool list
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              itemCount: filtered.length,
+              separatorBuilder: (_, __) =>
+                  Divider(height: 1, color: border),
+              itemBuilder: (_, i) {
+                final t = filtered[i];
+                return InkWell(
+                  onTap: () {
+                    // Tools open relevant functionality
+                    if (t.title == 'Console') {
+                      setState(() {
+                        _bottomPanelOpen = true;
+                        _bottomPanelTab  = 0;
+                      });
+                    } else if (t.title == 'Database') {
+                      _openAgentSettingsTab();
+                    }
+                  },
+                  child: Container(
+                    color: cardBg,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: t.color.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                            child: Icon(t.icon, size: 17, color: t.color)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t.title,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: fg)),
+                            const SizedBox(height: 2),
+                            Text(t.desc,
+                                style: TextStyle(
+                                    fontSize: 11, color: muted),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                          ],
                         ),
                       ),
-                  ]),
+                    ]),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Search bar + open preview
+          Container(
+            padding:
+                const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xff252526) : const Color(0xffececec),
+              border: Border(top: BorderSide(color: border)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _agentToolsSearchCtrl,
+                  onChanged: (v) =>
+                      setState(() => _agentToolsSearch = v),
+                  style: TextStyle(fontSize: 13, color: fg),
+                  decoration: InputDecoration(
+                    hintText: 'Search tools…',
+                    hintStyle:
+                        TextStyle(fontSize: 13, color: muted),
+                    filled: true,
+                    fillColor: inputBg,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: Icon(Broken.search_normal,
+                        size: 15, color: muted),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          isDark ? const Color(0xff2d2d2d) : const Color(0xffe0e0e0),
+                      foregroundColor: fg,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _activeRail = 8;
+                        if (!_openTabs.any((t) => t.id == 'browser')) {
+                          _openTabs.add(const _TabDef(
+                              id: 'browser',
+                              title: 'Navigateur',
+                              icon: Broken.global));
+                          _activeTabIdx = _openTabs.length - 1;
+                        } else {
+                          _activeTabIdx = _openTabs
+                              .indexWhere((t) => t.id == 'browser');
+                        }
+                      });
+                    },
+                    icon: Icon(Broken.global, size: 15, color: fg),
+                    label: Text('Open preview',
+                        style: TextStyle(fontSize: 13, color: fg)),
+                  ),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ── Tasks tab content ─────────────────────────────────────────────────────
+  Widget _buildTasksTabContent(BuildContext context, AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff1e1e1e) : const Color(0xfffafafa);
+    final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffe5e5e5);
+    final cardBg  = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
+    final emptyBg = isDark ? const Color(0xff252526) : const Color(0xffe8e8e8);
+
+    final readyTasks  = _agentTasks.where((t) => t['status'] == 'ready').toList();
+    final activeTasks = _agentTasks.where((t) => t['status'] == 'active').toList();
+    final draftTasks  = _agentTasks.where((t) => t['status'] == 'draft').toList();
+
+    Widget sectionLabel(String label) => Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: muted,
+                  letterSpacing: 0.2)),
+        );
+
+    Widget emptyBox(String text) => Container(
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          decoration: BoxDecoration(
+              color: emptyBg, borderRadius: BorderRadius.circular(8)),
+          child: Center(
+              child: Text(text,
+                  style: TextStyle(fontSize: 12, color: muted))),
+        );
+
+    Widget taskTile(Map<String, dynamic> task) {
+      final icons = {
+        'ready':  (Broken.play_circle, Colors.green[400]!),
+        'active': (Broken.timer_1,     Colors.blue[400]!),
+        'draft':  (Broken.edit,        muted),
+      };
+      final pair = icons[task['status']] ?? (Broken.task_square, muted);
+      return ListTile(
+        dense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+        leading: Icon(pair.$1, size: 16, color: pair.$2),
+        title: Text(task['title'] as String? ?? 'Task',
+            style: TextStyle(fontSize: 13, color: fg)),
+        subtitle: task['desc'] != null
+            ? Text(task['desc'] as String,
+                style: TextStyle(fontSize: 11, color: muted),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis)
+            : null,
+        trailing: GestureDetector(
+          onTap: () =>
+              setState(() => _agentTasks.remove(task)),
+          child: Icon(Broken.close_circle, size: 15, color: muted),
+        ),
+      );
+    }
+
+    return Container(
+      color: bg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── "New" onboarding card (dismissible) ─────────────────────
+          if (_agentTasksShowNew)
+            Container(
+              margin: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: _kAccent,
+                          borderRadius: BorderRadius.circular(4)),
+                      child: const Text('New',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () =>
+                          setState(() => _agentTasksShowNew = false),
+                      child: Icon(Broken.close_square, size: 16, color: muted),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  // Colorful task type icons row
+                  Row(children: [
+                    for (final c in [
+                      Colors.blue[400]!,
+                      Colors.green[400]!,
+                      Colors.orange[400]!,
+                      Colors.purple[400]!,
+                      Colors.pink[400]!,
+                    ])
+                      Container(
+                        width: 30,
+                        height: 30,
+                        margin: const EdgeInsets.only(right: 6),
+                        decoration: BoxDecoration(
+                          color: c.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Center(
+                            child: Icon(Broken.task_square,
+                                size: 14, color: c)),
+                      ),
+                  ]),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Background tasks allow you to get more work done at once.',
+                    style: TextStyle(fontSize: 12, color: fg),
+                  ),
+                  const SizedBox(height: 4),
+                  Text('Try creating your first one!',
+                      style: TextStyle(fontSize: 12, color: fg)),
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () {},
+                    child: Text('View documentation',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: _kAccent,
+                            fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+            ),
+
+          // ── Task sections ────────────────────────────────────────────
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 8),
+              children: [
+                sectionLabel('Ready'),
+                readyTasks.isEmpty
+                    ? emptyBox('No ready tasks')
+                    : Column(
+                        children: readyTasks.map(taskTile).toList()),
+                sectionLabel('Active'),
+                activeTasks.isEmpty
+                    ? emptyBox('No active tasks')
+                    : Column(
+                        children: activeTasks.map(taskTile).toList()),
+                sectionLabel('Draft'),
+                draftTasks.isEmpty
+                    ? emptyBox('No draft tasks')
+                    : Column(
+                        children: draftTasks.map(taskTile).toList()),
+              ],
+            ),
+          ),
+
+          // ── + New task button ─────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: border)),
+            ),
+            child: Row(children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _createAgentTask(context, appTheme),
+                  child: Container(
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xff2a2a2a)
+                          : const Color(0xffe8e8e8),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Broken.add_square, size: 15, color: muted),
+                          const SizedBox(width: 6),
+                          Text('New task',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: fg,
+                                  fontWeight: FontWeight.w500)),
+                        ]),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // "Core" label badge (mirrors Replit UI)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _kAccent.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('+ Core',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: _kAccent,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Create task dialog ────────────────────────────────────────────────────
+  void _createAgentTask(BuildContext context, AppTheme appTheme) {
+    final isDark   = appTheme.isDark;
+    final titleCtrl = TextEditingController();
+    final descCtrl  = TextEditingController();
+    String status   = 'draft';
+
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          backgroundColor:
+              isDark ? const Color(0xff252526) : Colors.white,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12)),
+          title: Text('Nouvelle tâche',
+              style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey[200] : Colors.grey[900])),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleCtrl,
+                autofocus: true,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[200] : Colors.grey[900]),
+                decoration: InputDecoration(
+                  hintText: 'Titre de la tâche',
+                  hintStyle: TextStyle(
+                      color: isDark
+                          ? Colors.grey[600]
+                          : Colors.grey[500]),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xff1e1e1e)
+                      : const Color(0xfff5f5f5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: descCtrl,
+                maxLines: 3,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.grey[200] : Colors.grey[900]),
+                decoration: InputDecoration(
+                  hintText: 'Description (optionnel)',
+                  hintStyle: TextStyle(
+                      color: isDark
+                          ? Colors.grey[600]
+                          : Colors.grey[500]),
+                  filled: true,
+                  fillColor: isDark
+                      ? const Color(0xff1e1e1e)
+                      : const Color(0xfff5f5f5),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 10),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Status selector
+              Row(children: [
+                for (final s in ['draft', 'ready', 'active'])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () => setS(() => status = s),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: status == s
+                              ? _kAccent.withOpacity(0.2)
+                              : (isDark
+                                  ? const Color(0xff2a2a2a)
+                                  : const Color(0xffe8e8e8)),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                              color: status == s
+                                  ? _kAccent
+                                  : Colors.transparent),
+                        ),
+                        child: Text(
+                          s[0].toUpperCase() + s.substring(1),
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: status == s
+                                  ? _kAccent
+                                  : (isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[700]),
+                              fontWeight: status == s
+                                  ? FontWeight.w600
+                                  : FontWeight.normal),
+                        ),
+                      ),
+                    ),
+                  ),
+              ]),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Annuler',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color:
+                          isDark ? Colors.grey[500] : Colors.grey[600])),
+            ),
+            TextButton(
+              onPressed: () {
+                final title = titleCtrl.text.trim();
+                if (title.isNotEmpty) {
+                  setState(() => _agentTasks.add({
+                        'title': title,
+                        'desc': descCtrl.text.trim().isEmpty
+                            ? null
+                            : descCtrl.text.trim(),
+                        'status': status,
+                        'createdAt': DateTime.now().toIso8601String(),
+                      }));
+                }
+                Navigator.pop(ctx);
+              },
+              child: Text('Créer',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: _kAccent,
+                      fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
       ),
     );
   }
