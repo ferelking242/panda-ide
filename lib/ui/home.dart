@@ -3698,7 +3698,7 @@ class _SelectTypeState extends State<SelectType>
       (icon: Broken.archive_book, color: Colors.green[400]!,   title: 'App Storage',   desc: 'Host and save uploads like images, videos, and documents'),
       (icon: Broken.copy,         color: Colors.purple[400]!,  title: 'Artifacts',     desc: 'Browse generated artifacts and previews'),
       (icon: Broken.brush_1,      color: Colors.pink[400]!,    title: 'Canvas',        desc: 'Agent-controlled canvas for mockups and wireframes'),
-      (icon: Broken.terminal_1,   color: Colors.teal[400]!,    title: 'Console',       desc: 'View the terminal output after running your code'),
+      (icon: Broken.command_square,color: Colors.teal[400]!,    title: 'Console',       desc: 'View the terminal output after running your code'),
       (icon: Broken.data,         color: Colors.cyan[400]!,    title: 'Database',      desc: 'Stores structured data such as user profiles, game scores, and product catalogs'),
       (icon: Broken.code,         color: Colors.indigo[400]!,  title: 'Developer',     desc: 'Internal developer tools, telemetry, and diagnostics'),
       (icon: Broken.global,       color: Colors.amber[400]!,   title: 'Domains',       desc: 'Manage custom domains for your published project'),
