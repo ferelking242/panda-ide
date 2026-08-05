@@ -138,7 +138,7 @@ class _SelectTypeState extends State<SelectType>
   int        _agentRequestSerial = 0;
 
   // ── Agent UI state ───────────────────────────────────────────────
-  /// 'ask' | 'agent' | 'normal'
+  /// 'ask' | 'agent' | 'plan'
   String _agentChatMode      = 'ask';
   final List<Map<String,String>> _agentAttachments = [];
 
@@ -932,7 +932,10 @@ class _SelectTypeState extends State<SelectType>
                                         ),
                                         // Panda Agent panel
                                         if (_rightPanelOpen)
-                                          _buildPandaAgentPanel(context, appTheme),
+                                          BlocProvider(
+                                            create: (_) => AIChatUIBloc(),
+                                            child: _buildPandaAgentPanel(context, appTheme),
+                                          ),
                                       ],
                                     ),
                                     ),
@@ -3495,7 +3498,7 @@ class _SelectTypeState extends State<SelectType>
                         ? 'Décrivez la tâche à réaliser…'
                         : _agentChatMode == 'ask'
                             ? 'Posez votre question…'
-                            : 'Écrivez un message…',
+                            : 'Décrivez ce que vous voulez planifier…',
                     hintStyle: TextStyle(fontSize: 13, color: muted),
                     border: InputBorder.none,
                     isDense: true,
@@ -3571,7 +3574,7 @@ class _SelectTypeState extends State<SelectType>
                               ? 'Ask'
                               : _agentChatMode == 'agent'
                                   ? 'Agent'
-                                  : 'Normal',
+                                  : 'Plan',
                           style: TextStyle(
                               fontSize: 11,
                               color: muted,
@@ -4772,7 +4775,7 @@ class _SelectTypeState extends State<SelectType>
           for (final mode in [
             ('ask',    'Ask',    'Questions & réponses rapides',   Broken.message_question),
             ('agent',  'Agent',  'Tâches complexes étape par étape', Broken.cpu),
-            ('normal', 'Normal', 'Conversation libre',              Broken.message_text),
+            ('plan',   'Plan',   'Planification avant exécution',   Broken.task_square),
           ])
             ListTile(
               dense: true,
@@ -4849,10 +4852,10 @@ class _SelectTypeState extends State<SelectType>
                     OutlinedButton.icon(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        _openAgentSettingsTab();
+                        _showAddProviderInPanel(context, appTheme);
                       },
-                      icon: const Icon(Broken.setting_2, size: 14),
-                      label: const Text('Paramètres Agent'),
+                      icon: const Icon(Broken.add_circle, size: 14),
+                      label: const Text('Ajouter un provider'),
                     ),
                   ],
                 ),
@@ -5021,7 +5024,13 @@ class _SelectTypeState extends State<SelectType>
               TextButton.icon(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  _openAgentSettingsTab();
+                  // Ouvrir le panneau et naviguer vers le tab Tool > Settings
+                  setState(() {
+                    _rightPanelOpen    = true;
+                    _agentPanelPrevTab = _agentPanelTab;
+                    _agentPanelTab     = 1; // Tools tab
+                  });
+                  _showAddProviderInPanel(context, appTheme);
                 },
                 icon: Icon(Broken.add_circle, size: 14, color: muted),
                 label: Text('Ajouter un provider',
@@ -5211,7 +5220,7 @@ class _SelectTypeState extends State<SelectType>
                   ? Broken.cpu_setting
                   : _agentChatMode == 'ask'
                       ? Broken.message_question
-                      : Broken.message_text,
+                      : Broken.task_square,
               size: 16, color: _kAccent,
             ),
             const SizedBox(width: 8),
@@ -5221,7 +5230,7 @@ class _SelectTypeState extends State<SelectType>
                     ? 'Mode Agent — exécute des tâches de code autonomes.'
                     : _agentChatMode == 'ask'
                         ? 'Mode Ask — répond à vos questions sur le code.'
-                        : 'Mode Normal — conversation libre avec le modèle.',
+                        : 'Mode Plan — planifie et décompose avant d\'agir.',
                 style: TextStyle(
                     fontSize: 12,
                     color: isDark ? Colors.grey[300]! : Colors.grey[700]!),
@@ -5504,7 +5513,10 @@ class _SelectTypeState extends State<SelectType>
             height: panelH,
             child: Stack(
               children: [
-                _buildPandaAgentPanel(context, appTheme, asPage: true),
+                BlocProvider(
+                  create: (_) => AIChatUIBloc(),
+                  child: _buildPandaAgentPanel(context, appTheme, asPage: true),
+                ),
                 Positioned(
                   top: 0, right: 0,
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -5761,7 +5773,7 @@ class _SelectTypeState extends State<SelectType>
       await for (final chunk in AgentRunner().run(
         model: model,
         messages: summaryMsgs,
-        agentMode: 'normal',
+        agentMode: 'ask',
       )) {
         if (chunk.phase == AgentPhase.streaming) summary += chunk.text;
       }
@@ -5865,6 +5877,202 @@ class _SelectTypeState extends State<SelectType>
       _showHistoryPanel = false;
       _agentConversationTitle = 'Nouvelle conversation';
     });
+  }
+
+  // ── Add Provider inline panel ─────────────────────────────────────────────
+  /// Affiche un bottom sheet avec un formulaire de configuration de provider
+  /// directement dans le panneau (sans ouvrir l'onglet agent-settings).
+  void _showAddProviderInPanel(BuildContext context, AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff252526) : Colors.white;
+    final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffe0e0e0);
+    final cardBg  = isDark ? const Color(0xff1e1e1e) : const Color(0xfff5f5f5);
+
+    // Providers list (simplified subset)
+    const providers = [
+      (id: 'openai',     name: 'OpenAI',     hint: 'sk-...'),
+      (id: 'claude',     name: 'Claude',     hint: 'sk-ant-...'),
+      (id: 'gemini',     name: 'Gemini',     hint: 'AIza...'),
+      (id: 'deepseek',   name: 'DeepSeek',   hint: 'sk-...'),
+      (id: 'openrouter', name: 'OpenRouter', hint: 'sk-or-...'),
+      (id: 'mistral',    name: 'Mistral',    hint: '...'),
+      (id: 'groq',       name: 'Groq',       hint: 'gsk_...'),
+      (id: 'copilot',    name: 'Copilot',    hint: ''),
+      (id: 'custom',     name: 'Custom',     hint: ''),
+    ];
+
+    String selectedId  = 'openai';
+    String apiKey      = '';
+    String customUrl   = '';
+    bool   obscure     = true;
+    bool   saving      = false;
+    String? errorMsg;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: bg,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) {
+          final prov = providers.firstWhere((p) => p.id == selectedId,
+              orElse: () => providers.first);
+
+          Future<void> save() async {
+            if (prov.hint.isNotEmpty && apiKey.trim().isEmpty && selectedId != 'copilot' && selectedId != 'custom') {
+              setSt(() => errorMsg = 'Clé API requise');
+              return;
+            }
+            if (selectedId == 'custom' && customUrl.trim().isEmpty) {
+              setSt(() => errorMsg = 'URL requise pour un endpoint custom');
+              return;
+            }
+            setSt(() { saving = true; errorMsg = null; });
+            try {
+              final aiBloc  = context.read<AIBloc>();
+              final newCfg  = Map<String, dynamic>.from(aiBloc.state.config);
+              final modelId = 'agent_$selectedId';
+              newCfg[modelId] = {
+                'provider':    selectedId,
+                'apiProvider': selectedId,
+                if (selectedId != 'copilot') 'apiKey': apiKey.trim(),
+                'modelName':   '',
+                'model':       '',
+                if (selectedId == 'custom') 'url': customUrl.trim(),
+              };
+              aiBloc.add(AIConfigEvent(newCfg));
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('aiConfig', jsonEncode(newCfg));
+              final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
+              selected['chat'] = modelId;
+              aiBloc.add(ModelSelectEvent(selected));
+              await prefs.setString('modelSelected', jsonEncode(selected));
+              if (ctx.mounted) Navigator.pop(ctx);
+            } catch (e) {
+              setSt(() { saving = false; errorMsg = e.toString(); });
+            }
+          }
+
+          return Padding(
+            padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Handle
+                  Center(
+                    child: Container(
+                      width: 36, height: 4,
+                      decoration: BoxDecoration(
+                        color: muted.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Ajouter un provider',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg)),
+                  const SizedBox(height: 16),
+                  // Provider selector
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: providers.map((p) {
+                      final sel = selectedId == p.id;
+                      return GestureDetector(
+                        onTap: () => setSt(() { selectedId = p.id; apiKey = ''; customUrl = ''; errorMsg = null; }),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                          decoration: BoxDecoration(
+                            color: sel ? _kAccent.withOpacity(0.15) : cardBg,
+                            border: Border.all(color: sel ? _kAccent : border),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(p.name,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
+                                  color: sel ? _kAccent : fg)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  // API key field (not for copilot)
+                  if (selectedId != 'copilot' && selectedId != 'custom') ...[
+                    Text('Clé API', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: fg)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      onChanged: (v) => setSt(() { apiKey = v; errorMsg = null; }),
+                      obscureText: obscure,
+                      style: TextStyle(fontSize: 13, color: fg),
+                      decoration: InputDecoration(
+                        hintText: prov.hint,
+                        hintStyle: TextStyle(fontSize: 12, color: muted),
+                        filled: true, fillColor: cardBg,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        suffixIcon: IconButton(
+                          icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 16, color: muted),
+                          onPressed: () => setSt(() => obscure = !obscure),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  // Custom URL
+                  if (selectedId == 'custom') ...[
+                    Text('URL endpoint', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: fg)),
+                    const SizedBox(height: 6),
+                    TextField(
+                      onChanged: (v) => setSt(() { customUrl = v; errorMsg = null; }),
+                      style: TextStyle(fontSize: 13, color: fg),
+                      decoration: InputDecoration(
+                        hintText: 'http://localhost:11434/v1/chat/completions',
+                        hintStyle: TextStyle(fontSize: 12, color: muted),
+                        filled: true, fillColor: cardBg,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+                        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  // Error
+                  if (errorMsg != null) ...[
+                    Text(errorMsg!, style: TextStyle(fontSize: 11, color: Colors.red[400])),
+                    const SizedBox(height: 8),
+                  ],
+                  // Save button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: saving ? null : save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _kAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                      ),
+                      child: saving
+                          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Connecter', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   // ── Rename conversation ───────────────────────────────────────────────────
@@ -6053,7 +6261,11 @@ class _SelectTypeState extends State<SelectType>
             muted: muted,
             onTap: () {
               Navigator.pop(context);
-              _openAgentSettingsTab();
+              setState(() {
+                _rightPanelOpen    = true;
+                _agentPanelPrevTab = _agentPanelTab;
+                _agentPanelTab     = 3; // User Settings
+              });
             },
           ),
           const SizedBox(height: 16),

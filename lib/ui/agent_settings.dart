@@ -245,7 +245,7 @@ class _AgentSettingsState extends State<AgentSettings>
   String     _chatThinkingBuf  = '';
   int        _chatSerial       = 0;
   final      _chatRunner       = AgentRunner();
-  String     _chatMode         = 'agent'; // 'ask' | 'agent' | 'normal'
+  String     _chatMode         = 'agent'; // 'ask' | 'agent' | 'plan'
 
   // ── Tools tab state ─────────────────────────────────────────────────────
   bool _showToolsSettings = false; // false = tool list, true = settings sub-view
@@ -924,7 +924,7 @@ class _AgentSettingsState extends State<AgentSettings>
                   const SizedBox(width: 6),
                   _modeChip('agent',  'Agent',  isDark, muted, fg),
                   const SizedBox(width: 6),
-                  _modeChip('normal', 'Normal', isDark, muted, fg),
+                  _modeChip('plan', 'Plan', isDark, muted, fg),
                   const Spacer(),
                   if (_chatMessages.isNotEmpty)
                     InkWell(
@@ -959,7 +959,7 @@ class _AgentSettingsState extends State<AgentSettings>
                               ? 'Demandez à Panda Agent de coder…'
                               : _chatMode == 'ask'
                                   ? 'Posez une question sur le code…'
-                                  : 'Message…',
+                                  : 'Décrivez ce que vous voulez planifier…',
                           hintStyle: TextStyle(fontSize: 12, color: muted),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           border: InputBorder.none,

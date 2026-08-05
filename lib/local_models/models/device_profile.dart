@@ -57,8 +57,18 @@ class DeviceProfile {
     performanceScore: 30,
   );
 
-  /// RAM totale en GB (arrondi)
-  int get totalRamGb => (totalRamMb / 1024).round();
+  /// RAM totale en GB (plafond vers taille standard) — Android rapporte ~6-10%
+  /// de moins que la RAM nominale (ex: Samsung S21 8GB → ~7.3-7.5 GB dans
+  /// /proc/meminfo). On arrondit au plafond pour ne pas bloquer les modèles
+  /// qui tiendraient réellement en mémoire.
+  int get totalRamGb {
+    // Plafond au GB entier, puis snap vers la taille standard ≥
+    final gbCeil = (totalRamMb / 1024).ceil();
+    for (final s in const [2, 3, 4, 6, 8, 10, 12, 16, 24, 32]) {
+      if (gbCeil <= s) return s;
+    }
+    return gbCeil;
+  }
 
   /// Indique si le GPU offload est probablement disponible
   bool get gpuOffloadAvailable => vulkanSupported && gpuHint != 'unknown';

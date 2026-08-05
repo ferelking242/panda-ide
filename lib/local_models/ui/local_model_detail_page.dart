@@ -592,20 +592,60 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
       );
     }
 
-    final freeGb  = _storage == 'sdcard'
+    final freeGb   = _storage == 'sdcard'
         ? (widget.profile?.sdCardFreeGb ?? 0)
         : (widget.profile?.internalFreeGb ?? 0);
-    final sizeGb  = _selectedQuant?.sizeGb ?? 0.0;
-    final enough  = freeGb >= sizeGb;
-    final compat  = _compatScore > 0;
+    final sizeGb   = _selectedQuant?.sizeGb ?? 0.0;
+    final enough   = freeGb >= sizeGb;
+    final compat   = _compatScore > 0;
+    final score    = _compatScore;
 
-    return _MainButton(
-      label: _selectedQuant != null
-          ? '⬇️  Télécharger ${_selectedQuant!.level} (${_selectedQuant!.sizeLabel})'
-          : 'Sélectionnez une quantization',
-      icon: Icons.download,
-      onTap: (enough && compat && _selectedQuant != null) ? _startDownload : null,
-      cs: cs,
+    // Colour coding
+    //  ≥ 60 → vert (modèle bien adapté)
+    //  1–59 → jaune (faisable mais limité)
+    //  0    → rouge (RAM insuffisante) — triple-tap pour forcer
+    if (!compat) {
+      // RAM insuffisante — triple-tap pour installer quand même
+      return _TripleTapDownloadButton(
+        label: _selectedQuant != null
+            ? '⬇️  Télécharger ${_selectedQuant!.level} (${_selectedQuant!.sizeLabel})'
+            : 'Sélectionnez une quantization',
+        warningLabel: '⚠️  RAM insuffisante — ${widget.profile?.totalRamGb ?? 0} GB détectés, '
+            '${_selectedQuant?.minRamGb ?? 0} GB requis. Appuyez 3× pour forcer.',
+        enabled: _selectedQuant != null,
+        onConfirmed: _selectedQuant != null ? _startDownload : null,
+        cs: cs,
+      );
+    }
+
+    // Enough RAM — color based on score
+    final btnColor = score >= 60 ? Colors.green[600]! : Colors.orange[700]!;
+    final tooltip  = score >= 60
+        ? '✅ Compatible — devrait tourner sans problème'
+        : '⚠️ Faisable mais limité — performances réduites possibles';
+
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: double.infinity,
+        height: 44,
+        child: ElevatedButton.icon(
+          onPressed: (enough && _selectedQuant != null) ? _startDownload : null,
+          icon: const Icon(Icons.download, size: 16),
+          label: Text(
+            _selectedQuant != null
+                ? '⬇️  Télécharger ${_selectedQuant!.level} (${_selectedQuant!.sizeLabel})'
+                : 'Sélectionnez une quantization',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: (enough && _selectedQuant != null) ? btnColor : cs.surfaceVariant,
+            foregroundColor: (enough && _selectedQuant != null) ? Colors.white : cs.onSurfaceVariant,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            elevation: 0,
+          ),
+        ),
+      ),
     );
   }
 
@@ -911,6 +951,94 @@ class _StorageOption extends StatelessWidget {
     ),
   );
 }
+
+// ── _TripleTapDownloadButton — bouton rouge pour RAM insuffisante ──────────────
+
+class _TripleTapDownloadButton extends StatefulWidget {
+  final String    label;
+  final String    warningLabel;
+  final bool      enabled;
+  final VoidCallback? onConfirmed;
+  final ColorScheme   cs;
+
+  const _TripleTapDownloadButton({
+    required this.label,
+    required this.warningLabel,
+    required this.enabled,
+    required this.onConfirmed,
+    required this.cs,
+  });
+
+  @override
+  State<_TripleTapDownloadButton> createState() => _TripleTapDownloadButtonState();
+}
+
+class _TripleTapDownloadButtonState extends State<_TripleTapDownloadButton> {
+  int _tapCount = 0;
+
+  void _onTap() {
+    if (!widget.enabled) return;
+    setState(() => _tapCount++);
+    if (_tapCount >= 3) {
+      setState(() => _tapCount = 0);
+      widget.onConfirmed?.call();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = 3 - _tapCount;
+    final btnLabel  = _tapCount == 0
+        ? widget.label
+        : 'Encore $remaining appui${remaining > 1 ? "s" : ""} pour confirmer…';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: widget.cs.error.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: widget.cs.error.withOpacity(0.3)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 14, color: widget.cs.error),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  widget.warningLabel,
+                  style: TextStyle(fontSize: 11, color: widget.cs.error, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          height: 44,
+          child: ElevatedButton.icon(
+            onPressed: widget.enabled ? _onTap : null,
+            icon: const Icon(Icons.download, size: 16),
+            label: Text(btnLabel,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.enabled ? widget.cs.error : widget.cs.surfaceVariant,
+              foregroundColor: widget.enabled ? Colors.white : widget.cs.onSurfaceVariant,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 0,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _MainButton extends StatelessWidget {
   final String   label;
