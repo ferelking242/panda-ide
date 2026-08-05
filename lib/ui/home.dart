@@ -161,7 +161,7 @@ class _SelectTypeState extends State<SelectType>
   // ── Conversation title (editable) ────────────────────────────────
   String _agentConversationTitle = 'Nouvelle conversation';
 
-  // ── Panel tabs (0=Chat, 1=Tool, 2=Task) ──────────────────────────
+  // ── Panel tabs (0=Chat, 1=Tool, 2=Task, 3=UserSettings) ─────────
   int _agentPanelTab     = 0;
   int _agentPanelPrevTab = 0;
 
@@ -172,6 +172,22 @@ class _SelectTypeState extends State<SelectType>
   // ── Tools search ──────────────────────────────────────────────────
   String _agentToolsSearch = '';
   final _agentToolsSearchCtrl = TextEditingController();
+
+  // ── Approval mode ─────────────────────────────────────────────────
+  String _agentApprovalMode    = 'default'; // 'default'|'bypass'|'autopilot'
+  bool   _agentSandboxTerminal = true;
+
+  // ── User Settings ─────────────────────────────────────────────────
+  bool   _usAudioNotif          = true;
+  bool   _usPushNotif           = true;
+  bool   _usAutoPreview         = true;
+  String _usForwardPorts        = 'all ports except localhost';
+  String _usFontSize            = 'normal';
+  bool   _usAgentExpanded       = true;
+  bool   _usPreviewExpanded     = true;
+  bool   _usAppearanceExpanded  = true;
+  bool   _usCodeEditExpanded    = false;
+  bool   _usAdvancedExpanded    = false;
 
   // ── Sidebar search ────────────────────────────────────────────────
   final _sidebarSearchCtrl = TextEditingController();
@@ -3246,7 +3262,9 @@ class _SelectTypeState extends State<SelectType>
                     ? _buildToolsTabContent(context, appTheme)
                     : _agentPanelTab == 2
                         ? _buildTasksTabContent(context, appTheme)
-                        : _buildChatTabContent(context, appTheme, asPage),
+                        : _agentPanelTab == 3
+                            ? _buildUserSettingsPage(context, appTheme)
+                            : _buildChatTabContent(context, appTheme, asPage),
               ),
             ),
           ),
@@ -3270,12 +3288,12 @@ class _SelectTypeState extends State<SelectType>
       required int tabIdx,
       required IconData icon,
       required String label,
+      required double w,
     }) {
       final selected = _agentPanelTab == tabIdx;
       return GestureDetector(
         onTap: () {
           if (tabIdx == 0 && selected) {
-            // Tapping already-selected chat tab opens menu
             _showAgentHeaderMenu(context, appTheme, asPage);
             return;
           }
@@ -3288,10 +3306,7 @@ class _SelectTypeState extends State<SelectType>
           duration: const Duration(milliseconds: 270),
           curve: Curves.easeInOutCubic,
           height: 34,
-          // Chat bubble grows wide, others grow to show label
-          width: selected
-              ? (tabIdx == 0 ? 168.0 : 84.0)
-              : 34.0,
+          width: w,
           clipBehavior: Clip.hardEdge,
           decoration: BoxDecoration(
             color: selected ? selBg : unselBg,
@@ -3302,36 +3317,27 @@ class _SelectTypeState extends State<SelectType>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon,
-                    size: 14,
-                    color: selected ? fg : muted),
+                Icon(icon, size: 14, color: selected ? fg : muted),
                 if (selected) ...[
                   const SizedBox(width: 6),
                   if (tabIdx == 0) ...[
-                    // Conversation name + chevron
                     Flexible(
                       child: Text(
                         _agentConversationTitle,
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: TextStyle(
-                          fontSize: 12,
-                          color: fg,
-                          fontWeight: FontWeight.w500,
-                        ),
+                          fontSize: 12, color: fg, fontWeight: FontWeight.w500),
                       ),
                     ),
                     const SizedBox(width: 4),
                     Icon(Broken.arrow_down_2, size: 11, color: muted),
                   ] else ...[
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: fg,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    Text(label,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: fg,
+                            fontWeight: FontWeight.w500)),
                   ],
                 ],
               ],
@@ -3349,28 +3355,43 @@ class _SelectTypeState extends State<SelectType>
         border: Border(
             bottom: BorderSide(color: borderC.withOpacity(0.5), width: 0.5)),
       ),
-      child: Row(children: [
-        // Back / close
-        GestureDetector(
-          onTap: () {
-            if (!asPage) setState(() => _rightPanelOpen = false);
-          },
-          child: SizedBox(
-            width: 28,
-            height: 34,
-            child: Icon(Broken.arrow_left_2, size: 15, color: muted),
-          ),
-        ),
-        const SizedBox(width: 4),
-        // Chat bubble
-        bubble(tabIdx: 0, icon: Broken.magic_star,   label: ''),
-        const SizedBox(width: 4),
-        // Tools bubble
-        bubble(tabIdx: 1, icon: Broken.setting_3,    label: 'Tools'),
-        const SizedBox(width: 4),
-        // Tasks bubble
-        bubble(tabIdx: 2, icon: Broken.task_square,  label: 'Tasks'),
-      ]),
+      child: LayoutBuilder(
+        builder: (ctx, constraints) {
+          // Compute widths so all 3 bubbles fill 100% of available space
+          // Layout: [back28] [4] [chat] [4] [tools] [4] [tasks]
+          final bubbles = constraints.maxWidth - 28 - 4 - 4 - 4; // remaining for 3 bubbles
+          final double chatW  = _agentPanelTab == 0 ? bubbles * 0.62 : bubbles * 0.19;
+          final double toolsW = _agentPanelTab == 1 ? bubbles * 0.62 : bubbles * 0.19;
+          final double tasksW = _agentPanelTab == 2 ? bubbles * 0.62 : bubbles * 0.19;
+
+          return Row(children: [
+            // Back / close
+            GestureDetector(
+              onTap: () {
+                if (_agentPanelTab >= 3) {
+                  setState(() {
+                    _agentPanelPrevTab = _agentPanelTab;
+                    _agentPanelTab     = 1; // back to tools
+                  });
+                } else if (!asPage) {
+                  setState(() => _rightPanelOpen = false);
+                }
+              },
+              child: SizedBox(
+                width: 28,
+                height: 34,
+                child: Icon(Broken.arrow_left_2, size: 15, color: muted),
+              ),
+            ),
+            const SizedBox(width: 4),
+            bubble(tabIdx: 0, icon: Broken.magic_star,  label: '',      w: chatW),
+            const SizedBox(width: 4),
+            bubble(tabIdx: 1, icon: Broken.setting_3,   label: 'Tools', w: toolsW),
+            const SizedBox(width: 4),
+            bubble(tabIdx: 2, icon: Broken.task_square, label: 'Tasks', w: tasksW),
+          ]);
+        },
+      ),
     );
   }
 
@@ -3678,7 +3699,550 @@ class _SelectTypeState extends State<SelectType>
             ],
           ),
         ),
+
+        // ── Footer: Local env + Approval mode ────────────────────────
+        Container(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: Row(children: [
+            // + Agent shortcut
+            GestureDetector(
+              onTap: () {},
+              child: Row(children: [
+                Icon(Broken.add_circle, size: 13, color: muted),
+                const SizedBox(width: 4),
+                Icon(Broken.magic_star, size: 13, color: muted),
+                const SizedBox(width: 4),
+                Text('Agent', style: TextStyle(fontSize: 11, color: muted)),
+              ]),
+            ),
+            const Spacer(),
+            // Local pill
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xff2a2a2a) : const Color(0xffe8e8e8),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Broken.monitor, size: 11, color: muted),
+                const SizedBox(width: 4),
+                Text('Local', style: TextStyle(fontSize: 11, color: muted, fontWeight: FontWeight.w500)),
+              ]),
+            ),
+            const SizedBox(width: 6),
+            // Approval mode pill
+            GestureDetector(
+              onTap: () => _showApprovalModeSheet(context, appTheme),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xff2a2a2a) : const Color(0xffe8e8e8),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Broken.shield_tick, size: 11,
+                      color: _agentApprovalMode == 'bypass'
+                          ? Colors.orange[400]
+                          : _agentApprovalMode == 'autopilot'
+                              ? Colors.blue[400]
+                              : muted),
+                  const SizedBox(width: 4),
+                  Text(
+                    _agentApprovalMode == 'bypass'
+                        ? 'Contournement'
+                        : _agentApprovalMode == 'autopilot'
+                            ? 'Autopilot'
+                            : 'Approbations par défaut',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: muted,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ]),
+              ),
+            ),
+          ]),
+        ),
       ],
+    );
+  }
+
+  // ── Approval mode bottom sheet ────────────────────────────────────────────
+  void _showApprovalModeSheet(BuildContext context, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final bg     = isDark ? const Color(0xff1e1e1e) : Colors.white;
+    final fg     = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    final selBg  = isDark ? const Color(0xff2a2a2a) : const Color(0xfff0f0f0);
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setS) => Container(
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(width: 36, height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                      color: muted.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(2))),
+
+              // ── Option: Approbations par défaut ──
+              _approvalOption(
+                context: ctx, setS: setS, appTheme: appTheme,
+                mode: 'default',
+                icon: Broken.shield_tick,
+                iconColor: Colors.grey[400]!,
+                title: 'Approbations par défaut',
+                subtitle: 'Copilot utilise vos paramètres configurés',
+                selBg: selBg, fg: fg, muted: muted,
+                extra: Padding(
+                  padding: const EdgeInsets.fromLTRB(36, 8, 0, 0),
+                  child: Row(children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Bac à sable pour le terminal',
+                              style: TextStyle(fontSize: 13, color: fg)),
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: _agentSandboxTerminal,
+                      onChanged: (v) => setState(() {
+                        _agentSandboxTerminal = v;
+                        setS(() {});
+                      }),
+                      activeColor: _kAccent,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ]),
+                ),
+              ),
+
+              // ── Option: Contournement ──
+              _approvalOption(
+                context: ctx, setS: setS, appTheme: appTheme,
+                mode: 'bypass',
+                icon: Broken.warning_2,
+                iconColor: Colors.orange[400]!,
+                title: 'Contournement des approbations',
+                subtitle: 'Tous les appels d\'outils sont automatiquement approuvés',
+                selBg: selBg, fg: fg, muted: muted,
+              ),
+
+              // ── Option: Autopilot ──
+              _approvalOption(
+                context: ctx, setS: setS, appTheme: appTheme,
+                mode: 'autopilot',
+                icon: Broken.send_2,
+                iconColor: Colors.blue[400]!,
+                title: 'Autopilot (Aperçu)',
+                subtitle: 'Itère de manière autonome, du début à la fin',
+                selBg: selBg, fg: fg, muted: muted,
+              ),
+
+              Divider(color: muted.withOpacity(0.2), height: 24),
+
+              // En savoir plus
+              GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text('En savoir plus sur les autorisations',
+                      style: TextStyle(
+                          fontSize: 14,
+                          color: fg,
+                          fontWeight: FontWeight.w500)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _approvalOption({
+    required BuildContext context,
+    required StateSetter setS,
+    required AppTheme appTheme,
+    required String mode,
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required Color selBg,
+    required Color fg,
+    required Color muted,
+    Widget? extra,
+  }) {
+    final selected = _agentApprovalMode == mode;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _agentApprovalMode = mode);
+        setS(() {});
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? selBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(icon, size: 18, color: iconColor),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: TextStyle(fontSize: 12, color: muted),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+            ]),
+            if (extra != null) extra!,
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── User Settings page ────────────────────────────────────────────────────
+  Widget _buildUserSettingsPage(BuildContext context, AppTheme appTheme) {
+    final isDark  = appTheme.isDark;
+    final bg      = isDark ? const Color(0xff1e1e1e) : const Color(0xfffafafa);
+    final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    final border  = isDark ? const Color(0xff2e2e2e) : const Color(0xffe8e8e8);
+    final cardBg  = isDark ? const Color(0xff252526) : Colors.white;
+    final divC    = isDark ? const Color(0xff2e2e2e) : const Color(0xffe8e8e8);
+
+    Widget section({
+      required String title,
+      required bool expanded,
+      required VoidCallback onToggle,
+      required List<Widget> children,
+    }) =>
+        Container(
+          margin: const EdgeInsets.fromLTRB(0, 0, 0, 0),
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: divC, width: 0.5)),
+          ),
+          child: Column(
+            children: [
+              InkWell(
+                onTap: onToggle,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                  child: Row(children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: fg)),
+                    const Spacer(),
+                    Icon(
+                      expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                      size: 14,
+                      color: muted,
+                    ),
+                  ]),
+                ),
+              ),
+              if (expanded)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: children,
+                  ),
+                ),
+            ],
+          ),
+        );
+
+    Widget toggleRow(String label, String subtitle, bool value, ValueChanged<bool> onChanged) =>
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(fontSize: 13, color: fg, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: TextStyle(fontSize: 11, color: muted)),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: _kAccent,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ]),
+        );
+
+    Widget dividerRow() => Divider(height: 1, color: divC);
+
+    return Container(
+      color: bg,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Page header
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('User Settings',
+                    style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: fg)),
+                const SizedBox(height: 4),
+                Text(
+                  'The following settings apply to your account and will be used across all your Apps.',
+                  style: TextStyle(fontSize: 12, color: muted),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: ListView(
+              children: [
+                // ── Agent ──────────────────────────────────────────────
+                section(
+                  title: 'Agent',
+                  expanded: _usAgentExpanded,
+                  onToggle: () => setState(() => _usAgentExpanded = !_usAgentExpanded),
+                  children: [
+                    toggleRow(
+                      'Agent Audio Notification',
+                      'Play a sound when the Agent needs your response.',
+                      _usAudioNotif,
+                      (v) => setState(() => _usAudioNotif = v),
+                    ),
+                    dividerRow(),
+                    toggleRow(
+                      'Agent Push Notification',
+                      'Send a push notification when the Agent needs your response.',
+                      _usPushNotif,
+                      (v) => setState(() => _usPushNotif = v),
+                    ),
+                  ],
+                ),
+
+                // ── App Preview ────────────────────────────────────────
+                section(
+                  title: 'App Preview',
+                  expanded: _usPreviewExpanded,
+                  onToggle: () => setState(() => _usPreviewExpanded = !_usPreviewExpanded),
+                  children: [
+                    toggleRow(
+                      'Automatic Preview',
+                      'Open a web preview automatically when a port is open',
+                      _usAutoPreview,
+                      (v) => setState(() => _usAutoPreview = v),
+                    ),
+                    dividerRow(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Forward Opened Ports Automat…',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: fg,
+                                  fontWeight: FontWeight.w500)),
+                          const SizedBox(height: 2),
+                          Text('Automatically configure detected newly opened ports.',
+                              style: TextStyle(fontSize: 11, color: muted)),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: cardBg,
+                              border: Border.all(color: border),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: DropdownButton<String>(
+                              value: _usForwardPorts,
+                              isExpanded: true,
+                              underline: const SizedBox.shrink(),
+                              dropdownColor: cardBg,
+                              style: TextStyle(fontSize: 13, color: fg),
+                              icon: Icon(Broken.arrow_down_2, size: 14, color: muted),
+                              items: const [
+                                DropdownMenuItem(value: 'all ports except localhost', child: Text('all ports except localhost')),
+                                DropdownMenuItem(value: 'all ports', child: Text('all ports')),
+                                DropdownMenuItem(value: 'none', child: Text('none')),
+                              ],
+                              onChanged: (v) => setState(() => _usForwardPorts = v!),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // ── Appearance ─────────────────────────────────────────
+                section(
+                  title: 'Appearance',
+                  expanded: _usAppearanceExpanded,
+                  onToggle: () => setState(() => _usAppearanceExpanded = !_usAppearanceExpanded),
+                  children: [
+                    // Font Size
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Font Size',
+                                  style: TextStyle(fontSize: 13, color: fg, fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 2),
+                              Text('Change the font size of the editor.',
+                                  style: TextStyle(fontSize: 11, color: muted)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: cardBg,
+                            border: Border.all(color: border),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: DropdownButton<String>(
+                            value: _usFontSize,
+                            underline: const SizedBox.shrink(),
+                            dropdownColor: cardBg,
+                            style: TextStyle(fontSize: 13, color: fg),
+                            icon: Icon(Broken.arrow_down_2, size: 14, color: muted),
+                            items: const [
+                              DropdownMenuItem(value: 'small',  child: Text('small')),
+                              DropdownMenuItem(value: 'normal', child: Text('normal')),
+                              DropdownMenuItem(value: 'large',  child: Text('large')),
+                            ],
+                            onChanged: (v) => setState(() => _usFontSize = v!),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    dividerRow(),
+                    // Theme
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(children: [
+                        Text('Theme', style: TextStyle(fontSize: 13, color: fg, fontWeight: FontWeight.w500)),
+                        const Spacer(),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: cardBg,
+                            border: Border.all(color: border),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            for (final opt in [
+                              (label: 'Light', icon: Broken.sun_1),
+                              (label: 'Dark',  icon: Broken.moon),
+                              (label: 'System', icon: Broken.monitor),
+                            ]) ...[
+                              GestureDetector(
+                                onTap: () {
+                                  final bloc = context.read<AppThemeBloc>();
+                                  if (opt.label == 'Light') bloc.add(const AppThemeChanged(false));
+                                  else if (opt.label == 'Dark') bloc.add(const AppThemeChanged(true));
+                                  else bloc.add(AppThemeChanged(
+                                      WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark));
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: (opt.label == 'Light' && !isDark) ||
+                                           (opt.label == 'Dark'  &&  isDark)
+                                        ? _kAccent.withOpacity(0.15)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                    Icon(opt.icon, size: 13, color: fg),
+                                    const SizedBox(width: 4),
+                                    Text(opt.label,
+                                        style: TextStyle(fontSize: 12, color: fg)),
+                                  ]),
+                                ),
+                              ),
+                            ],
+                          ]),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ),
+
+                // ── Code Editing ───────────────────────────────────────
+                section(
+                  title: 'Code Editing',
+                  expanded: _usCodeEditExpanded,
+                  onToggle: () => setState(() => _usCodeEditExpanded = !_usCodeEditExpanded),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Code editing settings coming soon.',
+                          style: TextStyle(fontSize: 12, color: muted)),
+                    ),
+                  ],
+                ),
+
+                // ── Advanced Developer Settings ─────────────────────────
+                section(
+                  title: 'Advanced Developer Settings',
+                  expanded: _usAdvancedExpanded,
+                  onToggle: () => setState(() => _usAdvancedExpanded = !_usAdvancedExpanded),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Advanced settings coming soon.',
+                          style: TextStyle(fontSize: 12, color: muted)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -3686,22 +4250,23 @@ class _SelectTypeState extends State<SelectType>
   Widget _buildToolsTabContent(BuildContext context, AppTheme appTheme) {
     final isDark  = appTheme.isDark;
     final bg      = isDark ? const Color(0xff1e1e1e) : const Color(0xfffafafa);
-    final cardBg  = isDark ? const Color(0xff252526) : Colors.white;
     final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
     final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
-    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffe5e5e5);
-    final inputBg = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
+    final border  = isDark ? const Color(0xff2e2e2e) : const Color(0xffe8e8e8);
+    final inputBg = isDark ? const Color(0xff2a2a2a) : const Color(0xfff0f0f0);
+    final hoverBg = isDark ? const Color(0xff252525) : const Color(0xfff2f2f2);
 
     final tools = [
-      (icon: Broken.lock,         color: Colors.orange[400]!,  title: 'Secrets',       desc: 'Store sensitive information (like API keys) securely in your App'),
-      (icon: Broken.code_1,       color: Colors.blue[400]!,    title: 'Agent Skills',  desc: 'Manage skills that extend Agent capabilities'),
-      (icon: Broken.archive_book, color: Colors.green[400]!,   title: 'App Storage',   desc: 'Host and save uploads like images, videos, and documents'),
-      (icon: Broken.copy,         color: Colors.purple[400]!,  title: 'Artifacts',     desc: 'Browse generated artifacts and previews'),
-      (icon: Broken.brush_1,      color: Colors.pink[400]!,    title: 'Canvas',        desc: 'Agent-controlled canvas for mockups and wireframes'),
-      (icon: Broken.command_square,color: Colors.teal[400]!,    title: 'Console',       desc: 'View the terminal output after running your code'),
-      (icon: Broken.data,         color: Colors.cyan[400]!,    title: 'Database',      desc: 'Stores structured data such as user profiles, game scores, and product catalogs'),
-      (icon: Broken.code,         color: Colors.indigo[400]!,  title: 'Developer',     desc: 'Internal developer tools, telemetry, and diagnostics'),
-      (icon: Broken.global,       color: Colors.amber[400]!,   title: 'Domains',       desc: 'Manage custom domains for your published project'),
+      (icon: Broken.lock,          color: Colors.orange[400]!,  title: 'Secrets',        desc: 'Store sensitive information (like API keys) securely in your App'),
+      (icon: Broken.code_1,        color: Colors.blue[400]!,    title: 'Agent Skills',   desc: 'Manage skills that extend Agent capabilities'),
+      (icon: Broken.archive_book,  color: Colors.green[400]!,   title: 'App Storage',    desc: 'Host and save uploads like images, videos, and documents'),
+      (icon: Broken.copy,          color: Colors.purple[400]!,  title: 'Artifacts',      desc: 'Browse generated artifacts and previews'),
+      (icon: Broken.brush_1,       color: Colors.pink[400]!,    title: 'Canvas',         desc: 'Agent-controlled canvas for mockups and wireframes'),
+      (icon: Broken.command_square,color: Colors.teal[400]!,    title: 'Console',        desc: 'View the terminal output after running your code'),
+      (icon: Broken.data,          color: Colors.cyan[400]!,    title: 'Database',       desc: 'Stores structured data such as user profiles, game scores, and product catalogs'),
+      (icon: Broken.code,          color: Colors.indigo[400]!,  title: 'Developer',      desc: 'Internal developer tools, telemetry, and diagnostics'),
+      (icon: Broken.global,        color: Colors.amber[400]!,   title: 'Domains',        desc: 'Manage custom domains for your published project'),
+      (icon: Broken.setting,       color: Colors.grey[500]!,    title: 'User Settings',  desc: 'Configure your account settings, appearance, and notifications'),
     ];
 
     final filtered = _agentToolsSearch.isEmpty
@@ -3717,134 +4282,96 @@ class _SelectTypeState extends State<SelectType>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Tool list
+          // Tool list — same bg as panel, no card elevation
           Expanded(
-            child: ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+            child: ListView.builder(
+              padding: const EdgeInsets.only(top: 6, bottom: 4),
               itemCount: filtered.length,
-              separatorBuilder: (_, __) =>
-                  Divider(height: 1, color: border),
               itemBuilder: (_, i) {
                 final t = filtered[i];
-                return InkWell(
-                  onTap: () {
-                    // Tools open relevant functionality
-                    if (t.title == 'Console') {
-                      setState(() {
-                        _bottomPanelOpen = true;
-                        _bottomPanelTab  = 0;
-                      });
-                    } else if (t.title == 'Database') {
-                      _openAgentSettingsTab();
-                    }
-                  },
-                  child: Container(
-                    color: cardBg,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    child: Row(children: [
-                      Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: t.color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(8),
+                return Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      if (t.title == 'Console') {
+                        setState(() { _bottomPanelOpen = true; _bottomPanelTab = 0; });
+                      } else if (t.title == 'Database') {
+                        _openAgentSettingsTab();
+                      } else if (t.title == 'User Settings') {
+                        setState(() {
+                          _agentPanelPrevTab = _agentPanelTab;
+                          _agentPanelTab     = 3;
+                        });
+                      }
+                    },
+                    hoverColor: hoverBg,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Row(children: [
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: t.color.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(child: Icon(t.icon, size: 16, color: t.color)),
                         ),
-                        child: Center(
-                            child: Icon(t.icon, size: 17, color: t.color)),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(t.title,
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: fg)),
-                            const SizedBox(height: 2),
-                            Text(t.desc,
-                                style: TextStyle(
-                                    fontSize: 11, color: muted),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis),
-                          ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(t.title,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: fg)),
+                              const SizedBox(height: 2),
+                              Text(t.desc,
+                                  style: TextStyle(fontSize: 11, color: muted),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
                         ),
-                      ),
-                    ]),
+                        Icon(Broken.arrow_right_3, size: 13, color: muted.withOpacity(0.5)),
+                      ]),
+                    ),
                   ),
                 );
-              },
+                },
             ),
           ),
-          // Search bar + open preview
+
+          // ── Footer: search full width ──────────────────────────────
           Container(
-            padding:
-                const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xff252526) : const Color(0xffececec),
-              border: Border(top: BorderSide(color: border)),
+              color: bg,
+              border: Border(top: BorderSide(color: border, width: 0.5)),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _agentToolsSearchCtrl,
-                  onChanged: (v) =>
-                      setState(() => _agentToolsSearch = v),
-                  style: TextStyle(fontSize: 13, color: fg),
-                  decoration: InputDecoration(
-                    hintText: 'Search tools…',
-                    hintStyle:
-                        TextStyle(fontSize: 13, color: muted),
-                    filled: true,
-                    fillColor: inputBg,
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide.none,
-                    ),
-                    prefixIcon: Icon(Broken.search_normal,
-                        size: 15, color: muted),
-                    isDense: true,
-                  ),
+            child: TextField(
+              controller: _agentToolsSearchCtrl,
+              onChanged: (v) => setState(() => _agentToolsSearch = v),
+              style: TextStyle(fontSize: 13, color: fg),
+              decoration: InputDecoration(
+                hintText: 'Search tool…',
+                hintStyle: TextStyle(fontSize: 13, color: muted),
+                filled: true,
+                fillColor: inputBg,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  height: 38,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          isDark ? const Color(0xff2d2d2d) : const Color(0xffe0e0e0),
-                      foregroundColor: fg,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _activeRail = 8;
-                        if (!_openTabs.any((t) => t.id == 'browser')) {
-                          _openTabs.add(const _TabDef(
-                              id: 'browser',
-                              title: 'Navigateur',
-                              icon: Broken.global));
-                          _activeTabIdx = _openTabs.length - 1;
-                        } else {
-                          _activeTabIdx = _openTabs
-                              .indexWhere((t) => t.id == 'browser');
-                        }
-                      });
-                    },
-                    icon: Icon(Broken.global, size: 15, color: fg),
-                    label: Text('Open preview',
-                        style: TextStyle(fontSize: 13, color: fg)),
-                  ),
+                prefixIcon: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Icon(Broken.search_normal, size: 15, color: muted),
                 ),
-              ],
+                prefixIconConstraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                isDense: true,
+              ),
             ),
           ),
         ],
@@ -4020,54 +4547,34 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
 
-          // ── + New task button ─────────────────────────────────────────
+          // ── + New task button (full width, no Core badge) ─────────
           Container(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: border)),
+              border: Border(top: BorderSide(color: border, width: 0.5)),
             ),
-            child: Row(children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _createAgentTask(context, appTheme),
-                  child: Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xff2a2a2a)
-                          : const Color(0xffe8e8e8),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Broken.add_square, size: 15, color: muted),
-                          const SizedBox(width: 6),
-                          Text('New task',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: fg,
-                                  fontWeight: FontWeight.w500)),
-                        ]),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // "Core" label badge (mirrors Replit UI)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: GestureDetector(
+              onTap: () => _createAgentTask(context, appTheme),
+              child: Container(
+                height: 40,
                 decoration: BoxDecoration(
-                  color: _kAccent.withOpacity(0.15),
+                  color: isDark ? const Color(0xff2a2a2a) : const Color(0xffe8e8e8),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('+ Core',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: _kAccent,
-                        fontWeight: FontWeight.w600)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Broken.add_square, size: 15, color: muted),
+                    const SizedBox(width: 6),
+                    Text('New task',
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: fg,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
               ),
-            ]),
+            ),
           ),
         ],
       ),
