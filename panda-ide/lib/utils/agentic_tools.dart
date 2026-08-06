@@ -15,6 +15,7 @@ import 'package:panda/utils/agentic_tool_catalog.dart';
 import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
+import 'package:panda/terminal/terminal_bridge.dart';
 
 class AgenticTools {
   final BuildContext context;
@@ -1538,6 +1539,9 @@ class AgenticTools {
     Map<String, String> envs = const {},
   ]) async {
     try {
+      final fullCmd = args.isEmpty
+          ? command
+          : '$command ${args.map((a) => '"$a"').join(' ')}';
       final baseCmd = command.split('/').last.split(' ').first.toLowerCase();
       if (_kDangerousCommands.contains(baseCmd)) {
         final argsStr = args.isEmpty ? '' : ' ${args.join(' ')}';
@@ -1550,8 +1554,30 @@ class AgenticTools {
         }
       }
 
-      final env = await _buildAgentShellEnvironment(workspacePath);
+      // ── Prefer visible terminal (user can see the agent work) ────────────
+      final bridge = TerminalBridge.instance;
+      if (bridge.isAvailable) {
+        try {
+          bridge.onAgentCommandStateChanged?.call(true, fullCmd);
+          final output = await bridge.runCommand(
+            fullCmd,
+            timeout: const Duration(seconds: 120),
+          );
+          bridge.onAgentCommandStateChanged?.call(false, null);
+          return ToolResult.success({
+            "pid": "0",
+            "exitCode": "0",
+            "stdout": output,
+            "stderr": "",
+          });
+        } catch (e) {
+          bridge.onAgentCommandStateChanged?.call(false, null);
+          // Fall through to Process.run if bridge fails
+        }
+      }
 
+      // ── Fallback: hidden subprocess ────────────────────────────────────
+      final env = await _buildAgentShellEnvironment(workspacePath);
       env.addAll(envs);
       final process = await Process.run(
         command,

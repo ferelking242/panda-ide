@@ -14,6 +14,7 @@ import '../bloc/ui_bloc/ui_bloc.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
+import 'terminal_bridge.dart';
 
 class SetupTerminal extends StatefulWidget {
   final String projectDir;
@@ -214,6 +215,13 @@ class _TerminalRuntime {
   String currentInput = '';
   VoidCallback? selectionListener;
 
+  // ── Output capture (for bridge + error forwarding) ──────────────────────
+  final StreamController<String> _rawOutputCtrl =
+      StreamController<String>.broadcast();
+  Stream<String> get rawOutput => _rawOutputCtrl.stream;
+  final StringBuffer _outputBuffer = StringBuffer();
+  int lastExitCode = 0;
+
   _TerminalRuntime({
     required this.sessionId,
     required this.title,
@@ -225,6 +233,25 @@ class _TerminalRuntime {
     if (sshSession != null) return true;
     return pty != null;
   }
+
+  /// Feeds PTY output to the xterm widget, the raw stream, and the rolling
+  /// capture buffer simultaneously.
+  void feedOutput(String data) {
+    terminal.write(data);
+    if (!_rawOutputCtrl.isClosed) _rawOutputCtrl.add(data);
+    _outputBuffer.write(data);
+    // Keep only the last 50 KB to bound memory.
+    if (_outputBuffer.length > 51200) {
+      final s = _outputBuffer.toString();
+      _outputBuffer
+        ..clear()
+        ..write(s.substring(s.length - 50000));
+    }
+    TerminalBridge.instance.notifyOutput(data);
+  }
+
+  /// Returns the most recently captured raw output (max 50 KB).
+  String get recentOutput => _outputBuffer.toString();
 
   void stopProcess() {
     if(sshSession != null){
@@ -246,6 +273,7 @@ class _TerminalRuntime {
 
   Future<void> dispose() async {
     stopProcess();
+    await _rawOutputCtrl.close();
     if (selectionListener != null) {
       controller.removeListener(selectionListener!);
     }
@@ -253,7 +281,8 @@ class _TerminalRuntime {
   }
 }
 
-class _SetupTerminalState extends State<SetupTerminal> {
+class _SetupTerminalState extends State<SetupTerminal>
+    implements TerminalBridgeDelegate {
   late final TerminalSessionBloc _sessionBloc;
   late final List<SSHInfo> sshServerList;
   late final SSHPrivateKey? termuxInfo;
@@ -269,9 +298,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
   int _selectedSuggestionIndex = 0;
   List<String> _pathBinaries = [];
 
+  // ── Error banner state: sessionId → exit code ──────────────────────────
+  final Map<String, int> _errorSessions = {};
+
   @override
   void initState() {
     super.initState();
+    TerminalBridge.instance.attach(this);
     _sessionBloc = TerminalSessionBloc(
       initialFontSize: _terminalFontSizeFromConfig(),
     );
@@ -279,6 +312,53 @@ class _SetupTerminalState extends State<SetupTerminal> {
     termuxInfo = context.read<TermuxCubit>().state.termInfo;
     _bootstrapTerminalPage();
     _loadPathBinaries();
+  }
+
+  // ── TerminalBridgeDelegate ──────────────────────────────────────────────
+
+  @override
+  void writeToPty(String text) => sendToPty(text);
+
+  @override
+  Future<String> executeCommandAndCapture(
+    String command, {
+    required Duration timeout,
+  }) async {
+    final runtime = _activeRuntime();
+    if (runtime == null) throw StateError('No active terminal session');
+    if (runtime.pty == null) throw StateError('Terminal PTY is not running');
+
+    final sentinel =
+        '__PANDA_${DateTime.now().millisecondsSinceEpoch}__';
+    // Wrap so stdout+stderr are captured; echo the sentinel + exit code.
+    final wrapped = '{ $command; } 2>&1; echo "$sentinel"\$?';
+    final completer = Completer<String>();
+    final accum = StringBuffer();
+    StreamSubscription<String>? sub;
+
+    sub = runtime.rawOutput.listen((chunk) {
+      accum.write(chunk);
+      final clean = stripAnsiCodes(accum.toString());
+      final idx = clean.indexOf(sentinel);
+      if (idx >= 0 && !completer.isCompleted) {
+        sub?.cancel();
+        completer.complete(clean.substring(0, idx).trim());
+      }
+    });
+
+    runtime.pty!.write(const Utf8Encoder().convert('$wrapped\n'));
+
+    try {
+      return await completer.future.timeout(timeout, onTimeout: () {
+        sub?.cancel();
+        final result = stripAnsiCodes(accum.toString()).trim();
+        if (!completer.isCompleted) completer.complete(result);
+        return result;
+      });
+    } catch (e) {
+      sub?.cancel();
+      rethrow;
+    }
   }
 
   Future<void> _bootstrapTerminalPage() async {
@@ -631,15 +711,24 @@ class _SetupTerminalState extends State<SetupTerminal> {
     process.output
       .cast<List<int>>()
       .transform(const Utf8Decoder())
-      .listen(runtime.terminal.write);
+      .listen(runtime.feedOutput);
 
     process.exitCode.then((code) {
       if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
       runtime.pty = null;
+      runtime.lastExitCode = code;
       runtime.terminal.write('\r\n\n[Program finished with exit code $code]');
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
       );
+      // Error banner + bridge notification
+      if (code != 0) {
+        TerminalBridge.instance.onCommandError
+            ?.call(runtime.recentOutput, code);
+        if (mounted) setState(() => _errorSessions[runtime.sessionId] = code);
+      } else {
+        if (mounted) setState(() => _errorSessions.remove(runtime.sessionId));
+      }
     });
 
     runtime.terminal.onOutput = (data) {
@@ -897,6 +986,31 @@ class _SetupTerminalState extends State<SetupTerminal> {
                       height: 24,
                       color: const Color(0xff454545),
                     ),
+                    // ── Ask Agent ──────────────────────────────────────────
+                    _toolbarButton(
+                      icon: Icons.smart_toy_outlined,
+                      label: 'Agent',
+                      onTap: () {
+                        final selectedText =
+                            runtime.controller.selection != null
+                            ? runtime.terminal.buffer.getText(
+                                runtime.controller.selection!,
+                              )
+                            : '';
+                        if (selectedText.isNotEmpty) {
+                          TerminalBridge.instance.onSendToAgent?.call(
+                            'Sortie du terminal :\n```\n$selectedText\n```\n\n'
+                            'Explique ou aide-moi à corriger ceci.',
+                          );
+                        }
+                        runtime.controller.clearSelection();
+                      },
+                    ),
+                    Container(
+                      width: 1,
+                      height: 24,
+                      color: const Color(0xff454545),
+                    ),
                     _toolbarButton(
                       icon: Icons.close,
                       label: '',
@@ -959,6 +1073,101 @@ class _SetupTerminalState extends State<SetupTerminal> {
     runtime?.pty?.write(const Utf8Encoder().convert(sequence));
   }
 
+  // ── Copy / Paste helpers (used by keyboard bar) ────────────────────────
+
+  void _copySelection() {
+    final runtime = _activeRuntime();
+    if (runtime?.controller.selection != null) {
+      final text =
+          runtime!.terminal.buffer.getText(runtime.controller.selection!);
+      if (text.isNotEmpty) {
+        Clipboard.setData(ClipboardData(text: text));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Copié'),
+              duration: Duration(seconds: 1),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+      runtime.controller.clearSelection();
+    }
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null) {
+      final runtime = _activeRuntime();
+      runtime?.pty?.write(const Utf8Encoder().convert(data!.text!));
+    }
+  }
+
+  // ── Error banner ───────────────────────────────────────────────────────
+
+  Widget _buildErrorBanner(_TerminalRuntime runtime, int exitCode) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xff3a1a1a),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.red.shade800.withOpacity(0.6)),
+          boxShadow: const [
+            BoxShadow(
+                color: Colors.black38, blurRadius: 8, offset: Offset(0, 2)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 14, color: Colors.red.shade300),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                'Erreur (code $exitCode)',
+                style: TextStyle(color: Colors.red.shade200, fontSize: 12),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                final raw = stripAnsiCodes(runtime.recentOutput);
+                final snippet = raw.length > 3000
+                    ? raw.substring(raw.length - 3000)
+                    : raw;
+                TerminalBridge.instance.onSendToAgent?.call(
+                  'Cette commande a échoué avec le code $exitCode.\n\n'
+                  'Sortie du terminal :\n```\n$snippet\n```\n\n'
+                  'Aide-moi à comprendre et corriger l\'erreur.',
+                );
+                setState(() => _errorSessions.remove(runtime.sessionId));
+              },
+              icon: const Icon(Icons.smart_toy_outlined, size: 13),
+              label: const Text(
+                'Demander à l\'agent',
+                style: TextStyle(fontSize: 11),
+              ),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.orange.shade300,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+            const SizedBox(width: 4),
+            InkWell(
+              onTap: () =>
+                  setState(() => _errorSessions.remove(runtime.sessionId)),
+              child: const Icon(Icons.close, size: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _setTerminalOutputWithAutocomplete({
     bool ctrl = false,
     bool alt = false,
@@ -1001,6 +1210,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   @override
   void dispose() {
+    TerminalBridge.instance.detach();
     _hideSelectionToolbar();
     _suggestionsNotifier.dispose();
     _suggestionScrollController.dispose();
@@ -1362,10 +1572,23 @@ class _SetupTerminalState extends State<SetupTerminal> {
                                     resetCallback: resetCallback,
                                   );
                                 },
+                              onCopy: _copySelection,
+                              onPaste: _pasteFromClipboard,
                             ),
                         ],
                       ),
                       _buildSuggestionBox(),
+                      // ── Error banner ──────────────────────────────────────
+                      if (_errorSessions.containsKey(activeRuntime.sessionId))
+                        Positioned(
+                          bottom: widget.showKeyboardMenu ? 102 : 8,
+                          left: 8,
+                          right: 8,
+                          child: _buildErrorBanner(
+                            activeRuntime,
+                            _errorSessions[activeRuntime.sessionId]!,
+                          ),
+                        ),
                     ],
                   );
 
@@ -1536,12 +1759,16 @@ class _SetupTerminalState extends State<SetupTerminal> {
 class TerminalKeyboardMenu extends StatefulWidget {
   final Function(String) onSendSequence;
   final Function(bool ctrl, bool alt, bool shift, VoidCallback resetCallback)
-  onModifierChanged;
+      onModifierChanged;
+  final VoidCallback? onCopy;
+  final Future<void> Function()? onPaste;
 
   const TerminalKeyboardMenu({
     super.key,
     required this.onSendSequence,
     required this.onModifierChanged,
+    this.onCopy,
+    this.onPaste,
   });
 
   @override
@@ -1569,12 +1796,8 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
         isShiftActive = false;
       }
     });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
+    widget.onModifierChanged(isCtrlActive, isAltActive, isShiftActive,
+        _resetModifiers);
   }
 
   void _toggleAlt() {
@@ -1585,12 +1808,8 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
         isShiftActive = false;
       }
     });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
+    widget.onModifierChanged(isCtrlActive, isAltActive, isShiftActive,
+        _resetModifiers);
   }
 
   void _toggleShift() {
@@ -1601,99 +1820,116 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
         isAltActive = false;
       }
     });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
+    widget.onModifierChanged(isCtrlActive, isAltActive, isShiftActive,
+        _resetModifiers);
+  }
+
+  Widget _kbBtn(
+    String label, {
+    VoidCallback? onTap,
+    bool active = false,
+    IconData? icon,
+    double fontSize = 12,
+  }) {
+    final fg = active ? Colors.yellow : Colors.white;
+    final bg = active
+        ? Colors.white.withValues(alpha: 0.18)
+        : Colors.transparent;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(
+            color: active
+                ? Colors.yellow.withValues(alpha: 0.6)
+                : Colors.white.withValues(alpha: 0.12),
+          ),
+        ),
+        child: icon != null
+            ? Icon(icon, size: 14, color: fg)
+            : Text(
+                label,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: fontSize,
+                  fontFamily: 'monospace',
+                  fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+      ),
     );
   }
+
+  Widget _divider() => Container(
+        width: 1,
+        height: 20,
+        margin: const EdgeInsets.symmetric(horizontal: 3),
+        color: Colors.white.withValues(alpha: 0.12),
+      );
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 44,
       color: const Color(0xff181818),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: _toggleCtrl,
-                style: TextButton.styleFrom(
-                  foregroundColor: isCtrlActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isCtrlActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("CTRL"),
-              ),
-              TextButton(
-                onPressed: _toggleAlt,
-                style: TextButton.styleFrom(
-                  foregroundColor: isAltActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isAltActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("ALT"),
-              ),
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b[H'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("HOME"),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[A'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_upward),
-              ),
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b[F'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("END"),
-              ),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("ESC"),
-              ),
-              TextButton(
-                onPressed: _toggleShift,
-                style: TextButton.styleFrom(
-                  foregroundColor: isShiftActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isShiftActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("SHIFT"),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[D'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: IconButton(
-                  onPressed: () => widget.onSendSequence('\x1b[B'),
-                  color: Colors.white,
-                  icon: const Icon(Icons.arrow_downward),
-                ),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[C'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_forward),
-              ),
-            ],
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // ── Modifiers ────────────────────────────────────────────────
+            _kbBtn('CTRL', onTap: _toggleCtrl, active: isCtrlActive),
+            _kbBtn('ALT', onTap: _toggleAlt, active: isAltActive),
+            _kbBtn('SHIFT', onTap: _toggleShift, active: isShiftActive),
+            _kbBtn('ESC',
+                onTap: () => widget.onSendSequence('\x1b')),
+            _kbBtn('TAB',
+                onTap: () => widget.onSendSequence('\t')),
+            _divider(),
+            // ── Arrows ───────────────────────────────────────────────────
+            _kbBtn('', icon: Icons.arrow_back,
+                onTap: () => widget.onSendSequence('\x1b[D')),
+            _kbBtn('', icon: Icons.arrow_upward,
+                onTap: () => widget.onSendSequence('\x1b[A')),
+            _kbBtn('', icon: Icons.arrow_downward,
+                onTap: () => widget.onSendSequence('\x1b[B')),
+            _kbBtn('', icon: Icons.arrow_forward,
+                onTap: () => widget.onSendSequence('\x1b[C')),
+            _divider(),
+            // ── Navigation ───────────────────────────────────────────────
+            _kbBtn('HOME',
+                onTap: () => widget.onSendSequence('\x1b[H')),
+            _kbBtn('END',
+                onTap: () => widget.onSendSequence('\x1b[F')),
+            _kbBtn('PgUp',
+                onTap: () => widget.onSendSequence('\x1b[5~'),
+                fontSize: 11),
+            _kbBtn('PgDn',
+                onTap: () => widget.onSendSequence('\x1b[6~'),
+                fontSize: 11),
+            _divider(),
+            // ── Copy / Paste ─────────────────────────────────────────────
+            if (widget.onCopy != null)
+              _kbBtn('', icon: Icons.copy, onTap: widget.onCopy),
+            if (widget.onPaste != null)
+              _kbBtn('', icon: Icons.paste,
+                  onTap: () => widget.onPaste!()),
+            _divider(),
+            // ── Symbols ──────────────────────────────────────────────────
+            for (final s in [
+              '|', '&', ';', '~', '/', '\\', '`', '"', "'",
+              '!', '#', '%', '^', '@', '*', '>', '<',
+              '(', ')', '{', '}', '[', ']',
+              '_', '-', '=', '+',
+            ])
+              _kbBtn(s, onTap: () => widget.onSendSequence(s)),
+          ],
+        ),
       ),
     );
   }

@@ -48,6 +48,7 @@ import '../ui/browser/browser_panel.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import 'widgets.dart';
+import '../terminal/terminal_bridge.dart';
 
 // ── VSCode colour tokens ──────────────────────────────────────────────────────
 // activity-bar colours (dark / light)
@@ -190,6 +191,46 @@ class _SelectTypeState extends State<SelectType>
       _checkForAndroidUpdate();
       context.read<ChatSessionBloc>().add(LoadChatSessions());
     });
+    // ── Bridge callbacks ───────────────────────────────────────────────
+    _registerTerminalBridgeCallbacks();
+  }
+
+  void _registerTerminalBridgeCallbacks() {
+    final bridge = TerminalBridge.instance;
+
+    // "Ask Agent" from terminal selection / error banner → inject into chat
+    bridge.onSendToAgent = (String message) {
+      if (!mounted) return;
+      setState(() {
+        _agentInputCtrl.text = message;
+        // Open agent panel
+        _bottomPanelOpen = false;
+        _agentFloating = false;
+      });
+      // Small delay so the UI rebuilds before scrolling
+      Future.microtask(() {
+        if (!mounted) return;
+        _openAgentTab();
+        Future.delayed(const Duration(milliseconds: 150), () {
+          if (!mounted) return;
+          _agentInputCtrl.text = message;
+          _agentSend();
+        });
+      });
+    };
+
+    // Agent starts/stops running a command → open terminal panel so the user
+    // can watch what is happening in real time.
+    bridge.onAgentCommandStateChanged = (bool running, String? command) {
+      if (!mounted) return;
+      setState(() {
+        if (running) {
+          _bottomPanelOpen = true;
+          _bottomPanelTab = 0; // Terminal tab
+          _terminalFullscreen = false;
+        }
+      });
+    };
   }
 
   Future<void> _checkForAndroidUpdate() async {
@@ -242,6 +283,10 @@ class _SelectTypeState extends State<SelectType>
 
   @override
   void dispose() {
+    // Clear bridge callbacks before widgets dispose
+    TerminalBridge.instance.onSendToAgent = null;
+    TerminalBridge.instance.onAgentCommandStateChanged = null;
+    TerminalBridge.instance.onCommandError = null;
     WidgetsBinding.instance.removeObserver(this);
     createFileController.dispose();
     _agentInputCtrl.dispose();
