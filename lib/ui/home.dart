@@ -1230,27 +1230,6 @@ class _SelectTypeState extends State<SelectType>
 
               const Spacer(),
 
-              // ── Right: Panda AI icon ────────────────────────────────
-              _StatusBarItem(
-                icon: Broken.magic_star,
-                label: '',
-                fg: _rightPanelOpen ? _kAccent : fg,
-                onTap: () => setState(() => _rightPanelOpen = !_rightPanelOpen),
-              ),
-              const SizedBox(width: 2),
-
-              // ── Right: terminal ─────────────────────────────────────
-              _StatusBarItem(
-                icon: Icons.terminal,
-                label: '',
-                fg: _bottomPanelOpen ? _kAccent : fg,
-                onTap: () => setState(() {
-                  _bottomPanelOpen = true;
-                  _bottomPanelTab  = 0;
-                }),
-              ),
-              const SizedBox(width: 2),
-
               // ── Right: notifications ────────────────────────────────
               _StatusBarItem(
                 icon: Icons.notifications_none,
@@ -1415,7 +1394,12 @@ class _SelectTypeState extends State<SelectType>
             ),
             const SizedBox(height: 4),
 
-            // ── Sidebar items ─────────────────────────────────────────────
+            // ── Sidebar items (scrollable so they never overlap bottom) ───
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
             ...topItems.map((item) => _ActivityBtnEx(
                   item:      item,
                   selected:  _sidebarState == 2 && _activeRail == item.idx,
@@ -1520,8 +1504,12 @@ class _SelectTypeState extends State<SelectType>
                     });
                   },
                 )),
+                  ],
+                ),
+              ),
+            ),
 
-            const Spacer(),
+            const SizedBox(height: 8),
 
             // ── Theme toggle ───────────────────────────────────────────────
             BlocBuilder<AppThemeBloc, AppThemeState>(
@@ -1571,7 +1559,7 @@ class _SelectTypeState extends State<SelectType>
             ),
 
             _ActivityBtnEx(
-              item:      _RailItem(icon: Broken.settings, label: 'Parametres', idx: 99),
+              item:      _RailItem(icon: Broken.setting_3, label: 'Parametres', idx: 99),
               selected:  false,
               iconColor: iconColor,
               selColor:  selColor,
@@ -1581,7 +1569,7 @@ class _SelectTypeState extends State<SelectType>
                     _openTabs.add(const _TabDef(
                         id:    'settings',
                         title: 'Paramètres',
-                        icon:  Broken.settings));
+                        icon:  Broken.setting_3));
                     _activeTabIdx = _openTabs.length - 1;
                   } else {
                     _activeTabIdx =
