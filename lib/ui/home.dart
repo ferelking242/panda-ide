@@ -1114,6 +1114,10 @@ class _SelectTypeState extends State<SelectType>
                                   child: Material(
                                     elevation: 6,
                                     shadowColor: Colors.black45,
+                                    borderRadius: const BorderRadius.only(
+                                      topRight: Radius.circular(10),
+                                    ),
+                                    clipBehavior: Clip.antiAlias,
                                     child: SizedBox(
                                       width: _kSidebarWidth,
                                       child: _buildSidebarPanel(context, appTheme),
@@ -1261,11 +1265,14 @@ class _SelectTypeState extends State<SelectType>
         if (!sidebarActive) return SizedBox(height: 22, child: editorBar);
 
         // Two-tone: activity-bar block | rounded editor bar
-        return SizedBox(
+        // Wrap in actBg so the topLeft clip on editorBar reveals the
+        // same colour as the activity bar — no colour artefact at the junction.
+        return Container(
           height: 22,
+          color: actBg,
           child: Row(children: [
             // Activity bar segment (flat, same bg, no radius)
-            Container(width: 48, height: 22, color: actBg),
+            const SizedBox(width: 48),
             // Editor bar with rounded top-left corner
             Expanded(child: editorBar),
           ]),
