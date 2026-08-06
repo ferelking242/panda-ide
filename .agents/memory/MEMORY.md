@@ -3,3 +3,4 @@
 - [iOS Llama pod build](ios-llama-pod-build.md) — generated CocoaPods specs need persistent ARC and explicit Llama/ggml source patches for iOS.
 - [Android first-launch storage](android-first-launch-storage.md) — initialize Panda IDE against private storage before requesting public storage permission.
 - [Panda Agent provider navigation](panda-agent-provider-navigation.md) — keep provider configuration in the embedded provider-only page and resolve it from the Agent profile.
+- [Flutter validation environment](flutter-validation-environment.md) — the shell may lack Flutter/Dart even for a Flutter project; check before running analyzer commands.
