@@ -308,9 +308,9 @@ class _AdvancedInferenceSettingsPageState
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.2),
+        color: cs.primaryContainer.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cs.primary.withOpacity(0.2)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -437,7 +437,7 @@ class _AdvancedInferenceSettingsPageState
   Widget _buildExplanations(ColorScheme cs, bool dark) => Container(
     padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
-      color: cs.surfaceContainerHighest.withOpacity(0.4),
+      color: cs.surfaceContainerHighest.withValues(alpha: 0.4),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Column(
@@ -515,11 +515,11 @@ class _AdvancedInferenceSettingsPageState
           decoration: InputDecoration(
             isDense: true,
             hintText: hint,
-            hintStyle: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withOpacity(0.5)),
+            hintStyle: TextStyle(fontSize: 12, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
             filled:     true,
             fillColor:  enabled
                 ? cs.surfaceContainerHighest
-                : cs.surfaceContainerHighest.withOpacity(0.4),
+                : cs.surfaceContainerHighest.withValues(alpha: 0.4),
             border:     OutlineInputBorder(
               borderRadius: BorderRadius.circular(6),
               borderSide:   BorderSide.none,
@@ -572,7 +572,7 @@ class _AdvancedInferenceSettingsPageState
   BoxDecoration _cardDecoration(ColorScheme cs, bool dark) => BoxDecoration(
     color:        dark ? const Color(0xff252526) : Colors.white,
     borderRadius: BorderRadius.circular(10),
-    border:       Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+    border:       Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
   );
 
   static const _tips = [

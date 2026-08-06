@@ -268,7 +268,7 @@ class _ExtensionListItem extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -290,7 +290,7 @@ class _ExtensionListItem extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF0066B8).withOpacity(0.1),
+                      color: const Color(0xFF0066B8).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -348,7 +348,7 @@ class _ExtIcon extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: const Color(0xFF0066B8).withOpacity(0.15),
+        color: const Color(0xFF0066B8).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Icon(Icons.extension, size: size * 0.55, color: const Color(0xFF0066B8)),

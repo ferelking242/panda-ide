@@ -145,7 +145,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         title: Text("Desktop",
                             style: TextStyle(color: cs.onSurface, fontSize: 16)),
                         leading: Icon(Icons.desktop_mac_sharp,
-                            color: cs.onSurface.withOpacity(0.7), size: 24),
+                            color: cs.onSurface.withValues(alpha: 0.7), size: 24),
                         trailing: Checkbox(
                           fillColor: WidgetStatePropertyAll(!state.isMobile
                             ? cs.primary
@@ -178,7 +178,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                         title: Text("Dev Tools",
                             style: TextStyle(color: cs.onSurface, fontSize: 16)),
                         leading: Icon(Icons.construction_outlined,
-                            color: cs.onSurface.withOpacity(0.7), size: 24),
+                            color: cs.onSurface.withValues(alpha: 0.7), size: 24),
                         trailing: Checkbox(
                           fillColor: WidgetStatePropertyAll(state.isConsole
                             ? cs.primary

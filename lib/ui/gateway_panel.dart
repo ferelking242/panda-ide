@@ -182,7 +182,7 @@ class _GatewayPanelState extends State<GatewayPanel>
             Container(
               padding: const EdgeInsets.all(7),
               decoration: BoxDecoration(
-                color: _kAccent.withOpacity(0.15),
+                color: _kAccent.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.router_rounded, size: 16, color: _kAccent),
@@ -434,7 +434,7 @@ class _GatewayPanelState extends State<GatewayPanel>
             color: dotColor,
             shape: BoxShape.circle,
             boxShadow: _manager.isRunning
-                ? [BoxShadow(color: dotColor.withOpacity(0.5), blurRadius: 6)]
+                ? [BoxShadow(color: dotColor.withValues(alpha: 0.5), blurRadius: 6)]
                 : null,
           ),
         ),
@@ -462,9 +462,9 @@ class _GatewayPanelState extends State<GatewayPanel>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: _kAccent.withOpacity(0.12),
+                color: _kAccent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: _kAccent.withOpacity(0.3)),
+                border: Border.all(color: _kAccent.withValues(alpha: 0.3)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Text(
@@ -582,8 +582,7 @@ class _GatewayPanelState extends State<GatewayPanel>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         color: hdr,
         child: Row(children: [
-          Icon(Icons.circle, size: 8, color: _kGreen.withOpacity(
-              _manager.isRunning ? 1 : 0.3)),
+          Icon(Icons.circle, size: 8, color: _kGreen.withValues(alpha: _manager.isRunning ? 1 : 0.3)),
           const SizedBox(width: 6),
           Text(
             '${_manager.logs.length} entrées',
@@ -686,9 +685,9 @@ class _PythonBadge extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: (ok ? _kGreen : _kRed).withOpacity(0.12),
+          color: (ok ? _kGreen : _kRed).withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: (ok ? _kGreen : _kRed).withOpacity(0.4)),
+          border: Border.all(color: (ok ? _kGreen : _kRed).withValues(alpha: 0.4)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(
@@ -731,10 +730,10 @@ class _ProviderChip extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? color.withOpacity(0.15) : Colors.transparent,
+          color: selected ? color.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? color : _kMuted.withOpacity(0.3),
+            color: selected ? color : _kMuted.withValues(alpha: 0.3),
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -777,9 +776,9 @@ class _GwButton extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.12),
+            color: color.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withOpacity(0.45)),
+            border: Border.all(color: color.withValues(alpha: 0.45)),
           ),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             if (loading)
@@ -841,16 +840,16 @@ class _InfoBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(children: [
         Icon(icon, size: 14, color: color),
         const SizedBox(width: 8),
         Expanded(
           child: Text(text,
-              style: TextStyle(fontSize: 11, color: color.withOpacity(0.9))),
+              style: TextStyle(fontSize: 11, color: color.withValues(alpha: 0.9))),
         ),
         if (action != null) action!,
       ]),

@@ -166,9 +166,9 @@ class _LocalModelsPageState extends State<LocalModelsPage> {
       margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(0.35),
+        color: cs.primaryContainer.withValues(alpha: 0.35),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: cs.primary.withOpacity(0.25)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
@@ -351,12 +351,12 @@ class _ModelTile extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: installed
-                ? cs.primary.withOpacity(0.6)
-                : cs.outlineVariant.withOpacity(0.5),
+                ? cs.primary.withValues(alpha: 0.6)
+                : cs.outlineVariant.withValues(alpha: 0.5),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(dark ? 0.25 : 0.06),
+              color: Colors.black.withValues(alpha: dark ? 0.25 : 0.06),
               blurRadius: 6,
               offset: const Offset(0, 2),
             ),
@@ -374,7 +374,7 @@ class _ModelTile extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.15),
+                      color: cs.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text('✓', style: TextStyle(fontSize: 10, color: cs.primary)),
@@ -383,7 +383,7 @@ class _ModelTile extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.15),
+                      color: Colors.blue.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Text('NEW', style: TextStyle(fontSize: 9, color: Colors.blue, fontWeight: FontWeight.bold)),
@@ -477,9 +477,9 @@ class _ModelIcon extends StatelessWidget {
     width: 32,
     height: 32,
     decoration: BoxDecoration(
-      color: authorColor.withOpacity(0.15),
+      color: authorColor.withValues(alpha: 0.15),
       borderRadius: BorderRadius.circular(8),
-      border: Border.all(color: authorColor.withOpacity(0.3)),
+      border: Border.all(color: authorColor.withValues(alpha: 0.3)),
     ),
     child: Icon(Icons.smart_toy_outlined, size: 17, color: authorColor),
   );
@@ -531,7 +531,7 @@ class _ProgressBar extends StatelessWidget {
           child: LinearProgressIndicator(
             value: task.progress,
             minHeight: 3,
-            backgroundColor: cs.outlineVariant.withOpacity(0.3),
+            backgroundColor: cs.outlineVariant.withValues(alpha: 0.3),
             valueColor: AlwaysStoppedAnimation(cs.primary),
           ),
         ),

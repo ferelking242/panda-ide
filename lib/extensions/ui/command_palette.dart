@@ -111,7 +111,7 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.4),
+              color: Colors.black.withValues(alpha: 0.4),
               blurRadius: 20,
               offset: const Offset(0, -4),
             ),
@@ -235,7 +235,7 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
                                           horizontal: 6, vertical: 2),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFF0066B8)
-                                            .withOpacity(0.15),
+                                            .withValues(alpha: 0.15),
                                         borderRadius: BorderRadius.circular(4),
                                       ),
                                       child: Text(

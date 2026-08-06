@@ -287,7 +287,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                     child: FilterChip(
                       label: Text(cat, style: const TextStyle(fontSize: 12)),
                       selected: sel,
-                      selectedColor: cs.primary.withOpacity(0.18),
+                      selectedColor: cs.primary.withValues(alpha: 0.18),
                       checkmarkColor: cs.primary,
                       side: BorderSide(color: sel ? cs.primary : cs.outlineVariant),
                       showCheckmark: false,
@@ -335,7 +335,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
         if (_error != null) return _ErrorView(error: _error!, onRetry: _loadFeatured);
         if (_results.isEmpty) return Center(
           child: Text('No extensions found',
-              style: TextStyle(color: cs.onSurface.withOpacity(0.5))),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5))),
         );
         return ListView.builder(
           controller: _scrollCtrl,
@@ -416,7 +416,7 @@ class _MarketplaceHeader extends StatelessWidget {
       curve: Curves.easeInOut,
       decoration: BoxDecoration(
         color: headerBg,
-        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.4))),
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4))),
       ),
       padding: EdgeInsets.fromLTRB(
         12,
@@ -450,7 +450,7 @@ class _MarketplaceHeader extends StatelessWidget {
                     size: 22,
                     color: filtersVisible
                         ? cs.primary
-                        : onHeader.withOpacity(0.65),
+                        : onHeader.withValues(alpha: 0.65),
                   ),
                   tooltip: filtersVisible ? 'Hide filters' : 'Show filters',
                   onPressed: onFilterToggle,
@@ -464,7 +464,7 @@ class _MarketplaceHeader extends StatelessWidget {
               // Search restore (when collapsed)
               if (collapsed && section == _Section.extensions)
                 IconButton(
-                  icon: Icon(Icons.search, size: 22, color: onHeader.withOpacity(0.65)),
+                  icon: Icon(Icons.search, size: 22, color: onHeader.withValues(alpha: 0.65)),
                   tooltip: 'Search',
                   onPressed: onSearchExpand,
                   padding: EdgeInsets.zero,
@@ -487,8 +487,8 @@ class _MarketplaceHeader extends StatelessWidget {
                   style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
                   decoration: InputDecoration(
                     hintText: 'Search extensions…',
-                    hintStyle: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.4)),
-                    prefixIcon: Icon(Icons.search, size: 20, color: cs.onSurface.withOpacity(0.5)),
+                    hintStyle: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.4)),
+                    prefixIcon: Icon(Icons.search, size: 20, color: cs.onSurface.withValues(alpha: 0.5)),
                     suffixIcon: searchCtrl.text.isNotEmpty
                         ? IconButton(
                             icon: const Icon(Icons.close, size: 16),
@@ -526,7 +526,7 @@ class _SortButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return PopupMenuButton<String>(
-      icon: Icon(Icons.sort_rounded, size: 22, color: cs.onSurface.withOpacity(0.65)),
+      icon: Icon(Icons.sort_rounded, size: 22, color: cs.onSurface.withValues(alpha: 0.65)),
       tooltip: 'Sort',
       onSelected: onSelected,
       itemBuilder: (_) => _kSortOptions.entries.map((e) => PopupMenuItem(
@@ -571,7 +571,7 @@ class _TopPillNav extends StatelessWidget {
       height: compact ? 36 : 46,
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
-        border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.4))),
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4))),
       ),
       child: ListView(
         scrollDirection: Axis.horizontal,
@@ -592,9 +592,9 @@ class _TopPillNav extends StatelessWidget {
                 vertical: compact ? 2 : 4,
               ),
               decoration: BoxDecoration(
-                color: sel ? cs.primary.withOpacity(0.14) : Colors.transparent,
+                color: sel ? cs.primary.withValues(alpha: 0.14) : Colors.transparent,
                 borderRadius: BorderRadius.circular(20),
-                border: sel ? Border.all(color: cs.primary.withOpacity(0.3)) : null,
+                border: sel ? Border.all(color: cs.primary.withValues(alpha: 0.3)) : null,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -602,7 +602,7 @@ class _TopPillNav extends StatelessWidget {
                   Icon(
                     sel ? item.activeIcon : item.icon,
                     size: compact ? 16 : 18,
-                    color: sel ? cs.primary : cs.onSurface.withOpacity(0.55),
+                    color: sel ? cs.primary : cs.onSurface.withValues(alpha: 0.55),
                   ),
                   const SizedBox(width: 5),
                   AnimatedDefaultTextStyle(
@@ -610,7 +610,7 @@ class _TopPillNav extends StatelessWidget {
                     style: TextStyle(
                       fontSize: compact ? 11 : 12,
                       fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                      color: sel ? cs.primary : cs.onSurface.withOpacity(0.7),
+                      color: sel ? cs.primary : cs.onSurface.withValues(alpha: 0.7),
                     ),
                     child: Text(item.label),
                   ),
@@ -655,7 +655,7 @@ class _ExtensionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs    = theme.colorScheme;
-    final sub   = cs.onSurface.withOpacity(0.55);
+    final sub   = cs.onSurface.withValues(alpha: 0.55);
     final alreadyInstalled = ExtensionRegistry.instance.isInstalled(ext.id) ||
         installState == _InstallState.installed;
 
@@ -665,7 +665,7 @@ class _ExtensionCard extends StatelessWidget {
       color: cs.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -709,7 +709,7 @@ class _ExtensionCard extends StatelessWidget {
                     Text(ext.namespace, style: TextStyle(fontSize: 11, color: sub)),
                     const SizedBox(height: 4),
                     Text(ext.description,
-                        style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.8)),
+                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8)),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 6),
@@ -732,7 +732,7 @@ class _ExtensionCard extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                           decoration: BoxDecoration(
-                            color: cs.primary.withOpacity(0.1),
+                            color: cs.primary.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(ext.categories.first,
@@ -780,7 +780,7 @@ class _InstallButton extends StatelessWidget {
             onPressed: onPressed,
             style: TextButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              backgroundColor: cs.primary.withOpacity(0.12),
+              backgroundColor: cs.primary.withValues(alpha: 0.12),
               foregroundColor: cs.primary,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
@@ -917,7 +917,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                 ],
               ),
             ),
-            Divider(height: 1, color: cs.outlineVariant.withOpacity(0.4)),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
 
             // ── Scrollable body ───────────────────────────────────────────
             Expanded(
@@ -950,7 +950,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                             ),
                             const SizedBox(height: 2),
                             Text(ext.namespace,
-                                style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.55))),
+                                style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
                             const SizedBox(height: 8),
                             if (alreadyInstalled)
                               _OutlineBadge(
@@ -982,7 +982,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                   // Description
                   Text(ext.description,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurface.withOpacity(0.85))),
+                          color: cs.onSurface.withValues(alpha: 0.85))),
                   const SizedBox(height: 16),
 
                   // Stats
@@ -1031,7 +1031,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                     const Center(child: CircularProgressIndicator()),
                   ] else if (_readme != null && _readme!.isNotEmpty) ...[
                     const SizedBox(height: 20),
-                    Divider(color: cs.outlineVariant.withOpacity(0.5)),
+                    Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
                     const SizedBox(height: 12),
                     _MarkdownText(source: _readme!),
                   ],
@@ -1111,7 +1111,7 @@ class _StatChip extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              Text(sub, style: TextStyle(fontSize: 10, color: cs.onSurface.withOpacity(0.55))),
+              Text(sub, style: TextStyle(fontSize: 10, color: cs.onSurface.withValues(alpha: 0.55))),
             ],
           ),
         ],
@@ -1137,7 +1137,7 @@ class _InfoTile extends StatelessWidget {
             width: 96,
             child: Text(label,
                 style: TextStyle(fontSize: 12,
-                    color: cs.onSurface.withOpacity(0.55),
+                    color: cs.onSurface.withValues(alpha: 0.55),
                     fontWeight: FontWeight.w500)),
           ),
           Expanded(
@@ -1161,9 +1161,9 @@ class _OutlineBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
         borderRadius: BorderRadius.circular(20),
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1437,7 +1437,7 @@ class _RuntimeCard extends StatelessWidget {
       color: cs.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
@@ -1473,7 +1473,7 @@ class _RuntimeCard extends StatelessWidget {
                             fontWeight: FontWeight.w600, color: cs.onSurface)),
                     const SizedBox(height: 2),
                     Text(info.description,
-                        style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.55))),
+                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
                   ],
                 ),
               ),
@@ -1482,7 +1482,7 @@ class _RuntimeCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: cs.primary.withOpacity(0.1),
+                  color: cs.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(info.version,
@@ -1498,7 +1498,7 @@ class _RuntimeCard extends StatelessWidget {
                   installDir: Directory('$runtimesDir/${info.key}'),
                 )
               else
-                Icon(Icons.download_rounded, size: 22, color: cs.onSurface.withOpacity(0.3)),
+                Icon(Icons.download_rounded, size: 22, color: cs.onSurface.withValues(alpha: 0.3)),
             ],
           ),
         ),
@@ -1561,7 +1561,7 @@ class _InlineDownloadButton extends StatelessWidget {
           return SizedBox(
             width: 90,
             child: LinearPercentIndicator(
-              progressColor: Colors.greenAccent.withOpacity(0.7),
+              progressColor: Colors.greenAccent.withValues(alpha: 0.7),
               percent: (extractPct / 100).clamp(0.0, 1.0),
               width: 86,
               lineHeight: 36,
@@ -1579,7 +1579,7 @@ class _InlineDownloadButton extends StatelessWidget {
           return SizedBox(
             width: 90,
             child: LinearPercentIndicator(
-              progressColor: cs.primary.withOpacity(0.7),
+              progressColor: cs.primary.withValues(alpha: 0.7),
               percent: (percent / 100).clamp(0.0, 1.0),
               width: 86,
               lineHeight: 36,
@@ -1595,7 +1595,7 @@ class _InlineDownloadButton extends StatelessWidget {
           return SizedBox(
             width: 90,
             child: LinearPercentIndicator(
-              progressColor: cs.primary.withOpacity(0.5),
+              progressColor: cs.primary.withValues(alpha: 0.5),
               percent: 0.0,
               width: 86,
               lineHeight: 36,
@@ -1679,12 +1679,12 @@ class _RuntimeDetailPage extends StatelessWidget {
                             fontWeight: FontWeight.w700, color: cs.onSurface)),
                     const SizedBox(height: 4),
                     Text(info.description,
-                        style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.55))),
+                        style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.55))),
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: cs.primary.withOpacity(0.12),
+                        color: cs.primary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Text('v${info.version}',
@@ -1723,7 +1723,7 @@ class _RuntimeDetailPage extends StatelessWidget {
                       Text(
                         isExtracting ? 'Extracting… ${extractPct.toStringAsFixed(0)}%'
                             : 'Downloading… ${percent.toStringAsFixed(0)}%',
-                        style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.6)),
+                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
                       ),
                     ],
                   );
@@ -1738,7 +1738,7 @@ class _RuntimeDetailPage extends StatelessWidget {
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(double.infinity, 48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      side: BorderSide(color: cs.primary.withOpacity(0.4)),
+                      side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
                     ),
                   );
                 }
@@ -1794,7 +1794,7 @@ class _RuntimeDetailPage extends StatelessWidget {
           const SizedBox(height: 8),
           Text(info.longDescription,
               style: theme.textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurface.withOpacity(0.85), height: 1.6)),
+                  color: cs.onSurface.withValues(alpha: 0.85), height: 1.6)),
           const SizedBox(height: 20),
 
           // Use cases
@@ -1808,11 +1808,11 @@ class _RuntimeDetailPage extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.lightbulb_outline, size: 18, color: cs.primary.withOpacity(0.8)),
+                Icon(Icons.lightbulb_outline, size: 18, color: cs.primary.withValues(alpha: 0.8)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(info.useCase,
-                      style: TextStyle(fontSize: 13, color: cs.onSurface.withOpacity(0.85))),
+                      style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.85))),
                 ),
               ],
             ),
@@ -1830,14 +1830,14 @@ class _RuntimeDetailPage extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.language, size: 18, color: cs.onSurface.withOpacity(0.55)),
+                Icon(Icons.language, size: 18, color: cs.onSurface.withValues(alpha: 0.55)),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(info.website,
                       style: TextStyle(fontSize: 13, color: cs.primary,
                           decoration: TextDecoration.underline)),
                 ),
-                Icon(Icons.open_in_new, size: 14, color: cs.onSurface.withOpacity(0.4)),
+                Icon(Icons.open_in_new, size: 14, color: cs.onSurface.withValues(alpha: 0.4)),
               ],
             ),
           ),
@@ -1879,11 +1879,11 @@ class _PandaExtensionsSectionState extends State<_PandaExtensionsSection> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.download_outlined, size: 52, color: cs.onSurface.withOpacity(0.3)),
+              Icon(Icons.download_outlined, size: 52, color: cs.onSurface.withValues(alpha: 0.3)),
               const SizedBox(height: 14),
               Text('No Panda extensions available',
                   style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.onSurface.withOpacity(0.6))),
+                      color: cs.onSurface.withValues(alpha: 0.6))),
               const SizedBox(height: 8),
               FilledButton.tonal(
                 onPressed: () => context.read<PackageCatalogCubit>().refreshCatalog(),
@@ -1930,7 +1930,7 @@ class _PandaExtCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme  = Theme.of(context);
     final cs     = theme.colorScheme;
-    final sub    = cs.onSurface.withOpacity(0.55);
+    final sub    = cs.onSurface.withValues(alpha: 0.55);
     final extDir = Directory('$extensionDir/${ext.parentName}');
 
     return Card(
@@ -1939,7 +1939,7 @@ class _PandaExtCard extends StatelessWidget {
       color: cs.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
+        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -1966,7 +1966,7 @@ class _PandaExtCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.15),
+                          color: Colors.orange.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: const Text('Update',
@@ -2022,7 +2022,7 @@ class _SectionHeader extends StatelessWidget {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w700,
-          color: cs.onSurface.withOpacity(0.7),
+          color: cs.onSurface.withValues(alpha: 0.7),
           letterSpacing: 0.4,
         ));
   }
@@ -2050,14 +2050,14 @@ class _InstalledSection extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.extension_outlined, size: 52, color: cs.onSurface.withOpacity(0.3)),
+              Icon(Icons.extension_outlined, size: 52, color: cs.onSurface.withValues(alpha: 0.3)),
               const SizedBox(height: 14),
               Text('No extensions installed',
                   style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.onSurface.withOpacity(0.6))),
+                      color: cs.onSurface.withValues(alpha: 0.6))),
               const SizedBox(height: 6),
               Text('Browse Extensions to install one.',
-                  style: TextStyle(fontSize: 12, color: cs.onSurface.withOpacity(0.45)),
+                  style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45)),
                   textAlign: TextAlign.center),
             ],
           ),
@@ -2080,7 +2080,7 @@ class _InstalledSection extends StatelessWidget {
           color: cs.surface,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
+            side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
@@ -2106,14 +2106,14 @@ class _InstalledSection extends StatelessWidget {
               subtitle: Text(desc,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.55))),
+                  style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.55))),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (ext != null)
                     IconButton(
                       icon: Icon(Icons.settings_outlined, size: 18,
-                          color: cs.onSurface.withOpacity(0.55)),
+                          color: cs.onSurface.withValues(alpha: 0.55)),
                       tooltip: 'Settings',
                       onPressed: () => Navigator.push(context, MaterialPageRoute(
                         builder: (_) => ExtensionSettingsPage(extension: ext),
@@ -2144,7 +2144,7 @@ class _DefaultExtIcon extends StatelessWidget {
     return Container(
       width: size, height: size,
       decoration: BoxDecoration(
-        color: cs.primary.withOpacity(0.12),
+        color: cs.primary.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Icon(Icons.extension_rounded, size: size * 0.55, color: cs.primary),
@@ -2166,14 +2166,14 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: cs.onSurface.withOpacity(0.35)),
+            Icon(Icons.cloud_off_outlined, size: 48, color: cs.onSurface.withValues(alpha: 0.35)),
             const SizedBox(height: 12),
             Text('Could not load extensions',
                 style: Theme.of(context).textTheme.titleSmall,
                 textAlign: TextAlign.center),
             const SizedBox(height: 8),
             Text(error,
-                style: TextStyle(fontSize: 11, color: cs.onSurface.withOpacity(0.5)),
+                style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.5)),
                 textAlign: TextAlign.center,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis),
@@ -2239,7 +2239,7 @@ class _MarkdownText extends StatelessWidget {
             ),
             child: Text(line,
                 style: TextStyle(fontSize: 12, fontFamily: 'monospace',
-                    color: cs.onSurface.withOpacity(0.8))),
+                    color: cs.onSurface.withValues(alpha: 0.8))),
           );
         }
         if (line.trim() == '---' || line.trim() == '___') {
@@ -2252,7 +2252,7 @@ class _MarkdownText extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 1),
           child: Text(line,
               style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurface.withOpacity(0.85), height: 1.6)),
+                  color: cs.onSurface.withValues(alpha: 0.85), height: 1.6)),
         );
       }).toList(),
     );

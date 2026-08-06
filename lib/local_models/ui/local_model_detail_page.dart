@@ -137,9 +137,9 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
           width: 54,
           height: 54,
           decoration: BoxDecoration(
-            color: authorColor.withOpacity(0.15),
+            color: authorColor.withValues(alpha: 0.15),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: authorColor.withOpacity(0.3)),
+            border: Border.all(color: authorColor.withValues(alpha: 0.3)),
           ),
           child: Icon(Icons.smart_toy_outlined, size: 28, color: authorColor),
         ),
@@ -243,7 +243,7 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
           child: LinearProgressIndicator(
             value: score / 100,
             minHeight: 6,
-            backgroundColor: cs.outlineVariant.withOpacity(0.25),
+            backgroundColor: cs.outlineVariant.withValues(alpha: 0.25),
             valueColor: AlwaysStoppedAnimation(color),
           ),
         ),
@@ -301,11 +301,11 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: selected
-                    ? cs.primary.withOpacity(0.12)
+                    ? cs.primary.withValues(alpha: 0.12)
                     : dark ? const Color(0xff2d2d2d) : const Color(0xfff8f8f8),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: selected ? cs.primary : cs.outlineVariant.withOpacity(0.4),
+                  color: selected ? cs.primary : cs.outlineVariant.withValues(alpha: 0.4),
                   width: selected ? 1.5 : 1,
                 ),
               ),
@@ -417,10 +417,10 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: (enough ? Colors.green : cs.error).withOpacity(0.08),
+        color: (enough ? Colors.green : cs.error).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-            color: (enough ? Colors.green : cs.error).withOpacity(0.25)),
+            color: (enough ? Colors.green : cs.error).withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
@@ -462,7 +462,7 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
                   child: LinearProgressIndicator(
                     value: task.progress,
                     minHeight: 8,
-                    backgroundColor: cs.outlineVariant.withOpacity(0.3),
+                    backgroundColor: cs.outlineVariant.withValues(alpha: 0.3),
                     valueColor: AlwaysStoppedAnimation(cs.primary),
                   ),
                 ),
@@ -530,9 +530,9 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.1),
+                color: cs.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: cs.primary.withOpacity(0.3)),
+                border: Border.all(color: cs.primary.withValues(alpha: 0.3)),
               ),
               child: Row(
                 children: [
@@ -729,7 +729,7 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
       decoration: BoxDecoration(
         color: dark ? const Color(0xff2a2a2a) : const Color(0xfff2f6ff),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: cs.primary.withOpacity(0.2)),
+        border: Border.all(color: cs.primary.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -803,7 +803,7 @@ class _Card extends StatelessWidget {
     decoration: BoxDecoration(
       color: dark ? const Color(0xff2d2d2d) : const Color(0xfff8f8f8),
       borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
+      border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
     ),
     child: child,
   );
@@ -846,7 +846,7 @@ class _SpecRow extends StatelessWidget {
         if (!last)
           Divider(
             height: 1,
-            color: cs.outlineVariant.withOpacity(0.25),
+            color: cs.outlineVariant.withValues(alpha: 0.25),
           ),
       ],
     );
@@ -870,10 +870,10 @@ class _Chip extends StatelessWidget {
     padding: EdgeInsets.symmetric(
         horizontal: small ? 5 : 7, vertical: small ? 1 : 3),
     decoration: BoxDecoration(
-      color: (error ? cs.error : cs.primary).withOpacity(0.12),
+      color: (error ? cs.error : cs.primary).withValues(alpha: 0.12),
       borderRadius: BorderRadius.circular(5),
       border: Border.all(
-          color: (error ? cs.error : cs.primary).withOpacity(0.25)),
+          color: (error ? cs.error : cs.primary).withValues(alpha: 0.25)),
     ),
     child: Text(
       label,
@@ -913,11 +913,11 @@ class _StorageOption extends StatelessWidget {
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: selected
-              ? cs.primary.withOpacity(0.1)
+              ? cs.primary.withValues(alpha: 0.1)
               : dark ? const Color(0xff2d2d2d) : const Color(0xfff8f8f8),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? cs.primary : cs.outlineVariant.withOpacity(0.4),
+            color: selected ? cs.primary : cs.outlineVariant.withValues(alpha: 0.4),
             width: selected ? 1.5 : 1,
           ),
         ),
@@ -998,9 +998,9 @@ class _TripleTapDownloadButtonState extends State<_TripleTapDownloadButton> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: widget.cs.error.withOpacity(0.08),
+            color: widget.cs.error.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: widget.cs.error.withOpacity(0.3)),
+            border: Border.all(color: widget.cs.error.withValues(alpha: 0.3)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

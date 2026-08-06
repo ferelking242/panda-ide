@@ -174,9 +174,9 @@ class _StatusBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,7 +194,7 @@ class _StatusBanner extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(sub,
                     style: TextStyle(fontSize: 12,
-                        color: color.withOpacity(0.8))),
+                        color: color.withValues(alpha: 0.8))),
               ],
             ),
           ),
@@ -223,7 +223,7 @@ class _ShizukuSection extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.15),
+              color: Colors.green.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -420,7 +420,7 @@ class _CheatSheet extends StatelessWidget {
               Expanded(
                 child: Text(c.$2,
                     style: TextStyle(fontSize: 12,
-                        color: cs.onSurface.withOpacity(0.7))),
+                        color: cs.onSurface.withValues(alpha: 0.7))),
               ),
             ],
           ),
@@ -457,7 +457,7 @@ class _InfoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -539,7 +539,7 @@ class _LabeledField extends StatelessWidget {
           width: 100,
           child: Text(label,
               style: TextStyle(fontSize: 13,
-                  color: cs.onSurface.withOpacity(0.6))),
+                  color: cs.onSurface.withValues(alpha: 0.6))),
         ),
         Expanded(
           child: TextField(

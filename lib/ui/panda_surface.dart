@@ -17,12 +17,12 @@ class PandaSurface {
       color: cs.surfaceContainer,
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: borderColor ?? cs.outline.withOpacity(.20),
+        color: borderColor ?? cs.outline.withValues(alpha: .20),
         width: 1,
       ),
       boxShadow: [
         BoxShadow(
-          color: cs.shadow.withOpacity(.05),
+          color: cs.shadow.withValues(alpha: .05),
           blurRadius: 12,
           offset: const Offset(0, 3),
           spreadRadius: -2,
@@ -63,10 +63,10 @@ class PandaSurface {
         end: Alignment.bottomRight,
       ),
       borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: color.withOpacity(0.40), width: 1.2),
+      border: Border.all(color: color.withValues(alpha: 0.40), width: 1.2),
       boxShadow: [
         BoxShadow(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           blurRadius: 12,
           offset: const Offset(0, 4),
           spreadRadius: -2,

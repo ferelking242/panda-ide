@@ -302,7 +302,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
       }
 
       final url =
-          '${_viteUseHttps ? 'https' : 'http'}://localhost:$runningPort';
+          '${_viteUseHttps ? 'https' : 'http'}://127.0.0.1:$runningPort';
       Navigator.of(context).push(
         PageRouteBuilder(
           pageBuilder: (context, animation, scondaryAnimation) =>
@@ -1774,27 +1774,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
           final Set<String> uniquePaths = {};
           storedData.insert(0, dataToInsert);
           final List<dynamic> uniqueData = [];
-          Map<String, dynamic>? normalizeRecentEntry(dynamic rawEntry) {
-            if (rawEntry is Map &&
-                rawEntry['type'] is String &&
-                rawEntry['path'] is String) {
-              return {
-                'type': rawEntry['type'],
-                'path': rawEntry['path'],
-                'rootDir': rawEntry['rootDir'] ?? rawEntry['path'],
-              };
-            }
-
-            if (rawEntry is Map && rawEntry.length == 1) {
-              final dynamic key = rawEntry.keys.first;
-              if (key is String) {
-                return {'type': 'file', 'path': key, 'rootDir': rawEntry[key]};
-              }
-            }
-
-            return null;
-          }
-
+          // normalizeRecentEntry est défini comme top-level dans functions.dart
           for (final data in storedData) {
             final normalized = normalizeRecentEntry(data);
             if (normalized == null) {
@@ -1866,7 +1846,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                       padding: const EdgeInsets.all(16.0),
                       child: Text(snapshot.error.toString(),
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _cs.onSurface.withOpacity(0.6))),
+                          style: TextStyle(color: _cs.onSurface.withValues(alpha: 0.6))),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(

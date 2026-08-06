@@ -137,7 +137,7 @@ class _PermissionScreenState extends State<PermissionScreen> {
                           width: 52,
                           height: 52,
                           decoration: BoxDecoration(
-                            color: _kAccent.withOpacity(0.15),
+                            color: _kAccent.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(14),
                           ),
                           child: const Icon(Icons.shield_outlined,
@@ -156,7 +156,7 @@ class _PermissionScreenState extends State<PermissionScreen> {
                         Text(
                           'Panda IDE a besoin de ces accès pour fonctionner correctement en tant qu\'IDE complet.',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
+                            color: Colors.white.withValues(alpha: 0.55),
                             fontSize: 14,
                             height: 1.5,
                           ),
@@ -224,7 +224,7 @@ class _PermissionScreenState extends State<PermissionScreen> {
                               'Vous pouvez continuer sans toutes les autorisations, mais certaines fonctionnalités seront limitées.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
-                                color: Colors.white.withOpacity(0.4),
+                                color: Colors.white.withValues(alpha: 0.4),
                                 fontSize: 12,
                               ),
                             ),
@@ -241,7 +241,7 @@ class _PermissionScreenState extends State<PermissionScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               disabledBackgroundColor:
-                                  _kAccent.withOpacity(0.4),
+                                  _kAccent.withValues(alpha: 0.4),
                             ),
                             child: _proceeding
                                 ? const SizedBox(
@@ -281,7 +281,7 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       label,
       style: TextStyle(
-        color: Colors.white.withOpacity(0.35),
+        color: Colors.white.withValues(alpha: 0.35),
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
@@ -328,8 +328,8 @@ class _PermissionCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _granted
-              ? const Color(0xff3aaa6e).withOpacity(0.3)
-              : Colors.white.withOpacity(0.06),
+              ? const Color(0xff3aaa6e).withValues(alpha: 0.3)
+              : Colors.white.withValues(alpha: 0.06),
         ),
       ),
       padding: const EdgeInsets.all(16),
@@ -341,7 +341,7 @@ class _PermissionCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.12),
+              color: iconColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: iconColor, size: 22),
@@ -365,7 +365,7 @@ class _PermissionCard extends StatelessWidget {
                 Text(
                   description,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.5),
+                    color: Colors.white.withValues(alpha: 0.5),
                     fontSize: 12.5,
                     height: 1.5,
                   ),
@@ -378,13 +378,13 @@ class _PermissionCard extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: _granted
-                          ? const Color(0xff3aaa6e).withOpacity(0.15)
-                          : _kAccent.withOpacity(0.15),
+                          ? const Color(0xff3aaa6e).withValues(alpha: 0.15)
+                          : _kAccent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: _granted
-                            ? const Color(0xff3aaa6e).withOpacity(0.4)
-                            : _kAccent.withOpacity(0.35),
+                            ? const Color(0xff3aaa6e).withValues(alpha: 0.4)
+                            : _kAccent.withValues(alpha: 0.35),
                       ),
                     ),
                     child: Row(

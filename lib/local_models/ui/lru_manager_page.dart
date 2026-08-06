@@ -203,7 +203,7 @@ class _LruManagerPageState extends State<LruManagerPage> {
       decoration: BoxDecoration(
         color:        dark ? const Color(0xff252526) : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border:       Border.all(color: cs.outlineVariant.withOpacity(0.4)),
+        border:       Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
@@ -290,15 +290,15 @@ class _LruManagerPageState extends State<LruManagerPage> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: selected
-              ? cs.errorContainer.withOpacity(0.3)
+              ? cs.errorContainer.withValues(alpha: 0.3)
               : dark ? const Color(0xff252526) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: selected
-                ? cs.error.withOpacity(0.5)
+                ? cs.error.withValues(alpha: 0.5)
                 : c.isEligible
-                    ? cs.error.withOpacity(0.2)
-                    : cs.outlineVariant.withOpacity(0.4),
+                    ? cs.error.withValues(alpha: 0.2)
+                    : cs.outlineVariant.withValues(alpha: 0.4),
           ),
         ),
         child: Row(
@@ -316,7 +316,7 @@ class _LruManagerPageState extends State<LruManagerPage> {
             Container(
               width: 36, height: 36,
               decoration: BoxDecoration(
-                color:        cs.primaryContainer.withOpacity(0.4),
+                color:        cs.primaryContainer.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(Icons.smart_toy_outlined, size: 18, color: cs.primary),

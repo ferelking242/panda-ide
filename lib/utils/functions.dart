@@ -738,7 +738,7 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
     "$binDir/git",
-    ["log", "--all", "--pretty=format:%H%x01%P%x01%an%x01%s"],
+    ["log", "--all", "--date=short", "--pretty=format:%H%x01%P%x01%an%x01%s%x01%ad"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
@@ -778,6 +778,7 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
       final parentHashes = parts[1].isEmpty ? <String>[] : parts[1].split(' ');
       final author = parts[2];
       final message = parts[3];
+      final date = parts.length > 4 ? parts[4] : '';
 
       commits.add(
         CommitNode(
@@ -785,6 +786,7 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
           parents: parentHashes,
           author: author,
           message: message,
+          date: date,
           isHead: hash == headHash,
           isRemoteHead: upstreamHash != null && hash == upstreamHash,
         ),
@@ -2634,6 +2636,7 @@ class CommitNode {
   final List<String> parents;
   final String author;
   final String message;
+  final String date;
   int lane;
   int? childLane;
   bool isMerge;
@@ -2646,6 +2649,7 @@ class CommitNode {
     required this.parents,
     required this.author,
     required this.message,
+    this.date = '',
     this.lane = -1,
     this.childLane,
     this.isMerge = false,
@@ -4248,4 +4252,25 @@ class CustomEditorTheme {
         : null,
     );
   }
+}
+/// Utilitaire partagé — normalise une entrée "récente" (recent files/folders)
+/// vers le format canonique { type, path, rootDir }.
+/// Retourne null si l'entrée est invalide.
+Map<String, dynamic>? normalizeRecentEntry(dynamic rawEntry) {
+  if (rawEntry is Map &&
+      rawEntry['type'] is String &&
+      rawEntry['path'] is String) {
+    return {
+      'type': rawEntry['type'],
+      'path': rawEntry['path'],
+      'rootDir': rawEntry['rootDir'] ?? rawEntry['path'],
+    };
+  }
+  if (rawEntry is Map && rawEntry.length == 1) {
+    final dynamic key = rawEntry.keys.first;
+    if (key is String) {
+      return {'type': 'file', 'path': key, 'rootDir': rawEntry[key]};
+    }
+  }
+  return null;
 }

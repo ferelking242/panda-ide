@@ -864,7 +864,7 @@ class _AgentSettingsState extends State<AgentSettings>
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: _kAccent.withOpacity(0.15),
+                        color: _kAccent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: const Icon(Broken.cpu_setting, color: _kAccent, size: 18),
@@ -995,7 +995,7 @@ class _AgentSettingsState extends State<AgentSettings>
                       child: Container(
                         width: 32, height: 32,
                         decoration: BoxDecoration(
-                          color: _kDanger.withOpacity(0.15),
+                          color: _kDanger.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Icon(Broken.stop_circle, size: 16, color: _kDanger),
@@ -1010,7 +1010,7 @@ class _AgentSettingsState extends State<AgentSettings>
                         decoration: BoxDecoration(
                           color: _chatInputCtrl.text.trim().isNotEmpty
                               ? _kAccent
-                              : _kAccent.withOpacity(0.3),
+                              : _kAccent.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: const Icon(Broken.send_1, size: 16, color: Colors.white),
@@ -1032,9 +1032,9 @@ class _AgentSettingsState extends State<AgentSettings>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: active ? _kAccent.withOpacity(0.15) : Colors.transparent,
+          color: active ? _kAccent.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: active ? _kAccent.withOpacity(0.5) : Colors.transparent),
+          border: Border.all(color: active ? _kAccent.withValues(alpha: 0.5) : Colors.transparent),
         ),
         child: Text(
           label,
@@ -1055,7 +1055,7 @@ class _AgentSettingsState extends State<AgentSettings>
               Container(
                 width: 52, height: 52,
                 decoration: BoxDecoration(
-                  color: _kAccent.withOpacity(0.15),
+                  color: _kAccent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(Broken.message_programming, color: _kAccent, size: 28),
@@ -1122,7 +1122,7 @@ class _AgentSettingsState extends State<AgentSettings>
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: _kAccent.withOpacity(0.25),
+                        color: _kAccent.withValues(alpha: 0.25),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -1333,7 +1333,7 @@ class _AgentSettingsState extends State<AgentSettings>
               final enabled = selections[item.spec.name] ?? true;
               return _buildToolRow(
                 icon: item.spec.requiresWriteAccess ? Broken.edit_2 : Broken.flash_circle,
-                color: item.spec.requiresWriteAccess ? const Color(0xffe05252).withOpacity(0.8) : _kAccent,
+                color: item.spec.requiresWriteAccess ? const Color(0xffe05252).withValues(alpha: 0.8) : _kAccent,
                 name: item.spec.label,
                 desc: item.spec.description,
                 isDark: isDark,
@@ -1390,7 +1390,7 @@ class _AgentSettingsState extends State<AgentSettings>
           Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
+              color: color.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, size: 18, color: color),
@@ -1546,9 +1546,9 @@ class _AgentSettingsState extends State<AgentSettings>
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: _kAccent.withOpacity(0.08),
+                        color: _kAccent.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: _kAccent.withOpacity(0.2)),
+                        border: Border.all(color: _kAccent.withValues(alpha: 0.2)),
                       ),
                       child: Text(
                         'Nécessite GitHub Copilot. Connectez votre compte GitHub dans la sidebar Git.',
@@ -1578,9 +1578,9 @@ class _AgentSettingsState extends State<AgentSettings>
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: (_testKeyResult == true ? _kSuccess : _kDanger).withOpacity(0.1),
+                        color: (_testKeyResult == true ? _kSuccess : _kDanger).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: (_testKeyResult == true ? _kSuccess : _kDanger).withOpacity(0.3)),
+                        border: Border.all(color: (_testKeyResult == true ? _kSuccess : _kDanger).withValues(alpha: 0.3)),
                       ),
                       child: Text(_testKeyMessage, style: TextStyle(fontSize: 12, color: _testKeyResult == true ? _kSuccess : _kDanger)),
                     ),
@@ -1801,7 +1801,7 @@ class _AgentSettingsState extends State<AgentSettings>
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: _kAccent.withOpacity(0.12),
+                      color: _kAccent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Broken.cpu_setting, size: 16, color: _kAccent),
@@ -1832,7 +1832,7 @@ class _AgentSettingsState extends State<AgentSettings>
                               const Color(0xff4285f4), const Color(0xff10a37f),
                               const Color(0xfff97316), const Color(0xff8b5cf6),
                               const Color(0xffe05252),
-                            ][([Broken.cpu_setting, Broken.code_1, Broken.flash_circle, Broken.global, Broken.diagram].indexOf(icon))].withOpacity(0.15),
+                            ][([Broken.cpu_setting, Broken.code_1, Broken.flash_circle, Broken.global, Broken.diagram].indexOf(icon))].withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Icon(icon, size: 14, color: [
@@ -1909,9 +1909,9 @@ class _AgentSettingsState extends State<AgentSettings>
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: _kAccent.withOpacity(0.1),
+                              color: _kAccent.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: _kAccent.withOpacity(0.3)),
+                              border: Border.all(color: _kAccent.withValues(alpha: 0.3)),
                             ),
                             child: Row(mainAxisSize: MainAxisSize.min, children: [
                               const Icon(Broken.add_square, size: 12, color: _kAccent),
@@ -2098,7 +2098,7 @@ class _ProviderPicker extends StatelessWidget {
               child: Row(children: [
                 Container(
                   width: 24, height: 24,
-                  decoration: BoxDecoration(color: p.color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                  decoration: BoxDecoration(color: p.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                   child: Icon(p.icon, size: 14, color: p.color),
                 ),
                 const SizedBox(width: 10),
@@ -2139,7 +2139,7 @@ class _ModelCard extends StatelessWidget {
     child: Row(children: [
       Container(
         width: 32, height: 32,
-        decoration: BoxDecoration(color: pDef.color.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(color: pDef.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
         child: Icon(pDef.icon, size: 16, color: pDef.color),
       ),
       const SizedBox(width: 10),
@@ -2150,7 +2150,7 @@ class _ModelCard extends StatelessWidget {
         ]),
       ),
       IconButton(
-        icon: Icon(Broken.trash, size: 15, color: _kDanger.withOpacity(0.7)),
+        icon: Icon(Broken.trash, size: 15, color: _kDanger.withValues(alpha: 0.7)),
         tooltip: 'Supprimer',
         onPressed: onRemove,
       ),
@@ -2173,7 +2173,7 @@ class _ColorSwatch extends StatelessWidget {
       decoration: BoxDecoration(
         color: color, shape: BoxShape.circle,
         border: Border.all(color: selected ? Colors.white : Colors.transparent, width: 2.5),
-        boxShadow: selected ? [BoxShadow(color: color.withOpacity(0.6), blurRadius: 6, spreadRadius: 1)] : [],
+        boxShadow: selected ? [BoxShadow(color: color.withValues(alpha: 0.6), blurRadius: 6, spreadRadius: 1)] : [],
       ),
       child: selected ? const Icon(Icons.check, size: 14, color: Colors.white) : null,
     ),
@@ -2215,7 +2215,7 @@ class _ChatPhaseChip extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      color: _kAccent.withOpacity(0.1),
+      color: _kAccent.withValues(alpha: 0.1),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Text(label, style: const TextStyle(fontSize: 11, color: _kAccent)),
@@ -2273,7 +2273,7 @@ class _DotsIndicatorState extends State<_DotsIndicator>
                   width: widget.size,
                   height: widget.size,
                   decoration: BoxDecoration(
-                    color: widget.color.withOpacity(0.4 + bounce * 0.6),
+                    color: widget.color.withValues(alpha: 0.4 + bounce * 0.6),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -2345,8 +2345,8 @@ class _ChatThinkingBlockState extends State<_ChatThinkingBlock>
 
   @override
   Widget build(BuildContext context) {
-    final bg = _kThinkBorder.withOpacity(widget.isDark ? 0.08 : 0.05);
-    final border = _kThinkBorder.withOpacity(0.3);
+    final bg = _kThinkBorder.withValues(alpha: widget.isDark ? 0.08 : 0.05);
+    final border = _kThinkBorder.withValues(alpha: 0.3);
     final charCount = widget.thinking.length;
     final hint = charCount > 0
         ? '${(charCount / 1000).toStringAsFixed(1)}k'
@@ -2390,7 +2390,7 @@ class _ChatThinkingBlockState extends State<_ChatThinkingBlock>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                       decoration: BoxDecoration(
-                        color: _kThinkBorder.withOpacity(0.18),
+                        color: _kThinkBorder.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(hint,
@@ -2399,7 +2399,7 @@ class _ChatThinkingBlockState extends State<_ChatThinkingBlock>
                   ],
                   const Spacer(),
                   if (widget.isStreaming)
-                    _DotsIndicator(color: _kThinkPurple.withOpacity(0.7))
+                    _DotsIndicator(color: _kThinkPurple.withValues(alpha: 0.7))
                   else
                     Icon(
                       _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
@@ -2518,10 +2518,10 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
     return Container(
       margin: const EdgeInsets.only(bottom: 5),
       decoration: BoxDecoration(
-        color: isRunning ? runColor.withOpacity(0.06) : cardBg,
+        color: isRunning ? runColor.withValues(alpha: 0.06) : cardBg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isRunning ? runColor.withOpacity(0.4) : border,
+          color: isRunning ? runColor.withValues(alpha: 0.4) : border,
         ),
       ),
       child: Material(
@@ -2545,8 +2545,8 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
                   // Tool icon
                   Icon(icon, size: 13,
                       color: isRunning
-                          ? runColor.withOpacity(0.85)
-                          : widget.fg.withOpacity(0.6)),
+                          ? runColor.withValues(alpha: 0.85)
+                          : widget.fg.withValues(alpha: 0.6)),
                   const SizedBox(width: 6),
                   // Label + arg hint
                   Expanded(

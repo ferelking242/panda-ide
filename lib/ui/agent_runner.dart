@@ -368,10 +368,16 @@ runShellCommand(git status) → runShellCommand(git add -A) → runShellCommand(
           allowWrites: agentMode == 'agent',
         );
       } else if (model is LocalLlama) {
-        ctrl.add(const AgentChunk(
-          phase: AgentPhase.error,
-          text: 'LocalLlama n\'est pas supporté en mode agent pour l\'instant.',
-        ));
+        // LocalLlama expose une API OpenAI-compatible → on passe par _runSse
+        await _runSse(
+          model,
+          messages,
+          systemPrompt,
+          ctrl,
+          agenticTools,
+          toolSchemas,
+          allowWrites: agentMode == 'agent',
+        );
       } else {
         await _runSse(
           model,

@@ -151,7 +151,7 @@ class _PandaSplashScreenState extends State<PandaSplashScreen>
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xff5090c8)
-                                  .withOpacity(0.6 * _glowAnim.value),
+                                  .withValues(alpha: 0.6 * _glowAnim.value),
                               blurRadius: 40 * _glowAnim.value,
                               spreadRadius: 8 * _glowAnim.value,
                             ),
@@ -200,7 +200,7 @@ class _PandaSplashScreenState extends State<PandaSplashScreen>
                       Text(
                         'Code anywhere.',
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
+                          color: Colors.white.withValues(alpha: 0.5),
                           fontSize: 14,
                           fontWeight: FontWeight.w300,
                           letterSpacing: 2.0,

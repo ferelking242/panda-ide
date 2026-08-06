@@ -43,6 +43,7 @@ import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
+import '../extensions/language_feature_router.dart';
 import '../ui/gateway_panel.dart';
 import '../ui/browser/browser_panel.dart';
 import 'agent_runner.dart';
@@ -883,7 +884,7 @@ class _SelectTypeState extends State<SelectType>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               blurRadius: 20,
               offset: const Offset(0, 10)),
         ],
@@ -894,7 +895,7 @@ class _SelectTypeState extends State<SelectType>
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _kAccent.withOpacity(0.12),
+            color: _kAccent.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: _kAccent, size: 26),
@@ -1836,7 +1837,7 @@ class _SelectTypeState extends State<SelectType>
       return Icon(icon, size: 16, color: theme.selectScreenCardTextColor);
     }
     return Icon(Icons.insert_drive_file_outlined,
-        size: 16, color: theme.selectScreenCardTextColor.withOpacity(0.65));
+        size: 16, color: theme.selectScreenCardTextColor.withValues(alpha: 0.65));
   }
 
   // ── Search panel ──────────────────────────────────────────────────────────
@@ -2102,9 +2103,9 @@ class _SelectTypeState extends State<SelectType>
             margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.orange.withOpacity(dark ? 0.15 : 0.10),
+              color: Colors.orange.withValues(alpha: dark ? 0.15 : 0.10),
               border: Border.all(
-                  color: Colors.orange.withOpacity(0.5), width: 1),
+                  color: Colors.orange.withValues(alpha: 0.5), width: 1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(children: [
@@ -2329,9 +2330,9 @@ class _SelectTypeState extends State<SelectType>
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(dark ? 0.12 : 0.08),
+                  color: Colors.orange.withValues(alpha: dark ? 0.12 : 0.08),
                   borderRadius: BorderRadius.circular(7),
-                  border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   !extensionInstalled && !nodeInstalled
@@ -2381,7 +2382,7 @@ class _SelectTypeState extends State<SelectType>
               Container(
                 padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: _kAccent.withOpacity(dark ? 0.12 : 0.08),
+                  color: _kAccent.withValues(alpha: dark ? 0.12 : 0.08),
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Column(
@@ -3252,7 +3253,7 @@ class _SelectTypeState extends State<SelectType>
                             size: 12,
                             color: isActive
                                 ? inactiveFg
-                                : inactiveFg.withOpacity(0.3)),
+                                : inactiveFg.withValues(alpha: 0.3)),
                       ),
                     ]),
                   ),
@@ -3584,7 +3585,7 @@ class _SelectTypeState extends State<SelectType>
         decoration: BoxDecoration(
           color: panelBg,
           border: Border(
-            bottom: BorderSide(color: borderC.withOpacity(0.5), width: 0.5),
+            bottom: BorderSide(color: borderC.withValues(alpha: 0.5), width: 0.5),
           ),
         ),
         child: Row(
@@ -3689,7 +3690,7 @@ class _SelectTypeState extends State<SelectType>
       decoration: BoxDecoration(
         color: panelBg,
         border: Border(
-            bottom: BorderSide(color: borderC.withOpacity(0.5), width: 0.5)),
+            bottom: BorderSide(color: borderC.withValues(alpha: 0.5), width: 0.5)),
       ),
       child: LayoutBuilder(
         builder: (ctx, constraints) {
@@ -4015,7 +4016,7 @@ class _SelectTypeState extends State<SelectType>
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.15),
+                          color: Colors.red.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(Broken.stop_circle,
@@ -4031,7 +4032,7 @@ class _SelectTypeState extends State<SelectType>
                           color:
                               _agentInputCtrl.text.trim().isEmpty
                                   ? Colors.transparent
-                                  : _kAccent.withOpacity(0.9),
+                                  : _kAccent.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(Broken.send_2,
@@ -4140,7 +4141,7 @@ class _SelectTypeState extends State<SelectType>
               Container(width: 36, height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                      color: muted.withOpacity(0.4),
+                      color: muted.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(2))),
 
               // ── Option: Approbations par défaut ──
@@ -4199,7 +4200,7 @@ class _SelectTypeState extends State<SelectType>
                 selBg: selBg, fg: fg, muted: muted,
               ),
 
-              Divider(color: muted.withOpacity(0.2), height: 24),
+              Divider(color: muted.withValues(alpha: 0.2), height: 24),
 
               // En savoir plus
               GestureDetector(
@@ -4540,7 +4541,7 @@ class _SelectTypeState extends State<SelectType>
                                   decoration: BoxDecoration(
                                     color: (opt.label == 'Light' && !isDark) ||
                                            (opt.label == 'Dark'  &&  isDark)
-                                        ? _kAccent.withOpacity(0.15)
+                                        ? _kAccent.withValues(alpha: 0.15)
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
@@ -4675,7 +4676,7 @@ class _SelectTypeState extends State<SelectType>
                           width: 34,
                           height: 34,
                           decoration: BoxDecoration(
-                            color: t.color.withOpacity(0.12),
+                            color: t.color.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Center(child: Icon(t.icon, size: 16, color: t.color)),
@@ -4698,7 +4699,7 @@ class _SelectTypeState extends State<SelectType>
                             ],
                           ),
                         ),
-                        Icon(Broken.arrow_right_3, size: 13, color: muted.withOpacity(0.5)),
+                        Icon(Broken.arrow_right_3, size: 13, color: muted.withValues(alpha: 0.5)),
                       ]),
                     ),
                   ),
@@ -4857,7 +4858,7 @@ class _SelectTypeState extends State<SelectType>
                         height: 30,
                         margin: const EdgeInsets.only(right: 6),
                         decoration: BoxDecoration(
-                          color: c.withOpacity(0.18),
+                          color: c.withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Center(
@@ -5031,7 +5032,7 @@ class _SelectTypeState extends State<SelectType>
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: status == s
-                              ? _kAccent.withOpacity(0.2)
+                              ? _kAccent.withValues(alpha: 0.2)
                               : (isDark
                                   ? const Color(0xff2a2a2a)
                                   : const Color(0xffe8e8e8)),
@@ -5118,7 +5119,7 @@ class _SelectTypeState extends State<SelectType>
               width: 36, height: 4,
               margin: const EdgeInsets.only(top: 10, bottom: 8),
               decoration: BoxDecoration(
-                color: muted.withOpacity(0.4),
+                color: muted.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -5237,7 +5238,7 @@ class _SelectTypeState extends State<SelectType>
                   width: 36, height: 4,
                   margin: const EdgeInsets.only(top: 10, bottom: 8),
                   decoration: BoxDecoration(
-                    color: muted.withOpacity(0.4),
+                    color: muted.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -5279,7 +5280,7 @@ class _SelectTypeState extends State<SelectType>
                           Container(
                             padding: const EdgeInsets.all(5),
                             decoration: BoxDecoration(
-                              color: pColor.withOpacity(0.15),
+                              color: pColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Icon(icon, size: 13, color: pColor),
@@ -5301,7 +5302,7 @@ class _SelectTypeState extends State<SelectType>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: _kAccent.withOpacity(0.15),
+                                color: _kAccent.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text('actif',
@@ -5347,12 +5348,12 @@ class _SelectTypeState extends State<SelectType>
                                   horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? _kAccent.withOpacity(0.1)
+                                    ? _kAccent.withValues(alpha: 0.1)
                                     : card,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isSelected
-                                      ? _kAccent.withOpacity(0.4)
+                                      ? _kAccent.withValues(alpha: 0.4)
                                       : border,
                                 ),
                               ),
@@ -5578,7 +5579,7 @@ class _SelectTypeState extends State<SelectType>
                   errorBuilder: (_, __, ___) => Container(
                     width: 52, height: 52,
                     decoration: BoxDecoration(
-                      color: _kAccent.withOpacity(0.15),
+                      color: _kAccent.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: const Icon(Broken.message_programming,
@@ -5606,9 +5607,9 @@ class _SelectTypeState extends State<SelectType>
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: _kAccent.withOpacity(isDark ? 0.08 : 0.05),
+            color: _kAccent.withValues(alpha: isDark ? 0.08 : 0.05),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _kAccent.withOpacity(0.2)),
+            border: Border.all(color: _kAccent.withValues(alpha: 0.2)),
           ),
           child: Row(children: [
             Icon(
@@ -5710,7 +5711,7 @@ class _SelectTypeState extends State<SelectType>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: _kAccent.withOpacity(0.85),
+                          color: _kAccent.withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(text,
@@ -5748,7 +5749,7 @@ class _SelectTypeState extends State<SelectType>
                   height: 28,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _kAccent.withOpacity(0.2),
+                    color: _kAccent.withValues(alpha: 0.2),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: githubAvatarUrl != null && githubAvatarUrl.isNotEmpty
@@ -5785,7 +5786,7 @@ class _SelectTypeState extends State<SelectType>
                 height: 28,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _kAccent.withOpacity(0.15),
+                  color: _kAccent.withValues(alpha: 0.15),
                 ),
                 child: ClipOval(
                   child: Image.asset(
@@ -5848,14 +5849,14 @@ class _SelectTypeState extends State<SelectType>
                         horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
                       color: isError
-                          ? Colors.red.withOpacity(isDark ? 0.2 : 0.1)
+                          ? Colors.red.withValues(alpha: isDark ? 0.2 : 0.1)
                           : (isDark
                               ? const Color(0xff2d2d2d)
                               : const Color(0xffe8e8e8)),
                       borderRadius: BorderRadius.circular(8),
                       border: isError
                           ? Border.all(
-                              color: Colors.red.withOpacity(0.4), width: 1)
+                              color: Colors.red.withValues(alpha: 0.4), width: 1)
                           : null,
                     ),
                     child: Row(
@@ -6495,7 +6496,7 @@ class _SelectTypeState extends State<SelectType>
                     child: Container(
                       width: 36, height: 4,
                       decoration: BoxDecoration(
-                        color: muted.withOpacity(0.3),
+                        color: muted.withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
@@ -6514,7 +6515,7 @@ class _SelectTypeState extends State<SelectType>
                           duration: const Duration(milliseconds: 150),
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                           decoration: BoxDecoration(
-                            color: sel ? _kAccent.withOpacity(0.15) : cardBg,
+                            color: sel ? _kAccent.withValues(alpha: 0.15) : cardBg,
                             border: Border.all(color: sel ? _kAccent : border),
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -6692,7 +6693,7 @@ class _SelectTypeState extends State<SelectType>
               height: 4,
               margin: const EdgeInsets.only(top: 10, bottom: 8),
               decoration: BoxDecoration(
-                color: muted.withOpacity(0.4),
+                color: muted.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -6705,7 +6706,7 @@ class _SelectTypeState extends State<SelectType>
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: _kAccent.withOpacity(0.15),
+                  color: _kAccent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Center(child: Icon(Broken.magic_star, size: 13, color: _kAccent)),
@@ -6929,7 +6930,7 @@ class _SelectTypeState extends State<SelectType>
                           style: TextStyle(fontSize: 10, color: muted),
                         ),
                         selected: isCurrent,
-                        selectedTileColor: _kAccent.withOpacity(0.07),
+                        selectedTileColor: _kAccent.withValues(alpha: 0.07),
                         onTap: () {
                           ctx.read<ChatSessionBloc>().add(SelectSession(s.id));
                           final convs = s.conversations;
@@ -6952,7 +6953,7 @@ class _SelectTypeState extends State<SelectType>
                         },
                         trailing: IconButton(
                           icon: Icon(Broken.trash, size: 13,
-                              color: muted.withOpacity(0.6)),
+                              color: muted.withValues(alpha: 0.6)),
                           onPressed: () => ctx.read<ChatSessionBloc>()
                               .add(DeleteSession(s.id)),
                         ),
@@ -7401,7 +7402,7 @@ class _SelectTypeState extends State<SelectType>
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: _kAccent.withOpacity(0.15),
+                  color: _kAccent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Broken.code_circle,
@@ -7941,7 +7942,7 @@ class _WalkthroughCardState extends State<_WalkthroughCard> {
             boxShadow: _hovered
                 ? [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 8,
                         offset: const Offset(0, 2))
                   ]
@@ -7951,7 +7952,7 @@ class _WalkthroughCardState extends State<_WalkthroughCard> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _kAccent.withOpacity(0.12),
+                color: _kAccent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child:
@@ -8059,7 +8060,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
                   style: TextStyle(
                       fontSize: 11,
                       fontStyle: FontStyle.italic,
-                      color: widget.fg.withOpacity(0.7))),
+                      color: widget.fg.withValues(alpha: 0.7))),
             ],
           ],
         ),
@@ -8295,9 +8296,9 @@ class _AgentPhaseChipState extends State<_AgentPhaseChip>
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(widget.isDark ? 0.15 : 0.08),
+        color: color.withValues(alpha: widget.isDark ? 0.15 : 0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         // Spinning square — inspired by Replit Agent cube
@@ -8309,7 +8310,7 @@ class _AgentPhaseChipState extends State<_AgentPhaseChip>
               width: 11,
               height: 11,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.85),
+                color: color.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -8467,7 +8468,7 @@ class _PanelToolbarBtn extends StatelessWidget {
 }
 
 // ── Problems panel content ────────────────────────────────────────────────
-class _ProblemsPanel extends StatelessWidget {
+class _ProblemsPanel extends StatefulWidget {
   const _ProblemsPanel({
     required this.fg,
     required this.search,
@@ -8478,20 +8479,118 @@ class _ProblemsPanel extends StatelessWidget {
   final int    filter; // 0=all 1=errors 2=warnings
 
   @override
+  State<_ProblemsPanel> createState() => _ProblemsPanelState();
+}
+
+class _ProblemsPanelState extends State<_ProblemsPanel> {
+  late final ValueNotifier<int> _version;
+
+  @override
+  void initState() {
+    super.initState();
+    _version = LanguageFeatureRouter.instance.diagnosticsVersion;
+    _version.addListener(_onDiagnosticsChanged);
+  }
+
+  void _onDiagnosticsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _version.removeListener(_onDiagnosticsChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isEmpty = true; // TODO: wire to real diagnostics
-    final label = search.isNotEmpty
-        ? 'No problems matching "$search"'
-        : 'No problems have been detected in the workspace.';
-    return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.check_circle_outline, size: 32, color: fg.withOpacity(0.35)),
-        const SizedBox(height: 8),
-        Text(label,
-          style: TextStyle(fontSize: 12, color: fg.withOpacity(0.6)),
-          textAlign: TextAlign.center,
-        ),
-      ]),
+    final allDiags = LanguageFeatureRouter.instance.allDiagnostics;
+
+    // Filtre selon filter (0=all 1=errors 2=warnings) et recherche
+    final List<MapEntry<String, List<ExtensionDiagnostic>>> filtered = [];
+    for (final entry in allDiags.entries) {
+      final diags = entry.value.where((d) {
+        if (widget.filter == 1 && d.severity != 0) return false;
+        if (widget.filter == 2 && d.severity != 1) return false;
+        if (widget.search.isNotEmpty &&
+            !d.message.toLowerCase().contains(widget.search.toLowerCase())) {
+          return false;
+        }
+        return true;
+      }).toList();
+      if (diags.isNotEmpty) filtered.add(MapEntry(entry.key, diags));
+    }
+
+    if (filtered.isEmpty) {
+      final label = widget.search.isNotEmpty
+          ? 'No problems matching "${widget.search}"'
+          : 'No problems have been detected in the workspace.';
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.check_circle_outline, size: 32, color: widget.fg.withValues(alpha: 0.35)),
+          const SizedBox(height: 8),
+          Text(label,
+            style: TextStyle(fontSize: 12, color: widget.fg.withValues(alpha: 0.6)),
+            textAlign: TextAlign.center,
+          ),
+        ]),
+      );
+    }
+
+    // Affichage groupé par fichier
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      itemCount: filtered.length,
+      itemBuilder: (context, i) {
+        final filePath = filtered[i].key;
+        final diags = filtered[i].value;
+        final fileName = filePath.split('/').last;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 2),
+              child: Text(fileName,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: widget.fg.withValues(alpha: 0.7),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            ...diags.map((d) {
+              final isError = d.severity == 0;
+              final isWarn  = d.severity == 1;
+              final color = isError
+                  ? const Color(0xFFF44747)
+                  : isWarn
+                      ? const Color(0xFFCCA700)
+                      : widget.fg.withValues(alpha: 0.6);
+              final icon = isError
+                  ? Icons.error_outline
+                  : isWarn
+                      ? Icons.warning_amber_outlined
+                      : Icons.info_outline;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Row(children: [
+                  Icon(icon, size: 13, color: color),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      d.message,
+                      style: TextStyle(fontSize: 12, color: widget.fg),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ]),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }

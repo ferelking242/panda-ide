@@ -12800,8 +12800,9 @@ class VSCodeGitGraphPainter extends CustomPainter {
       );
       messagePainter.paint(canvas, Offset(textStartX, 6));
 
+      final datePart = rowInfo.commit.date.isNotEmpty ? ' · ${rowInfo.commit.date}' : '';
       final authorHash =
-          '${rowInfo.commit.author} • ${rowInfo.commit.hash.substring(0, 7)}';
+          '${rowInfo.commit.author} • ${rowInfo.commit.hash.substring(0, 7)}$datePart';
       final authorPainter = TextPainter(
         text: TextSpan(
           text: authorHash,
