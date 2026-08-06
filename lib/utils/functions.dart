@@ -406,12 +406,33 @@ Future<void> cloneRepo(
   String location,
   String url,
   void Function(double progress) onProgress,
+  {
+  String? branch,
+  int? depth,
+  String? targetDirectory,
+  bool recursive = false,
+  }
 ) async {
   final sharedPath = await NativeChannel.getLibraryPath();
 
+  final cloneArgs = <String>['clone', '--progress'];
+  if (branch != null && branch.trim().isNotEmpty) {
+    cloneArgs.addAll(['--branch', branch.trim()]);
+  }
+  if (depth != null && depth > 0) {
+    cloneArgs.addAll(['--depth', '$depth']);
+  }
+  if (recursive) {
+    cloneArgs.add('--recurse-submodules');
+  }
+  cloneArgs.add(url);
+  if (targetDirectory != null && targetDirectory.trim().isNotEmpty) {
+    cloneArgs.add(targetDirectory.trim());
+  }
+
   final process = await Process.start(
     '$binDir/git',
-    ['clone', '--progress', url],
+    cloneArgs,
     workingDirectory: location,
     environment: gitEnvs(sharedPath),
   );
@@ -432,7 +453,10 @@ Future<void> cloneRepo(
 
   final exitCode = await process.exitCode;
   if (exitCode != 0) {
-    throw Exception('git clone failed with exit code $exitCode');
+    throw Exception(
+      'git clone failed with exit code $exitCode'
+      '${branch != null && branch.trim().isNotEmpty ? ' for branch "${branch.trim()}"' : ''}',
+    );
   }
 }
 

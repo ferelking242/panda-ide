@@ -8690,7 +8690,18 @@ $diffText
                                               child: InkWell(
                                                 borderRadius:BorderRadius.circular(8),
                                                 onTap: () {
-                                                  widget.onOpenDiffView?.call(fileName, widget.workSpace, widget.activeEditorsBloc!);
+                                                  final onOpenDiffView =
+                                                      widget.onOpenDiffView;
+                                                  final activeEditorsBloc =
+                                                      widget.activeEditorsBloc;
+                                                  if (onOpenDiffView != null &&
+                                                      activeEditorsBloc != null) {
+                                                    onOpenDiffView(
+                                                      fileName,
+                                                      widget.workSpace,
+                                                      activeEditorsBloc,
+                                                    );
+                                                  }
                                                 },
                                                 child: Container(
                                                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

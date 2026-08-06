@@ -85,7 +85,6 @@ class _SelectTypeState extends State<SelectType>
   final _scaffoldKey         = GlobalKey<ScaffoldState>();
   final createFileController = TextEditingController();
   final _createFileKey       = GlobalKey<FormState>();
-  final _cloneRepoKey        = GlobalKey<FormState>();
   AnimationStatus _terminalSelectionStatus = AnimationStatus.dismissed;
   bool _didShowPackageUpdateToast  = false;
   bool _didShowStorageMigrationToast = false;
@@ -367,6 +366,11 @@ class _SelectTypeState extends State<SelectType>
     String repoName,
     BuildContext context,
     StreamController<double> progressController,
+    {
+    String? branch,
+    int? depth,
+    bool recursive = false,
+    }
   ) async {
     final targetDir = Directory('$projectDir/$repoName');
     if (targetDir.existsSync()) {
@@ -393,6 +397,9 @@ class _SelectTypeState extends State<SelectType>
         projectDir,
         repoUrl,
         (p) => progressController.add(p),
+        branch: branch,
+        depth: depth,
+        recursive: recursive,
       );
       if (context.mounted) {
         Navigator.of(context).pop();
@@ -584,122 +591,266 @@ class _SelectTypeState extends State<SelectType>
   void _doCloneRepo(BuildContext context, AppTheme appTheme) {
     showDialog(
       context: context,
-      builder: (_) {
+      builder: (dialogContext) {
         final cloneCtrl = TextEditingController();
+        final branchCtrl = TextEditingController();
+        final depthCtrl = TextEditingController(text: '1');
+        final nameCtrl = TextEditingController();
+        var source = 'github';
+        var advanced = false;
+        var shallow = true;
+        var recursive = false;
+
+        String repoNameFromUrl(String value) {
+          final cleaned = value.trim().replaceFirst(RegExp(r'/$'), '');
+          if (cleaned.isEmpty) return '';
+          final lastPart = cleaned.split('/').last;
+          return lastPart.replaceFirst(RegExp(r'\.git$'), '');
+        }
+
+        String normalizedUrl() {
+          final value = cloneCtrl.text.trim();
+          if (value.isEmpty) return '';
+          if (source == 'github' &&
+              !value.startsWith('http') &&
+              !value.startsWith('git@')) {
+            return 'https://github.com/${value.replaceFirst(RegExp(r'^/+'), '')}.git';
+          }
+          if (source == 'gitlab' &&
+              !value.startsWith('http') &&
+              !value.startsWith('git@')) {
+            return 'https://gitlab.com/${value.replaceFirst(RegExp(r'^/+'), '')}.git';
+          }
+          return value;
+        }
+
+        String sourceHint() {
+          switch (source) {
+            case 'gitlab':
+              return 'group/projet ou https://gitlab.com/groupe/projet.git';
+            case 'url':
+              return 'https://example.com/organisation/projet.git';
+            default:
+              return 'organisation/projet ou https://github.com/organisation/projet.git';
+          }
+        }
+
+        Future<void> startClone() async {
+          final url = normalizedUrl();
+          if (url.isEmpty) return;
+          final name = nameCtrl.text.trim().isEmpty
+              ? repoNameFromUrl(url)
+              : nameCtrl.text.trim();
+          if (name.isEmpty) return;
+
+          final parsedDepth = int.tryParse(depthCtrl.text.trim());
+          if (shallow && (parsedDepth == null || parsedDepth < 1)) return;
+
+          final progressCtrl = StreamController<double>.broadcast();
+          if (!dialogContext.mounted) return;
+          Navigator.of(dialogContext).pop();
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (_) => Dialog(
+              backgroundColor: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: _dialogBox(appTheme.isDark),
+                child: StreamBuilder<double>(
+                  stream: progressCtrl.stream,
+                  initialData: 0.0,
+                  builder: (_, snap) {
+                    final p = (snap.data ?? 0.0).clamp(0.0, 1.0).toDouble();
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Broken.programming_arrows,
+                            color: _kAccent, size: 32),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Clonage de $name…',
+                          style: TextStyle(
+                            color: appTheme.selectScreenCardTextColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        LinearPercentIndicator(
+                          percent: p,
+                          progressColor: _kAccent,
+                          barRadius: const Radius.circular(20),
+                          lineHeight: 8,
+                          trailing: Padding(
+                            padding: const EdgeInsets.only(left: 10),
+                            child: Text(
+                              '${(p * 100).toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                  color: appTheme.selectScreenCardTextColor),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+          progressCtrl.add(0.0);
+          await _performClone(
+            projectDir,
+            url,
+            name,
+            context,
+            progressCtrl,
+            branch: advanced && branchCtrl.text.trim().isNotEmpty
+                ? branchCtrl.text.trim()
+                : null,
+            depth: advanced && shallow ? parsedDepth : null,
+            recursive: advanced && recursive,
+          );
+        }
+
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
-            width: 400,
+            width: 520,
             padding: const EdgeInsets.all(24),
             decoration: _dialogBox(appTheme.isDark),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _dialogHeader(
-                    appTheme, Broken.programming_arrows, 'Clone Repository'),
-                const SizedBox(height: 8),
-                Text('Enter the repository URL to clone',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 14)),
-                const SizedBox(height: 24),
-                Form(
-                  key: _cloneRepoKey,
-                  child: TextFormField(
+            child: StatefulBuilder(
+              builder: (context, setDialogState) => Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _dialogHeader(
+                      appTheme, Broken.programming_arrows, 'Cloner un dépôt'),
+                  const SizedBox(height: 18),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'github', label: Text('GitHub')),
+                      ButtonSegment(value: 'gitlab', label: Text('GitLab')),
+                      ButtonSegment(value: 'url', label: Text('URL')),
+                    ],
+                    selected: {source},
+                    onSelectionChanged: (value) =>
+                        setDialogState(() => source = value.first),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
                     controller: cloneCtrl,
-                    style:
-                        TextStyle(color: appTheme.selectScreenCardTextColor),
+                    autofocus: true,
+                    style: TextStyle(
+                        color: appTheme.selectScreenCardTextColor),
                     cursorColor: _kAccent,
-                    validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Enter a URL' : null,
+                    onChanged: (_) => setDialogState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'https://github.com/user/repo.git',
-                      hintStyle: const TextStyle(color: Colors.grey),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide:
-                            const BorderSide(color: Color(0xff3c3c3c)),
+                      labelText: source == 'url'
+                          ? 'URL du dépôt'
+                          : 'Chemin du dépôt',
+                      hintText: sourceHint(),
+                      prefixIcon: Icon(
+                        source == 'github'
+                            ? Icons.code
+                            : source == 'gitlab'
+                                ? Icons.source
+                                : Icons.link,
+                        size: 18,
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: _kAccent),
-                      ),
+                      border: const OutlineInputBorder(),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _cancelBtn(context),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      style: _primaryBtn(),
-                      onPressed: () async {
-                        if (!_cloneRepoKey.currentState!.validate()) return;
-                        final url  = cloneCtrl.text.trim();
-                        final name = url.split('/').last.replaceAll('.git', '');
-                        final progressCtrl =
-                            StreamController<double>.broadcast();
-                        if (!context.mounted) return;
-                        Navigator.of(context).pop();
-                        showDialog(
-                          context: context,
-                          barrierDismissible: false,
-                          builder: (_) => Dialog(
-                            backgroundColor: Colors.transparent,
-                            child: Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: _dialogBox(appTheme.isDark),
-                              child: StreamBuilder<double>(
-                                stream: progressCtrl.stream,
-                                initialData: 0.0,
-                                builder: (_, snap) {
-                                  final p = snap.data ?? 0.0;
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Broken.programming_arrows,
-                                          color: _kAccent, size: 32),
-                                      const SizedBox(height: 16),
-                                      Text('Cloning repository…',
-                                          style: TextStyle(
-                                              color: appTheme
-                                                  .selectScreenCardTextColor,
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w600)),
-                                      const SizedBox(height: 24),
-                                      LinearPercentIndicator(
-                                        percent: p,
-                                        progressColor: _kAccent,
-                                        barRadius:
-                                            const Radius.circular(20),
-                                        lineHeight: 8,
-                                        trailing: Padding(
-                                          padding: const EdgeInsets.only(
-                                              left: 10),
-                                          child: Text(
-                                              '${(p * 100).toStringAsFixed(1)}%',
-                                              style: TextStyle(
-                                                  color: appTheme
-                                                      .selectScreenCardTextColor)),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameCtrl,
+                    style: TextStyle(
+                        color: appTheme.selectScreenCardTextColor),
+                    decoration: const InputDecoration(
+                      labelText: 'Nom du dossier (optionnel)',
+                      hintText: 'Déduit automatiquement du dépôt',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          setDialogState(() => advanced = !advanced),
+                      icon: Icon(advanced
+                          ? Icons.expand_less
+                          : Icons.expand_more),
+                      label: const Text('Options avancées'),
+                    ),
+                  ),
+                  if (advanced) ...[
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: branchCtrl,
+                            style: TextStyle(
+                                color:
+                                    appTheme.selectScreenCardTextColor),
+                            decoration: const InputDecoration(
+                              labelText: 'Branche',
+                              hintText: 'main',
+                              border: OutlineInputBorder(),
                             ),
                           ),
-                        );
-                        progressCtrl.add(0.0);
-                        await _performClone(
-                            projectDir, url, name, context, progressCtrl);
-                      },
-                      child: const Text('Clone',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Clone superficiel'),
+                            subtitle: const Text('Historique limité'),
+                            value: shallow,
+                            onChanged: (value) =>
+                                setDialogState(() => shallow = value),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (shallow)
+                      TextField(
+                        controller: depthCtrl,
+                        keyboardType: TextInputType.number,
+                        style: TextStyle(
+                            color: appTheme.selectScreenCardTextColor),
+                        decoration: const InputDecoration(
+                          labelText: 'Profondeur de l’historique',
+                          hintText: '1',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Inclure les sous-modules Git'),
+                      value: recursive,
+                      onChanged: (value) =>
+                          setDialogState(() => recursive = value ?? false),
                     ),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      _cancelBtn(dialogContext),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        style: _primaryBtn(),
+                        onPressed: cloneCtrl.text.trim().isEmpty
+                            ? null
+                            : startClone,
+                        child: const Text('Cloner',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -1545,6 +1696,8 @@ class _SelectTypeState extends State<SelectType>
         enableRenameFileOption: true,
         enableRenameFolderOption: true,
         enableGitFeatures: true,
+        fileIconBuilder: (extension) =>
+            _buildExplorerFileIcon(extension, t),
         onFileTap: (file) {
           final lang = languages.firstWhere(
             (l) => l.extension.contains(
@@ -1622,6 +1775,32 @@ class _SelectTypeState extends State<SelectType>
             () => _push(ctx, const MarketplacePage())),
       ],
     );
+  }
+
+  Widget _buildExplorerFileIcon(String extension, AppTheme theme) {
+    final normalizedExtension =
+        extension.toLowerCase().replaceFirst('.', '');
+    Language? language;
+    for (final candidate in languages) {
+      if (candidate.extension.any(
+          (item) => item.toLowerCase() == normalizedExtension)) {
+        language = candidate;
+        break;
+      }
+    }
+    final icon = language?.icon;
+    if (icon is Widget) {
+      return SizedBox(
+        width: 16,
+        height: 16,
+        child: FittedBox(fit: BoxFit.contain, child: icon),
+      );
+    }
+    if (icon is IconData) {
+      return Icon(icon, size: 16, color: theme.selectScreenCardTextColor);
+    }
+    return Icon(Icons.insert_drive_file_outlined,
+        size: 16, color: theme.selectScreenCardTextColor.withOpacity(0.65));
   }
 
   // ── Search panel ──────────────────────────────────────────────────────────
@@ -1745,93 +1924,31 @@ class _SelectTypeState extends State<SelectType>
   // ── Git panel ─────────────────────────────────────────────────────────────
   Widget _sidebarGit(BuildContext ctx, AppTheme t, bool dark) {
     final activeDir = _activeProjectDir();
-    final isGitRepo = activeDir != null &&
-        Directory('$activeDir/.git').existsSync();
-
-    if (isGitRepo) {
-      // Trigger status refresh for this project
-      ctx.read<RepoStatusBloc>().add(LoadRepoStatus(activeDir));
-      return BlocBuilder<RepoStatusBloc, RepoStatusState>(
-        builder: (_, repoState) {
-          final loaded = repoState is RepoStatusLoaded ? repoState : null;
-          final staged   = loaded?.staged   ?? <String>[];
-          final unstaged = loaded?.unstaged ?? <String>[];
-          final branch   = loaded?.currentBranch ?? '…';
-          final isLoading = repoState is RepoStatusLoading;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Branch header + refresh
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(children: [
-                  Icon(Broken.programming_arrows, size: 13, color: _kAccent),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      branch,
-                      style: TextStyle(
-                          fontSize: 12,
-                          color: dark ? Colors.grey[300] : Colors.grey[700]),
-                    ),
-                  ),
-                  if (isLoading)
-                    const SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 1.5, color: _kAccent))
-                  else
-                    InkWell(
-                      onTap: () => ctx
-                          .read<RepoStatusBloc>()
-                          .add(LoadRepoStatus(activeDir)),
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.all(2),
-                        child: Icon(Icons.refresh,
-                            size: 14,
-                            color: dark ? Colors.grey[500] : Colors.grey[600]),
-                      ),
-                    ),
-                ]),
-              ),
-              if (staged.isNotEmpty) ...[
-                _gitSectionLabel('INDEXÉS (${staged.length})', dark),
-                ...staged.map(
-                    (s) => _gitFileItem(ctx, t, dark, s, activeDir)),
-              ],
-              if (unstaged.isNotEmpty) ...[
-                _gitSectionLabel('CHANGEMENTS (${unstaged.length})', dark),
-                ...unstaged.map(
-                    (s) => _gitFileItem(ctx, t, dark, s, activeDir)),
-              ],
-              if (loaded != null &&
-                  staged.isEmpty &&
-                  unstaged.isEmpty)
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Text(
-                    'Pas de modifications en attente.',
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: dark ? Colors.grey[500] : Colors.grey[600]),
-                  ),
-                ),
-              const Divider(indent: 12, endIndent: 12),
-              _panelItem(ctx, t, Broken.programming_arrows, 'Ouvrir GitHub',
-                  _openGithubTab),
-              _panelItem(ctx, t, Broken.add_circle, 'Cloner un dépôt…',
-                  () => _doCloneRepo(ctx, t)),
-            ],
-          );
-        },
-      );
+    if (activeDir == null) {
+      // No project open → keep the source-control entry points available.
+      return _gitEntryPoints(ctx, t, dark);
     }
 
-    // No git project open → basic panel
+    // Keep the complete source-control experience in the Panda sidebar:
+    // staging, commit actions, sync, and the commit graph all live here.
+    final isGitRepo = Directory('$activeDir/.git').existsSync();
+    return Column(
+      children: [
+        Expanded(
+          child: SourceControl(
+            appTheme: t,
+            workSpace: activeDir,
+            isRepoThere: isGitRepo,
+          ),
+        ),
+        const Divider(height: 1, indent: 12, endIndent: 12),
+        _panelItem(ctx, t, Broken.add_circle, 'Cloner un dépôt…',
+            () => _doCloneRepo(ctx, t)),
+      ],
+    );
+  }
+
+  Widget _gitEntryPoints(BuildContext ctx, AppTheme t, bool dark) {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
       children: [
@@ -1860,59 +1977,6 @@ class _SelectTypeState extends State<SelectType>
           ),
         ),
       ],
-    );
-  }
-
-  Widget _gitSectionLabel(String title, bool dark) => Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-        child: Text(title,
-            style: _kSectionTitle.copyWith(
-                color: dark ? Colors.grey[500] : Colors.grey[600])),
-      );
-
-  Widget _gitFileItem(
-      BuildContext ctx, AppTheme t, bool dark, String line, String rootDir) {
-    final indicator = line.length >= 2 ? line.substring(0, 2).trim() : '?';
-    final filePath  = line.length > 3 ? line.substring(3).trim() : line.trim();
-    final color = indicator.contains('D')
-        ? Colors.red[400]!
-        : indicator.contains('A') || indicator.contains('?')
-            ? Colors.green[400]!
-            : _kAccent;
-    return InkWell(
-      onTap: () {
-        final f = File('$rootDir/$filePath');
-        if (!f.existsSync()) return;
-        final lang = languages.firstWhere(
-          (l) => l.extension
-              .contains(path.extension(f.path).replaceFirst('.', '')),
-          orElse: () => languages[0],
-        );
-        _openEditorTab(file: f, rootDir: rootDir, languageDetails: lang);
-      },
-      child: Padding(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Row(children: [
-          SizedBox(
-            width: 16,
-            child: Text(indicator,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: color)),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(filePath,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: dark ? Colors.grey[300] : Colors.grey[700]),
-                overflow: TextOverflow.ellipsis),
-          ),
-        ]),
-      ),
     );
   }
 
