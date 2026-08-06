@@ -223,7 +223,16 @@ const _providers = <_ProviderDef>[
 // ─────────────────────────────────────────────────────────────────────────────
 class AgentSettings extends StatefulWidget {
   final bool embedded;
-  const AgentSettings({super.key, this.embedded = false});
+  /// When true, reuse the provider settings implementation as a standalone
+  /// page. This keeps the provider flow in one place without rendering the
+  /// legacy Chat/Tools/Subagents shell inside Panda Agent.
+  final bool providersOnly;
+
+  const AgentSettings({
+    super.key,
+    this.embedded = false,
+    this.providersOnly = false,
+  });
 
   @override
   State<AgentSettings> createState() => _AgentSettingsState();
@@ -245,10 +254,26 @@ class _AgentSettingsState extends State<AgentSettings>
   String     _chatThinkingBuf  = '';
   int        _chatSerial       = 0;
   final      _chatRunner       = AgentRunner();
-  String     _chatMode         = 'agent'; // 'ask' | 'agent' | 'normal'
+  String     _chatMode         = 'agent'; // 'ask' | 'agent' | 'plan'
 
   // ── Tools tab state ─────────────────────────────────────────────────────
-  bool _showToolsSettings = false; // false = tool list, true = settings sub-view
+  // null = tool list, 'settings'|'secrets'|'skills'|'console'|'files'|'shell'|'workflows' = sub-page
+  String? _activePage;
+
+  // Secrets page state
+  final List<Map<String, String>> _secrets = [];
+  final _secretFilterCtrl = TextEditingController();
+  bool _secretsLoaded = false;
+
+  // Skills page state
+  late TabController _skillsTabCtrl; // Project | Workspace | Community
+  final List<Map<String, dynamic>> _projectSkills = [];
+
+  // Console page state
+  bool _consoleShowLatest = true;
+
+  // Files page state
+  bool _showFilesMenu = false;
 
   // Provider/model state (used in Tools > Settings)
   String _selectedProviderId = 'openai';
@@ -280,8 +305,29 @@ class _AgentSettingsState extends State<AgentSettings>
     super.initState();
     _tab            = TabController(length: 3, vsync: this);
     _settingsSubTab = TabController(length: 3, vsync: this);
+    _skillsTabCtrl  = TabController(length: 3, vsync: this);
     _chatInputCtrl.addListener(() => setState(() {}));
     _loadMemorySettings();
+    _loadSecrets();
+  }
+
+  Future<void> _loadSecrets() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    final raw = prefs.getStringList('panda_secrets') ?? [];
+    final parsed = <Map<String, String>>[];
+    for (final entry in raw) {
+      final idx = entry.indexOf('=');
+      if (idx > 0) {
+        parsed.add({'name': entry.substring(0, idx), 'value': entry.substring(idx + 1)});
+      }
+    }
+    setState(() { _secrets.clear(); _secrets.addAll(parsed); _secretsLoaded = true; });
+  }
+
+  Future<void> _saveSecrets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('panda_secrets', _secrets.map((s) => '${s['name']}=${s['value']}').toList());
   }
 
   Future<void> _loadMemorySettings() async {
@@ -305,12 +351,14 @@ class _AgentSettingsState extends State<AgentSettings>
   void dispose() {
     _tab.dispose();
     _settingsSubTab.dispose();
+    _skillsTabCtrl.dispose();
     _chatInputCtrl.dispose();
     _chatScrollCtrl.dispose();
     _apiKeyCtrl.dispose();
     _customUrlCtrl.dispose();
     _memoryNotesCtrl.dispose();
     _systemPromptCtrl.dispose();
+    _secretFilterCtrl.dispose();
     _chatRunner.cancel();
     super.dispose();
   }
@@ -569,6 +617,19 @@ class _AgentSettingsState extends State<AgentSettings>
               {'role': 'user', 'content': code},
             ],
           },
+          customParser: (response) {
+            try {
+              final data = response is Map ? response : {};
+              final choices = data['choices'] as List?;
+              if (choices != null && choices.isNotEmpty) {
+                final msg = choices.first['message'] ?? choices.first['delta'];
+                if (msg is Map) return (msg['content'] ?? '').toString();
+              }
+              return (data['text'] ?? data['content'] ?? response ?? '').toString();
+            } catch (_) {
+              return response?.toString() ?? '';
+            }
+          },
         );
       default:
         return null;
@@ -813,6 +874,15 @@ class _AgentSettingsState extends State<AgentSettings>
     final border = isDark ? const Color(0xff3a3a3a) : const Color(0xffe0e0e0);
     final hdrBg  = isDark ? const Color(0xff252526) : const Color(0xffececec);
 
+    if (widget.providersOnly) {
+      return Container(
+        color: bg,
+        child: _buildProvidersContent(
+          context, isDark, bg, card, fg, muted, border,
+        ),
+      );
+    }
+
     final body = Column(
       children: [
         // ── Tab bar header ─────────────────────────────────────────────
@@ -911,7 +981,7 @@ class _AgentSettingsState extends State<AgentSettings>
                   const SizedBox(width: 6),
                   _modeChip('agent',  'Agent',  isDark, muted, fg),
                   const SizedBox(width: 6),
-                  _modeChip('normal', 'Normal', isDark, muted, fg),
+                  _modeChip('plan', 'Plan', isDark, muted, fg),
                   const Spacer(),
                   if (_chatMessages.isNotEmpty)
                     InkWell(
@@ -946,7 +1016,7 @@ class _AgentSettingsState extends State<AgentSettings>
                               ? 'Demandez à Panda Agent de coder…'
                               : _chatMode == 'ask'
                                   ? 'Posez une question sur le code…'
-                                  : 'Message…',
+                                  : 'Décrivez ce que vous voulez planifier…',
                           hintStyle: TextStyle(fontSize: 12, color: muted),
                           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           border: InputBorder.none,
@@ -1215,15 +1285,22 @@ class _AgentSettingsState extends State<AgentSettings>
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // TAB 2 — Tools (Replit-style list + Settings sub-view)
+  // TAB 2 — Tools (Replit-style list + sub-pages)
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildToolsTab(BuildContext context, bool isDark, Color bg,
       Color card, Color fg, Color muted, Color border) {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
-      child: _showToolsSettings
-          ? _buildToolsSettings(context, isDark, bg, card, fg, muted, border)
-          : _buildToolsList(context, isDark, bg, card, fg, muted, border),
+      child: switch (_activePage) {
+        'settings'  => _buildToolsSettings(context, isDark, bg, card, fg, muted, border),
+        'secrets'   => _buildSecretsPage(context, isDark, bg, card, fg, muted, border),
+        'skills'    => _buildSkillsPage(context, isDark, bg, card, fg, muted, border),
+        'console'   => _buildConsolePage(context, isDark, bg, card, fg, muted, border),
+        'files'     => _buildFilesPage(context, isDark, bg, card, fg, muted, border),
+        'shell'     => _buildShellPage(context, isDark, bg, card, fg, muted, border),
+        'workflows' => _buildWorkflowsPage(context, isDark, bg, card, fg, muted, border),
+        _           => _buildToolsList(context, isDark, bg, card, fg, muted, border),
+      },
     );
   }
 
@@ -1233,7 +1310,13 @@ class _AgentSettingsState extends State<AgentSettings>
 
     // Tools displayed in the list
     final toolItems = [
-      _ToolItem(icon: Broken.setting_2, color: const Color(0xff888888), name: 'Settings', desc: 'Providers IA, mémoire, apparence', onTap: () => setState(() => _showToolsSettings = true)),
+      _ToolItem(icon: Broken.lock,          color: const Color(0xff888888), name: 'Secrets',       desc: 'API keys et variables d\'environnement',      onTap: () => setState(() => _activePage = 'secrets')),
+      _ToolItem(icon: Broken.star_1,        color: const Color(0xff8b5cf6), name: 'Agent Skills',  desc: 'Compétences et instructions réutilisables',    onTap: () => setState(() => _activePage = 'skills')),
+      _ToolItem(icon: Broken.monitor,       color: const Color(0xff4caf7d), name: 'Console',       desc: 'Résultats et logs d\'exécution',               onTap: () => setState(() => _activePage = 'console')),
+      _ToolItem(icon: Broken.folder_2,      color: _kAccent,               name: 'Files',          desc: 'Navigateur de fichiers du projet',             onTap: () => setState(() => _activePage = 'files')),
+      _ToolItem(icon: Broken.code_1,        color: const Color(0xffff9500), name: 'Shell',          desc: 'Terminal bash du projet',                      onTap: () => setState(() => _activePage = 'shell')),
+      _ToolItem(icon: Broken.play_circle,   color: const Color(0xff00c9b1), name: 'Workflows',     desc: 'Configurer et lancer l\'application',           onTap: () => setState(() => _activePage = 'workflows')),
+      _ToolItem(icon: Broken.setting_2,     color: const Color(0xff888888), name: 'Settings',      desc: 'Providers IA, mémoire, apparence',             onTap: () => setState(() => _activePage = 'settings')),
     ];
 
     // Tool specs from catalog
@@ -1371,7 +1454,7 @@ class _AgentSettingsState extends State<AgentSettings>
               Row(children: [
                 IconButton(
                   icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
-                  onPressed: () => setState(() => _showToolsSettings = false),
+                  onPressed: () => setState(() => _activePage = null),
                   tooltip: 'Retour',
                 ),
                 Text('Settings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
@@ -1712,6 +1795,602 @@ class _AgentSettingsState extends State<AgentSettings>
     );
   }
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAGE — Secrets
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildSecretsPage(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final hdrBg = isDark ? const Color(0xff252526) : const Color(0xffececec);
+    final filtered = _secrets.where((s) {
+      final q = _secretFilterCtrl.text.trim().toLowerCase();
+      return q.isEmpty || (s['name'] ?? '').toLowerCase().contains(q);
+    }).toList();
+
+    return Column(children: [
+      // ── Header ─────────────────────────────────────────────────────────
+      Container(
+        color: hdrBg,
+        child: Row(children: [
+          IconButton(
+            icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
+            onPressed: () => setState(() => _activePage = null),
+            tooltip: 'Retour',
+          ),
+          Text('Secrets', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+          const Spacer(),
+          IconButton(icon: Icon(Broken.more, size: 18, color: muted), onPressed: () {}),
+          IconButton(icon: Icon(Broken.link, size: 18, color: muted), onPressed: () {}),
+          GestureDetector(
+            onTap: () => _showAddSecretDialog(context, isDark, bg, card, fg, muted, border),
+            child: Container(
+              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: _kAccent,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.add, size: 14, color: Colors.white),
+                SizedBox(width: 4),
+                Text('New Secret', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+      // ── Body ───────────────────────────────────────────────────────────
+      Expanded(child: ListView(padding: const EdgeInsets.all(14), children: [
+        // Info banner
+        Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: _kAccent.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _kAccent.withOpacity(0.25)),
+          ),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Broken.info_circle, size: 16, color: _kAccent),
+            const SizedBox(width: 8),
+            Expanded(child: Text(
+              'Secrets are accessible to anyone who has access to this project. '
+              'Store sensitive API keys and tokens here — they are not committed to git.',
+              style: TextStyle(fontSize: 12, color: fg, height: 1.4),
+            )),
+          ]),
+        ),
+        // Filter
+        TextField(
+          controller: _secretFilterCtrl,
+          onChanged: (_) => setState(() {}),
+          style: TextStyle(fontSize: 13, color: fg),
+          decoration: InputDecoration(
+            hintText: 'Filter Secrets by name',
+            hintStyle: TextStyle(fontSize: 12, color: muted),
+            prefixIcon: Icon(Broken.search_normal, size: 16, color: muted),
+            filled: true,
+            fillColor: card,
+            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _kAccent)),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: border)),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 10),
+        // Secrets list
+        if (filtered.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(8), border: Border.all(color: border)),
+            child: Text('No secrets yet. Tap "+ New Secret" to add one.', style: TextStyle(fontSize: 13, color: muted)),
+          )
+        else
+          ...filtered.map((secret) => _SecretRow(
+            name: secret['name']!,
+            isDark: isDark, card: card, fg: fg, muted: muted, border: border,
+            onDelete: () { setState(() => _secrets.removeWhere((s) => s['name'] == secret['name'])); _saveSecrets(); },
+          )),
+        // Configurations section
+        const SizedBox(height: 20),
+        Row(children: [
+          Text('Configurations', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+          const Spacer(),
+          TextButton(onPressed: () {}, child: Text('More', style: TextStyle(fontSize: 12, color: muted))),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: _kAccent, borderRadius: BorderRadius.circular(6)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.add, size: 13, color: Colors.white),
+                SizedBox(width: 3),
+                Text('New configuration', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+              ]),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        Text(
+          'Configurations are similar to secrets, but for non-sensitive information. '
+          'Useful for values that differ between development and production.',
+          style: TextStyle(fontSize: 12, color: muted, height: 1.4),
+        ),
+        const SizedBox(height: 32),
+      ])),
+    ]);
+  }
+
+  void _showAddSecretDialog(BuildContext context, bool isDark, Color bg, Color card, Color fg, Color muted, Color border) {
+    final nameCtrl = TextEditingController();
+    final valueCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: card,
+        title: Text('New Secret', style: TextStyle(fontSize: 15, color: fg)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: nameCtrl,
+            style: TextStyle(fontSize: 13, color: fg),
+            decoration: InputDecoration(
+              labelText: 'Name', labelStyle: TextStyle(color: muted),
+              border: OutlineInputBorder(borderSide: BorderSide(color: border)),
+              focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: _kAccent)),
+              isDense: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: valueCtrl,
+            style: TextStyle(fontSize: 13, color: fg),
+            obscureText: true,
+            decoration: InputDecoration(
+              labelText: 'Value', labelStyle: TextStyle(color: muted),
+              border: OutlineInputBorder(borderSide: BorderSide(color: border)),
+              focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: _kAccent)),
+              isDense: true,
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text('Annuler', style: TextStyle(color: muted))),
+          TextButton(
+            onPressed: () {
+              final n = nameCtrl.text.trim(); final v = valueCtrl.text;
+              if (n.isEmpty) return;
+              setState(() { _secrets.removeWhere((s) => s['name'] == n); _secrets.add({'name': n, 'value': v}); });
+              _saveSecrets();
+              Navigator.pop(ctx);
+            },
+            child: const Text('Ajouter', style: TextStyle(color: _kAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAGE — Agent Skills
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildSkillsPage(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final hdrBg = isDark ? const Color(0xff252526) : const Color(0xffececec);
+    const purple = Color(0xff8b5cf6);
+
+    return Column(children: [
+      // Header
+      Container(
+        color: hdrBg,
+        child: Row(children: [
+          IconButton(
+            icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
+            onPressed: () => setState(() => _activePage = null),
+          ),
+          const Icon(Broken.star_1, size: 16, color: purple),
+          const SizedBox(width: 6),
+          Text('Agent Skills', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+        ]),
+      ),
+      // Title + subtitle
+      Container(
+        width: double.infinity,
+        color: bg,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Agent skills', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: fg)),
+          const SizedBox(height: 4),
+          Text('Skills extend what Agent can do. Manage installed skills here.', style: TextStyle(fontSize: 13, color: muted)),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: () {},
+            child: const Text('Learn more about skills', style: TextStyle(fontSize: 13, color: _kAccent)),
+          ),
+          const SizedBox(height: 12),
+        ]),
+      ),
+      // Tabs
+      Container(
+        color: hdrBg,
+        child: TabBar(
+          controller: _skillsTabCtrl,
+          labelColor: fg,
+          unselectedLabelColor: muted,
+          indicatorColor: fg,
+          indicatorSize: TabBarIndicatorSize.tab,
+          tabs: const [
+            Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Broken.folder_2, size: 14), SizedBox(width: 4), Text('Project', style: TextStyle(fontSize: 13))])),
+            Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Broken.people, size: 14), SizedBox(width: 4), Text('Workspace', style: TextStyle(fontSize: 13))])),
+            Tab(child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(Broken.global, size: 14), SizedBox(width: 4), Text('Community', style: TextStyle(fontSize: 13))])),
+          ],
+        ),
+      ),
+      // Tab body
+      Expanded(
+        child: TabBarView(
+          controller: _skillsTabCtrl,
+          children: [
+            // Project
+            _projectSkills.isEmpty
+              ? _buildSkillsEmptyState(fg, muted, card, border)
+              : ListView(padding: const EdgeInsets.all(12), children: _projectSkills.map((s) => _buildSkillCard(s, fg, muted, card, border)).toList()),
+            // Workspace
+            _buildSkillsEmptyState(fg, muted, card, border),
+            // Community
+            _buildSkillsEmptyState(fg, muted, card, border),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  Widget _buildSkillsEmptyState(Color fg, Color muted, Color card, Color border) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(8), border: Border.all(color: border)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('No skills installed yet', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+          const SizedBox(height: 6),
+          Text('Skills are reusable instructions that teach Agent how to perform specific tasks. Ask Agent to create a skill from a chat.', style: TextStyle(fontSize: 12, color: muted, height: 1.4)),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildSkillCard(Map<String, dynamic> skill, Color fg, Color muted, Color card, Color border) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: card, borderRadius: BorderRadius.circular(8), border: Border.all(color: border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(skill['name']?.toString() ?? '', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+        if ((skill['description'] ?? '').toString().isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(skill['description'].toString(), style: TextStyle(fontSize: 12, color: muted)),
+        ],
+      ]),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAGE — Console
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildConsolePage(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final hdrBg = isDark ? const Color(0xff252526) : const Color(0xffececec);
+
+    return Column(children: [
+      // Header
+      Container(
+        color: hdrBg,
+        child: Row(children: [
+          IconButton(
+            icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
+            onPressed: () => setState(() => _activePage = null),
+          ),
+          Icon(Broken.monitor, size: 16, color: _kSuccess),
+          const SizedBox(width: 6),
+          Text('Console', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+        ]),
+      ),
+      // Toolbar
+      Container(
+        color: hdrBg,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(children: [
+          // Workflows dropdown chip
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6), border: Border.all(color: border)),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Text('Workflows', style: TextStyle(fontSize: 12, color: fg)),
+                const SizedBox(width: 4),
+                Icon(Broken.arrow_down_2, size: 12, color: muted),
+              ]),
+            ),
+          ),
+          const Spacer(),
+          // Show only latest toggle
+          Text('Show Only Latest', style: TextStyle(fontSize: 11, color: fg)),
+          const SizedBox(width: 6),
+          Switch(
+            value: _consoleShowLatest,
+            activeColor: _kAccent,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            onChanged: (v) => setState(() => _consoleShowLatest = v),
+          ),
+          const SizedBox(width: 8),
+          // Clear past runs
+          GestureDetector(
+            onTap: () {},
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Broken.trash, size: 14, color: muted),
+              const SizedBox(width: 4),
+              Text('Clear Past Runs', style: TextStyle(fontSize: 11, color: muted)),
+            ]),
+          ),
+        ]),
+      ),
+      const Divider(height: 1),
+      // Body
+      Expanded(child: ListView(padding: const EdgeInsets.all(14), children: [
+        // Empty state hint
+        Text('Results of your code will appear here when you run', style: TextStyle(fontSize: 13, color: muted)),
+        const SizedBox(height: 16),
+        // Default section
+        Text('Default', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => setState(() => _activePage = 'workflows'),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(color: _kSuccess, borderRadius: BorderRadius.circular(6)),
+            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.play_arrow, size: 16, color: Colors.white),
+              SizedBox(width: 6),
+              Text('Configure your app', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white)),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Divider(color: border),
+        const SizedBox(height: 8),
+        // Workflows row
+        Row(children: [
+          Text('Workflows', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: fg)),
+          const SizedBox(width: 6),
+          GestureDetector(
+            onTap: () => setState(() => _activePage = 'workflows'),
+            child: Icon(Broken.setting_2, size: 14, color: muted),
+          ),
+        ]),
+        const SizedBox(height: 32),
+      ])),
+    ]);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAGE — Files
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildFilesPage(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final hdrBg = isDark ? const Color(0xff252526) : const Color(0xffececec);
+
+    return GestureDetector(
+      onTap: () { if (_showFilesMenu) setState(() => _showFilesMenu = false); },
+      child: Column(children: [
+        // Header
+        Container(
+          color: hdrBg,
+          child: Row(children: [
+            IconButton(
+              icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
+              onPressed: () => setState(() => _activePage = null),
+            ),
+            Icon(Broken.folder_2, size: 16, color: _kAccent),
+            const SizedBox(width: 6),
+            Text('Files', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+          ]),
+        ),
+        // Search + menu
+        Container(
+          color: hdrBg,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: Row(children: [
+            Expanded(
+              child: Container(
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: border)),
+                child: Row(children: [
+                  Icon(Broken.search_normal, size: 14, color: muted),
+                  const SizedBox(width: 6),
+                  Text('Search files and code', style: TextStyle(fontSize: 12, color: muted)),
+                ]),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() => _showFilesMenu = !_showFilesMenu),
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: border)),
+                    child: Icon(Broken.more, size: 16, color: fg),
+                  ),
+                ),
+                if (_showFilesMenu)
+                  Positioned(
+                    top: 36, right: 0,
+                    child: Material(
+                      color: card, borderRadius: BorderRadius.circular(8),
+                      elevation: 6,
+                      child: Container(
+                        width: 190,
+                        decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: border)),
+                        child: Column(mainAxisSize: MainAxisSize.min, children: [
+                          _FilesMenuItem(icon: Broken.document_text, label: 'New file',           color: fg, onTap: () => setState(() => _showFilesMenu = false)),
+                          _FilesMenuItem(icon: Broken.folder_add,    label: 'New folder',         color: fg, onTap: () => setState(() => _showFilesMenu = false)),
+                          _FilesMenuItem(icon: Broken.document_upload, label: 'Upload files',    color: fg, onTap: () => setState(() => _showFilesMenu = false)),
+                          _FilesMenuItem(icon: Broken.import_1,       label: 'Download as zip',  color: fg, onTap: () => setState(() => _showFilesMenu = false)),
+                          _FilesMenuItem(icon: Broken.eye_slash,      label: 'Hide hidden files', color: fg, onTap: () => setState(() => _showFilesMenu = false)),
+                        ]),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ]),
+        ),
+        const Divider(height: 1),
+        // File tree
+        Expanded(child: ListView(padding: const EdgeInsets.fromLTRB(12, 8, 12, 8), children: [
+          Row(children: [
+            Icon(Broken.folder_2, size: 16, color: muted),
+            const SizedBox(width: 6),
+            Text('.panda', style: TextStyle(fontSize: 13, color: fg)),
+          ]),
+          const SizedBox(height: 4),
+          Row(children: [
+            Icon(Broken.folder_2, size: 16, color: muted),
+            const SizedBox(width: 6),
+            Text('.agents', style: TextStyle(fontSize: 13, color: fg)),
+          ]),
+        ])),
+      ]),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAGE — Shell
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildShellPage(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final hdrBg   = isDark ? const Color(0xff252526) : const Color(0xffececec);
+    final termBg  = isDark ? const Color(0xff0d1117) : const Color(0xff1e1e1e);
+    const prompt  = Color(0xff5090c8);
+    const termFg  = Color(0xffe0e0e0);
+
+    return Column(children: [
+      // Header
+      Container(
+        color: hdrBg,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Row(children: [
+            IconButton(
+              icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
+              onPressed: () => setState(() => _activePage = null),
+            ),
+            Icon(Broken.code_1, size: 16, color: const Color(0xffff9500)),
+            const SizedBox(width: 6),
+            Text('Shell', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+          ]),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(color: termBg, border: Border(bottom: BorderSide(color: border.withOpacity(0.5)))),
+            child: Text('~/workspace: bash', style: TextStyle(fontSize: 11, color: muted)),
+          ),
+        ]),
+      ),
+      // Terminal body
+      Expanded(
+        child: Container(
+          color: termBg,
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            RichText(text: TextSpan(children: [
+              TextSpan(text: '~/workspace', style: const TextStyle(fontSize: 13, color: prompt, fontFamily: 'monospace')),
+              const TextSpan(text: '\$ ', style: TextStyle(fontSize: 13, color: termFg, fontFamily: 'monospace')),
+            ])),
+          ]),
+        ),
+      ),
+    ]);
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // PAGE — Workflows
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWorkflowsPage(BuildContext context, bool isDark, Color bg,
+      Color card, Color fg, Color muted, Color border) {
+    final hdrBg = isDark ? const Color(0xff252526) : const Color(0xffececec);
+
+    return Column(children: [
+      // Header
+      Container(
+        color: hdrBg,
+        child: Row(children: [
+          IconButton(
+            icon: Icon(Broken.arrow_left_2, color: fg, size: 18),
+            onPressed: () => setState(() => _activePage = null),
+          ),
+          Icon(Broken.play_circle, size: 16, color: const Color(0xff00c9b1)),
+          const SizedBox(width: 6),
+          Text('Workflows', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+        ]),
+      ),
+      // Search + New Workflow
+      Container(
+        color: hdrBg,
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+        child: Row(children: [
+          Expanded(
+            child: Container(
+              height: 34,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: border)),
+              child: Row(children: [
+                Icon(Broken.search_normal, size: 14, color: muted),
+                const SizedBox(width: 6),
+                Text('Search for a workflow...', style: TextStyle(fontSize: 12, color: muted)),
+              ]),
+            ),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: () {},
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(color: _kAccent, borderRadius: BorderRadius.circular(6)),
+              child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.add, size: 14, color: Colors.white),
+                SizedBox(width: 4),
+                Text('New Workflow', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+      const Divider(height: 1),
+      // Body — no .replit file warning
+      Expanded(child: ListView(padding: const EdgeInsets.all(14), children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: _kDanger.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _kDanger.withOpacity(0.3)),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Broken.warning_2, size: 15, color: _kDanger),
+            const SizedBox(width: 6),
+            Text('Missing .replit file', style: TextStyle(fontSize: 13, color: _kDanger, fontWeight: FontWeight.w500)),
+          ]),
+        ),
+        const SizedBox(height: 32),
+      ])),
+    ]);
+  }
+
   // ── Section label ─────────────────────────────────────────────────────────
   Widget _sectionLabel(String label, Color muted) => Text(
     label,
@@ -1931,6 +2610,88 @@ class _ToolItem {
 class _ToolSpecItem {
   final AgenticToolSpec spec;
   const _ToolSpecItem({required this.spec});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Secrets page sub-widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SecretRow extends StatefulWidget {
+  final String name;
+  final bool isDark;
+  final Color card, fg, muted, border;
+  final VoidCallback onDelete;
+  const _SecretRow({
+    required this.name, required this.isDark, required this.card,
+    required this.fg, required this.muted, required this.border,
+    required this.onDelete,
+  });
+
+  @override
+  State<_SecretRow> createState() => _SecretRowState();
+}
+
+class _SecretRowState extends State<_SecretRow> {
+  bool _visible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: widget.card,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: widget.border),
+      ),
+      child: Row(children: [
+        Icon(Broken.document_copy, size: 16, color: widget.muted),
+        const SizedBox(width: 10),
+        Expanded(child: Text(widget.name, style: TextStyle(fontSize: 13, color: widget.fg, fontWeight: FontWeight.w500))),
+        const SizedBox(width: 8),
+        Icon(Broken.document_copy, size: 14, color: widget.muted),
+        const SizedBox(width: 8),
+        Text(_visible ? '(visible)' : '••••••••', style: TextStyle(fontSize: 13, color: widget.muted, fontFamily: 'monospace')),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: () => setState(() => _visible = !_visible),
+          child: Icon(_visible ? Broken.eye_slash : Broken.eye, size: 16, color: widget.muted),
+        ),
+        const SizedBox(width: 8),
+        GestureDetector(
+          onTap: widget.onDelete,
+          child: Icon(Broken.trash, size: 16, color: widget.muted),
+        ),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Files page sub-widgets
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FilesMenuItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+  const _FilesMenuItem({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+        child: Row(children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 12),
+          Text(label, style: TextStyle(fontSize: 13, color: color)),
+        ]),
+      ),
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

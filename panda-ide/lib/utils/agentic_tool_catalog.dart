@@ -13,16 +13,11 @@ class AgenticToolSpec {
 }
 
 const List<AgenticToolSpec> agenticToolSpecs = [
+  // ── Lecture de contexte ─────────────────────────────────────────────────
   AgenticToolSpec(
     name: 'activeEditorFile',
     label: 'Active editor file',
     description: 'Gets the path of the currently active editor file.',
-    requiresWriteAccess: false,
-  ),
-  AgenticToolSpec(
-    name: 'currentlySelectedText',
-    label: 'Selected text',
-    description: 'Gets the currently selected text in the active editor.',
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
@@ -32,45 +27,29 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
+    name: 'getFileInfo',
+    label: 'File info',
+    description: 'Gets metadata about a file or directory.',
+    requiresWriteAccess: false,
+  ),
+
+  // ── Lecture de fichiers ─────────────────────────────────────────────────
+  AgenticToolSpec(
     name: 'readFile',
     label: 'Read file',
     description: 'Reads the contents of a file.',
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
-    name: 'deleteFile',
-    label: 'Delete file',
-    description: 'Deletes a file from the workspace.',
-    requiresWriteAccess: true,
-  ),
-  AgenticToolSpec(
-    name: 'rename',
-    label: 'Rename path',
-    description: 'Renames or moves a file or directory path.',
-    requiresWriteAccess: true,
-  ),
-  AgenticToolSpec(
-    name: 'renamePath',
-    label: 'Rename path (alt)',
-    description: 'Renames or moves a file or directory path.',
-    requiresWriteAccess: true,
-  ),
-  AgenticToolSpec(
-    name: 'insertAtLine',
-    label: 'Insert at line',
-    description: 'Inserts text before or after a specific line.',
-    requiresWriteAccess: true,
-  ),
-  AgenticToolSpec(
-    name: 'replaceAllInFile',
-    label: 'Replace in file',
-    description: 'Replaces matching text in a file with pending diff tracking.',
-    requiresWriteAccess: true,
-  ),
-  AgenticToolSpec(
     name: 'readFilesBatch',
     label: 'Read files batch',
     description: 'Reads multiple files in one call.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'listFiles',
+    label: 'List files',
+    description: 'Lists files in a directory.',
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
@@ -85,10 +64,50 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     description: 'Searches files and returns matching lines with context.',
     requiresWriteAccess: false,
   ),
+
+  // ── Écriture de fichiers ────────────────────────────────────────────────
+  AgenticToolSpec(
+    name: 'editFile',
+    label: 'Edit file',
+    description: 'Applies a targeted diff/patch to a file (preferred for edits).',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'writeFile',
+    label: 'Write file',
+    description: 'Writes content to a file, creating it if it doesn\'t exist.',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'replaceAllInFile',
+    label: 'Replace in file',
+    description: 'Replaces matching text in a file with pending diff tracking.',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'createDirectory',
+    label: 'Create directory',
+    description: 'Creates a new directory at the given path.',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'rename',
+    label: 'Rename path',
+    description: 'Renames or moves a file or directory path.',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'deleteFile',
+    label: 'Delete file',
+    description: 'Deletes a file from the workspace.',
+    requiresWriteAccess: true,
+  ),
+
+  // ── Git ─────────────────────────────────────────────────────────────────
   AgenticToolSpec(
     name: 'gitStatus',
     label: 'Git status',
-    description: 'Returns git status details.',
+    description: 'Returns git status details including branch, ahead/behind, and changed files.',
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
@@ -104,53 +123,13 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
-    name: 'searchInFiles',
-    label: 'Search in files',
-    description: 'Searches for text across workspace files.',
-    requiresWriteAccess: false,
-  ),
-  AgenticToolSpec(
-    name: 'writeFile',
-    label: 'Write file',
-    description: 'Writes content to a file.',
+    name: 'gitCommit',
+    label: 'Git commit',
+    description: 'Stages all changes and creates a commit with the given message.',
     requiresWriteAccess: true,
   ),
-  AgenticToolSpec(
-    name: 'listFiles',
-    label: 'List files',
-    description: 'Lists files in a directory.',
-    requiresWriteAccess: false,
-  ),
-  AgenticToolSpec(
-    name: 'editFile',
-    label: 'Edit file',
-    description: 'Applies a diff or patch to a file.',
-    requiresWriteAccess: true,
-  ),
-  AgenticToolSpec(
-    name: 'getPendingEditsForFile',
-    label: 'Pending edits',
-    description: 'Gets pending agentic diff hunks for a file.',
-    requiresWriteAccess: false,
-  ),
-  AgenticToolSpec(
-    name: 'getFileInfo',
-    label: 'File info',
-    description: 'Gets metadata about a file or directory.',
-    requiresWriteAccess: false,
-  ),
-  AgenticToolSpec(
-    name: 'openLinks',
-    label: 'Open links',
-    description: 'Opens links in the workspace context.',
-    requiresWriteAccess: false,
-  ),
-  AgenticToolSpec(
-    name: 'searchInWeb',
-    label: 'Search in web',
-    description: 'Searches the web for relevant information.',
-    requiresWriteAccess: false,
-  ),
+
+  // ── Exécution ───────────────────────────────────────────────────────────
   AgenticToolSpec(
     name: 'runShellCommand',
     label: 'Run terminal command',
@@ -158,10 +137,50 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     requiresWriteAccess: true,
   ),
   AgenticToolSpec(
+    name: 'runTests',
+    label: 'Run tests',
+    description: 'Runs the project test suite and returns results.',
+    requiresWriteAccess: true,
+  ),
+
+  // ── Web ─────────────────────────────────────────────────────────────────
+  AgenticToolSpec(
+    name: 'searchInWeb',
+    label: 'Search in web',
+    description: 'Searches the web using DuckDuckGo and returns results.',
+    requiresWriteAccess: false,
+  ),
+
+  // ── Agent ───────────────────────────────────────────────────────────────
+  AgenticToolSpec(
     name: 'updateProjectMemory',
     label: 'Update project memory',
     description: 'Writes or updates .panda/memory.md — persistent project notes injected at the start of every conversation.',
     requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'loadRules',
+    label: 'Load rules',
+    description: 'Reads and injects project rules from .panda/rules.md into the agent context.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'askFollowUpQuestion',
+    label: 'Ask follow-up question',
+    description: 'Asks the user a precise clarifying question before acting on an ambiguous task.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'attemptCompletion',
+    label: 'Attempt completion',
+    description: 'Signals the end of a task with a result summary. Never ends with a question.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'getPendingEditsForFile',
+    label: 'Pending edits',
+    description: 'Gets pending agentic diff hunks for a file.',
+    requiresWriteAccess: false,
   ),
 ];
 
