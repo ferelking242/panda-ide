@@ -360,6 +360,7 @@ jobs:
     if: always()
     needs: [build-android, build-ios, publish]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Send ntfy notification
         if: always()
@@ -386,7 +387,7 @@ jobs:
             tags="warning,rotating_light"
             message="Android=${ANDROID_RESULT}, iOS=${IOS_RESULT}, release=${RELEASE_RESULT}. Commit ${SHA:0:7}"
           fi
-          curl --fail-with-body --retry 3 \
+          curl --fail-with-body --retry 3 --max-time 30 \
             -H "Title: $title" \
             -H "Priority: $priority" \
             -H "Tags: $tags" \

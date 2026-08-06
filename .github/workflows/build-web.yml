@@ -60,6 +60,8 @@ jobs:
           flutter build web \
             --release \
             --no-tree-shake-icons \
+            --no-source-maps \
+            --dart2js-optimization O4 \
             --base-href "/panda-ide/"
 
       - name: Setup Pages
@@ -76,6 +78,7 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -84,3 +87,5 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          timeout: 1800000
