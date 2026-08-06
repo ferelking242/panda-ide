@@ -23,9 +23,32 @@ class AgenticTools {
   static List<AgenticToolSpec> get toolSpecs => agenticToolSpecs;
 
   AgenticTools({required this.workspacePath, required this.context})
-    : _activeEditor = context.read<ActiveEditorBloc>().state.activeEditors.where((editor) => editor.isActive).firstOrNull;
+    : _activeEditor = _readActiveEditor(context);
 
   final ActiveEditor? _activeEditor;
+
+  static ActiveEditor? _readActiveEditor(BuildContext context) {
+    try {
+      return context
+          .read<ActiveEditorBloc>()
+          .state
+          .activeEditors
+          .where((editor) => editor.isActive)
+          .firstOrNull;
+    } catch (_) {
+      // Panda Agent is rendered beside the editor, not inside its local
+      // ActiveEditorBloc scope. A missing editor must not abort the chat run.
+      return null;
+    }
+  }
+
+  List<ActiveEditor> _readActiveEditors() {
+    try {
+      return context.read<ActiveEditorBloc>().state.activeEditors;
+    } catch (_) {
+      return <ActiveEditor>[];
+    }
+  }
 
   String _canonicalWorkspacePath() => Directory(workspacePath).absolute.path;
 
@@ -39,7 +62,12 @@ class AgenticTools {
   List<Map<String, dynamic>> _applyToolSelectionFilter(
     List<Map<String, dynamic>> tools,
   ) {
-    final selections = context.read<AIChatUIBloc>().state.agenticToolSelections;
+    Map<String, bool> selections = const <String, bool>{};
+    try {
+      selections = context.read<AIChatUIBloc>().state.agenticToolSelections;
+    } catch (_) {
+      // Keep all catalog tools enabled when the optional UI bloc is absent.
+    }
     return filterAgenticToolsBySelection(tools, selections);
   }
 
@@ -65,7 +93,7 @@ class AgenticTools {
   }
 
   bool _hasLspDiagnosticsAvailability() {
-    final editors = context.read<ActiveEditorBloc>().state.activeEditors;
+    final editors = _readActiveEditors();
     return editors.any((editor) => editor.controller.lspConfig != null);
   }
 
@@ -73,7 +101,7 @@ class AgenticTools {
     String? filePath,
   ]) async {
     try {
-      final editors = context.read<ActiveEditorBloc>().state.activeEditors;
+      final editors = _readActiveEditors();
       final lspEditors = editors
           .where((editor) => editor.controller.lspConfig != null)
           .toList();
