@@ -98,6 +98,7 @@ class _SelectTypeState extends State<SelectType>
   int  _sidebarState     = 1;
   bool _rightPanelOpen   = false;
   bool _bottomPanelOpen  = false;
+  bool _terminalFullscreen = false;
   int  _bottomPanelTab   = 0; // 0=Terminal 1=Problems 2=Output 3=Debug
 
   // Problems panel state
@@ -829,6 +830,7 @@ class _SelectTypeState extends State<SelectType>
                               Column(
                                 children: [
                                   // ── Editor area ──────────────────────────────
+                                  if (!(_bottomPanelOpen && _terminalFullscreen))
                                   Expanded(
                                     child: ClipSmoothRect(
                                       radius: _sidebarState >= 1
@@ -836,13 +838,9 @@ class _SelectTypeState extends State<SelectType>
                                               topLeft: SmoothRadius(
                                                   cornerRadius: 22,
                                                   cornerSmoothing: 0.6),
-                                              bottomLeft: _bottomPanelOpen
-                                                  ? const SmoothRadius(
-                                                      cornerRadius: 0,
-                                                      cornerSmoothing: 0)
-                                                  : SmoothRadius(
-                                                      cornerRadius: 22,
-                                                      cornerSmoothing: 0.6))
+                                              bottomLeft: SmoothRadius(
+                                                  cornerRadius: 22,
+                                                  cornerSmoothing: 0.6))
                                           : SmoothBorderRadius.zero,
                                       child: Container(
                                       color: appTheme.scaffoldBg,
@@ -908,7 +906,9 @@ class _SelectTypeState extends State<SelectType>
                                   ),
                                   // ── Bottom panel — stays right of activity bar ──
                                   if (_bottomPanelOpen)
-                                    _buildBottomPanel(),
+                                    _terminalFullscreen
+                                        ? Expanded(child: _buildBottomPanel(fullscreen: true))
+                                        : _buildBottomPanel(),
                                 ],
                               ),
 
@@ -916,8 +916,8 @@ class _SelectTypeState extends State<SelectType>
                               if (_sidebarState == 2)
                                 Positioned(
                                   left: 0,
-                                  top: 0,
-                                  bottom: 0,
+                                  top: 35,
+                                  bottom: 22,
                                   child: Material(
                                     elevation: 6,
                                     shadowColor: Colors.black45,
@@ -2708,7 +2708,7 @@ class _SelectTypeState extends State<SelectType>
       }
 
       // ── Bottom panel (terminal / problems / output / debug) ──────────────────
-      Widget _buildBottomPanel() {
+      Widget _buildBottomPanel({bool fullscreen = false}) {
         return BlocBuilder<AppThemeBloc, AppThemeState>(
           builder: (context, ts) {
             final isDark = ts.appTheme.isDark;
@@ -2719,7 +2719,7 @@ class _SelectTypeState extends State<SelectType>
             final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
             return Container(
-              height: 220,
+              height: fullscreen ? null : 220,
               decoration: BoxDecoration(
                   border: Border(top: BorderSide(color: border))),
               child: Column(children: [
@@ -2754,8 +2754,45 @@ class _SelectTypeState extends State<SelectType>
                       );
                     }),
                     const Spacer(),
+                    // ── Terminal 3-dot menu ──────────────────────────────────
+                    if (_bottomPanelTab == 0)
+                      PopupMenuButton<String>(
+                        tooltip: 'More Actions',
+                        padding: EdgeInsets.zero,
+                        icon: Icon(Icons.more_vert, size: 14, color: fg),
+                        iconSize: 14,
+                        constraints: const BoxConstraints(
+                          minWidth: 28, minHeight: 28),
+                        itemBuilder: (_) => [
+                          PopupMenuItem<String>(
+                            value: 'fullscreen',
+                            height: 32,
+                            child: Row(children: [
+                              Icon(
+                                _terminalFullscreen
+                                    ? Icons.fullscreen_exit
+                                    : Icons.fullscreen,
+                                size: 15, color: fg),
+                              const SizedBox(width: 8),
+                              Text(
+                                _terminalFullscreen
+                                    ? 'Quitter le plein écran'
+                                    : 'Plein écran',
+                                style: TextStyle(fontSize: 13, color: fg)),
+                            ]),
+                          ),
+                        ],
+                        onSelected: (v) {
+                          if (v == 'fullscreen') {
+                            setState(() => _terminalFullscreen = !_terminalFullscreen);
+                          }
+                        },
+                      ),
                     InkWell(
-                      onTap: () => setState(() => _bottomPanelOpen = false),
+                      onTap: () => setState(() {
+                        _bottomPanelOpen = false;
+                        _terminalFullscreen = false;
+                      }),
                       borderRadius: BorderRadius.circular(4),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
