@@ -1110,135 +1110,162 @@ class _AgentSettingsState extends State<AgentSettings>
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Container(
-                  margin: const EdgeInsets.only(top: 4, bottom: 2),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  constraints: const BoxConstraints(maxWidth: 280),
+                  margin: const EdgeInsets.only(top: 6, bottom: 2, left: 48),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: _kAccent.withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(8),
+                    color: _kAccent,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(4),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _kAccent.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                  child: Text(text, style: const TextStyle(fontSize: 13, color: Colors.white)),
+                  child: Text(
+                    text,
+                    style: const TextStyle(fontSize: 13.5, color: Colors.white, height: 1.45),
+                  ),
                 ),
-                _ChatActionBtn(
-                  icon: Broken.copy,
-                  label: 'Copier',
-                  muted: muted,
-                  onTap: () {
-                    Clipboard.setData(ClipboardData(text: text));
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text('Copié !', style: TextStyle(fontSize: 12)),
-                      duration: Duration(seconds: 1),
-                    ));
-                  },
+                Padding(
+                  padding: const EdgeInsets.only(right: 2, bottom: 6),
+                  child: _ChatActionBtn(
+                    icon: Broken.copy,
+                    label: 'Copier',
+                    muted: muted,
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: text));
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Copié !', style: TextStyle(fontSize: 12)),
+                        duration: Duration(seconds: 1),
+                      ));
+                    },
+                  ),
                 ),
-                const SizedBox(height: 4),
               ],
             ),
           );
         }
 
-        // Agent message
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            constraints: const BoxConstraints(maxWidth: 320),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Phase chip
-                if (isStreaming) ...[
-                  if (think.isNotEmpty) _ChatPhaseChip(label: '🤔 Réflexion…', isDark: isDark),
-                  if (think.isEmpty) _ChatPhaseChip(label: '✍️ Génération…', isDark: isDark),
-                  const SizedBox(height: 4),
-                ],
+        // ── Agent message — no bubble, plain text, full width ──────────────
+        return Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Streaming dots — only when nothing visible yet
+              if (isStreaming && think.isEmpty && text.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    _DotsIndicator(color: muted),
+                    const SizedBox(width: 6),
+                    Text('Génération…',
+                        style: TextStyle(fontSize: 11, color: muted, fontStyle: FontStyle.italic)),
+                  ]),
+                ),
 
-                // Thinking block
-                if (think.isNotEmpty)
-                  _ChatThinkingBlock(thinking: think, isDark: isDark, fg: fg, muted: muted),
+              // Thinking block — collapsible with brain icon
+              if (think.isNotEmpty)
+                _ChatThinkingBlock(
+                  thinking: think,
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                  isStreaming: isStreaming && text.isEmpty,
+                ),
 
-                // Tool calls
-                ...() {
-                  final calls = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-                  return calls.map((call) => _ChatToolCallBlock(
-                    toolName: call['name'] as String? ?? '',
-                    status: call['status'] as String? ?? 'running',
-                    result: call['result'] as String?,
-                    isDark: isDark, fg: fg, muted: muted,
-                  ));
-                }(),
+              // Tool calls — icon + label + expandable result
+              ...() {
+                final calls = (msg['toolCalls'] as List?)
+                        ?.cast<Map<String, dynamic>>() ??
+                    [];
+                return calls.map((call) => _ChatToolCallBlock(
+                      toolName: call['name'] as String? ?? '',
+                      status: call['status'] as String? ?? 'running',
+                      result: call['result'] as String?,
+                      args: (call['args'] as Map?)
+                          ?.cast<String, dynamic>(),
+                      isDark: isDark,
+                      fg: fg,
+                      muted: muted,
+                    ));
+              }(),
 
-                // Response bubble
-                if (text.isNotEmpty || isStreaming)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isError
-                          ? Colors.red.withOpacity(isDark ? 0.2 : 0.1)
-                          : isDark ? const Color(0xff2d2d2d) : const Color(0xffe8e8e8),
-                      borderRadius: BorderRadius.circular(8),
-                      border: isError ? Border.all(color: Colors.red.withOpacity(0.4)) : null,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            text.isEmpty && isStreaming ? ' ' : text,
-                            style: TextStyle(fontSize: 13, color: isError ? Colors.red[400] : fg),
+              // Response text — NO bubble, plain
+              if (text.isNotEmpty || (isStreaming && think.isEmpty))
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          text,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: isError ? _kDanger : fg,
+                            height: 1.55,
                           ),
                         ),
-                        if (isStreaming) ...[
-                          const SizedBox(width: 2),
-                          _ChatBlinkingCursor(color: fg),
-                        ],
+                      ),
+                      if (isStreaming && text.isNotEmpty) ...[
+                        const SizedBox(width: 3),
+                        _ChatBlinkingCursor(color: fg),
                       ],
-                    ),
+                    ],
                   ),
+                ),
 
-                // Action row
-                if (!isStreaming && (text.isNotEmpty || isError))
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (text.isNotEmpty)
-                          _ChatActionBtn(
-                            icon: Broken.copy,
-                            label: 'Copier',
-                            muted: muted,
-                            onTap: () {
-                              Clipboard.setData(ClipboardData(text: text));
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                                content: Text('Copié !', style: TextStyle(fontSize: 12)),
-                                duration: Duration(seconds: 1),
-                              ));
-                            },
-                          ),
-                        if (i > 0 && _chatMessages[i - 1]['role'] == 'user')
-                          _ChatActionBtn(
-                            icon: Broken.refresh,
-                            label: 'Réessayer',
-                            muted: muted,
-                            onTap: () {
-                              if (_chatGenerating) return;
-                              final userText = _chatMessages[i - 1]['text'] as String? ?? '';
-                              if (userText.isEmpty) return;
-                              setState(() {
-                                if (i < _chatMessages.length) _chatMessages.removeAt(i);
-                                if ((i - 1) < _chatMessages.length) _chatMessages.removeAt(i - 1);
-                                _chatInputCtrl.text = userText;
-                              });
-                              _chatSend();
-                            },
-                          ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
+              // Action row (copy + retry)
+              if (!isStreaming && (text.isNotEmpty || isError))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    if (text.isNotEmpty)
+                      _ChatActionBtn(
+                        icon: Broken.copy,
+                        label: 'Copier',
+                        muted: muted,
+                        onTap: () {
+                          Clipboard.setData(ClipboardData(text: text));
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                            content:
+                                Text('Copié !', style: TextStyle(fontSize: 12)),
+                            duration: Duration(seconds: 1),
+                          ));
+                        },
+                      ),
+                    if (i > 0 && _chatMessages[i - 1]['role'] == 'user')
+                      _ChatActionBtn(
+                        icon: Broken.refresh,
+                        label: 'Réessayer',
+                        muted: muted,
+                        onTap: () {
+                          if (_chatGenerating) return;
+                          final userText =
+                              _chatMessages[i - 1]['text'] as String? ?? '';
+                          if (userText.isEmpty) return;
+                          setState(() {
+                            if (i < _chatMessages.length)
+                              _chatMessages.removeAt(i);
+                            if ((i - 1) < _chatMessages.length)
+                              _chatMessages.removeAt(i - 1);
+                            _chatInputCtrl.text = userText;
+                          });
+                          _chatSend();
+                        },
+                      ),
+                  ]),
+                ),
+            ],
           ),
         );
       },
@@ -2195,100 +2222,411 @@ class _ChatPhaseChip extends StatelessWidget {
   );
 }
 
+// ─── DotsIndicator — 3 points animés (thinking / loading) ───────────────────
+
+class _DotsIndicator extends StatefulWidget {
+  final Color color;
+  final double size;
+  const _DotsIndicator({required this.color, this.size = 4.0});
+  @override
+  State<_DotsIndicator> createState() => _DotsIndicatorState();
+}
+
+class _DotsIndicatorState extends State<_DotsIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: widget.size * 3 + 8,
+      height: widget.size * 2,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, __) {
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(3, (i) {
+              // chaque point bounce avec un décalage de phase
+              final phase = ((_ctrl.value * 3) - i).clamp(0.0, 1.0);
+              final bounce = Curves.easeInOut.transform(
+                (phase < 0.5 ? phase * 2 : (1 - phase) * 2).clamp(0.0, 1.0),
+              );
+              return Transform.translate(
+                offset: Offset(0, -bounce * widget.size * 0.9),
+                child: Container(
+                  width: widget.size,
+                  height: widget.size,
+                  decoration: BoxDecoration(
+                    color: widget.color.withOpacity(0.4 + bounce * 0.6),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              );
+            }),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Thinking block — collapsible avec icône cerveau ────────────────────────
+
 class _ChatThinkingBlock extends StatefulWidget {
   final String thinking;
   final bool isDark;
+  final bool isStreaming;   // true = le modèle pense encore
   final Color fg, muted;
-  const _ChatThinkingBlock({required this.thinking, required this.isDark, required this.fg, required this.muted});
+  const _ChatThinkingBlock({
+    required this.thinking,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    this.isStreaming = false,
+  });
   @override
   State<_ChatThinkingBlock> createState() => _ChatThinkingBlockState();
 }
 
-class _ChatThinkingBlockState extends State<_ChatThinkingBlock> {
+class _ChatThinkingBlockState extends State<_ChatThinkingBlock>
+    with SingleTickerProviderStateMixin {
   bool _expanded = false;
+  late AnimationController _pulse;
+  late Animation<double> _pulseAnim;
+
+  static const _kThinkPurple = Color(0xff9b7de8);
+  static const _kThinkBorder = Color(0xff7c5cbf);
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 950),
+    );
+    _pulseAnim = Tween<double>(begin: 0.45, end: 1.0).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+    if (widget.isStreaming) _pulse.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_ChatThinkingBlock old) {
+    super.didUpdateWidget(old);
+    if (widget.isStreaming && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!widget.isStreaming && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bg = _kThinkBorder.withOpacity(widget.isDark ? 0.08 : 0.05);
+    final border = _kThinkBorder.withOpacity(0.3);
+    final charCount = widget.thinking.length;
+    final hint = charCount > 0
+        ? '${(charCount / 1000).toStringAsFixed(1)}k'
+        : '';
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: _kAccent.withOpacity(widget.isDark ? 0.06 : 0.04),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _kAccent.withOpacity(0.15)),
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Row(children: [
-                Icon(Broken.cpu_setting, size: 12, color: _kAccent),
-                const SizedBox(width: 6),
-                Text('Réflexion', style: TextStyle(fontSize: 11, color: _kAccent, fontWeight: FontWeight.w500)),
-                const Spacer(),
-                Icon(_expanded ? Broken.arrow_up_2 : Broken.arrow_down_2, size: 12, color: _kAccent),
-              ]),
+          // ── Header ──────────────────────────────────────────────────────────
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                child: Row(children: [
+                  // Cerveau animé
+                  FadeTransition(
+                    opacity: widget.isStreaming ? _pulseAnim : const AlwaysStoppedAnimation(1.0),
+                    child: const Text('🧠', style: TextStyle(fontSize: 15)),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    widget.isStreaming ? 'Réflexion en cours…' : 'Réflexion interne',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: _kThinkPurple,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (hint.isNotEmpty) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: _kThinkBorder.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(hint,
+                          style: TextStyle(fontSize: 9.5, color: widget.muted)),
+                    ),
+                  ],
+                  const Spacer(),
+                  if (widget.isStreaming)
+                    _DotsIndicator(color: _kThinkPurple.withOpacity(0.7))
+                  else
+                    Icon(
+                      _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                      size: 13,
+                      color: _kThinkPurple,
+                    ),
+                ]),
+              ),
             ),
           ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-              child: Text(widget.thinking, style: TextStyle(fontSize: 11, color: widget.muted, height: 1.4, fontFamily: 'monospace')),
-            ),
+          // ── Contenu déplié ──────────────────────────────────────────────────
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            child: _expanded && widget.thinking.isNotEmpty
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Divider(height: 1, color: border),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                        child: SelectableText(
+                          widget.thinking,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: widget.muted,
+                            height: 1.6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
     );
   }
 }
 
+// ─── Tool call block — icône par type, résultat expandable ──────────────────
+
 class _ChatToolCallBlock extends StatefulWidget {
   final String toolName, status;
   final String? result;
+  final Map<String, dynamic>? args;
   final bool isDark;
   final Color fg, muted;
-  const _ChatToolCallBlock({required this.toolName, required this.status, this.result, required this.isDark, required this.fg, required this.muted});
+  const _ChatToolCallBlock({
+    required this.toolName,
+    required this.status,
+    this.result,
+    this.args,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
   @override
   State<_ChatToolCallBlock> createState() => _ChatToolCallBlockState();
 }
 
 class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
   bool _expanded = false;
+
+  // ── Icône selon le nom de l'outil ─────────────────────────────────────────
+  IconData _iconFor(String name) {
+    if (name == 'runShellCommand') return Broken.code_1;
+    if (name.startsWith('write') || name.startsWith('edit') ||
+        name.startsWith('replace') || name.startsWith('insert')) return Broken.edit;
+    if (name.startsWith('read')) return Broken.document_1;
+    if (name.startsWith('delete')) return Broken.trash;
+    if (name.startsWith('list') || name.startsWith('glob')) return Broken.folder_2;
+    if (name.startsWith('grep') || name.startsWith('search')) return Broken.search_normal;
+    if (name.startsWith('git')) return Broken.hierarchy_2;
+    if (name.startsWith('searchInWeb') || name.startsWith('openLinks')) return Broken.global_search;
+    if (name.startsWith('updateProject') || name.startsWith('memory')) return Broken.note_2;
+    if (name.startsWith('getLsp') || name.startsWith('diagnostic')) return Broken.warning_2;
+    if (name.startsWith('rename') || name.startsWith('move')) return Broken.document_text;
+    if (name.startsWith('getFile') || name.startsWith('info')) return Broken.info_circle;
+    if (name.startsWith('activeEditor') || name.startsWith('currentlySelected')) return Broken.code_circle;
+    return Broken.cpu_setting;
+  }
+
+  // ── Label lisible (camelCase → "Camel case") ──────────────────────────────
+  String _labelFor(String name) {
+    if (name.isEmpty) return name;
+    final spaced = name.replaceAllMapped(
+      RegExp(r'([A-Z])'),
+      (m) => ' ${m.group(1)!.toLowerCase()}',
+    );
+    return spaced[0].toUpperCase() + spaced.substring(1);
+  }
+
+  // ── Résumé court des args ─────────────────────────────────────────────────
+  String? _argsSummary(Map<String, dynamic>? args) {
+    if (args == null || args.isEmpty) return null;
+    final first = args.values.first;
+    if (first is String) {
+      final trimmed = first.replaceAll('\n', ' ').trim();
+      return trimmed.length > 55 ? '${trimmed.substring(0, 55)}…' : trimmed;
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isRunning = widget.status == 'running';
-    final color = isRunning ? const Color(0xfff97316) : _kSuccess;
+    const runColor = Color(0xfff97316);
+    final border = widget.isDark ? const Color(0xff2a2a3a) : const Color(0xffe0e0e0);
+    final cardBg = widget.isDark ? const Color(0xff1a1a2a) : const Color(0xfff4f4f8);
+    final hasResult = (widget.result ?? '').isNotEmpty;
+    final icon = _iconFor(widget.toolName);
+    final label = _labelFor(widget.toolName);
+    final argHint = _argsSummary(widget.args);
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
+      margin: const EdgeInsets.only(bottom: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.2)),
+        color: isRunning ? runColor.withOpacity(0.06) : cardBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isRunning ? runColor.withOpacity(0.4) : border,
+        ),
       ),
-      child: InkWell(
-        onTap: widget.result != null ? () => setState(() => _expanded = !_expanded) : null,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                if (isRunning) SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5, color: color))
-                else Icon(Broken.tick_circle, size: 11, color: color),
-                const SizedBox(width: 6),
-                Expanded(child: Text(widget.toolName, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500))),
-                if (widget.result != null)
-                  Icon(_expanded ? Broken.arrow_up_2 : Broken.arrow_down_2, size: 11, color: widget.muted),
-              ]),
-              if (_expanded && widget.result != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(widget.result!.substring(0, widget.result!.length.clamp(0, 500)),
-                      style: TextStyle(fontSize: 10, color: widget.muted, fontFamily: 'monospace', height: 1.4)),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: hasResult ? () => setState(() => _expanded = !_expanded) : null,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header row ─────────────────────────────────────────────
+                Row(children: [
+                  // Status badge
+                  if (isRunning)
+                    _DotsIndicator(color: runColor, size: 3.5)
+                  else
+                    Icon(Broken.tick_circle, size: 13, color: _kSuccess),
+                  const SizedBox(width: 7),
+                  // Tool icon
+                  Icon(icon, size: 13,
+                      color: isRunning
+                          ? runColor.withOpacity(0.85)
+                          : widget.fg.withOpacity(0.6)),
+                  const SizedBox(width: 6),
+                  // Label + arg hint
+                  Expanded(
+                    child: RichText(
+                      text: TextSpan(
+                        text: label,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isRunning ? runColor : widget.fg,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        children: argHint != null
+                            ? [
+                                TextSpan(
+                                  text: '  $argHint',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w400,
+                                    color: widget.muted,
+                                    fontSize: 11,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                )
+                              ]
+                            : null,
+                      ),
+                    ),
+                  ),
+                  if (hasResult)
+                    Icon(
+                      _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                      size: 12,
+                      color: widget.muted,
+                    ),
+                ]),
+
+                // ── Résultat déplié ────────────────────────────────────────
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 190),
+                  curve: Curves.easeOut,
+                  child: _expanded && hasResult
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Divider(height: 1, color: border),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(9),
+                                decoration: BoxDecoration(
+                                  color: widget.isDark
+                                      ? const Color(0xff0d1117)
+                                      : const Color(0xfff6f8fa),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: SelectableText(
+                                  () {
+                                    final r = widget.result!;
+                                    const limit = 900;
+                                    if (r.length > limit) {
+                                      return '${r.substring(0, limit)}\n… [${r.length - limit} chars tronqués]';
+                                    }
+                                    return r;
+                                  }(),
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    color: widget.muted,
+                                    fontFamily: 'monospace',
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
