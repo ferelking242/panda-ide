@@ -196,6 +196,12 @@ class _SelectTypeState extends State<SelectType>
   List<File> _sidebarSearchResults = [];
   bool _sidebarSearching = false;
 
+  // ── Workspace persistence (survives tab switches) ──────────────────
+  // Set when any project/folder is opened; cleared only when the user
+  // explicitly closes the workspace from the menu.
+  String? _currentWorkspaceDir;
+  String? _currentWorkspaceName;
+
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
   void initState() {
@@ -1189,19 +1195,26 @@ class _SelectTypeState extends State<SelectType>
                   icon: Icons.call_split_rounded,
                   label: branch,
                   fg: fg,
-                  onTap: () {},
+                  onTap: () => _showBranchPicker(ctx, isDark, appTheme,
+                      repoState as RepoStatusLoaded),
                 )
               else
-                // VSCode-style "><" remote / open button
+                // Folder icon → opens workspace menu when no project / no git
                 Builder(builder: (bCtx) => InkWell(
                   onTap: () => _showWorkspaceMenu(bCtx, isDark, appTheme),
                   borderRadius: BorderRadius.circular(3),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.chevron_right, size: 13, color: fg),
-                      Icon(Icons.chevron_left, size: 13, color: fg),
-                    ]),
+                    child: _currentWorkspaceDir != null
+                        ? Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Icons.folder_open_outlined, size: 13, color: fg),
+                            const SizedBox(width: 4),
+                            Text(
+                              _currentWorkspaceName ?? '',
+                              style: TextStyle(fontSize: 11, color: fg),
+                            ),
+                          ])
+                        : Icon(Icons.folder_outlined, size: 13, color: fg),
                   ),
                 )),
 
@@ -1312,6 +1325,9 @@ class _SelectTypeState extends State<SelectType>
   }
 
   String? _activeProjectDir() {
+    // Persisted workspace takes priority — stays set across tab switches.
+    if (_currentWorkspaceDir != null) return _currentWorkspaceDir;
+    // Fallback: check if the current active tab is itself a project tab.
     final cfg = _activeEditorConfig();
     return (cfg != null && cfg.isProject) ? cfg.rootDir : null;
   }
@@ -1360,6 +1376,18 @@ class _SelectTypeState extends State<SelectType>
       // Make sure the sidebar collapses so the editor gets full width.
       if (_sidebarState == 2) _sidebarState = 1;
       _activeRail = 0;
+
+      // Persist the workspace: stays active even when switching tabs.
+      if (isProject) {
+        _currentWorkspaceDir  = rootDir;
+        _currentWorkspaceName = path.basename(rootDir);
+        // Refresh the global RepoStatusBloc for the new workspace.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            context.read<RepoStatusBloc>().add(LoadRepoStatus(rootDir));
+          }
+        });
+      }
     });
   }
 
@@ -1923,7 +1951,9 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Git panel ─────────────────────────────────────────────────────────────
   Widget _sidebarGit(BuildContext ctx, AppTheme t, bool dark) {
-    final activeDir = _activeProjectDir();
+    // Use the persisted workspace so the git panel stays populated even when
+    // the user switches to Welcome, Agent, or any other non-project tab.
+    final activeDir = _currentWorkspaceDir ?? _activeProjectDir();
     if (activeDir == null) {
       // No project open → keep the source-control entry points available.
       return _gitEntryPoints(ctx, t, dark);
@@ -1936,6 +1966,7 @@ class _SelectTypeState extends State<SelectType>
       children: [
         Expanded(
           child: SourceControl(
+            key: ValueKey(activeDir),   // re-mount when workspace changes
             appTheme: t,
             workSpace: activeDir,
             isRepoThere: isGitRepo,
@@ -2612,10 +2643,13 @@ class _SelectTypeState extends State<SelectType>
                             const SizedBox(width: 5),
                             Flexible(
                               child: Text(
-                                'Espace de travail',
+                                _currentWorkspaceName ?? 'Espace de travail',
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     fontSize: 12,
+                                    fontWeight: _currentWorkspaceName != null
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
                                     color: isDark
                                         ? Colors.grey[300]!
                                         : Colors.grey[700]!),
@@ -2771,6 +2805,32 @@ class _SelectTypeState extends State<SelectType>
           color: bg,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           items: [
+            // ── Current workspace header ────────────────────────────────
+            if (_currentWorkspaceName != null) ...[
+              PopupMenuItem<String>(
+                enabled: false, height: 28,
+                child: Row(children: [
+                  Icon(Broken.folder_open, size: 13,
+                      color: isDark ? Colors.blue[300]! : Colors.blue[700]!),
+                  const SizedBox(width: 6),
+                  Flexible(child: Text(
+                    _currentWorkspaceName!,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.blue[200]! : Colors.blue[800]!),
+                  )),
+                ]),
+              ),
+              PopupMenuItem<String>(value: 'close_workspace', height: 30,
+                child: Row(children: [
+                  Icon(Broken.close_circle, size: 14, color: Colors.red[400]),
+                  const SizedBox(width: 8),
+                  Text('Fermer le projet',
+                      style: TextStyle(fontSize: 13, color: Colors.red[400])),
+                ])),
+              const PopupMenuDivider(height: 6),
+            ],
             PopupMenuItem<String>(
               enabled: false, height: 28,
               child: Text('ESPACE DE TRAVAIL',
@@ -2800,7 +2860,12 @@ class _SelectTypeState extends State<SelectType>
           ],
         ).then((value) {
           if (value == null) return;
-          if (value == 'open_folder') {
+          if (value == 'close_workspace') {
+            setState(() {
+              _currentWorkspaceDir  = null;
+              _currentWorkspaceName = null;
+            });
+          } else if (value == 'open_folder') {
             _doOpenFolder(ctx, appTheme);
           } else if (value == 'open_file') {
             _doOpenFile(ctx);
@@ -2808,6 +2873,112 @@ class _SelectTypeState extends State<SelectType>
             _doOpenFolder(ctx, appTheme);
           }
         });
+      }
+
+      // ── Branch picker ────────────────────────────────────────────────────────
+      void _showBranchPicker(BuildContext ctx, bool isDark, AppTheme appTheme,
+          RepoStatusLoaded repoState) {
+        final fg   = isDark ? Colors.grey[200]! : Colors.grey[800]!;
+        final subFg = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+        final current = repoState.currentBranch ?? '';
+
+        showModalBottomSheet<void>(
+          context: ctx,
+          backgroundColor:
+              isDark ? const Color(0xff252526) : const Color(0xfff5f5f5),
+          shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+          isScrollControlled: true,
+          builder: (_) => DraggableScrollableSheet(
+            initialChildSize: 0.5,
+            minChildSize: 0.3,
+            maxChildSize: 0.9,
+            expand: false,
+            builder: (__, scrollCtrl) {
+              // Combine local + remote branches, removing duplicates.
+              final allBranches = {
+                ...repoState.branches,
+                ...repoState.remoteBranches,
+              }.toList()..sort();
+
+              return Column(children: [
+                // Handle
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  width: 36, height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(children: [
+                    Icon(Icons.call_split_rounded, size: 16, color: fg),
+                    const SizedBox(width: 8),
+                    Text('Changer de branche',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: fg)),
+                  ]),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollCtrl,
+                    itemCount: allBranches.length,
+                    itemBuilder: (_, i) {
+                      final b = allBranches[i];
+                      final isCurrent = b == current ||
+                          b.endsWith('/$current');
+                      return ListTile(
+                        dense: true,
+                        leading: Icon(
+                          isCurrent
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_off,
+                          size: 16,
+                          color: isCurrent ? _kAccent : subFg,
+                        ),
+                        title: Text(b,
+                            style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isCurrent
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: isCurrent ? _kAccent : fg)),
+                        onTap: isCurrent
+                            ? null
+                            : () async {
+                                Navigator.pop(ctx);
+                                if (_currentWorkspaceDir == null) return;
+                                final res = await gitCheckoutBranch(
+                                    _currentWorkspaceDir!, b);
+                                if (mounted) {
+                                  if (res.exitCode == 0) {
+                                    context.read<RepoStatusBloc>().add(
+                                        LoadRepoStatus(_currentWorkspaceDir!));
+                                  } else {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(SnackBar(
+                                      content: Text(
+                                          'Erreur : ${res.stderr}',
+                                          style: const TextStyle(fontSize: 12)),
+                                      duration:
+                                          const Duration(seconds: 4),
+                                    ));
+                                  }
+                                }
+                              },
+                      );
+                    },
+                  ),
+                ),
+              ]);
+            },
+          ),
+        );
       }
 
       // ── Bottom panel (terminal / problems / output / debug) ──────────────────
@@ -2978,7 +3149,7 @@ class _SelectTypeState extends State<SelectType>
               );
             }
             return EmbeddedTerminal(
-              projectDir: '/',
+              projectDir: _currentWorkspaceDir ?? '/',
               showKeyboardMenu: true,
             );
           case 1: // Problems
@@ -3246,9 +3417,20 @@ class _SelectTypeState extends State<SelectType>
 
   void _closeTab(int i) {
     setState(() {
-      final removedId = _openTabs[i].id;
+      final removedId  = _openTabs[i].id;
+      final removedCfg = _editorTabs[removedId];
+
       _openTabs.removeAt(i);
       _editorTabs.remove(removedId);
+
+      // If the closed tab was the persistent workspace project tab, clear it.
+      if (removedCfg != null &&
+          removedCfg.isProject &&
+          removedCfg.rootDir == _currentWorkspaceDir) {
+        _currentWorkspaceDir  = null;
+        _currentWorkspaceName = null;
+      }
+
       if (_openTabs.isEmpty) {
         _activeTabIdx = 0;
       } else if (i < _activeTabIdx) {

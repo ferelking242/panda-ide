@@ -67,7 +67,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
   TabController? tabController;
   int _vitePort = 5173;
   Process? _vitePreviewProcess;
-  AnimationStatus _terminalSelectionStatus = .dismissed, _runtimeSelectionStatus = .dismissed;
+  AnimationStatus _terminalSelectionStatus = AnimationStatus.dismissed, _runtimeSelectionStatus = AnimationStatus.dismissed;
 
   @override
   void initState() {
