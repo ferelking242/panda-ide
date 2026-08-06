@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: panda-release-2
+  group: panda-release-${{ github.run_id }}
   cancel-in-progress: false
 
 env:
