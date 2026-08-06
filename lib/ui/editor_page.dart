@@ -422,7 +422,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
 
     final lang = languages.firstWhere(
       (language) => language.extension.contains(
-        path.extension(file.path).replaceFirst('.', ''),
+        path.extension(file.path).replaceFirst('.', '').toLowerCase(),
       ),
       orElse: () => languages[0],
     );
@@ -1659,7 +1659,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                       final lang = languages.firstWhere(
                         (l) => l.extension.contains(
                             path.extension(filePath.path)
-                                .replaceFirst('.', '')),
+                                .replaceFirst('.', '').toLowerCase()),
                         orElse: () => languages[0],
                       );
                       if (currentlyRuntimeID != null) {
@@ -2032,8 +2032,18 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
               }
             },
             child: BlocBuilder<ActiveEditorBloc, ActiveEditorState>(
-              buildWhen: (previous, current) =>
-                  previous.activeEditors.length != current.activeEditors.length,
+              buildWhen: (previous, current) {
+                if (previous.activeEditors.length !=
+                    current.activeEditors.length) return true;
+                for (int i = 0; i < previous.activeEditors.length; i++) {
+                  final p = previous.activeEditors[i];
+                  final c = current.activeEditors[i];
+                  if (p.isActive != c.isActive ||
+                      p.file.path != c.file.path ||
+                      p.customTitle != c.customTitle) return true;
+                }
+                return false;
+              },
               builder: (context, editorState) {
                 _syncDirtyTracking(editorState.activeEditors);
                 final hasDirtyFiles = _hasUnsavedEditors(
@@ -2056,6 +2066,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                       !_hasUnsavedEditors(editorState.activeEditors),
                   onPopInvokedWithResult: (didPop, result) async {
                     if (didPop) {
+                      _allowImmediatePop = false; // B7: reset after use
                       context.read<ActiveEditorBloc>().add(CloseActiveEditor());
                       return;
                     }

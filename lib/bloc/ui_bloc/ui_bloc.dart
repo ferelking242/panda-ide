@@ -544,8 +544,9 @@ class ChatSessionBloc extends Bloc<ChatSessionEvent, ChatSessionState> {
   }
 
   Future<void> _onSelectSession(SelectSession event, Emitter<ChatSessionState> emit) async {
-    final session = state.sessions.firstWhere((s) => s.id == event.sessionId);
-    emit(state.copyWith(currentSession: session));
+    final idx = state.sessions.indexWhere((s) => s.id == event.sessionId);
+    if (idx < 0) return; // B9: session ID invalide — ignorer silencieusement
+    emit(state.copyWith(currentSession: state.sessions[idx]));
   }
 
   Future<void> _onUpdateCurrentSession(UpdateCurrentSession event, Emitter<ChatSessionState> emit) async {

@@ -1633,7 +1633,11 @@ class _SelectTypeState extends State<SelectType>
       4: 'EXÉCUTER / DEBUG',
       5: 'TUNNEL / SSH',
       6: 'MARKETPLACE',
+      7: 'GATEWAY AI',
+      8: 'NAVIGATEUR',
       9: 'GITHUB COPILOT',
+      10: 'PANDA AGENT',
+      11: 'MODÈLES LOCAUX',
     };
 
     Widget panelBody;
