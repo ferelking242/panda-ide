@@ -360,7 +360,7 @@ jobs:
     if: always()
     needs: [build-android, build-ios, publish]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 1
     steps:
       - name: Send ntfy notification
         if: always()
