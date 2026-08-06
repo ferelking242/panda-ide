@@ -5510,7 +5510,7 @@ class _SelectTypeState extends State<SelectType>
         if (isMe) {
           // ── User message with GitHub avatar ───────────────────────
           final githubAvatarUrl = context
-              .read<RepoBloc>()
+              .read<GithubAuthCubit>()
               .state
               .user
               ?.avatarUrl;
