@@ -2,3 +2,4 @@
 - [Panda Agent stream lifecycle](panda-agent-stream-lifecycle.md) — setup failures before streaming must close the stream and reset the UI instead of leaving generation infinite.
 - [iOS Llama pod build](ios-llama-pod-build.md) — generated CocoaPods specs need persistent ARC and explicit Llama/ggml source patches for iOS.
 - [Android first-launch storage](android-first-launch-storage.md) — initialize Panda IDE against private storage before requesting public storage permission.
+- [Panda Agent provider navigation](panda-agent-provider-navigation.md) — keep provider configuration in the embedded provider-only page and resolve it from the Agent profile.
