@@ -1002,7 +1002,14 @@ class _SelectTypeState extends State<SelectType>
 
                   // ── Below top bar: activity bar (full-height) | editor + panel ─
                   Expanded(
-                    child: Row(
+                    child: ColoredBox(
+                      // Ensures the area revealed by ClipSmoothRect rounded
+                      // corners (topLeft + bottomLeft) matches the activity-bar
+                      // background — eliminating the colour artefact.
+                      color: _sidebarState >= 1
+                          ? (appTheme.isDark ? _kActivityBgDark : _kActivityBgLight)
+                          : Colors.transparent,
+                      child: Row(
                       children: [
                         // Activity bar — full height, spans editor AND terminal
                         if (_sidebarState >= 1)
@@ -1109,26 +1116,21 @@ class _SelectTypeState extends State<SelectType>
                               if (_sidebarState == 2)
                                 Positioned(
                                   left: 0,
-                                  top: 36,   // starts below the dongle tab bar (35px + 1px divider)
+                                  // top: 35 = topBar (35 px) — sidebar aligns
+                                  // flush with the editor tab-bar bottom line.
+                                  // PhysicalShape inside _buildSidebarPanel
+                                  // already provides elevation + clip, so the
+                                  // redundant Material wrapper is removed.
+                                  top: 35,
                                   bottom: 0,
-                                  child: Material(
-                                    elevation: 6,
-                                    shadowColor: Colors.black45,
-                                    borderRadius: const BorderRadius.only(
-                                      topRight: Radius.circular(10),
-                                    ),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: SizedBox(
-                                      width: _kSidebarWidth,
-                                      child: _buildSidebarPanel(context, appTheme),
-                                    ),
-                                  ),
+                                  child: _buildSidebarPanel(context, appTheme),
                                 ),
                             ],
                           ),
                         ),
                       ],
                     ),
+                    ), // ColoredBox
                   ),
 // ── Status bar ────────────────────────────────────────
                   _buildStatusBar(context, appTheme,
