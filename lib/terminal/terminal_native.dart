@@ -16,6 +16,13 @@ import '../utils/functions.dart';
 import '../utils/themes.dart';
 import './terminal_bridge.dart';
 
+// ── Exit banner data ─────────────────────────────────────────────────────────
+class _ExitBannerData {
+  final int exitCode;
+  final String sessionTitle;
+  _ExitBannerData({required this.exitCode, required this.sessionTitle});
+}
+
 class SetupTerminal extends StatefulWidget {
   final String projectDir;
   final List<String> args;
@@ -274,6 +281,18 @@ class _SetupTerminalState extends State<SetupTerminal> {
   int _selectedSuggestionIndex = 0;
   List<String> _pathBinaries = [];
 
+  // ── Feature 1: Exit code banner ────────────────────────────────────────────
+  final ValueNotifier<_ExitBannerData?> _exitBannerNotifier = ValueNotifier(null);
+  Timer? _exitBannerTimer;
+
+  // ── Feature 3: Fullscreen ──────────────────────────────────────────────────
+  bool _isFullscreen = false;
+
+  // ── Feature 4: Split terminals ─────────────────────────────────────────────
+  bool _isSplitView = false;
+  String? _splitSessionId;
+  Axis _splitAxis = Axis.horizontal;
+
   @override
   void initState() {
     super.initState();
@@ -464,24 +483,74 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Future<void> _ensureBashRc() async {
     try {
       final bashrc = File('$homeDir/.bashrc');
+
+      // ── Feature 2 : prompt oh-my-zsh style ──────────────────────────────
+      const gitBranchFn = r'''
+# Git branch helper
+__git_branch() {
+  local branch
+  branch=$(git symbolic-ref --short HEAD 2>/dev/null) || return
+  echo " \033[0;33m(\033[1;33m${branch}\033[0;33m)\033[0m"
+}
+''';
+      const richPS1 = r'''
+# Prompt couleur : user@host dir (branch) $
+PS1='\[\033[0;32m\]\u\[\033[0;37m\]@\[\033[0;36m\]\h \[\033[0;34m\]\w\[\033[0m\]$(__git_branch) \[\033[0;32m\]\$\[\033[0m\] '
+''';
       final aliases = [
         'alias ls="ls --color=auto"',
-        'alias ll="ls -ll"',
+        'alias ll="ls -la --color=auto"',
         'alias la="ls -la"',
+        'alias grep="grep --color=auto"',
+        'alias cp="cp -i"',
+        'alias mv="mv -i"',
+        'alias ..="cd .."',
+        'alias ...="cd ../.."',
       ];
+
+      final fullContent = '${gitBranchFn.trimRight()}\n${richPS1.trimRight()}\n${aliases.join('\n')}\n';
+
       if (!await bashrc.exists()) {
         await bashrc.create(recursive: true);
-        await bashrc.writeAsString('${aliases.join('\n')}\n', flush: true);
+        await bashrc.writeAsString(fullContent, flush: true);
         return;
       }
 
       final existing = await bashrc.readAsString();
-      final missing = aliases.where((alias) => !existing.contains(alias)).toList();
-      if (missing.isNotEmpty) {
-        await bashrc.writeAsString('${existing.trimRight()}\n${missing.join('\n')}\n', flush: true);
+      final needsGitFn  = !existing.contains('__git_branch');
+      final needsPS1    = !existing.contains('__git_branch') || !existing.contains("PS1=");
+      final missingAliases = aliases.where((a) => !existing.contains(a)).toList();
+
+      if (needsGitFn || needsPS1 || missingAliases.isNotEmpty) {
+        final extra = StringBuffer();
+        if (needsGitFn) extra.write('\n$gitBranchFn');
+        if (needsPS1)   extra.write('\n$richPS1');
+        if (missingAliases.isNotEmpty) extra.write('\n${missingAliases.join('\n')}\n');
+        await bashrc.writeAsString(
+          '${existing.trimRight()}\n${extra.toString().trimLeft()}\n',
+          flush: true,
+        );
       }
-    } catch (_) {
-    }
+    } catch (_) {}
+  }
+
+  // ── Feature 1: show exit code banner ────────────────────────────────────
+  void _showExitBanner(String sessionId, int code) {
+    if (!mounted) return;
+    final meta = _sessionBloc.state.sessions
+        .firstWhere((s) => s.id == sessionId,
+            orElse: () => TerminalSessionMeta(
+                  id: sessionId,
+                  title: 'Terminal',
+                  createdAt: DateTime.now(),
+                  isRunning: false,
+                ));
+    _exitBannerTimer?.cancel();
+    _exitBannerNotifier.value =
+        _ExitBannerData(exitCode: code, sessionTitle: meta.title);
+    _exitBannerTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted) _exitBannerNotifier.value = null;
+    });
   }
 
   double _terminalFontSizeFromConfig() {
@@ -573,6 +642,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       runtime.pty = null;
       runtime.terminal.write('\r\n\n[Alpine session ended with exit code $code]');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      _showExitBanner(runtime.sessionId, code);
     });
 
     runtime.terminal.onOutput = (data) {
@@ -643,10 +713,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
       session.done.then((_) {
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
-        runtime.terminal.write('\r\n\n[Program finished with exit code ${session.exitCode}]');
+        final code = session.exitCode ?? 0;
+        runtime.terminal.write('\r\n\n[Program finished with exit code $code]');
         _sessionBloc.add(
           UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
         );
+        _showExitBanner(runtime.sessionId, code);
       });
 
       return;
@@ -678,7 +750,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
     final enVars = <String, String>{
       'HOME': homeDir,
-      'PS1': ' \x1b[32m\\w \x1b[0m\$ ',
+      // PS1 is set by .bashrc (rich prompt with git branch) — keep a safe fallback
+      'PS1': r'\[\033[0;32m\]\u@\h \[\033[0;34m\]\w\[\033[0m\] \$ ',
       'PATH': pathParts.join(':'),
       'PROMPT_DIRTRIM': '2',
       'ROXUM_SHARED_PATH': _sharedPath,
@@ -734,6 +807,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
       );
+      _showExitBanner(runtime.sessionId, code);
     });
 
     runtime.terminal.onOutput = (data) {
@@ -1125,7 +1199,167 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }
     _sessionRuntimes.clear();
     _sessionBloc.close();
+    _exitBannerTimer?.cancel();
+    _exitBannerNotifier.dispose();
     super.dispose();
+  }
+
+  // ── Feature 1: Exit code overlay banner ─────────────────────────────────
+  Widget _buildExitBanner() {
+    return ValueListenableBuilder<_ExitBannerData?>(
+      valueListenable: _exitBannerNotifier,
+      builder: (context, data, _) {
+        if (data == null) return const SizedBox.shrink();
+        final isSuccess = data.exitCode == 0;
+        final bgColor   = isSuccess ? const Color(0xff1b4332) : const Color(0xff4a1919);
+        final bdColor   = isSuccess ? const Color(0xff40b06e) : const Color(0xffef5350);
+        final fgColor   = isSuccess ? const Color(0xff86efac) : const Color(0xffef9a9a);
+        return Positioned(
+          top: 8,
+          left: 12,
+          right: 12,
+          child: Material(
+            elevation: 10,
+            borderRadius: BorderRadius.circular(12),
+            shadowColor: bdColor.withValues(alpha: 0.4),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: bdColor, width: 1),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSuccess ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
+                    size: 18,
+                    color: bdColor,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      isSuccess
+                          ? '✓  ${data.sessionTitle} — terminé avec succès (code 0)'
+                          : '✗  ${data.sessionTitle} — exit code ${data.exitCode}',
+                      style: TextStyle(
+                        color: fgColor,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => _exitBannerNotifier.value = null,
+                    child: Icon(Icons.close_rounded, size: 15, color: fgColor.withValues(alpha: 0.7)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Feature 4: Split terminal view ──────────────────────────────────────
+  Widget _buildSingleTerminalPage(TerminalSessionState state, TerminalThemePreset activeTheme) {
+    if (state.sessions.isEmpty) return const Center(child: CircularProgressIndicator());
+    return PageView.builder(
+      controller: _pageController,
+      physics: const BouncingScrollPhysics(),
+      onPageChanged: (index) {
+        if (_syncingPage) return;
+        if (index < state.sessions.length) {
+          _syncingPage = true;
+          _sessionBloc.add(SetActiveTerminalSession(state.sessions[index].id));
+          Future.delayed(Duration.zero, () => _syncingPage = false);
+        }
+      },
+      itemCount: state.sessions.length,
+      itemBuilder: (context, index) {
+        final session = state.sessions[index];
+        final runtime = _sessionRuntimes[session.id];
+        if (runtime == null) return const SizedBox();
+        return TerminalView(
+          runtime.terminal,
+          readOnly: widget.readOnly,
+          padding: EdgeInsets.zero,
+          controller: runtime.controller,
+          autofocus: session.id == state.activeSessionId,
+          keyboardType: TextInputType.multiline,
+          theme: activeTheme.theme,
+          textStyle: TerminalStyle(fontSize: state.fontSize),
+        );
+      },
+    );
+  }
+
+  Widget _buildSplitTerminalView(TerminalSessionState state, TerminalThemePreset activeTheme) {
+    final primary = _sessionRuntimes[state.activeSessionId];
+    final splitRuntime = _splitSessionId != null ? _sessionRuntimes[_splitSessionId] : null;
+
+    Widget termView(_TerminalRuntime? r, bool isActive) {
+      if (r == null) return const Center(child: CircularProgressIndicator());
+      return GestureDetector(
+        onTap: () {
+          if (!isActive) {
+            _sessionBloc.add(SetActiveTerminalSession(r.sessionId));
+          }
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            border: isActive
+                ? Border.all(color: const Color(0xff5090c8), width: 1.5)
+                : Border.all(color: const Color(0xff3c3c3c), width: 0.5),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(5),
+            child: TerminalView(
+              r.terminal,
+              readOnly: widget.readOnly,
+              padding: EdgeInsets.zero,
+              controller: r.controller,
+              autofocus: isActive,
+              keyboardType: TextInputType.multiline,
+              theme: activeTheme.theme,
+              textStyle: TerminalStyle(fontSize: state.fontSize),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final children = [
+      Expanded(child: termView(primary, true)),
+      const SizedBox(width: 4, height: 4),
+      Expanded(child: termView(splitRuntime, false)),
+    ];
+
+    return _splitAxis == Axis.horizontal
+        ? Row(children: children)
+        : Column(children: children);
+  }
+
+  Future<void> _enableSplitView(Axis axis) async {
+    if (_isSplitView && _splitAxis == axis) {
+      setState(() { _isSplitView = false; _splitSessionId = null; });
+      return;
+    }
+    // Create a new session for the split pane
+    final newTitle = 'Split ${_sessionRuntimes.length + 1}';
+    await _createSession(makeActive: false, title: newTitle);
+    final sessions = _sessionBloc.state.sessions;
+    // The newly created session is the first (prepended)
+    final newId = sessions.first.id;
+    setState(() {
+      _isSplitView = true;
+      _splitAxis = axis;
+      _splitSessionId = newId;
+    });
   }
 
   Widget _buildSuggestionBox() {
@@ -1427,19 +1661,40 @@ class _SetupTerminalState extends State<SetupTerminal> {
     );
   }
 
-  // ── Session tab bar (replaces drawer as primary navigation) ──────────────
+  // ── Helper: popup menu item ──────────────────────────────────────────────
+  Widget _menuItem(IconData icon, String label, bool isDark) {
+    final fg = isDark ? Colors.white.withValues(alpha: 0.85) : const Color(0xff1a1a1a);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 17, color: fg.withValues(alpha: 0.6)),
+        const SizedBox(width: 10),
+        Text(label, style: TextStyle(color: fg, fontSize: 13)),
+      ],
+    );
+  }
+
+  // ── Feature 5 + Session tab bar (replaces drawer as primary navigation) ──
 
   Widget _buildSessionTabBar(TerminalSessionState state, AppTheme appTheme) {
     final isDark = appTheme.isDark;
-    final bgColor = isDark ? const Color(0xff1e1e1e) : const Color(0xffececec);
+    final bgColor = isDark ? const Color(0xff1a1a1a) : const Color(0xffe4e4e4);
     final activeTabColor = isDark ? const Color(0xff2d2d2d) : Colors.white;
     final inactiveTextColor = isDark ? Colors.grey.shade500 : Colors.grey.shade600;
     final activeTextColor = isDark ? Colors.white : const Color(0xff1a1a1a);
     const accentColor = Color(0xff5090c8);
 
     return Container(
-      height: 36,
-      color: bgColor,
+      height: 38,
+      decoration: BoxDecoration(
+        color: bgColor,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? const Color(0xff2e2e2e) : const Color(0xffcccccc),
+            width: 1,
+          ),
+        ),
+      ),
       child: Row(
         children: [
           Expanded(
@@ -1643,47 +1898,16 @@ class _SetupTerminalState extends State<SetupTerminal> {
               configState.codeForgeConfig['terminalTheme']?.toString(),
             );
 
-            // PageView body — one page per session, swipeable
-            final pageView = state.sessions.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : PageView.builder(
-                    controller: _pageController,
-                    physics: const BouncingScrollPhysics(),
-                    onPageChanged: (index) {
-                      if (_syncingPage) return;
-                      if (index < state.sessions.length) {
-                        _syncingPage = true;
-                        _sessionBloc.add(
-                          SetActiveTerminalSession(state.sessions[index].id),
-                        );
-                        Future.delayed(Duration.zero,
-                            () => _syncingPage = false);
-                      }
-                    },
-                    itemCount: state.sessions.length,
-                    itemBuilder: (context, index) {
-                      final session = state.sessions[index];
-                      final runtime = _sessionRuntimes[session.id];
-                      if (runtime == null) return const SizedBox();
-                      final isActive = session.id == state.activeSessionId;
-                      return TerminalView(
-                        runtime.terminal,
-                        readOnly: widget.readOnly,
-                        padding: EdgeInsets.zero,
-                        controller: runtime.controller,
-                        autofocus: isActive,
-                        keyboardType: TextInputType.multiline,
-                        theme: activeTerminalTheme.theme,
-                        textStyle: TerminalStyle(fontSize: state.fontSize),
-                      );
-                    },
-                  );
+            // ── Terminal body ──────────────────────────────────────────────
+            final mainTermView = _isSplitView
+                ? _buildSplitTerminalView(state, activeTerminalTheme)
+                : _buildSingleTerminalPage(state, activeTerminalTheme);
 
             final terminalContent = Stack(
               children: [
                 Column(
                   children: [
-                    Expanded(child: pageView),
+                    Expanded(child: mainTermView),
                     if (widget.showKeyboardMenu)
                       TerminalKeyboardMenu(
                         onSendSequence: sendToPty,
@@ -1716,52 +1940,185 @@ class _SetupTerminalState extends State<SetupTerminal> {
                       ),
                   ],
                 ),
+                // Feature 1: exit banner overlay
+                _buildExitBanner(),
                 _buildSuggestionBox(),
               ],
             );
 
             if (!widget.useScaffold) return terminalContent;
 
-            return Scaffold(
-              appBar: AppBar(
-                toolbarHeight: 44,
-                backgroundColor: appTheme.isDark
-                    ? const Color(0xff1e1e1e)
-                    : const Color(0xffececec),
-                elevation: 0,
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new, size: 17),
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
-                title: Text(
-                  _activeRuntime()?.title ?? 'Terminal',
-                  style: TextStyle(
-                    color: appTheme.selectScreenCardTextColor,
-                    fontSize: 15,
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    tooltip: 'Decrease font',
-                    onPressed: () =>
-                        _onTerminalFontSizeChanged(state.fontSize - 1),
-                    icon: const Icon(Icons.text_decrease, size: 18),
-                  ),
-                  IconButton(
-                    tooltip: 'Increase font',
-                    onPressed: () =>
-                        _onTerminalFontSizeChanged(state.fontSize + 1),
-                    icon: const Icon(Icons.text_increase, size: 18),
-                  ),
-                ],
-              ),
+            // ── Feature 3: fullscreen wraps entire screen ──────────────────
+            final isDark   = appTheme.isDark;
+            final barColor = isDark ? const Color(0xff1e1e1e) : const Color(0xffececec);
+
+            Widget scaffold = Scaffold(
+              backgroundColor: isDark ? const Color(0xff1e1e1e) : const Color(0xffececec),
+              appBar: _isFullscreen
+                  ? null   // hide app bar in fullscreen
+                  : AppBar(
+                      toolbarHeight: 44,
+                      backgroundColor: barColor,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      surfaceTintColor: Colors.transparent,
+                      leading: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios_new, size: 17),
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                      title: Text(
+                        _activeRuntime()?.title ?? 'Terminal',
+                        style: TextStyle(
+                          color: appTheme.selectScreenCardTextColor,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      actions: [
+                        // Font size controls
+                        IconButton(
+                          tooltip: 'Police −',
+                          onPressed: () => _onTerminalFontSizeChanged(state.fontSize - 1),
+                          icon: const Icon(Icons.text_decrease, size: 18),
+                        ),
+                        IconButton(
+                          tooltip: 'Police +',
+                          onPressed: () => _onTerminalFontSizeChanged(state.fontSize + 1),
+                          icon: const Icon(Icons.text_increase, size: 18),
+                        ),
+                        // Feature 3: 3-dot menu ⋯
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert_rounded, size: 20),
+                          tooltip: 'Plus d\'options',
+                          color: isDark ? const Color(0xff252526) : Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(
+                              color: isDark ? const Color(0xff3c3c3c) : const Color(0xffcccccc),
+                              width: 0.5,
+                            ),
+                          ),
+                          onSelected: (value) async {
+                            switch (value) {
+                              case 'fullscreen':
+                                setState(() => _isFullscreen = true);
+                                break;
+                              case 'split_h':
+                                await _enableSplitView(Axis.horizontal);
+                                break;
+                              case 'split_v':
+                                await _enableSplitView(Axis.vertical);
+                                break;
+                              case 'close_split':
+                                setState(() { _isSplitView = false; _splitSessionId = null; });
+                                break;
+                              case 'font_reset':
+                                _onTerminalFontSizeChanged(14);
+                                break;
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'fullscreen',
+                              child: _menuItem(Icons.fullscreen_rounded, 'Plein écran', isDark),
+                            ),
+                            if (!_isSplitView) ...[
+                              PopupMenuItem(
+                                value: 'split_h',
+                                child: _menuItem(Icons.vertical_split_rounded, 'Split horizontal', isDark),
+                              ),
+                              PopupMenuItem(
+                                value: 'split_v',
+                                child: _menuItem(Icons.horizontal_split_rounded, 'Split vertical', isDark),
+                              ),
+                            ] else
+                              PopupMenuItem(
+                                value: 'close_split',
+                                child: _menuItem(Icons.close_fullscreen_rounded, 'Fermer le split', isDark),
+                              ),
+                            PopupMenuItem(
+                              value: 'font_reset',
+                              child: _menuItem(Icons.format_size_rounded, 'Réinitialiser police', isDark),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                    ),
               body: Column(
                 children: [
-                  _buildSessionTabBar(state, appTheme),
-                  Expanded(child: terminalContent),
+                  // Feature 5: tab bar with rounded top corners
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(0),
+                      topRight: Radius.circular(0),
+                    ),
+                    child: _buildSessionTabBar(state, appTheme),
+                  ),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.zero,
+                      child: terminalContent,
+                    ),
+                  ),
                 ],
               ),
             );
+
+            // Feature 3: fullscreen overlay
+            if (_isFullscreen) {
+              return Stack(
+                children: [
+                  scaffold,
+                  Positioned(
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    child: Scaffold(
+                      backgroundColor: isDark ? const Color(0xff121212) : Colors.white,
+                      body: Stack(
+                        children: [
+                          Column(
+                            children: [
+                              // Slim fullscreen header
+                              Container(
+                                height: 40,
+                                color: barColor,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.terminal_rounded, size: 16, color: Colors.grey.shade500),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _activeRuntime()?.title ?? 'Terminal',
+                                        style: TextStyle(
+                                          color: appTheme.selectScreenCardTextColor,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Quitter le plein écran',
+                                      icon: const Icon(Icons.fullscreen_exit_rounded, size: 20),
+                                      onPressed: () => setState(() => _isFullscreen = false),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              _buildSessionTabBar(state, appTheme),
+                              Expanded(child: terminalContent),
+                            ],
+                          ),
+                          _buildExitBanner(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return scaffold;
           },
         ),
       ),
