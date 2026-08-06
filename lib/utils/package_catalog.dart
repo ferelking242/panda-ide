@@ -128,6 +128,19 @@ class PackageCatalogService {
       parentName: 'lua',
       iconUrl: 'assets/material_icons/lua.svg',
     ),
+    RunTime(
+      name: 'Alpine Linux',
+      version: '3.21',
+      details:
+          'Full Linux environment via proot — no root needed.\n'
+          'Includes the apk package manager: install any Linux package with "apk add <pkg>".\n'
+          'Also requires the proot binary (bundled in the same download).',
+      url: 'https://github.com/heckmon/android-arm64-shared-libraries/releases/download/v0.0.1/alpine-proot.tar.gz',
+      archiveName: 'alpine-proot.tar.gz',
+      archiveSize: 10,
+      parentName: 'alpine-linux',
+      iconUrl: 'https://alpinelinux.org/alpinelinux-logo.svg',
+    ),
   ];
 
   static final List<Extension> _pfdExtensions = [

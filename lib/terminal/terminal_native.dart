@@ -208,6 +208,7 @@ class _TerminalRuntime {
   final String title;
   final Terminal terminal;
   final TerminalController controller;
+  final bool isProot;
 
   Pty? pty;
   SSHSession? sshSession;
@@ -219,6 +220,7 @@ class _TerminalRuntime {
     required this.title,
     required this.terminal,
     required this.controller,
+    this.isProot = false,
   });
 
   bool get isRunning {
@@ -258,8 +260,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
   late final List<SSHInfo> sshServerList;
   late final SSHPrivateKey? termuxInfo;
   final Map<String, _TerminalRuntime> _sessionRuntimes = {};
-  AnimationStatus _terminalSelectionStatus = .dismissed;
+  AnimationStatus _terminalSelectionStatus = AnimationStatus.dismissed;
   String _sharedPath = '';
+  late final PageController _pageController;
+  bool _syncingPage = false;
 
   OverlayEntry? _selectionToolbarOverlay;
   bool _hasSelection = false;
@@ -277,6 +281,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     );
     sshServerList = context.read<SSHServersCubit>().state.serverList.where((server) => server.isConnected).toList();
     termuxInfo = context.read<TermuxCubit>().state.termInfo;
+    _pageController = PageController(initialPage: 0);
     _bootstrapTerminalPage();
     _loadPathBinaries();
   }
@@ -336,7 +341,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
     bool makeActive = true,
     String? title,
     bool showFeedback = false,
-    SSHInfo? externalServer
+    SSHInfo? externalServer,
+    bool useProot = false,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final sessionTitle = title ?? _nextSessionTitle();
@@ -345,6 +351,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       title: sessionTitle,
       terminal: Terminal(platform: TerminalTargetPlatform.android),
       controller: TerminalController(selectionMode: SelectionMode.block),
+      isProot: useProot,
     );
 
     runtime.selectionListener = () => _onSelectionChanged(id);
@@ -360,7 +367,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       ),
     );
 
-    await _startPty(runtime, args: args, externalServer: externalServer);
+    await _startPty(runtime, args: args, externalServer: externalServer, useProot: useProot);
 
     if (showFeedback && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -381,7 +388,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (_sessionBloc.state.activeSessionId == sessionId) {
       _suggestionsNotifier.value = null;
     }
-    await _startPty(runtime);
+    await _startPty(runtime, useProot: runtime.isProot);
   }
 
   void _terminateSession(String sessionId) {
@@ -503,11 +510,97 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _saveTerminalFontSize(fontSize);
   }
 
+  // ── proot + Alpine helpers ─────────────────────────────────────────────────
+
+  bool _isAlpineInstalled() {
+    return File('$binDir/proot').existsSync() &&
+        Directory('$runtimesDir/alpine-linux').existsSync();
+  }
+
+  Future<void> _startProotSession(_TerminalRuntime runtime) async {
+    final prootBin = '$binDir/proot';
+    final rootfsDir = '$runtimesDir/alpine-linux';
+
+    if (!File(prootBin).existsSync()) {
+      runtime.terminal.write(
+        '\r\n\x1b[31m[proot binary not found. Install Alpine Linux from the Downloads section.]\x1b[0m\r\n',
+      );
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      return;
+    }
+    if (!Directory(rootfsDir).existsSync()) {
+      runtime.terminal.write(
+        '\r\n\x1b[31m[Alpine rootfs not found. Install Alpine Linux from the Downloads section.]\x1b[0m\r\n',
+      );
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      return;
+    }
+
+    final process = Pty.start(
+      prootBin,
+      arguments: [
+        '--rootfs=$rootfsDir',
+        '-b', '/dev',
+        '-b', '/proc',
+        '-b', '/sys',
+        '-w', '/root',
+        '/bin/sh',
+      ],
+      workingDirectory: rootfsDir,
+      environment: {
+        'HOME': '/root',
+        'TERM': 'xterm-256color',
+        'SHELL': '/bin/sh',
+        'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        'TMPDIR': '/tmp',
+        'PROOT_TMP_DIR': tempDir,
+      },
+      rows: runtime.terminal.viewHeight,
+      columns: runtime.terminal.viewWidth,
+    );
+
+    runtime.pty = process;
+    _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
+
+    process.output
+      .cast<List<int>>()
+      .transform(const Utf8Decoder())
+      .listen(runtime.terminal.write);
+
+    process.exitCode.then((code) {
+      if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
+      runtime.pty = null;
+      runtime.terminal.write('\r\n\n[Alpine session ended with exit code $code]');
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+    });
+
+    runtime.terminal.onOutput = (data) {
+      if (widget.readOnly) return;
+      process.write(const Utf8Encoder().convert(data));
+      final activeSessionId = _sessionBloc.state.activeSessionId;
+      if (activeSessionId == runtime.sessionId) {
+        _handleInputForAutocomplete(runtime, data);
+      }
+    };
+
+    runtime.terminal.onResize = (w, h, pw, ph) {
+      process.resize(h, w);
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+
   Future<void> _startPty(
     _TerminalRuntime runtime, {
     List<String> args = const [],
     SSHInfo? externalServer,
+    bool useProot = false,
   }) async {
+    if (useProot) {
+      await _startProotSession(runtime);
+      return;
+    }
+
     if(externalServer != null && externalServer.client != null){
       final terminal = runtime.terminal;
       final session = await externalServer.client!.shell(
@@ -1004,6 +1097,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _hideSelectionToolbar();
     _suggestionsNotifier.dispose();
     _suggestionScrollController.dispose();
+    _pageController.dispose();
     for (final runtime in _sessionRuntimes.values) {
       runtime.dispose();
     }
@@ -1311,220 +1405,322 @@ class _SetupTerminalState extends State<SetupTerminal> {
     );
   }
 
+  // ── Session tab bar (replaces drawer as primary navigation) ──────────────
+
+  Widget _buildSessionTabBar(TerminalSessionState state, AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final bgColor = isDark ? const Color(0xff1e1e1e) : const Color(0xffececec);
+    final activeTabColor = isDark ? const Color(0xff2d2d2d) : Colors.white;
+    final inactiveTextColor = isDark ? Colors.grey.shade500 : Colors.grey.shade600;
+    final activeTextColor = isDark ? Colors.white : const Color(0xff1a1a1a);
+    const accentColor = Color(0xff5090c8);
+
+    return Container(
+      height: 36,
+      color: bgColor,
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: state.sessions.length,
+              itemBuilder: (context, index) {
+                final session = state.sessions[index];
+                final isActive = session.id == state.activeSessionId;
+                return GestureDetector(
+                  onTap: () {
+                    if (!isActive) {
+                      _syncingPage = true;
+                      _sessionBloc.add(SetActiveTerminalSession(session.id));
+                      _pageController
+                          .animateToPage(
+                            index,
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeInOut,
+                          )
+                          .then((_) => _syncingPage = false);
+                    }
+                  },
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 90, maxWidth: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    decoration: BoxDecoration(
+                      color: isActive ? activeTabColor : Colors.transparent,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isActive ? accentColor : Colors.transparent,
+                          width: 2,
+                        ),
+                        right: BorderSide(
+                          color: isDark ? const Color(0xff383838) : const Color(0xffcccccc),
+                          width: 0.5,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: session.isRunning
+                                ? Colors.green.shade400
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Flexible(
+                          child: Text(
+                            session.title,
+                            style: TextStyle(
+                              color: isActive ? activeTextColor : inactiveTextColor,
+                              fontSize: 12,
+                              fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: () => _deleteSession(session.id),
+                          borderRadius: BorderRadius.circular(3),
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Icon(
+                              Icons.close,
+                              size: 11,
+                              color: isActive
+                                  ? (isDark ? Colors.grey.shade400 : Colors.grey.shade600)
+                                  : Colors.transparent,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // + new session button
+          _buildNewSessionButton(state, appTheme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNewSessionButton(TerminalSessionState state, AppTheme appTheme) {
+    final hasExternal = sshServerList.isNotEmpty ||
+        (termuxInfo != null && termuxInfo!.isConnected) ||
+        _isAlpineInstalled();
+
+    if (!hasExternal) {
+      return InkWell(
+        onTap: () => _createSession(makeActive: true, showFeedback: true),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Icon(Icons.add, size: 17, color: Colors.grey.shade500),
+        ),
+      );
+    }
+
+    return MenuAnchor(
+      style: MenuStyle(
+        backgroundColor: WidgetStatePropertyAll(appTheme.selectScreenCardsBg),
+        shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+      ),
+      animated: true,
+      onAnimationStatusChanged: (status) => _terminalSelectionStatus = status,
+      menuChildren: [
+        MenuItemButton(
+          onPressed: () => _createSession(makeActive: true, showFeedback: true),
+          leadingIcon: Icon(Icons.terminal, color: appTheme.selectScreenCardTextColor, size: 18),
+          child: Text('bash', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+        ),
+        ...sshServerList.map((server) => MenuItemButton(
+          onPressed: () => _createSession(makeActive: true, showFeedback: true, externalServer: server),
+          leadingIcon: Padding(
+            padding: const EdgeInsets.only(left: 3),
+            child: FaIcon(FontAwesomeIcons.server, color: appTheme.selectScreenCardTextColor, size: 17),
+          ),
+          child: Text(server.name, style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+        )),
+        if (termuxInfo != null && termuxInfo!.isConnected)
+          MenuItemButton(
+            onPressed: () => _createSession(makeActive: true, showFeedback: true, externalServer: termuxInfo),
+            leadingIcon: SvgPicture.asset("assets/icons/Termux.svg", height: 18, width: 18),
+            child: Text(termuxInfo!.name, style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+          ),
+        if (_isAlpineInstalled())
+          MenuItemButton(
+            onPressed: () => _createSession(
+              makeActive: true,
+              showFeedback: true,
+              title: 'Alpine Linux',
+              useProot: true,
+            ),
+            leadingIcon: Icon(Icons.landslide_outlined, color: Colors.blue.shade300, size: 18),
+            child: Text('Alpine Linux (proot)', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+          ),
+      ],
+      builder: (context, controller, child) => InkWell(
+        onTap: () => _terminalSelectionStatus.isForwardOrCompleted
+            ? controller.close()
+            : controller.open(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.add, size: 17, color: Colors.grey.shade500),
+              Icon(Icons.arrow_drop_down, size: 14, color: Colors.grey.shade600),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Main build ─────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider.value(
       value: _sessionBloc,
       child: BlocListener<TerminalSessionBloc, TerminalSessionState>(
-        listenWhen: (previous, current) => previous.activeSessionId != current.activeSessionId,
+        listenWhen: (previous, current) =>
+            previous.activeSessionId != current.activeSessionId,
         listener: (context, state) {
           _hideSelectionToolbar();
           _suggestionsNotifier.value = null;
           _hasSelection = false;
+          // Sync page to active session
+          if (!_syncingPage) {
+            final idx = state.sessions
+                .indexWhere((s) => s.id == state.activeSessionId);
+            if (idx >= 0 && _pageController.hasClients) {
+              _syncingPage = true;
+              _pageController
+                  .animateToPage(
+                    idx,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeInOut,
+                  )
+                  .then((_) => _syncingPage = false);
+            }
+          }
         },
         child: BlocBuilder<TerminalSessionBloc, TerminalSessionState>(
           builder: (context, state) {
-            final activeRuntime = _activeRuntime();
             final appTheme = context.watch<AppThemeBloc>().state.appTheme;
             final configState = context.watch<ConfigBloc>().state;
             final activeTerminalTheme = terminalThemePresetById(
               configState.codeForgeConfig['terminalTheme']?.toString(),
             );
-            final terminalContent = activeRuntime == null
+
+            // PageView body — one page per session, swipeable
+            final pageView = state.sessions.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : Stack(
-                    children: [
-                      Column(
-                        children: [
-                          Expanded(
-                            child: TerminalView(
-                              activeRuntime.terminal,
-                              readOnly: widget.readOnly,
-                              padding: EdgeInsets.zero,
-                              controller: activeRuntime.controller,
-                              autofocus: true,
-                              keyboardType: TextInputType.multiline,
-                              theme: activeTerminalTheme.theme,
-                              textStyle: TerminalStyle(
-                                fontSize: state.fontSize
-                              ),
-                            ),
-                          ),
-                          if (widget.showKeyboardMenu)
-                            TerminalKeyboardMenu(
-                              onSendSequence: sendToPty,
-                              onModifierChanged:
-                                (ctrl, alt, shift, resetCallback) {
-                                  _setTerminalOutputWithAutocomplete(
-                                    ctrl: ctrl,
-                                    alt: alt,
-                                    shift: shift,
-                                    resetCallback: resetCallback,
-                                  );
-                                },
-                            ),
-                        ],
-                      ),
-                      _buildSuggestionBox(),
-                    ],
+                : PageView.builder(
+                    controller: _pageController,
+                    physics: const BouncingScrollPhysics(),
+                    onPageChanged: (index) {
+                      if (_syncingPage) return;
+                      if (index < state.sessions.length) {
+                        _syncingPage = true;
+                        _sessionBloc.add(
+                          SetActiveTerminalSession(state.sessions[index].id),
+                        );
+                        Future.delayed(Duration.zero,
+                            () => _syncingPage = false);
+                      }
+                    },
+                    itemCount: state.sessions.length,
+                    itemBuilder: (context, index) {
+                      final session = state.sessions[index];
+                      final runtime = _sessionRuntimes[session.id];
+                      if (runtime == null) return const SizedBox();
+                      final isActive = session.id == state.activeSessionId;
+                      return TerminalView(
+                        runtime.terminal,
+                        readOnly: widget.readOnly,
+                        padding: EdgeInsets.zero,
+                        controller: runtime.controller,
+                        autofocus: isActive,
+                        keyboardType: TextInputType.multiline,
+                        theme: activeTerminalTheme.theme,
+                        textStyle: TerminalStyle(fontSize: state.fontSize),
+                      );
+                    },
                   );
 
-            if (!widget.useScaffold) {
-              return terminalContent;
-            }
+            final terminalContent = Stack(
+              children: [
+                Column(
+                  children: [
+                    Expanded(child: pageView),
+                    if (widget.showKeyboardMenu)
+                      TerminalKeyboardMenu(
+                        onSendSequence: sendToPty,
+                        onModifierChanged: (ctrl, alt, shift, resetCallback) {
+                          _setTerminalOutputWithAutocomplete(
+                            ctrl: ctrl,
+                            alt: alt,
+                            shift: shift,
+                            resetCallback: resetCallback,
+                          );
+                        },
+                      ),
+                  ],
+                ),
+                _buildSuggestionBox(),
+              ],
+            );
+
+            if (!widget.useScaffold) return terminalContent;
 
             return Scaffold(
               appBar: AppBar(
-                leading: Builder(
-                  builder: (context) {
-                    final sessionCount = state.sessions.length;
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        IconButton(
-                          tooltip: 'Open sessions drawer',
-                          icon: const Icon(Icons.menu),
-                          onPressed: () => Scaffold.of(context).openDrawer(),
-                        ),
-                        if (sessionCount > 0)
-                          Positioned(
-                            right: 6,
-                            top: 6,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 5,
-                                vertical: 1,
-                              ),
-                              decoration: BoxDecoration(
-                                color: appTheme.editorPageToolSelectedBgColor,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Text(
-                                sessionCount > 99 ? '99+' : '$sessionCount',
-                                style: TextStyle(
-                                  color: appTheme.editorPageToolSelectedColor,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
+                toolbarHeight: 44,
+                backgroundColor: appTheme.isDark
+                    ? const Color(0xff1e1e1e)
+                    : const Color(0xffececec),
+                elevation: 0,
+                leading: IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 17),
+                  onPressed: () => Navigator.of(context).maybePop(),
                 ),
                 title: Text(
-                  activeRuntime?.title ?? 'Terminal',
+                  _activeRuntime()?.title ?? 'Terminal',
                   style: TextStyle(
-                    color: appTheme.selectScreenCardTextColor
+                    color: appTheme.selectScreenCardTextColor,
+                    fontSize: 15,
                   ),
                 ),
                 actions: [
                   IconButton(
-                    onPressed: () => _onTerminalFontSizeChanged(state.fontSize - 1),
-                    icon: Icon(Icons.zoom_out)
+                    tooltip: 'Decrease font',
+                    onPressed: () =>
+                        _onTerminalFontSizeChanged(state.fontSize - 1),
+                    icon: const Icon(Icons.text_decrease, size: 18),
                   ),
                   IconButton(
-                    onPressed: () => _onTerminalFontSizeChanged(state.fontSize + 1),
-                    icon: Icon(Icons.zoom_in)
-                  ),
-                  IconButton(
-                    tooltip: 'New session',
-                    onPressed: () => _createSession(
-                      makeActive: true,
-                      showFeedback: true,
-                    ),
-                    icon: Row(
-                      children: [
-                        Icon(Icons.add),
-                        if(sshServerList.isNotEmpty || termuxInfo != null) MenuAnchor(
-                          style: MenuStyle(
-                            backgroundColor: WidgetStatePropertyAll(appTheme.selectScreenCardsBg),
-                            shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: .circular(6)))
-                          ),
-                          animated: true,
-                          onAnimationStatusChanged: (status) {
-                            _terminalSelectionStatus = status;
-                          },
-                          menuChildren: [
-                            ...sshServerList.map((server) =>
-                              MenuItemButton(
-                                onPressed: () {
-                                  _createSession(
-                                    makeActive: true,
-                                    showFeedback: true,
-                                    externalServer: server
-                                  );
-                                },
-                                leadingIcon: Padding(
-                                  padding: const EdgeInsets.only(left: 3),
-                                  child: FaIcon(
-                                    FontAwesomeIcons.server,
-                                    color: appTheme.selectScreenCardTextColor,
-                                    size: 20
-                                  ),
-                                ),
-                                child: Text(
-                                  server.name,
-                                  style: TextStyle(
-                                    color: appTheme.selectScreenCardTextColor
-                                  )
-                                ),
-                              )
-                            ),
-
-                            if(termuxInfo != null && termuxInfo!.isConnected)
-                            MenuItemButton(
-                              onPressed: () {
-                                _createSession(
-                                  makeActive: true,
-                                  showFeedback: true,
-                                  externalServer: termuxInfo
-                                );
-                              },
-                              leadingIcon: SvgPicture.asset(
-                                "assets/icons/Termux.svg",
-                                height: 20,
-                                width: 20
-                              ),
-                              child: Text(
-                                termuxInfo!.name,
-                                style: TextStyle(
-                                  color: appTheme.selectScreenCardTextColor
-                                )
-                              ),
-                            )
-                          ],
-                          builder: (context, controller, child) => Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: InkWell(
-                              onTap: () {
-                                if(_terminalSelectionStatus.isForwardOrCompleted){
-                                  controller.close();
-                                } else {
-                                  controller.open();
-                                }
-                              },
-                              child: Icon(
-                                Icons.arrow_drop_down_rounded,
-                                color: appTheme.selectScreenCardTextColor
-                                        
-                              )
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    tooltip: 'Increase font',
+                    onPressed: () =>
+                        _onTerminalFontSizeChanged(state.fontSize + 1),
+                    icon: const Icon(Icons.text_increase, size: 18),
                   ),
                 ],
               ),
-              drawer: _buildSessionDrawer(state, appTheme),
-              body: terminalContent,
+              body: Column(
+                children: [
+                  _buildSessionTabBar(state, appTheme),
+                  Expanded(child: terminalContent),
+                ],
+              ),
             );
           },
         ),
@@ -1611,89 +1807,122 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
 
   @override
   Widget build(BuildContext context) {
+    // Compact single-row scrollable keyboard bar — ~44px height vs old ~90px.
+    const baseStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 11.5,
+      fontWeight: FontWeight.w500,
+      letterSpacing: 0.1,
+    );
+    const activeStyle = TextStyle(
+      color: Color(0xffffd700),
+      fontSize: 11.5,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.1,
+    );
+    const divColor = Color(0xff454545);
+    const chipBg   = Color(0xff2d2d2d);
+    const activeBg = Color(0xff3a3000);
+    const chipBorder = Color(0xff454545);
+    const activeBorder = Color(0xffffd700);
+
+    Widget chip(String label, VoidCallback onTap, {bool active = false}) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 28,
+          constraints: const BoxConstraints(minWidth: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+          decoration: BoxDecoration(
+            color: active ? activeBg : chipBg,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(
+              color: active ? activeBorder : chipBorder,
+              width: 0.8,
+            ),
+          ),
+          alignment: Alignment.center,
+          child: Text(label, style: active ? activeStyle : baseStyle),
+        ),
+      );
+    }
+
+    Widget iconChip(IconData icon, VoidCallback onTap) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 28,
+          width: 36,
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+          decoration: BoxDecoration(
+            color: chipBg,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: chipBorder, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: Icon(icon, size: 14, color: Colors.white),
+        ),
+      );
+    }
+
+    Widget div() => Container(
+      width: 1,
+      height: 20,
+      color: divColor,
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+    );
+
     return Container(
+      height: 44,
       color: const Color(0xff181818),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: _toggleCtrl,
-                style: TextButton.styleFrom(
-                  foregroundColor: isCtrlActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isCtrlActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("CTRL"),
-              ),
-              TextButton(
-                onPressed: _toggleAlt,
-                style: TextButton.styleFrom(
-                  foregroundColor: isAltActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isAltActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("ALT"),
-              ),
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b[H'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("HOME"),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[A'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_upward),
-              ),
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b[F'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("END"),
-              ),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => widget.onSendSequence('\x1b'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-                child: const Text("ESC"),
-              ),
-              TextButton(
-                onPressed: _toggleShift,
-                style: TextButton.styleFrom(
-                  foregroundColor: isShiftActive ? Colors.yellow : Colors.white,
-                  backgroundColor: isShiftActive
-                      ? Colors.white.withValues(alpha: 0.2)
-                      : Colors.transparent,
-                ),
-                child: const Text("SHIFT"),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[D'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_back),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 10),
-                child: IconButton(
-                  onPressed: () => widget.onSendSequence('\x1b[B'),
-                  color: Colors.white,
-                  icon: const Icon(Icons.arrow_downward),
-                ),
-              ),
-              IconButton(
-                onPressed: () => widget.onSendSequence('\x1b[C'),
-                color: Colors.white,
-                icon: const Icon(Icons.arrow_forward),
-              ),
-            ],
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
+            chip('ESC',   () => widget.onSendSequence('\x1b')),
+            chip('CTRL',  _toggleCtrl,  active: isCtrlActive),
+            chip('ALT',   _toggleAlt,   active: isAltActive),
+            chip('SHIFT', _toggleShift, active: isShiftActive),
+            chip('TAB',   () => widget.onSendSequence('\t')),
+            div(),
+            iconChip(Icons.arrow_upward_rounded,  () => widget.onSendSequence('\x1b[A')),
+            iconChip(Icons.arrow_downward_rounded, () => widget.onSendSequence('\x1b[B')),
+            iconChip(Icons.arrow_back_rounded,    () => widget.onSendSequence('\x1b[D')),
+            iconChip(Icons.arrow_forward_rounded, () => widget.onSendSequence('\x1b[C')),
+            div(),
+            chip('HOME',  () => widget.onSendSequence('\x1b[H')),
+            chip('END',   () => widget.onSendSequence('\x1b[F')),
+            chip('PgUp',  () => widget.onSendSequence('\x1b[5~')),
+            chip('PgDn',  () => widget.onSendSequence('\x1b[6~')),
+            div(),
+            chip('|',  () => widget.onSendSequence('|')),
+            chip('&',  () => widget.onSendSequence('&')),
+            chip(';',  () => widget.onSendSequence(';')),
+            chip('~',  () => widget.onSendSequence('~')),
+            chip('/',  () => widget.onSendSequence('/')),
+            chip('\\', () => widget.onSendSequence('\\')),
+            chip('`',  () => widget.onSendSequence('`')),
+            chip('"',  () => widget.onSendSequence('"')),
+            chip("'",  () => widget.onSendSequence("'")),
+            div(),
+            chip('(',  () => widget.onSendSequence('(')),
+            chip(')',  () => widget.onSendSequence(')')),
+            chip('{',  () => widget.onSendSequence('{')),
+            chip('}',  () => widget.onSendSequence('}')),
+            chip('[',  () => widget.onSendSequence('[')),
+            chip(']',  () => widget.onSendSequence(']')),
+            chip('!',  () => widget.onSendSequence('!')),
+            chip('#',  () => widget.onSendSequence('#')),
+            chip('%',  () => widget.onSendSequence('%')),
+            chip('^',  () => widget.onSendSequence('^')),
+            chip('@',  () => widget.onSendSequence('@')),
+            chip('*',  () => widget.onSendSequence('*')),
+            chip('>',  () => widget.onSendSequence('>')),
+            chip('<',  () => widget.onSendSequence('<')),
+          ],
+        ),
       ),
     );
   }

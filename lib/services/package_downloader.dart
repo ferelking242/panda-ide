@@ -467,14 +467,15 @@ class PackageDownloader {
       }
 
       final n = runtimeParentName?.toLowerCase();
-      if (n == 'python'  || archiveName == 'python.zip')           await _createPythonSymlinks();
-      if (n == 'java'    || n == 'java-21-openjdk' || archiveName == 'java-21-openjdk.zip') await _copyJavaLibraries();
-      if (n == 'clang'   || archiveName == 'clang.zip')             await _createClangSymlinks();
-      if (n == 'dart'    || archiveName == 'dart.zip')              await _createDartSymlinks();
-      if (n == 'rust'    || archiveName == 'rust.zip')              await _createRustSymlinks();
-      if (n == 'go'      || archiveName == 'go.zip')                await _createGoSymlinks();
-      if (n == 'ruby'    || archiveName == 'ruby.zip')              await _createRubySymlinks();
-      if (n == 'lua'     || archiveName == 'lua.zip')               await _createLuaSymlinks();
+      if (n == 'python'      || archiveName == 'python.zip')           await _createPythonSymlinks();
+      if (n == 'java'        || n == 'java-21-openjdk' || archiveName == 'java-21-openjdk.zip') await _copyJavaLibraries();
+      if (n == 'clang'       || archiveName == 'clang.zip')             await _createClangSymlinks();
+      if (n == 'dart'        || archiveName == 'dart.zip')              await _createDartSymlinks();
+      if (n == 'rust'        || archiveName == 'rust.zip')              await _createRustSymlinks();
+      if (n == 'go'          || archiveName == 'go.zip')                await _createGoSymlinks();
+      if (n == 'ruby'        || archiveName == 'ruby.zip')              await _createRubySymlinks();
+      if (n == 'lua'         || archiveName == 'lua.zip')               await _createLuaSymlinks();
+      if (n == 'alpine-linux'|| archiveName == 'alpine-proot.tar.gz')  await _setupAlpineProot();
 
       downloadBloc.markFullyCompleted(index);
     } catch (e) {
@@ -616,6 +617,51 @@ class PackageDownloader {
     if (!Directory(luaBin).existsSync()) await Directory(luaBin).create(recursive: true);
     await _symlink('$luaBin/lua',  '$shared/liblua.so');
     await _symlink('$luaBin/luac', '$shared/libluac.so');
+  }
+
+  // ── Alpine Linux + proot setup ────────────────────────────────────────────
+  //
+  // The archive alpine-proot.tar.gz must contain:
+  //   proot            — the proot binary compiled for Android arm64
+  //   rootfs/          — the Alpine Linux minirootfs (aarch64)
+  //
+  // After extraction the layout is:
+  //   $runtimesDir/alpine-linux/           ← rootfs
+  //   $binDir/proot                        ← proot binary (chmod +x)
+  //
+  static Future<void> _setupAlpineProot() async {
+    try {
+      final alpineDir = '$runtimesDir/alpine-linux';
+      final prootSrc  = '$alpineDir/proot';       // from archive
+      final prootDst  = '$binDir/proot';
+
+      // Move proot binary to binDir and make it executable
+      if (File(prootSrc).existsSync()) {
+        if (!Directory(binDir).existsSync()) {
+          await Directory(binDir).create(recursive: true);
+        }
+        await _fileCopy(src: prootSrc, dst: prootDst);
+        await Process.run('chmod', ['+x', prootDst]);
+        try { await File(prootSrc).delete(); } catch (_) {}
+      }
+
+      // Ensure /tmp inside rootfs
+      final tmpDir = Directory('$alpineDir/tmp');
+      if (!tmpDir.existsSync()) await tmpDir.create(recursive: true);
+
+      // Write a basic /etc/resolv.conf for DNS if missing
+      final resolv = File('$alpineDir/etc/resolv.conf');
+      if (!resolv.existsSync()) {
+        try {
+          await resolv.parent.create(recursive: true);
+          await resolv.writeAsString('nameserver 8.8.8.8\nnameserver 1.1.1.1\n');
+        } catch (_) {}
+      }
+
+      debugPrint('Alpine proot setup complete — rootfs at $alpineDir, proot at $prootDst');
+    } catch (e) {
+      debugPrint('Alpine proot setup error: $e');
+    }
   }
 
   static Future<void> _symlinkExec({required String execName, required String libName}) async {
