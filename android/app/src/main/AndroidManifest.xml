@@ -30,6 +30,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
 
+    <!-- Overlay / draw over other apps (mode flottant) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+
     <application
         android:label="Panda IDE"
         android:allowBackup="false"

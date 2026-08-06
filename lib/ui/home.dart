@@ -14,7 +14,7 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
-import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/broken_icons.dart';
@@ -159,6 +159,9 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Conversation title (editable) ────────────────────────────────
   String _agentConversationTitle = 'Nouvelle conversation';
+
+  // ── Last resolved AI model (used for title generation) ───────────
+  Models? _lastUsedModel;
 
   // ── Panel tabs (0=Chat, 1=Tool, 2=Task, 3=UserSettings, 4=Providers) ─
   int _agentPanelTab     = 0;
@@ -5498,62 +5501,118 @@ class _SelectTypeState extends State<SelectType>
         final isError     = phase == 'error';
 
         if (isMe) {
-          return Align(
-            alignment: Alignment.centerRight,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          // ── User message with GitHub avatar ───────────────────────
+          final githubAvatarUrl = context
+              .read<RepoBloc>()
+              .state
+              .user
+              ?.avatarUrl;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 4, bottom: 2),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
-                  constraints: const BoxConstraints(maxWidth: 260),
-                  decoration: BoxDecoration(
-                    color: _kAccent.withOpacity(0.85),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(text,
-                      style: const TextStyle(
-                          fontSize: 13, color: Colors.white)),
-                ),
-                // Copy action row
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _MsgActionBtn(
-                      icon: Broken.copy,
-                      label: 'Copier',
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: text));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Copié !',
-                                style: TextStyle(fontSize: 12)),
-                            duration: Duration(seconds: 1),
+                // Message bubble
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        margin: const EdgeInsets.only(top: 0, bottom: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _kAccent.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(text,
+                            style: const TextStyle(
+                                fontSize: 13, color: Colors.white)),
+                      ),
+                      // Copy action row
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _MsgActionBtn(
+                            icon: Broken.copy,
+                            label: 'Copier',
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Copié !',
+                                      style: TextStyle(fontSize: 12)),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            },
+                            muted: muted,
                           ),
-                        );
-                      },
-                      muted: muted,
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(width: 8),
+                // User avatar (GitHub photo or initials fallback)
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _kAccent.withOpacity(0.2),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: githubAvatarUrl != null && githubAvatarUrl.isNotEmpty
+                      ? Image.network(
+                          githubAvatarUrl,
+                          width: 28, height: 28, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.person, size: 16, color: _kAccent),
+                        )
+                      : const Icon(Icons.person, size: 16, color: _kAccent),
+                ),
               ],
             ),
           );
         }
 
         // ── Message agent ─────────────────────────────────────────────
+        // Provider name + icon for the agent avatar
+        final providerName = _lastUsedModel != null
+            ? _lastUsedModel!.runtimeType.toString().toLowerCase()
+            : 'agent';
         // Find index of the user message that triggered this response
         final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user')
             ? i - 1
             : -1;
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            constraints: const BoxConstraints(maxWidth: 280),
-            child: Column(
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Agent avatar
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _kAccent.withOpacity(0.15),
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    _providerIconAsset(providerName),
+                    width: 28, height: 28, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(
+                        Broken.cpu_setting, size: 16, color: _kAccent),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Message content
+              Expanded(
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Phase chip — only when no tool calls to avoid double indicator
@@ -5685,11 +5744,22 @@ class _SelectTypeState extends State<SelectType>
                     ),
                   ),
               ],
-            ),
-          ),
-        );
+            ),            // closes Column
+          ),              // closes Expanded
+        ],
+      ),                  // closes Row
+    );                    // closes Padding
       },
     );
+  }
+
+  /// Returns the asset path of the provider's icon given a provider runtime type.
+  String _providerIconAsset(String name) {
+    if (name.contains('gemini'))     return 'assets/icons/ai.svg';
+    if (name.contains('claude'))     return 'assets/icons/ai.svg';
+    if (name.contains('openai'))     return 'assets/icons/ai.svg';
+    if (name.contains('copilot'))    return 'assets/icons/github-copilot-icon.svg';
+    return 'assets/icons/app-icon.png';
   }
 
   // ── Floating agent overlay ────────────────────────────────────────────────
@@ -5912,11 +5982,15 @@ class _SelectTypeState extends State<SelectType>
     }
 
     try {
-      final dir = await getApplicationDocumentsDirectory();
       final ts  =
           '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
           '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-      final file = File('${dir.path}/panda-agent-$ts.md');
+      // Export to the public Panda IDE root folder accessible to the user
+      final exportDir = Directory(pandaRootDir);
+      if (!exportDir.existsSync()) {
+        await exportDir.create(recursive: true);
+      }
+      final file = File('$pandaRootDir/panda-agent-$ts.md');
       await file.writeAsString(buf.toString());
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -6031,6 +6105,61 @@ class _SelectTypeState extends State<SelectType>
       PandaLog.i('PandaAgent', 'ProjectMemory saved');
     } catch (e) {
       PandaLog.w('PandaAgent', 'Could not save project memory: $e');
+    }
+  }
+
+  // ── Smart title extraction ────────────────────────────────────────────────
+  /// Generates a concise chat title from [text] (first message).
+  String _smartTitle(String text) {
+    final cleaned = text.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (cleaned.isEmpty) return 'Nouvelle conversation';
+    // Try to grab first meaningful sentence (10–60 chars)
+    final match = RegExp(r'^(.{10,60}?)[\.\!\?]').firstMatch(cleaned);
+    if (match != null) return match.group(1)!.trim();
+    // Fallback: first 7 words
+    final words = cleaned.split(' ').take(7).join(' ');
+    return words.length > 50 ? words.substring(0, 50) : words;
+  }
+
+  /// After the first exchange, fires an async LLM call to generate a
+  /// proper conversation title and updates state + history.
+  Future<void> _generateConversationTitle() async {
+    if (_agentMessages.length != 2) return;
+    final model = _lastUsedModel;
+    if (model == null) return;
+    final firstMsg = (_agentMessages.first['text'] as String? ?? '').trim();
+    if (firstMsg.isEmpty) return;
+
+    try {
+      final runner = AgentRunner();
+      String title = '';
+      final stream = runner.run(
+        model: model,
+        messages: [
+          {
+            'role': 'user',
+            'content':
+                'Generate a concise 4–6 word title (in the same language as the user message) '
+                'summarising this conversation. Output ONLY the title — no quotes, no punctuation, '
+                'no explanation.\n\nUser message: "$firstMsg"',
+          },
+        ],
+        agentMode: 'normal', // disables all tools
+      );
+
+      await for (final chunk in stream) {
+        if (chunk.phase == AgentPhase.streaming) title += chunk.text;
+        if (chunk.phase == AgentPhase.done || chunk.phase == AgentPhase.error) break;
+      }
+
+      title = title.trim().replaceAll(RegExp(r'^["«»\']+|["«»\']+$'), '');
+      if (title.isNotEmpty && mounted) {
+        final clean = title.length > 50 ? title.substring(0, 50) : title;
+        setState(() => _agentConversationTitle = clean);
+        _autoSaveConversation();
+      }
+    } catch (_) {
+      // Title generation is best-effort — silently ignore failures.
     }
   }
 
@@ -6444,12 +6573,39 @@ class _SelectTypeState extends State<SelectType>
             label: 'Mode flottant',
             color: fg,
             muted: muted,
-            onTap: () {
+            onTap: () async {
               Navigator.pop(context);
-              setState(() {
-                _agentFloating = true;
-                _rightPanelOpen = false;
-              });
+              // On Android, check/request SYSTEM_ALERT_WINDOW before entering
+              // floating mode so the overlay can show over other apps.
+              if (Platform.isAndroid) {
+                final overlayStatus =
+                    await Permission.systemAlertWindow.status;
+                if (!overlayStatus.isGranted) {
+                  await Permission.systemAlertWindow.request();
+                  // Re-check after the settings round-trip
+                  final recheckStatus =
+                      await Permission.systemAlertWindow.status;
+                  if (!recheckStatus.isGranted) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text(
+                          'Autorisez la superposition dans Réglages → Panda IDE '
+                          'pour afficher l\'overlay par-dessus les autres apps.',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        duration: Duration(seconds: 5),
+                      ));
+                    }
+                    return;
+                  }
+                }
+              }
+              if (mounted) {
+                setState(() {
+                  _agentFloating  = true;
+                  _rightPanelOpen = false;
+                });
+              }
             },
           ),
           if (_agentMessages.isNotEmpty)
@@ -6534,7 +6690,14 @@ class _SelectTypeState extends State<SelectType>
                       () => setState(() => _showHistoryPanel = false)),
                 ]),
               ),
-              if (sessions.isEmpty)
+              if (sessState.isLoading)
+                Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(
+                        color: _kAccent, strokeWidth: 2),
+                  ),
+                )
+              else if (sessions.isEmpty)
                 Expanded(
                   child: Center(
                     child: Column(
@@ -6633,9 +6796,9 @@ class _SelectTypeState extends State<SelectType>
     setState(() {
       _agentGenerating = true;
       _agentPhase = AgentPhase.thinking;
-      // Auto-title from first message
+      // Auto-title from first message (smart extraction; refined by LLM after response)
       if (_agentMessages.isEmpty && _agentConversationTitle == 'Nouvelle conversation') {
-        _agentConversationTitle = text.length > 32 ? text.substring(0, 32) : text;
+        _agentConversationTitle = _smartTitle(text);
       }
     });
     PandaLog.i(
@@ -6725,6 +6888,7 @@ class _SelectTypeState extends State<SelectType>
               'La résolution du modèle IA a expiré.',
             ),
           );
+          if (model != null) _lastUsedModel = model;
           PandaLog.d(
             'PandaAgent',
             'Provider resolved — model=${model?.runtimeType ?? '<none>'}',
@@ -6969,6 +7133,10 @@ class _SelectTypeState extends State<SelectType>
             });
             // Auto-save conversation to history after each complete exchange
             _autoSaveConversation();
+            // After the FIRST exchange, fire an async LLM title generation
+            if (_agentMessages.length == 2) {
+              _generateConversationTitle();
+            }
           },
         );
   }

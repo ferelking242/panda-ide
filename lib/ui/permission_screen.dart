@@ -22,7 +22,8 @@ class PermissionScreen extends StatefulWidget {
 class _PermissionScreenState extends State<PermissionScreen> {
   // Android 13+ storage permissions
   PermissionStatus _storageStatus = PermissionStatus.denied;
-  PermissionStatus _notifStatus = PermissionStatus.denied;
+  PermissionStatus _notifStatus   = PermissionStatus.denied;
+  PermissionStatus _overlayStatus = PermissionStatus.denied;
   bool _loading = true;
   bool _proceeding = false;
 
@@ -35,10 +36,14 @@ class _PermissionScreenState extends State<PermissionScreen> {
   Future<void> _refreshStatuses() async {
     setState(() => _loading = true);
     final storage = await _storagePermission().status;
-    final notif = await Permission.notification.status;
+    final notif   = await Permission.notification.status;
+    final overlay = Platform.isAndroid
+        ? await Permission.systemAlertWindow.status
+        : PermissionStatus.granted;
     setState(() {
       _storageStatus = storage;
-      _notifStatus = notif;
+      _notifStatus   = notif;
+      _overlayStatus = overlay;
       _loading = false;
     });
   }
@@ -93,6 +98,12 @@ class _PermissionScreenState extends State<PermissionScreen> {
   Future<void> _requestNotification() async {
     final result = await Permission.notification.request();
     setState(() => _notifStatus = result);
+  }
+
+  Future<void> _requestOverlay() async {
+    if (!Platform.isAndroid) return;
+    final result = await Permission.systemAlertWindow.request();
+    setState(() => _overlayStatus = result);
   }
 
   Future<void> _proceed() async {
@@ -183,6 +194,19 @@ class _PermissionScreenState extends State<PermissionScreen> {
                               'Pour vous alerter de la fin des builds, des réponses de Panda Agent, et des mises à jour des extensions.',
                           status: _notifStatus,
                           onRequest: _requestNotification,
+                        ),
+                        const SizedBox(height: 28),
+                        _SectionLabel(label: 'AFFICHAGE'),
+                        const SizedBox(height: 10),
+                        _PermissionCard(
+                          icon: Icons.picture_in_picture_alt_rounded,
+                          iconColor: const Color(0xff9b7dd4),
+                          title: 'Superposition d\'écran (Mode flottant)',
+                          description:
+                              'Permet à Panda Agent de s\'afficher en mode flottant par-dessus les autres applications. '
+                              'Requis pour utiliser l\'overlay flottant hors de l\'app.',
+                          status: _overlayStatus,
+                          onRequest: _requestOverlay,
                         ),
                       ],
                     ),

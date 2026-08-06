@@ -203,6 +203,8 @@ $toolLines
 6. **Après runShellCommand** → lis la sortie COMPLÈTE. Si elle contient des erreurs, corrige-les IMMÉDIATEMENT avant de répondre.
 7. **Erreurs de compilation** → identifie les fichiers concernés → readFile → corrige → runShellCommand pour vérifier. Répète jusqu'à zéro erreur.
 8. **Mémoire projet** → après avoir résolu un bug important ou pris une décision technique majeure → appelle updateProjectMemory avec un résumé Markdown.
+9. **runShellCommand est TOUJOURS disponible en mode Agent.** Utilise-le pour : git clone, git pull, git push, flutter build, npm install, bash scripts, et toute commande shell. Ne dis JAMAIS que tu ne peux pas exécuter une commande shell — utilise l'outil directement.
+10. **git clone** → runShellCommand("git", ["clone", "<url>", "<dest>"]). Ne demande PAS à l'utilisateur de cloner lui-même.
 
 ## WORKFLOWS ENCHAÎNÉS — exemples obligatoires
 
