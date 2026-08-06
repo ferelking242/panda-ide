@@ -6159,7 +6159,7 @@ class _SelectTypeState extends State<SelectType>
         if (chunk.phase == AgentPhase.done || chunk.phase == AgentPhase.error) break;
       }
 
-      title = title.trim().replaceAll(RegExp(r'^["«»\']+|["«»\']+$'), '');
+      title = title.trim().replaceAll(RegExp(r"""^["«»']+|["«»']+$"""), '');
       if (title.isNotEmpty && mounted) {
         final clean = title.length > 50 ? title.substring(0, 50) : title;
         setState(() => _agentConversationTitle = clean);
