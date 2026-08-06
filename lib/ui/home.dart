@@ -955,7 +955,7 @@ class _SelectTypeState extends State<SelectType>
                               if (_sidebarState == 2)
                                 Positioned(
                                   left: 0,
-                                  top: 0,
+                                  top: 36,   // starts below the dongle tab bar (35px + 1px divider)
                                   bottom: 0,
                                   child: Material(
                                     elevation: 6,
@@ -2939,7 +2939,26 @@ class _SelectTypeState extends State<SelectType>
 
       // ── Tab bar ───────────────────────────────────────────────────────────────
 
-    Widget _buildTabBar(AppTheme appTheme, {bool isPrimary = true}) {
+  
+  /// Returns the correct 13×13 icon widget for a dongle tab.
+  /// For file-editor tabs the real language icon (SVG) is used.
+  /// For all other tabs (Welcome, Agent, …) falls back to the IconData.
+  Widget _buildTabIconWidget(_TabDef tab, Color color) {
+    final cfg = _editorTabs[tab.id];
+    if (cfg != null && cfg.languageDetails != null) {
+      final langIcon = cfg.languageDetails!.icon;
+      if (langIcon is Widget) {
+        return SizedBox(
+          width: 13,
+          height: 13,
+          child: FittedBox(fit: BoxFit.contain, child: langIcon),
+        );
+      }
+    }
+    return Icon(tab.icon, size: 13, color: color);
+  }
+
+  Widget _buildTabBar(AppTheme appTheme, {bool isPrimary = true}) {
     final isDark      = appTheme.isDark;
     final tabBg       = isDark ? _kTabBarDark    : _kTabBarLight;
     final activeTabBg = isDark ? _kTabActiveDark : _kTabActiveLight;
@@ -2977,8 +2996,7 @@ class _SelectTypeState extends State<SelectType>
                       color: isActive ? activeTabBg : Colors.transparent,
                     ),
                     child: Row(children: [
-                      Icon(tab.icon, size: 13,
-                          color: isActive ? activeFg : inactiveFg),
+                      _buildTabIconWidget(tab, isActive ? activeFg : inactiveFg),
                       const SizedBox(width: 6),
                       Text(tab.title,
                           style: TextStyle(
