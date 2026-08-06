@@ -29,6 +29,7 @@ import 'downloads.dart';
 import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
+import '../terminal/terminal_bridge.dart';
 import '../utils/ai.dart';
 import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
@@ -222,6 +223,8 @@ class _SelectTypeState extends State<SelectType>
     _themeAnim = CurvedAnimation(parent: _themeAnimCtrl, curve: Curves.easeInOut);
     // Rebuild send button colour when text changes
     _agentInputCtrl.addListener(() => setState(() {}));
+    // Bridge: terminal → agent
+    TerminalBridge.instance.onSendToAgent = _sendToAgentFromBridge;
     // Load chat sessions
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _openPendingSharedFile();
@@ -281,6 +284,7 @@ class _SelectTypeState extends State<SelectType>
 
   @override
   void dispose() {
+    TerminalBridge.instance.onSendToAgent = null;
     WidgetsBinding.instance.removeObserver(this);
     createFileController.dispose();
     _agentInputCtrl.dispose();
@@ -6965,6 +6969,17 @@ class _SelectTypeState extends State<SelectType>
     if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes}min';
     if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
     return 'Il y a ${diff.inDays}j';
+  }
+
+  /// Reçoit du texte depuis le terminal (via TerminalBridge) et l'envoie à l'agent.
+  void _sendToAgentFromBridge(String text) {
+    if (!mounted || _agentGenerating) return;
+    // Ouvre le panel agent si fermé
+    if (!_rightPanelOpen) {
+      setState(() => _rightPanelOpen = true);
+    }
+    _agentInputCtrl.text = text;
+    _agentSend();
   }
 
   Future<void> _agentSend() async {

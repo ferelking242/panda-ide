@@ -14,6 +14,7 @@ import '../bloc/ui_bloc/ui_bloc.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
+import './terminal_bridge.dart';
 
 class SetupTerminal extends StatefulWidget {
   final String projectDir;
@@ -991,6 +992,27 @@ class _SetupTerminalState extends State<SetupTerminal> {
                       color: const Color(0xff454545),
                     ),
                     _toolbarButton(
+                      icon: Icons.auto_awesome,
+                      label: 'Agent',
+                      onTap: () {
+                        final selectedText =
+                            runtime.controller.selection != null
+                            ? runtime.terminal.buffer.getText(
+                                runtime.controller.selection!,
+                              )
+                            : '';
+                        if (selectedText.isNotEmpty) {
+                          TerminalBridge.instance.sendToAgent(selectedText);
+                        }
+                        runtime.controller.clearSelection();
+                      },
+                    ),
+                    Container(
+                      width: 1,
+                      height: 24,
+                      color: const Color(0xff454545),
+                    ),
+                    _toolbarButton(
                       icon: Icons.close,
                       label: '',
                       onTap: () {
@@ -1673,6 +1695,24 @@ class _SetupTerminalState extends State<SetupTerminal> {
                             resetCallback: resetCallback,
                           );
                         },
+                        onCopy: () {
+                          final runtime = _activeRuntime();
+                          if (runtime == null) return;
+                          final selectedText = runtime.controller.selection != null
+                              ? runtime.terminal.buffer.getText(runtime.controller.selection!)
+                              : '';
+                          if (selectedText.isNotEmpty) {
+                            Clipboard.setData(ClipboardData(text: selectedText));
+                          }
+                        },
+                        onPaste: () async {
+                          final runtime = _activeRuntime();
+                          if (runtime == null) return;
+                          final data = await Clipboard.getData(Clipboard.kTextPlain);
+                          if (data?.text != null) {
+                            runtime.pty?.write(const Utf8Encoder().convert(data!.text!));
+                          }
+                        },
                       ),
                   ],
                 ),
@@ -1733,11 +1773,15 @@ class TerminalKeyboardMenu extends StatefulWidget {
   final Function(String) onSendSequence;
   final Function(bool ctrl, bool alt, bool shift, VoidCallback resetCallback)
   onModifierChanged;
+  final VoidCallback? onCopy;
+  final VoidCallback? onPaste;
 
   const TerminalKeyboardMenu({
     super.key,
     required this.onSendSequence,
     required this.onModifierChanged,
+    this.onCopy,
+    this.onPaste,
   });
 
   @override
@@ -1921,6 +1965,9 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
             chip('*',  () => widget.onSendSequence('*')),
             chip('>',  () => widget.onSendSequence('>')),
             chip('<',  () => widget.onSendSequence('<')),
+            div(),
+            iconChip(Icons.copy_rounded,  () => widget.onCopy?.call()),
+            iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
           ],
         ),
       ),
