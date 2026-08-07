@@ -25,6 +25,8 @@ import '../utils/agentic_tool_catalog.dart';
 import '../utils/copilot_chat.dart';
 import '../utils/panda_log.dart';
 import 'agent_runner.dart';
+import 'package:markdown_widget/markdown_widget.dart';
+import 'package:markdown_widget/config/configs.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 const _kAccent  = Color(0xff5090c8);
@@ -1651,26 +1653,32 @@ class _AgentSettingsState extends State<AgentSettings>
               if (text.isNotEmpty || (isStreaming && think.isEmpty))
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: Text(
-                          text,
-                          style: TextStyle(
-                            fontSize: 13.5,
-                            color: isError ? _kDanger : fg,
-                            height: 1.55,
-                          ),
+                  child: isStreaming
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                text,
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  color: isError ? _kDanger : fg,
+                                  height: 1.55,
+                                ),
+                              ),
+                            ),
+                            if (text.isNotEmpty) ...[
+                              const SizedBox(width: 3),
+                              _ChatBlinkingCursor(color: fg),
+                            ],
+                          ],
+                        )
+                      : _ChatMarkdownResponse(
+                          markdown: text,
+                          isDark: isDark,
+                          fg: isError ? _kDanger : fg,
                         ),
-                      ),
-                      if (isStreaming && text.isNotEmpty) ...[
-                        const SizedBox(width: 3),
-                        _ChatBlinkingCursor(color: fg),
-                      ],
-                    ],
-                  ),
                 ),
 
               // Action row (copy + retry)
@@ -3302,6 +3310,38 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ChatMarkdownResponse extends StatelessWidget {
+  final String markdown;
+  final bool isDark;
+  final Color fg;
+  const _ChatMarkdownResponse({
+    required this.markdown,
+    required this.isDark,
+    required this.fg,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final config = isDark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xff11121a) : const Color(0xfff8f9fb),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: MarkdownWidget(
+        data: markdown,
+        config: config.copy(configs: [
+          PConfig(
+            textStyle: TextStyle(fontSize: 13.5, color: fg, height: 1.55),
+          ),
+        ]),
       ),
     );
   }
