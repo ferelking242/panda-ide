@@ -953,7 +953,13 @@ class _AgentSettingsState extends State<AgentSettings>
     }
 
     final resp = await http.get(Uri.parse(url), headers: headers);
-    if (resp.statusCode != 200) throw StateError('HTTP ${resp.statusCode}: ${resp.body.substring(0, resp.body.length.clamp(0, 200))}');
+    if (resp.statusCode != 200) {
+      final detail = resp.body.substring(0, resp.body.length.clamp(0, 200));
+      if (provider == 'gemini' && resp.statusCode == 401) {
+        throw StateError('Clé Gemini refusée (401). Vérifiez la clé Google AI Studio, son projet et ses restrictions.');
+      }
+      throw StateError('HTTP ${resp.statusCode}: $detail');
+    }
     return _normalizeModelCatalog(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
@@ -964,11 +970,17 @@ class _AgentSettingsState extends State<AgentSettings>
       for (final item in data) {
         if (item is Map) {
           final m = Map<String, dynamic>.from(item);
+          final rawId = (m['id'] ?? m['name'] ?? '').toString();
+          final id = _selectedProviderId == 'gemini' && rawId.startsWith('models/')
+              ? rawId.substring('models/'.length)
+              : rawId;
           models.add({
-            'id': m['id'] ?? m['name'] ?? '',
-            'displayName': m['displayName'] ?? m['display_name'] ?? m['id'] ?? m['name'] ?? '',
-            'supported_generation_methods': m['supported_generation_methods'],
-            'supported_endpoints': m['supported_endpoints'],
+            'id': id,
+            'displayName': m['displayName'] ?? m['display_name'] ?? id,
+            'supported_generation_methods': m['supported_generation_methods'] ??
+                m['supportedGenerationMethods'],
+            'supported_endpoints': m['supported_endpoints'] ??
+                m['supportedEndpoints'],
           });
         }
       }
@@ -1009,11 +1021,16 @@ class _AgentSettingsState extends State<AgentSettings>
 
   bool _looksChatCapable(Map<String, dynamic> model) {
     final id      = model['id'].toString().toLowerCase();
-    final methods = model['supported_generation_methods'];
+    final methods = model['supported_generation_methods'] ??
+        model['supportedGenerationMethods'];
     if (methods is List && methods.isNotEmpty) {
-      return methods.any((m) => m.toString().toLowerCase().contains('generatecontent'));
+      return methods.any((m) {
+        final method = m.toString().toLowerCase();
+        return method == 'generatecontent' || method.contains('generatecontent');
+      });
     }
-    final endpoints = model['supported_endpoints'];
+    final endpoints = model['supported_endpoints'] ??
+        model['supportedEndpoints'];
     if (endpoints is List && endpoints.isNotEmpty) {
       return endpoints.any((e) {
         final v = e.toString().toLowerCase();

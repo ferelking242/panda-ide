@@ -884,13 +884,21 @@ class Gemini extends Models {
 
   Gemini({
     required this.apiKey,
-    this.model = 'gemini-2.5-flash-lite',
+    String model = 'gemini-2.5-flash-lite',
     this.temperature,
     this.maxOutputTokens,
     this.topP,
     this.topK,
     this.stopSequences,
-  }) : url = 'https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey';
+  })  : model = _normalizeGeminiModelId(model),
+        url = 'https://generativelanguage.googleapis.com/v1beta/models/${_normalizeGeminiModelId(model)}:generateContent?key=$apiKey';
+
+  static String _normalizeGeminiModelId(String value) {
+    final trimmed = value.trim();
+    return trimmed.startsWith('models/')
+        ? trimmed.substring('models/'.length)
+        : trimmed;
+  }
 
   @override
   String responseParser(dynamic response) {
