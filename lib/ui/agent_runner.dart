@@ -931,16 +931,24 @@ runShellCommand(git status) → runShellCommand(git add -A) → runShellCommand(
       case 400:
         return 'Requête invalide (400). ${extracted ?? body}';
       case 401:
-        return 'Clé API invalide ou expirée (401). Vérifiez votre clé dans Paramètres Agent.';
+        return 'Clé API invalide ou expirée (401).\n\n'
+            '• Vérifiez votre clé dans les Paramètres Agent (onglet Providers).\n'
+            '• Pour Gemini : la clé doit être activée sur aistudio.google.com.\n'
+            '• Pour DeepSeek/OpenAI : recopiez-la depuis le tableau de bord du provider.';
       case 402:
         final detail = extracted ?? 'Insufficient Balance';
         return 'Solde insuffisant (402) — $detail\n\n'
             'Votre compte n\'a plus de crédits. Rechargez votre solde sur '
-            'la plateforme du provider (ex : platform.deepseek.com, platform.openai.com…).';
+            'la plateforme du provider (ex : platform.deepseek.com, aistudio.google.com…).';
       case 403:
         return 'Accès refusé (403). ${extracted ?? 'Votre clé n\'a pas les permissions nécessaires.'}';
       case 404:
-        return 'Endpoint introuvable (404). Vérifiez l\'URL du provider.';
+        // 404 peut venir d'une URL d'endpoint incorrecte OU d'un nom de modèle inexistant.
+        final hint404 = extracted != null && extracted.isNotEmpty
+            ? extracted
+            : 'Le modèle sélectionné n\'existe peut-être plus chez ce provider.';
+        return 'Ressource introuvable (404) — $hint404\n\n'
+            'Reconfigurez votre provider dans les Paramètres Agent pour choisir un modèle valide.';
       case 429:
         return 'Limite de débit atteinte (429). ${extracted ?? 'Attendez quelques secondes et réessayez.'}';
       case 500:
