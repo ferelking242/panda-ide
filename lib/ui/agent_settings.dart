@@ -30,6 +30,9 @@ import 'agent_runner.dart';
 const _kAccent  = Color(0xff5090c8);
 const _kDanger  = Color(0xffe05252);
 const _kSuccess = Color(0xff4caf7d);
+const _kChatBg  = Color(0xff0f0f1a);
+const _kGroupBg = Color(0xff1a1a2a);
+const _kChipBg  = Color(0xff252535);
 
 // ── Provider definitions ────────────────────────────────────────────────────
 class _ProviderDef {
@@ -254,6 +257,8 @@ class _AgentSettingsState extends State<AgentSettings>
   String     _chatStreamBuf    = '';
   String     _chatThinkingBuf  = '';
   int        _chatSerial       = 0;
+  bool       _showScrollLatest = false;
+  final List<String> _chatContextChips = [];
   final      _chatRunner       = AgentRunner();
   String     _chatMode         = 'agent'; // 'ask' | 'agent' | 'plan'
 
@@ -296,7 +301,18 @@ class _AgentSettingsState extends State<AgentSettings>
     _tab            = TabController(length: 3, vsync: this);
     _settingsSubTab = TabController(length: 3, vsync: this);
     _chatInputCtrl.addListener(() => setState(() {}));
+    _chatScrollCtrl.addListener(_onChatScroll);
     _loadMemorySettings();
+  }
+
+  void _onChatScroll() {
+    if (!_chatScrollCtrl.hasClients) return;
+    final distance = _chatScrollCtrl.position.maxScrollExtent -
+        _chatScrollCtrl.position.pixels;
+    final shouldShow = distance > 140 && _chatGenerating;
+    if (shouldShow != _showScrollLatest && mounted) {
+      setState(() => _showScrollLatest = shouldShow);
+    }
   }
 
   Future<void> _loadMemorySettings() async {
@@ -1125,16 +1141,67 @@ class _AgentSettingsState extends State<AgentSettings>
   // ══════════════════════════════════════════════════════════════════════════
   Widget _buildChatTab(BuildContext context, bool isDark, Color bg,
       Color card, Color fg, Color muted, Color border) {
-    final inputBg     = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
-    final inputBorder = isDark ? const Color(0xff404040) : const Color(0xffdddddd);
+    final chatBg      = isDark ? _kChatBg : const Color(0xfff6f8fa);
+    final inputBg     = isDark ? const Color(0xff151520) : Colors.white;
+    final inputBorder = isDark ? const Color(0xff2a2a3a) : const Color(0xffd0d7de);
 
     return Column(
       children: [
+        _buildChatHeader(isDark, fg, muted, border),
         // ── Chat area ─────────────────────────────────────────────────
         Expanded(
-          child: _chatMessages.isEmpty
-              ? _buildChatEmpty(isDark, fg, muted)
-              : _buildChatMessages(isDark, fg, muted),
+          child: Stack(
+            children: [
+              Container(
+                color: chatBg,
+                child: _chatMessages.isEmpty
+                    ? _buildChatEmpty(isDark, fg, muted)
+                    : _buildChatMessages(isDark, fg, muted),
+              ),
+              if (_showScrollLatest)
+                Positioned(
+                  bottom: 14,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: InkWell(
+                      onTap: () {
+                        _chatScrollCtrl.animateTo(
+                          _chatScrollCtrl.position.maxScrollExtent,
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOut,
+                        );
+                        setState(() => _showScrollLatest = false);
+                      },
+                      borderRadius: BorderRadius.circular(18),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: _kAccent,
+                          borderRadius: BorderRadius.circular(18),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.22),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Broken.arrow_down_2, size: 13, color: Colors.white),
+                            SizedBox(width: 6),
+                            Text('Derniers messages',
+                                style: TextStyle(fontSize: 11, color: Colors.white)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
 
         // ── Input area ────────────────────────────────────────────────
@@ -1146,148 +1213,246 @@ class _AgentSettingsState extends State<AgentSettings>
           ),
           child: Column(
             children: [
-              // Mode selector + token counter + clear
-              BlocBuilder<AIBloc, AIState>(builder: (_, aiState) {
-                final selectedId  = aiState.modelSelected['chat']?.toString();
-                final cfg         = selectedId == null ? null : aiState.config[selectedId];
-                final modelName   = cfg == null ? '' :
-                    (cfg['modelName'] ?? cfg['model'] ?? '').toString();
-                final tokens      = _estimateTokens();
-                final maxCtx      = _contextWindowFor(modelName);
-                final ratio       = maxCtx > 0 ? tokens / maxCtx : 0.0;
-                final tokenColor  = ratio < 0.6
-                    ? muted
-                    : ratio < 0.85
-                        ? const Color(0xfff59e0b)
-                        : _kDanger;
-
-                return Row(
-                  children: [
-                    _modeChip('ask',   'Ask',   isDark, muted, fg),
-                    const SizedBox(width: 6),
-                    _modeChip('agent', 'Agent', isDark, muted, fg),
-                    const SizedBox(width: 6),
-                    _modeChip('plan',  'Plan',  isDark, muted, fg),
-                    const Spacer(),
-                    // ── Token counter + cost ────────────────────────────
-                    if (modelName.isNotEmpty) ...[
-                      Tooltip(
-                        message: '~$tokens tokens dans le contexte / max ${_fmtK(maxCtx)}\n'
-                            'Session : ${_fmtK(_sessionTokensIn)} in + ${_fmtK(_sessionTokensOut)} out\n'
-                            'Coût estimé : ${_fmtCost(_sessionCostUsd)}\nModèle : $modelName',
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: tokenColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(5),
-                            border: Border.all(color: tokenColor.withOpacity(0.3)),
-                          ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Broken.cpu_setting, size: 9, color: tokenColor),
-                            const SizedBox(width: 3),
-                            Text(
-                              '${_fmtK(tokens)} / ${_fmtK(maxCtx)}',
-                              style: TextStyle(fontSize: 9.5, color: tokenColor, fontWeight: FontWeight.w500),
-                            ),
-                            if (_sessionCostUsd > 0) ...[
-                              const SizedBox(width: 5),
-                              Container(width: 1, height: 9, color: tokenColor.withOpacity(0.3)),
-                              const SizedBox(width: 5),
-                              Text(
-                                _fmtCost(_sessionCostUsd),
-                                style: TextStyle(fontSize: 9.5, color: tokenColor.withOpacity(0.85)),
-                              ),
-                            ],
-                          ]),
+              if (_chatContextChips.isNotEmpty)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _chatContextChips.map((chip) => Padding(
+                        padding: const EdgeInsets.only(right: 6, bottom: 6),
+                        child: InputChip(
+                          label: Text(chip, style: TextStyle(fontSize: 10, color: fg)),
+                          onDeleted: () => setState(() => _chatContextChips.remove(chip)),
+                          deleteIcon: Icon(Broken.close_circle, size: 13, color: muted),
+                          backgroundColor: _kChipBg,
+                          side: BorderSide(color: inputBorder),
+                          visualDensity: VisualDensity.compact,
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    // ── New chat ───────────────────────────────────────
-                    if (_chatMessages.isNotEmpty)
-                      InkWell(
-                        onTap: () => setState(() {
-                          _chatMessages.clear();
-                          _sessionCostUsd   = 0.0;
-                          _sessionTokensIn  = 0;
-                          _sessionTokensOut = 0;
-                        }),
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                          child: Icon(Broken.add_square, size: 14, color: muted),
-                        ),
-                      ),
-                  ],
-                );
-              }),
-              const SizedBox(height: 6),
-              // Text input
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xff1e1e1e) : Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: inputBorder),
-                      ),
-                      child: TextField(
-                        controller: _chatInputCtrl,
-                        maxLines: 4,
-                        minLines: 1,
-                        style: TextStyle(fontSize: 13, color: fg),
-                        decoration: InputDecoration(
-                          hintText: _chatMode == 'agent'
-                              ? 'Demandez à Panda Agent de coder…'
-                              : _chatMode == 'ask'
-                                  ? 'Posez une question sur le code…'
-                                  : 'Décrivez ce que vous voulez planifier…',
-                          hintStyle: TextStyle(fontSize: 12, color: muted),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          border: InputBorder.none,
-                          isDense: true,
-                        ),
-                        onSubmitted: (_) => _chatSend(),
-                      ),
+                      )).toList(),
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  if (_chatGenerating)
-                    InkWell(
-                      onTap: _chatStop,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        width: 32, height: 32,
-                        decoration: BoxDecoration(
-                          color: _kDanger.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Broken.stop_circle, size: 16, color: _kDanger),
-                      ),
-                    )
-                  else
-                    InkWell(
-                      onTap: _chatInputCtrl.text.trim().isNotEmpty ? _chatSend : null,
-                      borderRadius: BorderRadius.circular(6),
-                      child: Container(
-                        width: 32, height: 32,
-                        decoration: BoxDecoration(
-                          color: _chatInputCtrl.text.trim().isNotEmpty
-                              ? _kAccent
-                              : _kAccent.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Broken.send_1, size: 16, color: Colors.white),
+                ),
+              // Text input
+              Container(
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xff11111b) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: inputBorder),
+                ),
+                child: TextField(
+                  controller: _chatInputCtrl,
+                  maxLines: 8,
+                  minLines: 1,
+                  style: TextStyle(fontSize: 13, color: fg, height: 1.45),
+                  decoration: InputDecoration(
+                    hintText: _chatMode == 'agent'
+                        ? 'Décris ta tâche…'
+                        : _chatMode == 'ask'
+                            ? 'Pose une question…'
+                            : 'Que veux-tu planifier ?',
+                    hintStyle: TextStyle(fontSize: 12, color: muted),
+                    prefixIcon: Padding(
+                      padding: const EdgeInsets.only(left: 10, right: 4),
+                      child: Icon(Broken.slash, size: 15, color: muted),
+                    ),
+                    suffixIcon: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            tooltip: 'Ajouter un contexte',
+                            icon: Icon(Broken.attach_square, size: 16, color: muted),
+                            onPressed: () => setState(() => _chatContextChips.add('@file: sélection')),
+                          ),
+                          IconButton(
+                            tooltip: 'Entrée vocale',
+                            icon: Icon(Broken.microphone, size: 16, color: muted),
+                            onPressed: () => _showSnack(context, 'Entrée vocale bientôt disponible.'),
+                          ),
+                        ],
                       ),
                     ),
+                    contentPadding: const EdgeInsets.fromLTRB(4, 10, 4, 10),
+                    border: InputBorder.none,
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _chatSend(),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  _modeChip('ask', 'Ask', isDark, muted, fg),
+                  const SizedBox(width: 4),
+                  _modeChip('agent', 'Agent', isDark, muted, fg),
+                  const SizedBox(width: 4),
+                  _modeChip('plan', 'Plan', isDark, muted, fg),
+                  const Spacer(),
+                  if (_chatGenerating)
+                    _ChatSmallIconButton(
+                      icon: Broken.stop_circle,
+                      color: _kDanger,
+                      tooltip: 'Arrêter',
+                      onTap: _chatStop,
+                    )
+                  else
+                    _ChatSmallIconButton(
+                      icon: Broken.send_1,
+                      color: _chatInputCtrl.text.trim().isNotEmpty ? _kAccent : muted,
+                      tooltip: 'Envoyer',
+                      onTap: _chatInputCtrl.text.trim().isNotEmpty ? _chatSend : null,
+                    ),
+                  if (_chatMessages.isNotEmpty) ...[
+                    const SizedBox(width: 4),
+                    _ChatSmallIconButton(
+                      icon: Broken.add_square,
+                      color: muted,
+                      tooltip: 'Nouvelle conversation',
+                      onTap: () => setState(() {
+                        _chatMessages.clear();
+                        _sessionCostUsd = 0.0;
+                        _sessionTokensIn = 0;
+                        _sessionTokensOut = 0;
+                      }),
+                    ),
+                  ],
                 ],
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildChatHeader(bool isDark, Color fg, Color muted, Color border) {
+    return BlocBuilder<AIBloc, AIState>(
+      builder: (_, aiState) {
+        final selectedId = aiState.modelSelected['chat']?.toString();
+        final cfg = selectedId == null ? null : aiState.config[selectedId];
+        final modelName = cfg == null
+            ? 'Aucun modèle sélectionné'
+            : (cfg['modelName'] ?? cfg['model'] ?? 'Modèle actif').toString();
+        final tokens = _estimateTokens();
+        final maxCtx = _contextWindowFor(modelName);
+        final ratio = maxCtx > 0
+            ? (tokens / maxCtx).clamp(0.0, 1.0).toDouble()
+            : 0.0;
+        final tokenColor = ratio < 0.5
+            ? _kSuccess
+            : ratio < 0.8
+                ? const Color(0xfff5a623)
+                : _kDanger;
+
+        return Container(
+          padding: const EdgeInsets.fromLTRB(14, 8, 8, 9),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xff151520) : Colors.white,
+            border: Border(bottom: BorderSide(color: border)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: _kAccent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Broken.cpu_setting, size: 15, color: _kAccent),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Panda Agent',
+                        style: TextStyle(fontSize: 12.5, color: fg, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(modelName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 10, color: muted)),
+                  ],
+                ),
+              ),
+              Tooltip(
+                message: '${_fmtK(tokens)} / ${_fmtK(maxCtx)} tokens',
+                child: Container(
+                  width: 72,
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: tokenColor.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: tokenColor.withValues(alpha: 0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('${_fmtK(tokens)} / ${_fmtK(maxCtx)}',
+                          style: TextStyle(fontSize: 9, color: tokenColor, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: ratio,
+                          minHeight: 3,
+                          backgroundColor: tokenColor.withValues(alpha: 0.12),
+                          valueColor: AlwaysStoppedAnimation<Color>(tokenColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              if (_sessionCostUsd > 0)
+                Text('~${_fmtCost(_sessionCostUsd)}',
+                    style: TextStyle(fontSize: 9.5, color: muted)),
+              IconButton(
+                tooltip: 'Options du chat',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Broken.more, size: 17, color: muted),
+                onPressed: () => _showChatMenu(context),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showChatMenu(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Broken.add_square),
+              title: const Text('Nouvelle conversation'),
+              onTap: () {
+                Navigator.pop(context);
+                setState(() => _chatMessages.clear());
+              },
+            ),
+            ListTile(
+              leading: const Icon(Broken.copy),
+              title: const Text('Exporter le texte'),
+              onTap: () {
+                Navigator.pop(context);
+                final content = _chatMessages
+                    .map((m) => '${m['role']}: ${m['text'] ?? ''}')
+                    .join('\n\n');
+                Clipboard.setData(ClipboardData(text: content));
+                _showSnack(context, 'Conversation copiée.');
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1447,21 +1612,22 @@ class _AgentSettingsState extends State<AgentSettings>
                   isStreaming: isStreaming && text.isEmpty,
                 ),
 
-              // Tool calls — icon + label + expandable result
+              // Tool calls — grouped into one collapsible action timeline.
               ...() {
                 final calls = (msg['toolCalls'] as List?)
-                        ?.cast<Map<String, dynamic>>() ??
-                    [];
-                return calls.map((call) => _ChatToolCallBlock(
-                      toolName: call['name'] as String? ?? '',
-                      status: call['status'] as String? ?? 'running',
-                      result: call['result'] as String?,
-                      args: (call['args'] as Map?)
-                          ?.cast<String, dynamic>(),
-                      isDark: isDark,
-                      fg: fg,
-                      muted: muted,
-                    ));
+                        ?.whereType<Map>()
+                        .map((call) => call.cast<String, dynamic>())
+                        .toList() ??
+                    <Map<String, dynamic>>[];
+                if (calls.isEmpty) return <Widget>[];
+                return <Widget>[
+                  _ChatActionGroup(
+                    calls: calls,
+                    isDark: isDark,
+                    fg: fg,
+                    muted: muted,
+                  ),
+                ];
               }(),
 
               // Response text — NO bubble, plain
@@ -2327,6 +2493,230 @@ class _SettingsField extends StatelessWidget {
   );
 }
 
+class _ChatSmallIconButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback? onTap;
+
+  const _ChatSmallIconButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+        tooltip: tooltip,
+        onPressed: onTap,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.all(5),
+        constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+        icon: Icon(icon, size: 16, color: onTap == null ? color.withValues(alpha: 0.35) : color),
+      );
+}
+
+class _ChatActionGroup extends StatefulWidget {
+  final List<Map<String, dynamic>> calls;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  const _ChatActionGroup({
+    required this.calls,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  State<_ChatActionGroup> createState() => _ChatActionGroupState();
+}
+
+class _ChatActionGroupState extends State<_ChatActionGroup> {
+  bool _expanded = false;
+
+  IconData _groupIcon() {
+    final names = widget.calls.map((call) => call['name']?.toString() ?? '').toList();
+    if (names.any((name) => name == 'runShellCommand')) return Broken.code_1;
+    if (names.any((name) => name.startsWith('write') || name.startsWith('edit'))) {
+      return Broken.edit;
+    }
+    if (names.any((name) => name.startsWith('git'))) return Broken.hierarchy_2;
+    if (names.any((name) => name.startsWith('search') || name.startsWith('grep'))) {
+      return Broken.search_normal;
+    }
+    return Broken.setting_2;
+  }
+
+  String _title() {
+    final first = widget.calls.first['name']?.toString() ?? '';
+    if (first == 'runShellCommand') return 'Exécution du terminal';
+    if (first.startsWith('read') || first.startsWith('list')) return 'Exploration du projet';
+    if (first.startsWith('write') || first.startsWith('edit')) return 'Mise à jour des fichiers';
+    if (first.startsWith('git')) return 'Opérations Git';
+    return 'Actions de Panda Agent';
+  }
+
+  String _labelFor(String name) {
+    if (name.isEmpty) return 'Action';
+    final spaced = name.replaceAllMapped(
+      RegExp(r'([A-Z])'),
+      (match) => ' ${match.group(1)!.toLowerCase()}',
+    );
+    return spaced[0].toUpperCase() + spaced.substring(1);
+  }
+
+  IconData _iconFor(String name) {
+    if (name == 'runShellCommand') return Broken.code_1;
+    if (name.startsWith('write') || name.startsWith('edit') ||
+        name.startsWith('replace') || name.startsWith('insert')) {
+      return Broken.edit;
+    }
+    if (name.startsWith('read')) return Broken.document_1;
+    if (name.startsWith('delete')) return Broken.trash;
+    if (name.startsWith('list') || name.startsWith('glob')) return Broken.folder_2;
+    if (name.startsWith('grep') || name.startsWith('search')) return Broken.search_normal;
+    if (name.startsWith('git')) return Broken.hierarchy_2;
+    if (name.startsWith('openLinks')) return Broken.global_search;
+    if (name.startsWith('updateProject') || name.startsWith('memory')) return Broken.note_2;
+    if (name.startsWith('getLsp') || name.startsWith('diagnostic')) return Broken.warning_2;
+    return Broken.cpu_setting;
+  }
+
+  String? _argsSummary(Map<String, dynamic>? args) {
+    if (args == null || args.isEmpty) return null;
+    final value = args.values.first;
+    if (value is! String) return null;
+    final clean = value.replaceAll('\n', ' ').trim();
+    if (clean.isEmpty) return null;
+    return clean.length > 54 ? '${clean.substring(0, 54)}…' : clean;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final border = widget.isDark ? const Color(0xff2a2a3e) : const Color(0xffd0d7de);
+    final running = widget.calls.any((call) => call['status'] == 'running');
+    final groupColor = running ? const Color(0xfff5a623) : widget.muted;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      decoration: BoxDecoration(
+        color: widget.isDark ? _kGroupBg : Colors.white,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: running ? groupColor.withValues(alpha: 0.45) : border),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(9),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+              child: Row(
+                children: [
+                  Icon(_groupIcon(), size: 15, color: groupColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _title(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11.5, color: widget.fg, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  Text('${widget.calls.length} actions',
+                      style: TextStyle(fontSize: 10, color: widget.muted)),
+                  const SizedBox(width: 7),
+                  if (running)
+                    _DotsIndicator(color: groupColor, size: 3.5)
+                  else
+                    Icon(_expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                        size: 13, color: widget.muted),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            child: _expanded
+                ? Column(
+                    children: [
+                      Divider(height: 1, color: border),
+                      ...widget.calls.map((call) {
+                        final name = call['name']?.toString() ?? '';
+                        final result = call['result']?.toString() ?? '';
+                        final args = (call['args'] as Map?)?.cast<String, dynamic>();
+                        final itemRunning = call['status'] == 'running';
+                        final summary = _argsSummary(args);
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(11, 7, 11, 7),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(itemRunning ? Broken.more_circle : Broken.tick_circle,
+                                  size: 13,
+                                  color: itemRunning ? groupColor : _kSuccess),
+                              const SizedBox(width: 7),
+                              Icon(_iconFor(name), size: 13, color: widget.muted),
+                              const SizedBox(width: 7),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(_labelFor(name),
+                                        style: TextStyle(fontSize: 11, color: widget.fg)),
+                                    if (summary != null)
+                                      Text(summary,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                              fontSize: 10,
+                                              color: widget.muted,
+                                              fontStyle: FontStyle.italic)),
+                                    if (result.isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 5),
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.all(7),
+                                          decoration: BoxDecoration(
+                                            color: widget.isDark
+                                                ? const Color(0xff0d1117)
+                                                : const Color(0xfff6f8fa),
+                                            borderRadius: BorderRadius.circular(5),
+                                          ),
+                                          child: SelectableText(
+                                            result.length > 700
+                                                ? '${result.substring(0, 700)}\n…'
+                                                : result,
+                                            style: TextStyle(
+                                                fontSize: 10,
+                                                height: 1.45,
+                                                color: widget.muted,
+                                                fontFamily: 'monospace'),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProviderPicker extends StatelessWidget {
   final List<_ProviderDef> providers;
   final String selected;
@@ -2640,7 +3030,7 @@ class _ChatThinkingBlockState extends State<_ChatThinkingBlock>
                   // Cerveau animé
                   FadeTransition(
                     opacity: widget.isStreaming ? _pulseAnim : const AlwaysStoppedAnimation(1.0),
-                    child: const Text('🧠', style: TextStyle(fontSize: 15)),
+                    child: const Icon(Broken.cpu, size: 16, color: _kThinkPurple),
                   ),
                   const SizedBox(width: 8),
                   Text(
