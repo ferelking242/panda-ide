@@ -8,6 +8,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -274,6 +275,11 @@ class _AgentSettingsState extends State<AgentSettings>
   final _systemPromptCtrl  = TextEditingController();
   bool _memoryEnabled      = true;
 
+  // ── Cost tracking ────────────────────────────────────────────────────────
+  double _sessionCostUsd   = 0.0;   // cumulative cost for the session
+  int    _sessionTokensIn  = 0;     // estimated input tokens sent
+  int    _sessionTokensOut = 0;     // estimated output tokens received
+
   // ── Subagents tab state ─────────────────────────────────────────────────
   final List<Map<String, dynamic>> _readyTasks  = [];
   final List<Map<String, dynamic>> _activeTasks = [];
@@ -301,6 +307,8 @@ class _AgentSettingsState extends State<AgentSettings>
       _memoryNotesCtrl.text  = prefs.getString('agent_memory_notes') ?? '';
       _systemPromptCtrl.text = prefs.getString('agent_system_prompt') ?? '';
     });
+    // Restore previous conversation
+    if (_chatMessages.isEmpty) await _loadChatHistory();
   }
 
   Future<void> _saveMemorySettings() async {
@@ -308,6 +316,119 @@ class _AgentSettingsState extends State<AgentSettings>
     await prefs.setBool('agent_memory_enabled', _memoryEnabled);
     await prefs.setString('agent_memory_notes', _memoryNotesCtrl.text);
     await prefs.setString('agent_system_prompt', _systemPromptCtrl.text);
+  }
+
+  // ── Chat history ─────────────────────────────────────────────────────────
+
+  Future<void> _saveChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // Keep last 200 messages max to avoid excessive storage
+      final toSave = _chatMessages.length > 200
+          ? _chatMessages.sublist(_chatMessages.length - 200)
+          : _chatMessages;
+      await prefs.setString('agent_chat_history', jsonEncode(toSave));
+    } catch (_) {}
+  }
+
+  Future<void> _loadChatHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString('agent_chat_history');
+      if (raw == null || raw.isEmpty) return;
+      final list = jsonDecode(raw) as List<dynamic>;
+      if (!mounted) return;
+      setState(() {
+        _chatMessages.addAll(list.cast<Map<String, dynamic>>());
+      });
+    } catch (_) {}
+  }
+
+  // ── .pandarules — lecture depuis le projet courant ───────────────────────
+
+  Future<String> _loadPandaRules(SharedPreferences prefs) async {
+    try {
+      // Get the most recent project root from SharedPreferences
+      final rawRecent = prefs.getString('recent');
+      if (rawRecent == null || rawRecent.isEmpty) return '';
+      final recent = jsonDecode(rawRecent);
+      String? rootDir;
+      if (recent is List && recent.isNotEmpty) {
+        final first = recent.first;
+        if (first is Map) {
+          rootDir = first['rootDir']?.toString() ?? first['path']?.toString();
+        }
+      }
+      if (rootDir == null || rootDir.isEmpty) return '';
+      final file = File('$rootDir/.pandarules');
+      if (!await file.exists()) return '';
+      final content = await file.readAsString();
+      return content.trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  // ── Cost tracking helpers ─────────────────────────────────────────────────
+
+  /// Returns (inputCostPerMToken, outputCostPerMToken) in USD.
+  (double, double) _costRateFor(String model) {
+    final m = model.toLowerCase();
+    // Gemini
+    if (m.contains('gemini-2.5-pro'))      return (1.25, 10.00);
+    if (m.contains('gemini-2.5-flash-lite')) return (0.075, 0.30);
+    if (m.contains('gemini-2.5-flash'))    return (0.15, 0.60);
+    if (m.contains('gemini-1.5-pro'))      return (1.25, 5.00);
+    if (m.contains('gemini-1.5-flash'))    return (0.075, 0.30);
+    if (m.contains('gemini-1.0-pro'))      return (0.50, 1.50);
+    // OpenAI
+    if (m.contains('gpt-4o-mini'))         return (0.15, 0.60);
+    if (m.contains('gpt-4o'))              return (2.50, 10.00);
+    if (m.contains('gpt-4-turbo'))         return (10.00, 30.00);
+    if (m.contains('gpt-4'))               return (30.00, 60.00);
+    if (m.contains('gpt-3.5'))             return (0.50, 1.50);
+    if (m.contains('o3-mini'))             return (1.10, 4.40);
+    if (m.contains('o3'))                  return (10.00, 40.00);
+    if (m.contains('o1-mini'))             return (1.10, 4.40);
+    if (m.contains('o1'))                  return (15.00, 60.00);
+    // Claude
+    if (m.contains('claude-3-5-sonnet'))   return (3.00, 15.00);
+    if (m.contains('claude-3-5-haiku'))    return (0.80, 4.00);
+    if (m.contains('claude-3-opus'))       return (15.00, 75.00);
+    if (m.contains('claude-3-haiku'))      return (0.25, 1.25);
+    if (m.contains('claude'))              return (3.00, 15.00);
+    // DeepSeek
+    if (m.contains('deepseek-r1'))         return (0.55, 2.19);
+    if (m.contains('deepseek'))            return (0.27, 1.10);
+    // Grok
+    if (m.contains('grok-3-mini'))         return (0.30, 0.50);
+    if (m.contains('grok'))                return (3.00, 15.00);
+    // Mistral
+    if (m.contains('mistral-large'))       return (2.00, 6.00);
+    if (m.contains('mistral-small'))       return (0.20, 0.60);
+    if (m.contains('mixtral'))             return (0.65, 0.65);
+    // Llama / Groq
+    if (m.contains('llama-3'))             return (0.20, 0.20);
+    return (1.00, 1.00); // safe default
+  }
+
+  void _trackCost({required String modelName, required int inputTokens, required int outputTokens}) {
+    final (inRate, outRate) = _costRateFor(modelName);
+    final cost = (inputTokens / 1000000) * inRate + (outputTokens / 1000000) * outRate;
+    if (mounted) {
+      setState(() {
+        _sessionTokensIn  += inputTokens;
+        _sessionTokensOut += outputTokens;
+        _sessionCostUsd   += cost;
+      });
+    }
+  }
+
+  String _fmtCost(double usd) {
+    if (usd < 0.001) return '<\$0.001';
+    if (usd < 0.01)  return '\$${usd.toStringAsFixed(4)}';
+    if (usd < 1.0)   return '\$${usd.toStringAsFixed(3)}';
+    return '\$${usd.toStringAsFixed(2)}';
   }
 
   @override
@@ -327,6 +448,72 @@ class _AgentSettingsState extends State<AgentSettings>
   // ══════════════════════════════════════════════════════════════════════════
   // CHAT — send logic
   // ══════════════════════════════════════════════════════════════════════════
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TOKEN COUNTER helpers
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /// Approximate token count using the 4-chars-per-token heuristic.
+  int _estimateTokens() {
+    int chars = 0;
+    for (final m in _chatMessages) {
+      chars += (m['text'] as String? ?? '').length;
+      chars += (m['thinking'] as String? ?? '').length;
+      final calls = m['toolCalls'] as List? ?? [];
+      for (final c in calls) {
+        chars += (c['result'] as String? ?? '').length;
+      }
+    }
+    chars += _chatInputCtrl.text.length;
+    return (chars / 4).ceil();
+  }
+
+  /// Context window size (tokens) for the active model.
+  int _contextWindowFor(String model) {
+    final m = model.toLowerCase();
+    // Gemini
+    if (m.contains('gemini-2.5-pro'))   return 2000000;
+    if (m.contains('gemini-2.5'))       return 1000000;
+    if (m.contains('gemini-1.5-pro'))   return 2000000;
+    if (m.contains('gemini-1.5'))       return 1000000;
+    if (m.contains('gemini-exp'))       return 1000000;
+    if (m.contains('gemini'))           return 128000;
+    // OpenAI
+    if (m.contains('gpt-4o'))           return 128000;
+    if (m.contains('gpt-4-turbo'))      return 128000;
+    if (m.contains('gpt-4-32k'))        return 32000;
+    if (m.contains('gpt-4'))            return 8000;
+    if (m.contains('gpt-3.5'))          return 16000;
+    if (m.contains('o1-pro'))           return 200000;
+    if (m.contains('o1'))               return 200000;
+    if (m.contains('o3'))               return 200000;
+    // Claude
+    if (m.contains('claude'))           return 200000;
+    // DeepSeek
+    if (m.contains('deepseek-r1'))      return 128000;
+    if (m.contains('deepseek'))         return 64000;
+    // Llama
+    if (m.contains('llama-3'))          return 128000;
+    if (m.contains('llama-2'))          return 4000;
+    // Mistral / Mixtral
+    if (m.contains('mixtral'))          return 32000;
+    if (m.contains('mistral-large'))    return 128000;
+    if (m.contains('mistral'))          return 32000;
+    // Grok
+    if (m.contains('grok-3'))           return 131072;
+    if (m.contains('grok'))             return 131072;
+    // Qwen
+    if (m.contains('qwen'))             return 128000;
+    // Groq hosted
+    if (m.contains('gemma'))            return 8000;
+    return 32000; // safe default
+  }
+
+  String _fmtK(int n) {
+    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
+    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(0)}k';
+    return '$n';
+  }
 
   void _chatScrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -403,8 +590,13 @@ class _AgentSettingsState extends State<AgentSettings>
       final memoryEnabled = prefs.getBool('agent_memory_enabled') ?? true;
       final memoryNotes   = memoryEnabled ? (prefs.getString('agent_memory_notes') ?? '').trim() : '';
       final customPrompt  = (prefs.getString('agent_system_prompt') ?? '').trim();
-      final parts         = <String>[
+
+      // ── .pandarules injection ─────────────────────────────────────────────
+      final pandaRules = await _loadPandaRules(prefs);
+
+      final parts = <String>[
         if (customPrompt.isNotEmpty) customPrompt,
+        if (pandaRules.isNotEmpty) '# Project rules (.pandarules)\n$pandaRules',
         if (memoryNotes.isNotEmpty) 'Persistent context:\n$memoryNotes',
       ];
 
@@ -497,6 +689,25 @@ class _AgentSettingsState extends State<AgentSettings>
               _chatMessages[agentIdx]['phase'] = 'done';
             }
           });
+          // ── Cost + history ──────────────────────────────────────────────
+          _saveChatHistory();
+          // Estimate tokens for this turn and track cost
+          final aiState2 = context.read<AIBloc>().state;
+          final selId2   = aiState2.modelSelected['chat']?.toString();
+          final cfg2     = selId2 == null ? null : aiState2.config[selId2];
+          if (cfg2 != null) {
+            final modelName2 = (cfg2['modelName'] ?? cfg2['model'] ?? '').toString();
+            final userMsg  = _chatMessages
+                .where((m) => m['role'] == 'user')
+                .map((m) => (m['text'] as String? ?? '').length)
+                .fold(0, (a, b) => a + b);
+            final agentMsg = (_chatStreamBuf.length + _chatThinkingBuf.length);
+            _trackCost(
+              modelName: modelName2,
+              inputTokens:  (userMsg / 4).ceil(),
+              outputTokens: (agentMsg / 4).ceil(),
+            );
+          }
         },
       );
     } catch (e) {
@@ -935,26 +1146,81 @@ class _AgentSettingsState extends State<AgentSettings>
           ),
           child: Column(
             children: [
-              // Mode selector
-              Row(
-                children: [
-                  _modeChip('ask',    'Ask',    isDark, muted, fg),
-                  const SizedBox(width: 6),
-                  _modeChip('agent',  'Agent',  isDark, muted, fg),
-                  const SizedBox(width: 6),
-                  _modeChip('plan', 'Plan', isDark, muted, fg),
-                  const Spacer(),
-                  if (_chatMessages.isNotEmpty)
-                    InkWell(
-                      onTap: () => setState(() { _chatMessages.clear(); }),
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        child: Icon(Broken.add_square, size: 14, color: muted),
+              // Mode selector + token counter + clear
+              BlocBuilder<AIBloc, AIState>(builder: (_, aiState) {
+                final selectedId  = aiState.modelSelected['chat']?.toString();
+                final cfg         = selectedId == null ? null : aiState.config[selectedId];
+                final modelName   = cfg == null ? '' :
+                    (cfg['modelName'] ?? cfg['model'] ?? '').toString();
+                final tokens      = _estimateTokens();
+                final maxCtx      = _contextWindowFor(modelName);
+                final ratio       = maxCtx > 0 ? tokens / maxCtx : 0.0;
+                final tokenColor  = ratio < 0.6
+                    ? muted
+                    : ratio < 0.85
+                        ? const Color(0xfff59e0b)
+                        : _kDanger;
+
+                return Row(
+                  children: [
+                    _modeChip('ask',   'Ask',   isDark, muted, fg),
+                    const SizedBox(width: 6),
+                    _modeChip('agent', 'Agent', isDark, muted, fg),
+                    const SizedBox(width: 6),
+                    _modeChip('plan',  'Plan',  isDark, muted, fg),
+                    const Spacer(),
+                    // ── Token counter + cost ────────────────────────────
+                    if (modelName.isNotEmpty) ...[
+                      Tooltip(
+                        message: '~$tokens tokens dans le contexte / max ${_fmtK(maxCtx)}\n'
+                            'Session : ${_fmtK(_sessionTokensIn)} in + ${_fmtK(_sessionTokensOut)} out\n'
+                            'Coût estimé : ${_fmtCost(_sessionCostUsd)}\nModèle : $modelName',
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: tokenColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(5),
+                            border: Border.all(color: tokenColor.withOpacity(0.3)),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Broken.cpu_setting, size: 9, color: tokenColor),
+                            const SizedBox(width: 3),
+                            Text(
+                              '${_fmtK(tokens)} / ${_fmtK(maxCtx)}',
+                              style: TextStyle(fontSize: 9.5, color: tokenColor, fontWeight: FontWeight.w500),
+                            ),
+                            if (_sessionCostUsd > 0) ...[
+                              const SizedBox(width: 5),
+                              Container(width: 1, height: 9, color: tokenColor.withOpacity(0.3)),
+                              const SizedBox(width: 5),
+                              Text(
+                                _fmtCost(_sessionCostUsd),
+                                style: TextStyle(fontSize: 9.5, color: tokenColor.withOpacity(0.85)),
+                              ),
+                            ],
+                          ]),
+                        ),
                       ),
-                    ),
-                ],
-              ),
+                      const SizedBox(width: 6),
+                    ],
+                    // ── New chat ───────────────────────────────────────
+                    if (_chatMessages.isNotEmpty)
+                      InkWell(
+                        onTap: () => setState(() {
+                          _chatMessages.clear();
+                          _sessionCostUsd   = 0.0;
+                          _sessionTokensIn  = 0;
+                          _sessionTokensOut = 0;
+                        }),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          child: Icon(Broken.add_square, size: 14, color: muted),
+                        ),
+                      ),
+                  ],
+                );
+              }),
               const SizedBox(height: 6),
               // Text input
               Row(
