@@ -1242,6 +1242,18 @@ final _kSdks = <_RuntimeInfo>[
 // ── Language Runtimes ──────────────────────────────────────────────────────────
 final _kRuntimes = <_RuntimeInfo>[
   _RuntimeInfo(
+    key: "alpine-linux",
+    name: "Alpine Linux (PRoot)",
+    description: "Linux embarqué complet avec gestionnaire apk / pkg / apt",
+    version: "3.21",
+    longDescription:
+        "Environnement Linux complet autonome fonctionnant sous PRoot (aucun root requis).\n"
+        "Comprend le gestionnaire de paquets apk : installez Python, Node, Git, GCC et tout outil Linux directement depuis le terminal !",
+    website: "https://alpinelinux.org",
+    useCase: "Gestionnaire de paquets Linux (apk/pkg), environnement Linux embarqué complet",
+    icon: const Icon(Icons.terminal, size: 26, color: Color(0xFF0D597F)),
+  ),
+  _RuntimeInfo(
     key: 'node',
     name: 'Node.js',
     description: 'JavaScript / TypeScript runtime',

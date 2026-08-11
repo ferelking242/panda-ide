@@ -2662,11 +2662,22 @@ class _ChatActionGroupState extends State<_ChatActionGroup> {
   }
 
   String _title() {
-    final first = widget.calls.first['name']?.toString() ?? '';
-    if (first == 'runShellCommand') return 'Exécution du terminal';
-    if (first.startsWith('read') || first.startsWith('list')) return 'Exploration du projet';
-    if (first.startsWith('write') || first.startsWith('edit')) return 'Mise à jour des fichiers';
-    if (first.startsWith('git')) return 'Opérations Git';
+    final names = widget.calls.map((call) => call['name']?.toString() ?? '').toList();
+    if (names.any((n) => n == 'runShellCommand' || n.contains('Shell') || n.contains('cmd'))) {
+      return 'Exécution de commandes terminal';
+    }
+    if (names.any((n) => n.startsWith('search') || n.startsWith('grep') || n.startsWith('find') || n.startsWith('glob'))) {
+      return 'Recherche & Exploration de code';
+    }
+    if (names.any((n) => n.startsWith('write') || n.startsWith('edit') || n.startsWith('replace') || n.startsWith('create'))) {
+      return 'Modification de fichiers';
+    }
+    if (names.any((n) => n.startsWith('read') || n.startsWith('list'))) {
+      return 'Lecture du projet';
+    }
+    if (names.any((n) => n.startsWith('git'))) {
+      return 'Opérations Git';
+    }
     return 'Actions de Panda Agent';
   }
 
@@ -2698,11 +2709,18 @@ class _ChatActionGroupState extends State<_ChatActionGroup> {
 
   String? _argsSummary(Map<String, dynamic>? args) {
     if (args == null || args.isEmpty) return null;
-    final value = args.values.first;
-    if (value is! String) return null;
-    final clean = value.replaceAll('\n', ' ').trim();
+    final val = args['command'] ??
+        args['CommandLine'] ??
+        args['cmd'] ??
+        args['path'] ??
+        args['target'] ??
+        args['pattern'] ??
+        args['query'] ??
+        args.values.first;
+    if (val is! String) return null;
+    final clean = val.replaceAll('\n', ' ').trim();
     if (clean.isEmpty) return null;
-    return clean.length > 54 ? '${clean.substring(0, 54)}…' : clean;
+    return clean.length > 60 ? '${clean.substring(0, 60)}…' : clean;
   }
 
   @override
@@ -2711,12 +2729,14 @@ class _ChatActionGroupState extends State<_ChatActionGroup> {
     final running = widget.calls.any((call) => call['status'] == 'running');
     final groupColor = running ? const Color(0xfff5a623) : widget.muted;
 
+    final cardBg = widget.isDark ? const Color(0xff161622) : const Color(0xfff8f9fa);
+    final cardBorder = widget.isDark ? const Color(0xff262638) : const Color(0xffe1e4e8);
     return Container(
       margin: const EdgeInsets.only(top: 4, bottom: 8),
       decoration: BoxDecoration(
-        color: widget.isDark ? _kGroupBg : Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: running ? groupColor.withValues(alpha: 0.45) : border),
+        border: Border.all(color: running ? groupColor.withValues(alpha: 0.45) : cardBorder),
       ),
       child: Column(
         children: [

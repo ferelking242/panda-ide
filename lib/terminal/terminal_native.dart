@@ -491,12 +491,29 @@ __git_branch() {
   branch=$(git symbolic-ref --short HEAD 2>/dev/null) || return
   echo " \033[38;5;214m🌿 ${branch}\033[0m"
 }
+apk() {
+  if [ -x "/data/data/com.panda.ide/bin/proot" ] && [ -d "/data/data/com.panda.ide/runtimes/alpine-linux" ]; then
+    "/data/data/com.panda.ide/bin/proot" --rootfs="/data/data/com.panda.ide/runtimes/alpine-linux" -b /dev -b /proc -b /sys -w /root /sbin/apk "$@"
+  else
+    echo -e "\033[38;5;208m[Panda Linux]\033[0m L'environnement Alpine Linux n'est pas installé."
+    echo -e "Téléchargez-le depuis la \033[36mMarketplace (Section Runtimes -> Alpine Linux)\033[0m."
+  fi
+}
 pkg() {
-  if [ -x "/data/data/com.termux/files/usr/bin/pkg" ]; then
+  if [ -x "/data/data/com.panda.ide/bin/proot" ] && [ -d "/data/data/com.panda.ide/runtimes/alpine-linux" ]; then
+    apk "$@"
+  elif [ -x "/data/data/com.termux/files/usr/bin/pkg" ]; then
     /data/data/com.termux/files/usr/bin/pkg "$@"
   else
-    echo -e "\033[38;5;208m[Panda IDE]\033[0m \033[1m'pkg'\033[0m nécessite la connexion Termux. Allez dans \033[36mParamètres -> Termux\033[0m."
+    echo -e "\033[38;5;208m[Panda Linux]\033[0m 'pkg' nécessite l'environnement Linux (Alpine)."
+    echo -e "Téléchargez \033[36mAlpine Linux\033[0m depuis la Marketplace (Runtimes) pour installer tout paquet Linux (git, node, python...)."
   fi
+}
+apt() {
+  pkg "$@"
+}
+winget() {
+  echo -e "\033[38;5;208m[Panda Linux]\033[0m 'winget' est pour Windows. Sur Panda Linux Android, utilisez \033[1m'apk add <paquet>'\033[0m ou \033[1m'pkg install <paquet>'\033[0m."
 }''';
       const richPS1 = r'''# Oh My Zsh / Starship Flash Prompt
 export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(__git_branch) \[\033[38;5;118m\]➜\[\033[0m\] ' ''';
@@ -1786,26 +1803,79 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
           ),
           // + new session button
           _buildNewSessionButton(state, appTheme),
+          const SizedBox(width: 2),
+          // 3-dot options menu icon
+          PopupMenuButton<String>(
+            padding: EdgeInsets.zero,
+            icon: Icon(
+              _isFullscreen ? Icons.fullscreen_exit_rounded : Icons.more_vert_rounded,
+              size: 18,
+              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+            ),
+            tooltip: 'Options du terminal',
+            color: isDark ? const Color(0xff252526) : Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: BorderSide(
+                color: isDark ? const Color(0xff3c3c3c) : const Color(0xffcccccc),
+                width: 0.5,
+              ),
+            ),
+            onSelected: (value) async {
+              switch (value) {
+                case 'fullscreen':
+                  setState(() => _isFullscreen = !_isFullscreen);
+                  break;
+                case 'split_h':
+                  await _enableSplitView(Axis.horizontal);
+                  break;
+                case 'split_v':
+                  await _enableSplitView(Axis.vertical);
+                  break;
+                case 'close_split':
+                  setState(() { _isSplitView = false; _splitSessionId = null; });
+                  break;
+                case 'font_reset':
+                  _onTerminalFontSizeChanged(14);
+                  break;
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'fullscreen',
+                child: _menuItem(
+                  _isFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                  _isFullscreen ? 'Quitter le plein écran' : 'Plein écran',
+                  isDark,
+                ),
+              ),
+              if (!_isSplitView) ...[
+                PopupMenuItem(
+                  value: 'split_h',
+                  child: _menuItem(Icons.vertical_split_rounded, 'Split horizontal', isDark),
+                ),
+                PopupMenuItem(
+                  value: 'split_v',
+                  child: _menuItem(Icons.horizontal_split_rounded, 'Split vertical', isDark),
+                ),
+              ] else
+                PopupMenuItem(
+                  value: 'close_split',
+                  child: _menuItem(Icons.close_fullscreen_rounded, 'Fermer le split', isDark),
+                ),
+              PopupMenuItem(
+                value: 'font_reset',
+                child: _menuItem(Icons.format_size_rounded, 'Réinitialiser police', isDark),
+              ),
+            ],
+          ),
+          const SizedBox(width: 4),
         ],
       ),
     );
   }
 
   Widget _buildNewSessionButton(TerminalSessionState state, AppTheme appTheme) {
-    final hasExternal = sshServerList.isNotEmpty ||
-        (termuxInfo != null && termuxInfo!.isConnected) ||
-        _isAlpineInstalled();
-
-    if (!hasExternal) {
-      return InkWell(
-        onTap: () => _createSession(makeActive: true, showFeedback: true),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          child: Icon(Icons.add, size: 17, color: Colors.grey.shade500),
-        ),
-      );
-    }
-
     return MenuAnchor(
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(appTheme.selectScreenCardsBg),
@@ -1834,17 +1904,16 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
             leadingIcon: SvgPicture.asset("assets/icons/Termux.svg", height: 18, width: 18),
             child: Text(termuxInfo!.name, style: TextStyle(color: appTheme.selectScreenCardTextColor)),
           ),
-        if (_isAlpineInstalled())
-          MenuItemButton(
-            onPressed: () => _createSession(
-              makeActive: true,
-              showFeedback: true,
-              title: 'Alpine Linux',
-              useProot: true,
-            ),
-            leadingIcon: Icon(Icons.landslide_outlined, color: Colors.blue.shade300, size: 18),
-            child: Text('Alpine Linux (proot)', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+        MenuItemButton(
+          onPressed: () => _createSession(
+            makeActive: true,
+            showFeedback: true,
+            title: 'Alpine Linux',
+            useProot: true,
           ),
+          leadingIcon: Icon(Icons.terminal_rounded, color: Colors.blue.shade300, size: 18),
+          child: Text('Alpine Linux (proot)', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+        ),
       ],
       builder: (context, controller, child) => InkWell(
         onTap: () => _terminalSelectionStatus.isForwardOrCompleted
