@@ -777,7 +777,7 @@ Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront 
         'updateProjectMemory',
       };
       if (!allowWrites && mutatingTools.contains(functionName)) {
-        return 'Blocage : L'outil "$functionName" modifie l'espace de travail et est indisponible en mode $agentMode. Veuillez passer en Mode Agent pour autoriser l'exécution.';
+        return "Blocage : L'outil \"$functionName\" modifie l'espace de travail et est indisponible en mode $agentMode. Veuillez passer en Mode Agent pour autoriser l'exécution.";
       }
       switch (functionName) {
         case 'activeEditorFile':

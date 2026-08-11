@@ -6104,9 +6104,9 @@ class _SelectTypeState extends State<SelectType>
     } else if (_agentChatMode == 'ask') {
       suggestions = const [
         ('❓ Expliquer l\'architecture', 'Peux-tu m'expliquer l'architecture globale de ce projet ?'),
-        ('⚡ Optimiser les performances', 'Quelles sont les opportunités d'optimisation de performance dans ce projet ?'),
-        ('🐛 Détecter les bugs', 'Analyse le code pour identifier d'éventuels bugs ou failles de sécurité.'),
-        ('📁 Points d'entrée', 'Où se trouve le point d'entrée principal et comment fonctionne le flux de données ?'),
+        ('⚡ Optimiser les performances', 'Quelles sont les opportunités d\'optimisation de performance dans ce projet ?'),
+        ('🐛 Détecter les bugs', 'Analyse le code pour identifier d\'éventuels bugs ou failles de sécurité.'),
+        ('📁 Points d\'entrée', 'Où se trouve le point d\'entrée principal et comment fonctionne le flux de données ?'),
       ];
     } else {
       suggestions = const [
@@ -9219,7 +9219,7 @@ class _PlanApprovalCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 ),
                 icon: const Icon(Broken.message_text, size: 14),
-                label: const Text('Réviser avec l'Agent', style: TextStyle(fontSize: 11)),
+                label: const Text("Réviser avec l'Agent", style: const TextStyle(fontSize: 11)),
                 onPressed: onRevise,
               ),
             ],
