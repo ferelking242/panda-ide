@@ -31,6 +31,7 @@ import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
 import '../terminal/terminal_bridge.dart';
 import '../utils/ai.dart';
+import '../utils/agent_history_service.dart';
 import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
 import '../ui/github_page.dart';
@@ -158,6 +159,7 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Conversation history ──────────────────────────────────────────
   bool _showHistoryPanel = false;
+  String _agentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
 
   // ── Conversation title (editable) ────────────────────────────────
   String _agentConversationTitle = 'Nouvelle conversation';
@@ -3764,11 +3766,13 @@ class _SelectTypeState extends State<SelectType>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Messages / empty state ─────────────────────────────────────
+        // ── Messages / history panel / empty state ──────────────────────
         Expanded(
-          child: _agentMessages.isEmpty
-              ? _buildAgentEmptyState(isDark, muted, fg)
-              : _buildAgentMessages(isDark, fg, muted),
+          child: _showHistoryPanel
+              ? _buildHistoryPanel(appTheme)
+              : (_agentMessages.isEmpty
+                  ? _buildAgentEmptyState(isDark, muted, fg)
+                  : _buildAgentMessages(isDark, fg, muted)),
         ),
 
         // ── Attachments strip ──────────────────────────────────────────
@@ -5946,254 +5950,188 @@ class _SelectTypeState extends State<SelectType>
         final isError     = phase == 'error';
 
         if (isMe) {
-          // ── User message with GitHub avatar ───────────────────────
-          final githubAvatarUrl = context
-              .read<GithubAuthCubit>()
-              .state
-              .user
-              ?.avatarUrl;
+          // ── User message (Replit style: right aligned, no avatar) ──
           return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                // Message bubble
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.only(top: 0, bottom: 2),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: _kAccent.withValues(alpha: 0.85),
-                          borderRadius: BorderRadius.circular(10),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.88,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xff1e293b) : const Color(0xffe2e8f0),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark ? const Color(0xff334155) : const Color(0xffcbd5e1),
+                          width: 1,
                         ),
-                        child: Text(text,
-                            style: const TextStyle(
-                                fontSize: 13, color: Colors.white)),
                       ),
-                      // Copy action row
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _MsgActionBtn(
-                            icon: Broken.copy,
-                            label: 'Copier',
-                            onTap: () {
-                              Clipboard.setData(ClipboardData(text: text));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Copié !',
-                                      style: TextStyle(fontSize: 12)),
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            },
-                            muted: muted,
-                          ),
-                        ],
+                      child: SelectableText(
+                        text,
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _MsgActionBtn(
+                          icon: Broken.copy,
+                          label: 'Copier',
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: text));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Copié !', style: TextStyle(fontSize: 12)),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          muted: muted,
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                // User avatar (GitHub photo or initials fallback)
-                Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _kAccent.withValues(alpha: 0.2),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: githubAvatarUrl != null && githubAvatarUrl.isNotEmpty
-                      ? Image.network(
-                          githubAvatarUrl,
-                          width: 28, height: 28, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.person, size: 16, color: _kAccent),
-                        )
-                      : const Icon(Icons.person, size: 16, color: _kAccent),
-                ),
-              ],
+              ),
             ),
           );
         }
 
-        // ── Message agent ─────────────────────────────────────────────
-        // Provider name + icon for the agent avatar
-        final providerName = _lastUsedModel != null
-            ? _lastUsedModel!.runtimeType.toString().toLowerCase()
-            : 'agent';
-        // Find index of the user message that triggered this response
+        // ── Agent message (Replit style: full-width, no avatar) ──────
         final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user')
             ? i - 1
             : -1;
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-          child: Row(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Agent avatar
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _kAccent.withValues(alpha: 0.15),
-                ),
-                child: ClipOval(
-                  child: Image.asset(
-                    _providerIconAsset(providerName),
-                    width: 28, height: 28, fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(
-                        Broken.cpu_setting, size: 16, color: _kAccent),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Message content
-              Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Phase chip — only when no tool calls to avoid double indicator
-                () {
-                  final hasCalls = (msg['toolCalls'] as List?)?.isNotEmpty ?? false;
-                  if (isStreaming && think.isNotEmpty)
-                    return _AgentPhaseChip(phase: AgentPhase.thinking, isDark: isDark);
-                  if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isNotEmpty)
-                    return _AgentPhaseChip(
-                        phase: AgentPhase.toolRunning,
-                        isDark: isDark,
-                        toolName: msg['toolName'] as String? ?? '');
-                  if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isEmpty)
-                    return _AgentPhaseChip(phase: AgentPhase.streaming, isDark: isDark);
-                  return const SizedBox.shrink();
-                }(),
-
-                // Thinking block (collapsible)
-                if (think.isNotEmpty)
-                  _ThinkingBlock(
-                      thinking: think,
+              // Phase chip — only when no tool calls to avoid double indicator
+              () {
+                final hasCalls = (msg['toolCalls'] as List?)?.isNotEmpty ?? false;
+                if (isStreaming && think.isNotEmpty)
+                  return _AgentPhaseChip(phase: AgentPhase.thinking, isDark: isDark);
+                if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isNotEmpty)
+                  return _AgentPhaseChip(
+                      phase: AgentPhase.toolRunning,
                       isDark: isDark,
-                      fg: fg,
-                      muted: muted),
+                      toolName: msg['toolName'] as String? ?? '');
+                if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isEmpty)
+                  return _AgentPhaseChip(phase: AgentPhase.streaming, isDark: isDark);
+                return const SizedBox.shrink();
+              }(),
 
-                // Tool call blocks (expandable, Replit-style)
-                ...() {
-                  final calls = (msg['toolCalls'] as List?)
-                      ?.cast<Map<String, dynamic>>() ?? [];
-                  return calls.map((call) => _ToolCallBlock(
-                    toolName: call['name'] as String? ?? '',
-                    args: (call['args'] as Map?)
-                        ?.cast<String, dynamic>() ?? {},
-                    result: call['result'] as String?,
-                    status: call['status'] as String? ?? 'running',
+              // Thinking block (collapsible)
+              if (think.isNotEmpty)
+                _ThinkingBlock(
+                    thinking: think,
                     isDark: isDark,
                     fg: fg,
-                    muted: muted,
-                  ));
-                }(),
+                    muted: muted),
 
-                // Bulle réponse
-                if (text.isNotEmpty || isStreaming)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isError
-                          ? Colors.red.withValues(alpha: isDark ? 0.2 : 0.1)
-                          : (isDark
-                              ? const Color(0xff2d2d2d)
-                              : const Color(0xffe8e8e8)),
-                      borderRadius: BorderRadius.circular(8),
-                      border: isError
-                          ? Border.all(
-                              color: Colors.red.withValues(alpha: 0.4), width: 1)
-                          : null,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            text.isEmpty && isStreaming ? ' ' : text,
-                            style: TextStyle(
-                                fontSize: 13,
-                                color: isError ? Colors.red[400] : fg),
+              // Tool call blocks (expandable, Replit-style)
+              ...() {
+                final calls = (msg['toolCalls'] as List?)
+                    ?.cast<Map<String, dynamic>>() ?? [];
+                return calls.map((call) => _ToolCallBlock(
+                  toolName: call['name'] as String? ?? '',
+                  args: (call['args'] as Map?)
+                      ?.cast<String, dynamic>() ?? {},
+                  result: call['result'] as String?,
+                  status: call['status'] as String? ?? 'running',
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                ));
+              }(),
+
+              // Agent response text
+              if (text.isNotEmpty || isStreaming)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          text.isEmpty && isStreaming ? ' ' : text,
+                          style: TextStyle(
+                            fontSize: 13,
+                            height: 1.5,
+                            color: isError ? Colors.red[400] : fg,
                           ),
                         ),
-                        if (isStreaming) ...[
-                          const SizedBox(width: 2),
-                          _BlinkingCursor(color: fg),
-                        ],
+                      ),
+                      if (isStreaming) ...[
+                        const SizedBox(width: 2),
+                        _BlinkingCursor(color: fg),
                       ],
-                    ),
+                    ],
                   ),
+                ),
 
-                // Action row (copy + retry) — shown after generation
-                if (!isStreaming && (text.isNotEmpty || isError))
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (text.isNotEmpty)
-                          _MsgActionBtn(
-                            icon: Broken.copy,
-                            label: 'Copier',
-                            onTap: () {
-                              Clipboard.setData(ClipboardData(text: text));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Copié !',
-                                      style: TextStyle(fontSize: 12)),
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            },
-                            muted: muted,
-                          ),
-                        if (userMsgIdx >= 0)
-                          _MsgActionBtn(
-                            icon: Broken.refresh,
-                            label: 'Réessayer',
-                            onTap: () {
-                              final userText =
-                                  _agentMessages[userMsgIdx]['text']
-                                          as String? ??
-                                      '';
-                              if (userText.isEmpty || _agentGenerating) {
-                                return;
+              // Action row (copy + retry) — shown after generation
+              if (!isStreaming && (text.isNotEmpty || isError))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (text.isNotEmpty)
+                        _MsgActionBtn(
+                          icon: Broken.copy,
+                          label: 'Copier',
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: text));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Copié !', style: TextStyle(fontSize: 12)),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          muted: muted,
+                        ),
+                      if (userMsgIdx >= 0)
+                        _MsgActionBtn(
+                          icon: Broken.refresh,
+                          label: 'Réessayer',
+                          onTap: () {
+                            final userText = _agentMessages[userMsgIdx]['text'] as String? ?? '';
+                            if (userText.isEmpty || _agentGenerating) {
+                              return;
+                            }
+                            setState(() {
+                              if (i < _agentMessages.length) {
+                                _agentMessages.removeAt(i);
                               }
-                              // Remove agent message + user message then resend
-                              setState(() {
-                                if (i < _agentMessages.length) {
-                                  _agentMessages.removeAt(i);
-                                }
-                                if (userMsgIdx < _agentMessages.length) {
-                                  _agentMessages.removeAt(userMsgIdx);
-                                }
-                                _agentInputCtrl.text = userText;
-                              });
-                              _agentSend();
-                            },
-                            muted: muted,
-                          ),
-                      ],
-                    ),
+                              if (userMsgIdx < _agentMessages.length) {
+                                _agentMessages.removeAt(userMsgIdx);
+                              }
+                              _agentInputCtrl.text = userText;
+                            });
+                            _agentSend();
+                          },
+                          muted: muted,
+                        ),
+                    ],
                   ),
-              ],
-            ),            // closes Column
-          ),              // closes Expanded
-        ],
-      ),                  // closes Row
-    );                    // closes Padding
+                ),
+            ],
+          ),
+        );
       },
     );
   }
@@ -6609,52 +6547,38 @@ class _SelectTypeState extends State<SelectType>
   }
 
   /// Auto-saves the current conversation to history after each AI response.
-  /// Silently no-ops if there are fewer than 2 messages or if already saving.
-  void _autoSaveConversation() {
-    if (_agentMessages.length < 2) return;
-    // Build conversation pairs (user + agent)
-    final conversations = <AIConversation>[];
-    for (var i = 0; i < _agentMessages.length - 1; i += 2) {
-      final user  = _agentMessages[i];
-      final agent = i + 1 < _agentMessages.length ? _agentMessages[i + 1] : null;
-      final userText  = user['text'] as String? ?? '';
-      final agentText = agent?['text'] as String? ?? '';
-      if (userText.isEmpty) continue;
-      conversations.add(AIConversation(userText, agentText.isEmpty ? null : agentText));
+  void _autoSaveConversation() async {
+    if (_agentMessages.isEmpty) return;
+
+    if (_agentConversationTitle == 'Nouvelle conversation') {
+      final firstUser = _agentMessages.firstWhere(
+        (m) => m['role'] == 'user' && (m['text'] as String? ?? '').isNotEmpty,
+        orElse: () => <String, dynamic>{'text': 'Chat'},
+      );
+      final rawText = (firstUser['text'] as String? ?? 'Chat').trim();
+      if (rawText.isNotEmpty && rawText != 'Chat') {
+        _agentConversationTitle = rawText.length > 40 ? '${rawText.substring(0, 40)}…' : rawText;
+      }
     }
-    if (conversations.isEmpty) return;
-    final title = (_agentMessages.first['text'] as String? ?? 'Chat').trim();
-    context.read<ChatSessionBloc>().add(UpdateCurrentSession(
-      conversations: conversations,
-      title: title.length > 50 ? title.substring(0, 50) : title,
-    ));
+
+    final session = AgentSession(
+      id: _agentSessionId,
+      title: _agentConversationTitle,
+      updatedAt: DateTime.now(),
+      messages: List<Map<String, dynamic>>.from(_agentMessages),
+      agentMode: _agentChatMode,
+      modelName: _lastUsedModel?.runtimeType.toString() ?? '',
+    );
+
+    await AgentHistoryService.saveSession(session);
   }
 
   void _agentNewConversation() {
-    // Save current conversation to ChatSessionBloc
     if (_agentMessages.isNotEmpty) {
-      final conversations = <AIConversation>[];
-      for (var i = 0; i < _agentMessages.length - 1; i += 2) {
-        final user  = _agentMessages[i];
-        final agent = i + 1 < _agentMessages.length ? _agentMessages[i + 1] : null;
-        conversations.add(AIConversation(
-          user['text'] as String? ?? '',
-          agent?['text'] as String?,
-        ));
-      }
-      if (conversations.isNotEmpty) {
-        final title = (_agentMessages.isNotEmpty
-            ? (_agentMessages.first['text'] as String? ?? 'Chat')
-            : 'Chat');
-        context.read<ChatSessionBloc>().add(UpdateCurrentSession(
-          conversations: conversations,
-          title: title.length > 40 ? title.substring(0, 40) : title,
-        ));
-      }
+      _autoSaveConversation();
     }
-    // Create new session
-    context.read<ChatSessionBloc>().add(CreateNewSession());
     setState(() {
+      _agentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
       _agentMessages.clear();
       _agentAttachments.clear();
       _showHistoryPanel = false;
@@ -7102,44 +7026,62 @@ class _SelectTypeState extends State<SelectType>
   // ── History panel ────────────────────────────────────────────────────────
   Widget _buildHistoryPanel(AppTheme appTheme) {
     final isDark  = appTheme.isDark;
-    final bg      = isDark ? const Color(0xff252526) : const Color(0xfff5f5f5);
-    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    final bg      = isDark ? const Color(0xff181824) : const Color(0xfff5f5f5);
+    final border  = isDark ? const Color(0xff2d2d3d) : const Color(0xffdddddd);
     final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
     final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
 
-    return BlocBuilder<ChatSessionBloc, ChatSessionState>(
-      builder: (ctx, sessState) {
-        final sessions = sessState.sessions;
+    return FutureBuilder<List<AgentSession>>(
+      future: AgentHistoryService.loadSessions(),
+      builder: (context, snapshot) {
+        final sessions = snapshot.data ?? [];
         return Container(
-          width: 240,
           decoration: BoxDecoration(
             color: bg,
-            border: Border(left: BorderSide(color: border)),
+            border: Border(bottom: BorderSide(color: border)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                height: 38,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                color: isDark ? const Color(0xff252526) : const Color(0xffececec),
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                color: isDark ? const Color(0xff12121a) : const Color(0xffececec),
                 child: Row(children: [
-                  Text('HISTORIQUE',
+                  Icon(Broken.clock, size: 15, color: _kAccent),
+                  const SizedBox(width: 8),
+                  Text('HISTORIQUE DES DISCUSSIONS',
                       style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                           letterSpacing: 1.1,
-                          color: muted)),
+                          color: fg)),
                   const Spacer(),
+                  InkWell(
+                    onTap: () {
+                      _agentNewConversation();
+                    },
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Row(
+                        children: [
+                          Icon(Broken.add_square, size: 14, color: _kAccent),
+                          const SizedBox(width: 4),
+                          Text('Nouveau', style: TextStyle(fontSize: 11, color: _kAccent, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   _agentHdrBtn(Broken.close_square, 'Fermer', muted,
                       () => setState(() => _showHistoryPanel = false)),
                 ]),
               ),
-              if (sessState.isLoading)
-                Expanded(
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Expanded(
                   child: Center(
-                    child: CircularProgressIndicator(
-                        color: _kAccent, strokeWidth: 2),
+                    child: CircularProgressIndicator(color: _kAccent, strokeWidth: 2),
                   ),
                 )
               else if (sessions.isEmpty)
@@ -7150,7 +7092,7 @@ class _SelectTypeState extends State<SelectType>
                       children: [
                         Icon(Broken.clock, size: 28, color: muted),
                         const SizedBox(height: 8),
-                        Text('Aucune conversation',
+                        Text('Aucune conversation enregistrée',
                             style: TextStyle(fontSize: 12, color: muted)),
                       ],
                     ),
@@ -7158,61 +7100,82 @@ class _SelectTypeState extends State<SelectType>
                 )
               else
                 Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                     itemCount: sessions.length,
-                    itemBuilder: (_, i) {
+                    separatorBuilder: (_, __) => const SizedBox(height: 4),
+                    itemBuilder: (ctx, i) {
                       final s = sessions[i];
-                      final isCurrent = sessState.currentSession?.id == s.id;
-                      return ListTile(
-                        dense: true,
-                        leading: Icon(
-                          Broken.message_programming,
-                          size: 15,
-                          color: isCurrent ? _kAccent : muted,
+                      final isCurrent = _agentSessionId == s.id;
+                      final msgCount = s.messages.length;
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? _kAccent.withValues(alpha: isDark ? 0.15 : 0.1)
+                              : isDark
+                                  ? const Color(0xff222232)
+                                  : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isCurrent
+                                ? _kAccent.withValues(alpha: 0.5)
+                                : isDark
+                                    ? const Color(0xff2e2e42)
+                                    : const Color(0xffe2e8f0),
+                          ),
                         ),
-                        title: Text(
-                          s.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                          leading: Icon(
+                            Broken.message_2,
+                            size: 16,
+                            color: isCurrent ? _kAccent : muted,
+                          ),
+                          title: Text(
+                            s.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
                               fontSize: 12,
                               color: isCurrent ? _kAccent : fg,
-                              fontWeight: isCurrent
-                                  ? FontWeight.w600
-                                  : FontWeight.normal),
-                        ),
-                        subtitle: Text(
-                          _relativeTime(s.createdAt),
-                          style: TextStyle(fontSize: 10, color: muted),
-                        ),
-                        selected: isCurrent,
-                        selectedTileColor: _kAccent.withValues(alpha: 0.07),
-                        onTap: () {
-                          ctx.read<ChatSessionBloc>().add(SelectSession(s.id));
-                          final convs = s.conversations;
-                          final msgs = <Map<String, dynamic>>[];
-                          for (final c in convs) {
-                            msgs.add({'role': 'user', 'text': c.userRequest});
-                            msgs.add({
-                              'role': 'agent',
-                              'text': c.modelResponse ?? '',
-                              'thinking': '',
-                              'phase': 'done',
+                              fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                            ),
+                          ),
+                          subtitle: Row(
+                            children: [
+                              Text(
+                                _relativeTime(s.updatedAt),
+                                style: TextStyle(fontSize: 10, color: muted),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '$msgCount msg${msgCount > 1 ? 's' : ''}',
+                                style: TextStyle(fontSize: 10, color: muted.withValues(alpha: 0.8)),
+                              ),
+                            ],
+                          ),
+                          onTap: () {
+                            setState(() {
+                              _agentSessionId = s.id;
+                              _agentConversationTitle = s.title;
+                              _agentMessages
+                                ..clear()
+                                ..addAll(List<Map<String, dynamic>>.from(s.messages));
+                              _showHistoryPanel = false;
                             });
-                          }
-                          setState(() {
-                            _agentMessages
-                              ..clear()
-                              ..addAll(msgs);
-                            _showHistoryPanel = false;
-                          });
-                        },
-                        trailing: IconButton(
-                          icon: Icon(Broken.trash, size: 13,
-                              color: muted.withValues(alpha: 0.6)),
-                          onPressed: () => ctx.read<ChatSessionBloc>()
-                              .add(DeleteSession(s.id)),
+                          },
+                          trailing: IconButton(
+                            icon: Icon(Broken.trash, size: 14, color: muted.withValues(alpha: 0.7)),
+                            onPressed: () async {
+                              await AgentHistoryService.deleteSession(s.id);
+                              if (_agentSessionId == s.id) {
+                                _agentNewConversation();
+                              } else {
+                                setState(() {});
+                              }
+                            },
+                          ),
                         ),
                       );
                     },
