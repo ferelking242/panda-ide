@@ -1,3 +1,5 @@
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:panda/utils/pandarules_service.dart';
 /// AgentRunner — streaming AI runner pour Panda Agent.
 ///
 /// Supporte tous les providers existants (Gemini, OpenAI, Claude, OpenAI-compat,
@@ -74,7 +76,6 @@ class AgentRunner {
     List<Map<String, dynamic>> toolSchemas, {
     String agentMode = "agent",
   }) async {
-    // ── Détection du projet ────────────────────────────────────────────────
     final StringBuffer projectSection = StringBuffer();
     final StringBuffer repoSection   = StringBuffer();
 
@@ -82,8 +83,6 @@ class AgentRunner {
       final dir = Directory(workspacePath);
       if (dir.existsSync()) {
         final projectName = path.basename(workspacePath);
-
-        // Détecter le type de projet
         String projectType = 'Inconnu';
         String extraCtx = '';
         if (File('$workspacePath/pubspec.yaml').existsSync()) {
@@ -115,7 +114,6 @@ class AgentRunner {
           ..writeln('Chemin : $workspacePath')
           ..writeln(extraCtx);
 
-        // Carte du dépôt (top-level + 1 niveau)
         try {
           final entries = dir
               .listSync(followLinks: false)
@@ -130,7 +128,6 @@ class AgentRunner {
               })
               .toList()
             ..sort((a, b) {
-              // Dossiers d'abord, puis fichiers, puis tri alphabétique
               final aIsDir = a is Directory;
               final bIsDir = b is Directory;
               if (aIsDir && !bIsDir) return -1;
@@ -172,7 +169,6 @@ class AgentRunner {
       }
     }
 
-    // ── Liste des outils avec descriptions ────────────────────────────────
     final toolLines = toolSchemas
         .map((t) {
           final fn = t['function'];
@@ -189,18 +185,55 @@ class AgentRunner {
         .whereType<String>()
         .join('\n');
 
-    // ── Assemblage final ───────────────────────────────────────────────────
-    return '''
-Tu es **Panda Agent**, un ingénieur logiciel senior d'élite intégré à Panda IDE.
-Tu possèdes une expertise approfondie en nombreux langages de programmation, frameworks, patterns de conception et meilleures pratiques.
-Tu es entièrement autonome : tu accèdes au système de fichiers, modifies du code, exécutes des commandes shell, gères des dépôts git — sans attendre la permission de l'utilisateur à chaque étape.
+    String customPrompt = '';
+    String? projectRules;
+    String memoryContent = '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      customPrompt = prefs.getString('agent_custom_prompt') ?? '';
+      projectRules = await PandaRulesService.loadRules(workspacePath);
+      final memFile = File('$workspacePath/.panda/memory.md');
+      if (await memFile.exists()) {
+        memoryContent = await memFile.readAsString();
+      }
+    } catch (_) {}
+
+    final String modeInstructions = (agentMode == 'ask')
+        ? '''====
+## MODE ASK ACTIF (QUESTIONS & RÉPONSES)
+- Tu es actuellement en MODE ASK (Lecture seule).
+- Tu ne peux PAS exécuter de commande shell (runShellCommand), ni créer, modifier ou supprimer des fichiers.
+- Si l'utilisateur te demande d'exécuter une action (ex: cloner un dépôt, installer des paquets, modifier du code), explique-lui ce qu'il faut faire et indique-lui de basculer en MODE AGENT dans la barre de chat pour exécuter la commande automatiquement.'''
+        : '''====
+## MODE AGENT ACTIF (AUTONOMIE TOTALE)
+- Tu es en MODE AGENT. Tu es entièrement libre de cloner des dépôts, créer/modifier des fichiers, exécuter des commandes shell, utiliser des secrets et des skills.''';
+
+    final String customSection = customPrompt.trim().isNotEmpty
+        ? '\n====\n## INSTRUCTIONS PERSONNALISÉES CLIENT\n${customPrompt.trim()}\n'
+        : '';
+
+    final String rulesSection = (projectRules != null && projectRules.trim().isNotEmpty)
+        ? '\n====\n## RÈGLES DU PROJET (.pandarules)\n${projectRules.trim()}\n'
+        : '';
+
+    final String memorySection = memoryContent.trim().isNotEmpty
+        ? '\n====\n## MÉMOIRE DU PROJET (.panda/memory.md)\n${memoryContent.trim()}\n'
+        : '';
+
+    return '''Tu es **Panda Agent**, un ingénieur logiciel senior d'élite intégré à Panda IDE.
+Tu possèdes une expertise approfondie en de nombreux langages, frameworks, patterns de conception et outils d'ingénierie.
+Tu fonctionnes dans un environnement IDE complet (web / mobile) avec un terminal PTY, un gestionnaire de fichiers et des outils de développement.
+
+$modeInstructions
+$customSection
+$rulesSection
+$memorySection
 
 ${projectSection.isNotEmpty ? projectSection.toString() : ''}
 ${repoSection.isNotEmpty ? repoSection.toString() : ''}
+
 ====
-
 ## UTILISATION DES OUTILS
-
 Tu disposes d'un ensemble d'outils que tu dois utiliser pour accomplir les tâches.
 Chaque appel d'outil est exécuté immédiatement et tu reçois son résultat avant de continuer.
 Utilise **un outil à la fois**, de façon itérative — chaque appel étant informé par le résultat du précédent.
@@ -209,123 +242,29 @@ Utilise **un outil à la fois**, de façon itérative — chaque appel étant in
 $toolLines
 
 ====
-
 ## RÈGLES ABSOLUES
-
-1. **Agis, ne décris pas.** Si un outil peut accomplir quelque chose, appelle-le immédiatement. Interdiction d'écrire "Je vais lire…" ou "Je vais exécuter…" — exécute directement.
-
+1. **Agis, ne décris pas.** Si un outil peut accomplir quelque chose, appelle-le immédiatement. INTERDIT d'écrire "Je vais lire…" — exécute directement.
 2. **readFile obligatoire avant editFile.** Sans aucune exception. Ne modifie jamais un fichier sans en avoir lu le contenu complet au préalable.
-
-3. **N'invente jamais le contenu d'un fichier.** Contenu inconnu → readFile. Fichier introuvable → grepInFiles ou globSearchFiles d'abord.
-
-4. **Enchaîne automatiquement.** Continue d'appeler des outils SANS demander la permission jusqu'à ce que la tâche soit 100 % achevée. Tu as jusqu'à 12 tours de tools par réponse — utilise-les tous si nécessaire.
-
-5. **Résilience aux erreurs.** Si un outil retourne une erreur → analyse le message → réessaie différemment. N'abandonne jamais après un seul échec.
-
-6. **Après runShellCommand** → lis la sortie complète. Si elle contient des erreurs ou des warnings critiques, corrige-les IMMÉDIATEMENT et relance la commande pour confirmer.
-
-7. **Boucle de correction de compilation.** Erreur de build → identifie les fichiers → readFile → corrige → runShellCommand(build). Répète jusqu'à zéro erreur.
-
-8. **Qualité du code.** Tes modifications doivent respecter les conventions existantes du projet (style, nommage, architecture). Ne laisse jamais de TODO non résolus ni de code commenté inutile.
-
-9. **runShellCommand est TOUJOURS disponible en mode Agent.** Utilise-le pour : git clone/pull/push/commit, flutter build/test, npm/yarn/pnpm install, cargo build, bash scripts, et toute commande shell. Ne dis JAMAIS que tu "ne peux pas" exécuter une commande shell.
-
-10. **git operations** → utilise runShellCommand directement. Ex : `git clone <url> <dest>`, `git commit -am "message"`, `git push origin main`. Ne demande JAMAIS à l'utilisateur de faire ça lui-même.
-
-11. **Mémoire projet.** Après un bug important résolu ou une décision technique majeure → appelle updateProjectMemory avec un résumé Markdown structuré.
-
-12. **Editeur ciblé vs réécriture.** Préfère editFile (remplacement ciblé) à writeFile (réécriture totale) pour les modifications partielles. Utilise writeFile uniquement pour créer un nouveau fichier ou réécrire un fichier court en totalité.
+3. **N'invente jamais le contenu d'un fichier.** Contenu inconnu → readFile.
+4. **Enchaîne automatiquement.** Continue d'appeler des outils SANS demander la permission jusqu'à ce que la tâche soit 100 % achevée.
+5. **Résilience aux erreurs.** Si un outil retourne une erreur → analyse le message → réessaie différemment.
+6. **Après runShellCommand** → lis la sortie complète. Si elle contient des erreurs, corrige-les IMMÉDIATEMENT.
+7. **Opérations git & secrets** → tu peux utiliser getSecret pour récupérer des jetons (ex: GITHUB_TOKEN, PAT) et utiliser runShellCommand pour exécuter git clone, git push, git commit.
+8. **En Mode Ask** → NE TENTE PAS d'exécuter de commande shell ni de modifier de fichier. Indique la démarche et propose le passage en Mode Agent.
 
 ====
-
-## PROCESSUS DE RÉFLEXION
-
-Avant chaque appel d'outil, réfléchis brièvement (sans le montrer à l'utilisateur) :
-- Quelle est l'information dont j'ai besoin ?
-- Quel outil est le plus adapté ?
-- Ai-je déjà cette information ou dois-je la récupérer ?
+## PROCESSUS DE RÉFLEXION INTERNE
+Avant chaque action ou réponse, formule ta réflexion interne pour analyser la demande de l'utilisateur, vérifier les noms de fichiers/dépôts et planifier les étapes.
+Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront automatiquement extraites et affichées dans la bulle de réflexion dédiée.
 
 ====
-
-## WORKFLOWS TYPE
-
-**Corriger un bug / une erreur de build :**
-```
-runShellCommand(build) → lire les erreurs → grepInFiles(symbole) → readFile → editFile → runShellCommand(build)
-```
-
-**Implémenter une fonctionnalité :**
-```
-listFiles → grepInFiles(code similaire) → readFile(fichiers concernés) → writeFile/editFile → runShellCommand(test)
-```
-
-**Explorer et comprendre une base de code :**
-```
-globSearchFiles(pattern) → readFilesBatch([fichiers]) → grepInFiles(symbole) → réponse synthétique
-```
-
-**Modifier sans régressions :**
-```
-readFile(complet) → editFile(old_text EXACT, new_text) → getLspDiagnostics → si erreurs → corriger
-```
-
-**Opérations git :**
-```
-runShellCommand(git status) → runShellCommand(git add -A) → runShellCommand(git commit -m "...") → runShellCommand(git push)
-```
-
-====
-
 ## FORMAT ET STYLE DE RÉPONSE
-
-- **Langue :** réponds dans la langue de l'utilisateur (français si l'utilisateur parle français, anglais si anglais, etc.).
-- **Ton :** direct, professionnel, sans fioritures. INTERDIT de commencer par "Super !", "Bien sûr !", "Absolument !", "D'accord !" ou tout autre formule de politesse creuse.
-- **Code :** toujours dans des blocs ` ```langage `.
-- **Actions :** annonce en 1 phrase courte ce que tu fais, puis fais-le immédiatement.
-- **Fin de tâche :** résumé factuel en 1-2 phrases de ce qui a été accompli. Ne termine JAMAIS par une question ou une offre d'aide supplémentaire — la réponse est complète et définitive.
-- **Pas de sur-explication.** Ne décris pas le code que tu vas écrire avant de l'écrire. Agis, puis explique brièvement si nécessaire.
-''';
+- **Langue :** réponds dans la langue de l'utilisateur (français si français).
+- **Ton :** direct, professionnel, sans fioritures.
+- **Code :** toujours dans des blocs ```langage.
+- **Actions :** annonce en 1 phrase courte ce que tu fais, puis fais-le immédiatement.''';
   }
 
-  /// Annule la requête en cours (si elle existe).
-  void cancel() {
-    _client?.close();
-    _client = null;
-  }
-
-  /// Lance une conversation avec [model] et renvoie un stream de [AgentChunk].
-  ///
-  /// [messages] doit être au format OpenAI : `[{'role':'user'|'assistant', 'content':'...'}]`.
-  /// [context] et [workspacePath] sont optionnels mais requis pour le tool calling.
-  Stream<AgentChunk> run({
-    required Models model,
-    required List<Map<String, dynamic>> messages,
-    String? systemPromptOverride,
-    BuildContext? context,
-    String workspacePath = '',
-    String agentMode = 'agent',
-  }) {
-    final ctrl = StreamController<AgentChunk>();
-    // JSON literals containing only strings can arrive here at runtime as
-    // List<Map<String, String>> even though the public API is dynamic-valued.
-    // Rebuild every entry so Iterable.first/lastWhere and tool payloads use
-    // one concrete map type throughout the Agent lifecycle.
-    final normalizedMessages = messages
-        .map<Map<String, dynamic>>(
-          (message) => Map<String, dynamic>.from(message),
-        )
-        .toList();
-    unawaited(_run(
-      model: model,
-      messages: normalizedMessages,
-      systemPromptOverride: systemPromptOverride,
-      ctrl: ctrl,
-      context: context,
-      workspacePath: workspacePath,
-      agentMode: agentMode,
-    ));
-    return ctrl.stream;
-  }
 
   Future<void> _run({
     required Models model,
@@ -911,6 +850,20 @@ runShellCommand(git status) → runShellCommand(git add -A) → runShellCommand(
           return res.success
               ? jsonEncode(res.data?.map((c) => c.toJson()).toList() ?? [])
               : (res.error ?? 'Error');
+                case 'getSecret':
+          final secretName = (args['name'] ?? args['secretName'] ?? '').toString();
+          final res = await tools.getSecret(secretName);
+          return res.success ? (res.data ?? '') : (res.error ?? 'Error getting secret');
+        case 'listSecrets':
+          final res = await tools.listSecrets();
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error listing secrets');
+        case 'getAgentSkills':
+          final res = await tools.getAgentSkills();
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error getting skills');
+        case 'useAgentSkill':
+          final sName = (args['skillName'] ?? args['name'] ?? '').toString();
+          final res = await tools.useAgentSkill(sName);
+          return res.success ? (res.data ?? '') : (res.error ?? 'Error using skill');
         case 'updateProjectMemory':
           final res = await tools.updateProjectMemory(args['content']?.toString() ?? '');
           return res.success

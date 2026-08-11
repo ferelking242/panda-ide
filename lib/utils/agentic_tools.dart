@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1880,6 +1881,113 @@ class AgenticTools {
     return ToolResult.success(results);
   }
 
+  
+  Future<ToolResult<String>> getSecret(String name) async {
+    try {
+      if (name.isEmpty) return ToolResult.error('Secret name cannot be empty.');
+      final prefs = await SharedPreferences.getInstance();
+      final secretJson = prefs.getString('agent_secrets') ?? '{}';
+      final Map<String, dynamic> secretsMap = jsonDecode(secretJson);
+      if (secretsMap.containsKey(name) && secretsMap[name].toString().isNotEmpty) {
+        return ToolResult.success(secretsMap[name].toString());
+      }
+      if (Platform.environment.containsKey(name)) {
+        return ToolResult.success(Platform.environment[name]!);
+      }
+      final envFile = File('$workspacePath/.env');
+      if (await envFile.exists()) {
+        final lines = await envFile.readAsLines();
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.startsWith('#') || !trimmed.contains('=')) continue;
+          final parts = trimmed.split('=');
+          if (parts[0].trim() == name) {
+            final val = parts.sublist(1).join('=').trim().replaceAll('"', '').replaceAll("'", '');
+            return ToolResult.success(val);
+          }
+        }
+      }
+      return ToolResult.error('Secret "$name" is not configured.');
+    } catch (e) {
+      return ToolResult.error('Error getting secret "$name": $e');
+    }
+  }
+
+  Future<ToolResult<List<String>>> listSecrets() async {
+    try {
+      final names = <String>{};
+      final prefs = await SharedPreferences.getInstance();
+      final secretJson = prefs.getString('agent_secrets') ?? '{}';
+      final Map<String, dynamic> secretsMap = jsonDecode(secretJson);
+      names.addAll(secretsMap.keys);
+
+      for (final key in Platform.environment.keys) {
+        if (key.contains('TOKEN') || key.contains('KEY') || key.contains('SECRET') || key.contains('PAT') || key.contains('GITHUB')) {
+          names.add(key);
+        }
+      }
+
+      final envFile = File('$workspacePath/.env');
+      if (await envFile.exists()) {
+        final lines = await envFile.readAsLines();
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.startsWith('#') || !trimmed.contains('=')) continue;
+          names.add(trimmed.split('=')[0].trim());
+        }
+      }
+      return ToolResult.success(names.toList());
+    } catch (e) {
+      return ToolResult.error('Error listing secrets: $e');
+    }
+  }
+
+  Future<ToolResult<Map<String, String>>> getAgentSkills() async {
+    try {
+      final skills = <String, String>{};
+      final dirs = [
+        '$workspacePath/.panda/skills',
+        '$workspacePath/.agents/skills',
+        '$workspacePath/skills',
+      ];
+      for (final dirPath in dirs) {
+        final dir = Directory(dirPath);
+        if (await dir.exists()) {
+          await for (final entity in dir.list(recursive: true)) {
+            if (entity is File && entity.path.endsWith('SKILL.md')) {
+              final skillName = path.basename(entity.parent.path);
+              skills[skillName] = entity.path;
+            }
+          }
+        }
+      }
+      return ToolResult.success(skills);
+    } catch (e) {
+      return ToolResult.error('Error listing agent skills: $e');
+    }
+  }
+
+  Future<ToolResult<String>> useAgentSkill(String skillName) async {
+    try {
+      final skillsRes = await getAgentSkills();
+      if (!skillsRes.success || skillsRes.data == null) {
+        return ToolResult.error('No agent skills found.');
+      }
+      final filePath = skillsRes.data![skillName];
+      if (filePath == null) {
+        return ToolResult.error('Skill "$skillName" not found. Available skills: ${skillsRes.data!.keys.join(", ")}');
+      }
+      final file = File(filePath);
+      if (await file.exists()) {
+        final content = await file.readAsString();
+        return ToolResult.success(content);
+      }
+      return ToolResult.error('Skill file not found at $filePath');
+    } catch (e) {
+      return ToolResult.error('Error using skill "$skillName": $e');
+    }
+  }
+
   List<Map<String, dynamic>> getTools({bool readAccessOnly = false}) {
     return _applyToolSelectionFilter([
       {
@@ -2396,6 +2504,62 @@ class AgenticTools {
             "required": ["url"],
           },
         },
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "getSecret",
+          "description": "Retrieves a secret value or API key configured in settings or environment",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of secret (e.g. GITHUB_TOKEN, PAT, GEMINI_API_KEY)"
+              }
+            },
+            "required": ["name"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "listSecrets",
+          "description": "Lists all configured secret keys available to the agent",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "getAgentSkills",
+          "description": "Lists all available agent skills and their file paths",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "useAgentSkill",
+          "description": "Loads and returns instructions for a specific agent skill",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "skillName": {
+                "type": "string",
+                "description": "Name of skill to load"
+              }
+            },
+            "required": ["skillName"]
+          }
+        }
       },
       {
         "type": "function",

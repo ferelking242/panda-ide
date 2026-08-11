@@ -310,8 +310,8 @@ class _AgentSettingsState extends State<AgentSettings>
   @override
   void initState() {
     super.initState();
-    _tab            = TabController(length: 3, vsync: this);
-    _settingsSubTab = TabController(length: 3, vsync: this);
+    _tab            = TabController(length: 4, vsync: this);
+    _settingsSubTab = TabController(length: 4, vsync: this);
     _chatInputCtrl.addListener(() => setState(() {}));
     _chatScrollCtrl.addListener(_onChatScroll);
     _loadMemorySettings();
@@ -1989,6 +1989,7 @@ class _AgentSettingsState extends State<AgentSettings>
                   Tab(text: 'Providers'),
                   Tab(text: 'Mémoire'),
                   Tab(text: 'Apparence'),
+                  Tab(text: 'Agent Settings'),
                 ],
               ),
             ],
@@ -2001,6 +2002,7 @@ class _AgentSettingsState extends State<AgentSettings>
               _buildProvidersContent(context, isDark, bg, card, fg, muted, border),
               _buildMemoryContent(context, isDark, bg, card, fg, muted, border),
               _buildAppearanceContent(context, isDark, bg, card, fg, muted, border),
+              _buildAgentSettingsContent(context, isDark, bg, card, fg, muted, border),
             ],
           ),
         ),
@@ -3479,4 +3481,245 @@ class _ChatBlinkingCursorState extends State<_ChatBlinkingCursor> with SingleTic
     opacity: _anim,
     child: Container(width: 2, height: 14, color: widget.color),
   );
+}
+
+
+Widget _buildAgentSettingsContent(BuildContext context, bool isDark, Color bg,
+    Color card, Color fg, Color muted, Color border) {
+  return _AgentSettingsView(
+    isDark: isDark,
+    bg: bg,
+    card: card,
+    fg: fg,
+    muted: muted,
+    border: border,
+  );
+}
+
+class _AgentSettingsView extends StatefulWidget {
+  final bool isDark;
+  final Color bg;
+  final Color card;
+  final Color fg;
+  final Color muted;
+  final Color border;
+
+  const _AgentSettingsView({
+    required this.isDark,
+    required this.bg,
+    required this.card,
+    required this.fg,
+    required this.muted,
+    required this.border,
+  });
+
+  @override
+  State<_AgentSettingsView> createState() => _AgentSettingsViewState();
+}
+
+class _AgentSettingsViewState extends State<_AgentSettingsView> {
+  final TextEditingController _promptCtrl = TextEditingController();
+  final TextEditingController _rulesCtrl = TextEditingController();
+  Map<String, String> _secrets = {};
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _promptCtrl.text = prefs.getString('agent_custom_prompt') ?? '';
+
+    final secretJson = prefs.getString('agent_secrets') ?? '{}';
+    try {
+      final Map<String, dynamic> decoded = jsonDecode(secretJson);
+      _secrets = decoded.map((k, v) => MapEntry(k, v.toString()));
+    } catch (_) {}
+
+    setState(() => _loading = false);
+  }
+
+  Future<void> _savePrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('agent_custom_prompt', _promptCtrl.text.trim());
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Prompt personnalisé enregistré !', style: TextStyle(fontSize: 12))),
+      );
+    }
+  }
+
+  Future<void> _saveSecrets() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('agent_secrets', jsonEncode(_secrets));
+    setState(() {});
+  }
+
+  void _addSecretDialog() {
+    final keyCtrl = TextEditingController();
+    final valCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ajouter un secret / clé API', style: TextStyle(fontSize: 14)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: keyCtrl,
+              decoration: const InputDecoration(labelText: 'Nom (ex: GITHUB_TOKEN, PAT)', isDense: true),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: valCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Valeur', isDense: true),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final k = keyCtrl.text.trim();
+              final v = valCtrl.text.trim();
+              if (k.isNotEmpty && v.isNotEmpty) {
+                _secrets[k] = v;
+                _saveSecrets();
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('Ajouter'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        // ── Custom System Prompt ──────────────────────────────
+        Text(
+          'Prompt Système Personnalisé',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.fg),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Instructions supplémentaires injectées au début de chaque session d'agent.',
+          style: TextStyle(fontSize: 11, color: widget.muted),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _promptCtrl,
+          maxLines: 4,
+          style: TextStyle(fontSize: 12, color: widget.fg),
+          decoration: InputDecoration(
+            hintText: 'Ex: Toujours répondre de manière concise en français...',
+            hintStyle: TextStyle(fontSize: 12, color: widget.muted.withValues(alpha: 0.6)),
+            filled: true,
+            fillColor: widget.card,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: widget.border),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton.icon(
+            onPressed: _savePrompt,
+            icon: const Icon(Broken.document_upload, size: 14),
+            label: const Text('Enregistrer le Prompt', style: TextStyle(fontSize: 11)),
+          ),
+        ),
+        const Divider(height: 24),
+
+        // ── Secrets & API Keys ──────────────────────────────
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Secrets & Clés API',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.fg),
+                ),
+                Text(
+                  'Utilisés automatiquement par l'agent pour git, API, etc.',
+                  style: TextStyle(fontSize: 11, color: widget.muted),
+                ),
+              ],
+            ),
+            IconButton(
+              icon: const Icon(Broken.add_circle, size: 18),
+              onPressed: _addSecretDialog,
+              tooltip: 'Ajouter un secret',
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        if (_secrets.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Aucun secret configuré.',
+              style: TextStyle(fontSize: 11, color: widget.muted, fontStyle: FontStyle.italic),
+            ),
+          )
+        else
+          Column(
+            children: _secrets.entries.map((e) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: widget.card,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: widget.border),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Broken.key, size: 14, color: widget.fg),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        e.key,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: widget.fg),
+                      ),
+                    ),
+                    Text(
+                      '••••••••',
+                      style: TextStyle(fontSize: 11, color: widget.muted),
+                    ),
+                    IconButton(
+                      icon: const Icon(Broken.trash, size: 14, color: Colors.redAccent),
+                      onPressed: () {
+                        _secrets.remove(e.key);
+                        _saveSecrets();
+                      },
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
 }

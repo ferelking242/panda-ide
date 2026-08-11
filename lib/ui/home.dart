@@ -1,3 +1,22 @@
+
+Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
+  final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
+  final matches = thinkRegex.allMatches(rawText);
+  if (matches.isEmpty) {
+    return {'text': rawText, 'thinking': existingThinking};
+  }
+  String newThink = existingThinking;
+  for (final m in matches) {
+    final val = m.group(2)?.trim() ?? '';
+    if (val.isNotEmpty) {
+      if (newThink.isNotEmpty && !newThink.endsWith('\n')) newThink += '\n';
+      newThink += val;
+    }
+  }
+  final cleanText = rawText.replaceAll(RegExp(r'<(think|thought)>[\s\S]*?(?:</\1>|$)', caseSensitive: false), '').trim();
+  return {'text': cleanText, 'thinking': newThink};
+}
+import 'package:markdown_widget/markdown_widget.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -5950,61 +5969,11 @@ class _SelectTypeState extends State<SelectType>
         final isError     = phase == 'error';
 
         if (isMe) {
-          // ── User message (Replit style: right aligned, no avatar) ──
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.88,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xff1e293b) : const Color(0xffe2e8f0),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isDark ? const Color(0xff334155) : const Color(0xffcbd5e1),
-                          width: 1,
-                        ),
-                      ),
-                      child: SelectableText(
-                        text,
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.4,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _MsgActionBtn(
-                          icon: Broken.copy,
-                          label: 'Copier',
-                          onTap: () {
-                            Clipboard.setData(ClipboardData(text: text));
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Copié !', style: TextStyle(fontSize: 12)),
-                                duration: Duration(seconds: 1),
-                              ),
-                            );
-                          },
-                          muted: muted,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          return _UserMessageBubble(
+            text: text,
+            isDark: isDark,
+            fg: fg,
+            muted: muted,
           );
         }
 
@@ -6058,27 +6027,14 @@ class _SelectTypeState extends State<SelectType>
 
               // Agent response text
               if (text.isNotEmpty || isStreaming)
-                Container(
-                  width: double.infinity,
+                Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: SelectableText(
-                          text.isEmpty && isStreaming ? ' ' : text,
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.5,
-                            color: isError ? Colors.red[400] : fg,
-                          ),
-                        ),
-                      ),
-                      if (isStreaming) ...[
-                        const SizedBox(width: 2),
-                        _BlinkingCursor(color: fg),
-                      ],
-                    ],
+                  child: _AgentMarkdownView(
+                    markdown: text,
+                    isDark: isDark,
+                    fg: fg,
+                    isError: isError,
+                    isStreaming: isStreaming,
                   ),
                 ),
 
@@ -7500,7 +7456,10 @@ class _SelectTypeState extends State<SelectType>
                   _agentPhase = AgentPhase.streaming;
                   _agentCurrentTool = '';
                   _agentStreamBuf += chunk.text;
-                  _agentMessages[agentIdx]['text'] = _agentStreamBuf;
+                  final processed = _extractThinkingFromText(_agentStreamBuf, _agentThinkingBuf);
+                  _agentThinkingBuf = processed['thinking']!;
+                  _agentMessages[agentIdx]['text'] = processed['text']!;
+                  _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
                 case AgentPhase.done:
                   _agentPhase = AgentPhase.done;
                   _agentCurrentTool = '';
