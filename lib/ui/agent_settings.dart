@@ -25,6 +25,10 @@ import '../utils/agentic_tool_catalog.dart';
 import '../utils/copilot_chat.dart';
 import '../utils/panda_log.dart';
 import 'agent_runner.dart';
+import '../utils/agent_history_service.dart';
+import '../utils/pandarules_service.dart';
+import '../terminal/terminal_bridge.dart';
+
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:markdown_widget/config/configs.dart';
 
@@ -252,6 +256,7 @@ class _AgentSettingsState extends State<AgentSettings>
 
   // ── Chat tab state ──────────────────────────────────────────────────────
   final List<Map<String, dynamic>> _chatMessages = [];
+  String _currentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
   final _chatInputCtrl  = TextEditingController();
   final _chatScrollCtrl = ScrollController();
   bool       _chatGenerating   = false;
@@ -341,11 +346,24 @@ class _AgentSettingsState extends State<AgentSettings>
   Future<void> _saveChatHistory() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      // Keep last 200 messages max to avoid excessive storage
       final toSave = _chatMessages.length > 200
           ? _chatMessages.sublist(_chatMessages.length - 200)
           : _chatMessages;
       await prefs.setString('agent_chat_history', jsonEncode(toSave));
+
+      final titleMsg = _chatMessages.firstWhere(
+            (m) => m['role'] == 'user',
+            orElse: () => {'text': 'Nouvelle discussion'},
+          )['text']?.toString() ?? 'Nouvelle discussion';
+
+      final session = AgentSession(
+        id: _currentSessionId,
+        title: titleMsg.length > 50 ? '${titleMsg.substring(0, 50)}...' : titleMsg,
+        updatedAt: DateTime.now(),
+        messages: List<Map<String, dynamic>>.from(_chatMessages),
+        agentMode: _chatMode,
+      );
+      await AgentHistoryService.saveSession(session);
     } catch (_) {}
   }
 

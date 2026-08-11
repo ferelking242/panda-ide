@@ -19,6 +19,10 @@ import 'package:path/path.dart' as path;
 import '../utils/ai.dart';
 import '../utils/agentic_tools.dart';
 import '../utils/panda_log.dart';
+import '../terminal/terminal_bridge.dart';
+import '../utils/pandarules_service.dart';
+import '../utils/agent_history_service.dart';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AgentPhase — machine à états de l'agent
@@ -65,10 +69,11 @@ class AgentRunner {
 
   /// Génère dynamiquement le system prompt à partir du contexte réel du projet.
   /// Appelé dans [_run] après que les toolSchemas sont connus.
-  static String _buildSystemPrompt(
+  static Future<String> _buildSystemPrompt(
     String workspacePath,
-    List<Map<String, dynamic>> toolSchemas,
-  ) {
+    List<Map<String, dynamic>> toolSchemas, {
+    String agentMode = "agent",
+  }) async {
     // ── Détection du projet ────────────────────────────────────────────────
     final StringBuffer projectSection = StringBuffer();
     final StringBuffer repoSection   = StringBuffer();
@@ -345,7 +350,7 @@ runShellCommand(git status) → runShellCommand(git add -A) → runShellCommand(
           const <Map<String, dynamic>>[];
 
       // ── Génération dynamique du system prompt ───────────────────────────
-      final basePrompt = _buildSystemPrompt(workspacePath, toolSchemas);
+      final basePrompt = await _buildSystemPrompt(workspacePath, toolSchemas, agentMode: agentMode);
       final systemPrompt = (systemPromptOverride == null ||
               systemPromptOverride.trim().isEmpty)
           ? basePrompt
@@ -786,6 +791,9 @@ runShellCommand(git status) → runShellCommand(git add -A) → runShellCommand(
           return res.success
               ? 'Start: ${res.data?['startLine']}, End: ${res.data?['endLine']}, Text: ${res.data?['selectedText'] ?? ''}'
               : (res.error ?? 'Error');
+        case 'getTerminalOutput':
+          final lines = args['lines'] is int ? args['lines'] as int : 100;
+          return TerminalBridge.instance.getRecentOutput(lines);
         case 'getLspDiagnostics':
           final res = await tools.getLspDiagnostics(args['filePath']);
           return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
