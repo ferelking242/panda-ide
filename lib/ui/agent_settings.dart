@@ -3619,7 +3619,7 @@ class _AgentSettingsViewState extends State<_AgentSettingsView> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Instructions supplémentaires injectées au début de chaque session d'agent.',
+          "Instructions supplémentaires injectées au début de chaque session d'agent.",
           style: TextStyle(fontSize: 11, color: widget.muted),
         ),
         const SizedBox(height: 8),
@@ -3661,7 +3661,7 @@ class _AgentSettingsViewState extends State<_AgentSettingsView> {
                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: widget.fg),
                 ),
                 Text(
-                  'Utilisés automatiquement par l'agent pour git, API, etc.',
+                  "Utilisés automatiquement par l'agent pour git, API, etc.",
                   style: TextStyle(fontSize: 11, color: widget.muted),
                 ),
               ],

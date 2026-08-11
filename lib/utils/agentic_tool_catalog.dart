@@ -157,6 +157,30 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     description: 'Runs a command in the project terminal and returns its output.',
     requiresWriteAccess: true,
   ),
+    AgenticToolSpec(
+    name: 'requestSecret',
+    label: 'Demander un secret / clé API',
+    description: 'Demande à l'utilisateur de saisir un secret ou une clé API manquante via une boîte de dialogue interactive.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'getFullCommandLog',
+    label: 'Obtenir les logs complets de la commande',
+    description: 'Retourne la version complète et non tronquée des sorties stdout/stderr de la dernière commande shell exécutée.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'generateRepoMap',
+    label: 'Générer la carte du dépôt',
+    description: 'Génère une cartographie structurée du projet (arborescence des dossiers et fichiers clés) pour une prise en main rapide.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'createCheckpoint',
+    label: 'Créer un point de sauvegarde',
+    description: 'Crée un instantané / checkpoint de l'état actuel du projet dans .panda/checkpoints/.',
+    requiresWriteAccess: true,
+  ),
   AgenticToolSpec(
     name: 'updateProjectMemory',
     label: 'Update project memory',
