@@ -25,6 +25,10 @@ import '../utils/agentic_tool_catalog.dart';
 import '../utils/copilot_chat.dart';
 import '../utils/panda_log.dart';
 import 'agent_runner.dart';
+import 'agent/agent_diff_viewer.dart';
+import 'agent/agent_slash_mentions_overlay.dart';
+import '../utils/agent_export_service.dart';
+
 import '../utils/agent_history_service.dart';
 import '../utils/pandarules_service.dart';
 import '../terminal/terminal_bridge.dart';
@@ -257,6 +261,7 @@ class _AgentSettingsState extends State<AgentSettings>
   // ── Chat tab state ──────────────────────────────────────────────────────
   final List<Map<String, dynamic>> _chatMessages = [];
   String _currentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
+  String? _attachedImageBase64;
   final _chatInputCtrl  = TextEditingController();
   final _chatScrollCtrl = ScrollController();
   bool       _chatGenerating   = false;
