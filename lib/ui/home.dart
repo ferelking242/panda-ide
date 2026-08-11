@@ -5165,6 +5165,171 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
+  void _switchProviderActiveKey(BuildContext context, String agentKey, Map<String, dynamic> cfg, String keyId, int keyIndex) {
+    final aiBloc = context.read<AIBloc>();
+    final currentConfig = Map<String, dynamic>.from(aiBloc.state.config);
+    final targetCfg = currentConfig[agentKey] is Map
+        ? Map<String, dynamic>.from(currentConfig[agentKey] as Map)
+        : <String, dynamic>{};
+
+    targetCfg['activeKeyId'] = keyId;
+    targetCfg['activeKeyIndex'] = keyIndex;
+
+    final apiKeys = (targetCfg['apiKeys'] as List?)
+        ?.whereType<Map>()
+        .map((k) => Map<String, dynamic>.from(k))
+        .toList() ?? [];
+
+    if (keyIndex >= 0 && keyIndex < apiKeys.length) {
+      final selectedKeyVal = (apiKeys[keyIndex]['key'] ?? apiKeys[keyIndex]['apiKey'])?.toString() ?? '';
+      if (selectedKeyVal.isNotEmpty) {
+        targetCfg['apiKey'] = selectedKeyVal;
+        targetCfg['key'] = selectedKeyVal;
+      }
+    }
+
+    currentConfig[agentKey] = targetCfg;
+    aiBloc.add(AIConfigEvent(currentConfig));
+
+    final providerName = (targetCfg['provider'] ?? targetCfg['apiProvider'] ?? 'Provider').toString();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Clé d\'API activée pour $providerName'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: const Color(0xFF4CAF50),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showAddKeyDialog(BuildContext context, String agentKey, Map<String, dynamic> cfg, String providerName) {
+    final labelCtrl = TextEditingController();
+    final keyCtrl = TextEditingController();
+    bool obscure = true;
+
+    showDialog(
+      context: context,
+      builder: (dlgCtx) {
+        return StatefulBuilder(
+          builder: (context, setDlgState) {
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final bg = isDark ? const Color(0xff2d2d2d) : Colors.white;
+            final fg = isDark ? Colors.white : Colors.black87;
+
+            return AlertDialog(
+              backgroundColor: bg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              title: Row(
+                children: [
+                  const Icon(Icons.vpn_key_rounded, size: 20, color: Color(0xFF4CAF50)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Ajouter une clé pour ${providerName.toUpperCase()}',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: labelCtrl,
+                    style: TextStyle(fontSize: 13, color: fg),
+                    decoration: const InputDecoration(
+                      labelText: 'Nom / Label de la clé',
+                      hintText: 'ex: Clé Pro, Perso, Key #2',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: keyCtrl,
+                    obscureText: obscure,
+                    style: TextStyle(fontSize: 13, color: fg),
+                    decoration: InputDecoration(
+                      labelText: 'Clé d\'API',
+                      hintText: 'Collez votre clé API ici',
+                      isDense: true,
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        icon: Icon(obscure ? Icons.visibility_off : Icons.visibility, size: 18),
+                        onPressed: () => setDlgState(() => obscure = !obscure),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dlgCtx),
+                  child: const Text('Annuler'),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    final newKey = keyCtrl.text.trim();
+                    if (newKey.isEmpty) return;
+                    final label = labelCtrl.text.trim().isNotEmpty
+                        ? labelCtrl.text.trim()
+                        : 'Clé ${DateTime.now().millisecondsSinceEpoch % 1000}';
+
+                    final aiBloc = context.read<AIBloc>();
+                    final currentConfig = Map<String, dynamic>.from(aiBloc.state.config);
+                    final targetCfg = currentConfig[agentKey] is Map
+                        ? Map<String, dynamic>.from(currentConfig[agentKey] as Map)
+                        : <String, dynamic>{};
+
+                    final List<Map<String, dynamic>> apiKeys = (targetCfg['apiKeys'] as List?)
+                        ?.whereType<Map>()
+                        .map((k) => Map<String, dynamic>.from(k))
+                        .toList() ?? [];
+
+                    final legacyKey = (targetCfg['apiKey'] ?? targetCfg['key'] ?? '').toString().trim();
+                    if (apiKeys.isEmpty && legacyKey.isNotEmpty) {
+                      apiKeys.add({'id': 'k_0', 'label': 'Clé 1', 'key': legacyKey});
+                    }
+
+                    final newId = 'k_${DateTime.now().millisecondsSinceEpoch}';
+                    apiKeys.add({
+                      'id': newId,
+                      'label': label,
+                      'key': newKey,
+                    });
+
+                    targetCfg['apiKeys'] = apiKeys;
+                    targetCfg['activeKeyId'] = newId;
+                    targetCfg['activeKeyIndex'] = apiKeys.length - 1;
+                    targetCfg['apiKey'] = newKey;
+                    targetCfg['key'] = newKey;
+
+                    currentConfig[agentKey] = targetCfg;
+                    aiBloc.add(AIConfigEvent(currentConfig));
+
+                    Navigator.pop(dlgCtx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Clé "$label" ajoutée et activée !'),
+                        backgroundColor: const Color(0xFF4CAF50),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  child: const Text('Ajouter'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   /// Bottom sheet — hierarchical model picker (Provider → Models).
   void _showModelPickerSheet(BuildContext context, AppTheme appTheme) {
     final isDark  = appTheme.isDark;
@@ -5280,6 +5445,21 @@ class _SelectTypeState extends State<SelectType>
                   final icon = _providerIcon(providerRaw);
                   final pColor = _providerColor(providerRaw);
 
+                  final apiKeys = (cfg['apiKeys'] as List?)
+                      ?.whereType<Map>()
+                      .map((k) => Map<String, dynamic>.from(k))
+                      .where((k) => (k['key'] ?? k['apiKey'])?.toString().trim().isNotEmpty == true)
+                      .toList() ?? <Map<String, dynamic>>[];
+
+                  final legacyKey = (cfg['apiKey'] ?? cfg['key'] ?? cfg['api_key'] ?? cfg['secretKey'] ?? '').toString().trim();
+                  if (apiKeys.isEmpty && legacyKey.isNotEmpty) {
+                    apiKeys.add({'id': 'k_0', 'label': 'Clé 1', 'key': legacyKey});
+                  }
+
+                  final activeKeyId = cfg['activeKeyId']?.toString() ??
+                      (apiKeys.isNotEmpty ? apiKeys.first['id']?.toString() : null);
+                  final activeKeyIndex = (cfg['activeKeyIndex'] as num?)?.toInt() ?? 0;
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -5332,6 +5512,65 @@ class _SelectTypeState extends State<SelectType>
                           ),
                         ]),
                       ),
+
+                      // ── Multi API Key Selector Bar ───────────────────
+                      if (apiKeys.isNotEmpty || providerRaw.toLowerCase() != 'copilot') ...[
+                        Container(
+                          margin: const EdgeInsets.only(left: 26, top: 2, bottom: 8),
+                          height: 30,
+                          child: ListView(
+                            scrollDirection: Axis.horizontal,
+                            children: [
+                              for (int kIdx = 0; kIdx < apiKeys.length; kIdx++) ...[
+                                Builder(builder: (_) {
+                                  final kMap = apiKeys[kIdx];
+                                  final kId = kMap['id']?.toString() ?? 'k_$kIdx';
+                                  final kLabel = (kMap['label'] ?? 'Clé ${kIdx + 1}').toString();
+                                  final isKeyActive = (activeKeyId == kId) || (activeKeyIndex == kIdx);
+                                  return Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: ChoiceChip(
+                                      avatar: Icon(
+                                        isKeyActive ? Icons.vpn_key_rounded : Icons.vpn_key_outlined,
+                                        size: 12,
+                                        color: isKeyActive ? Colors.white : pColor,
+                                      ),
+                                      label: Text(
+                                        kLabel,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: isKeyActive ? FontWeight.w600 : FontWeight.normal,
+                                          color: isKeyActive ? Colors.white : fg,
+                                        ),
+                                      ),
+                                      selected: isKeyActive,
+                                      selectedColor: pColor,
+                                      backgroundColor: card,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      onSelected: (_) {
+                                        _switchProviderActiveKey(context, entry.key, cfg, kId, kIdx);
+                                      },
+                                    ),
+                                  );
+                                }),
+                              ],
+                              ActionChip(
+                                avatar: const Icon(Icons.add_rounded, size: 12, color: _kAccent),
+                                label: const Text('+ Clé', style: TextStyle(fontSize: 11, color: _kAccent, fontWeight: FontWeight.w600)),
+                                backgroundColor: _kAccent.withValues(alpha: 0.1),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                padding: const EdgeInsets.symmetric(horizontal: 4),
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                onPressed: () {
+                                  _showAddKeyDialog(context, entry.key, cfg, providerRaw);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
 
                       // ── Models list ──────────────────────────────────
                       if (models.isEmpty)
@@ -6062,7 +6301,7 @@ class _SelectTypeState extends State<SelectType>
   Models? _modelFromAiConfig(Map<String, dynamic> cfg) {
     final providerRaw = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
     final provider    = providerRaw.toLowerCase();
-    final apiKey      = (cfg['apiKey'] ?? cfg['key'] ?? cfg['api_key'] ?? cfg['secretKey'] ?? '').toString();
+    final apiKey      = Models.resolveApiKey(cfg);
     final modelName   = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
 
     switch (provider) {

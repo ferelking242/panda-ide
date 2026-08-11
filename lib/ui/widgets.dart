@@ -10097,79 +10097,192 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     final currentModelId = selectedModelId != null && models.any((m) => m.id == selectedModelId)
       ? selectedModelId
       : models.first.id;
-  
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(8),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(15),
+
+    Map<String, dynamic>? currentProviderConfig;
+    if (aiState.config.containsKey(currentModelId)) {
+      final raw = aiState.config[currentModelId];
+      if (raw is Map) currentProviderConfig = Map<String, dynamic>.from(raw);
+    }
+
+    final currentApiKeys = (currentProviderConfig?['apiKeys'] as List?)
+        ?.whereType<Map>()
+        .map((k) => Map<String, dynamic>.from(k))
+        .where((k) => (k['key'] ?? k['apiKey'])?.toString().trim().isNotEmpty == true)
+        .toList() ?? [];
+
+    final activeKeyId = currentProviderConfig?['activeKeyId']?.toString();
+    final activeKeyLabel = currentApiKeys.isNotEmpty
+        ? (currentApiKeys.firstWhere((k) => k['id'] == activeKeyId, orElse: () => currentApiKeys.first)['label'] ?? 'Clé 1')
+        : null;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(
+          child: Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withAlpha(15) : Colors.black.withAlpha(8),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: isDark ? Colors.white.withAlpha(20) : Colors.black.withAlpha(15),
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: currentModelId,
+                isDense: true,
+                isExpanded: true,
+                icon: Icon(Icons.keyboard_arrow_down_rounded, color: textColor.withAlpha(180), size: 20),
+                dropdownColor: isDark ? const Color(0xff2d2d2d) : Colors.white,
+                style: TextStyle(color: textColor, fontSize: 13),
+                items: models.map((model) {
+                  final isCurrent = model.id == currentModelId;
+                  return DropdownMenuItem<String>(
+                    value: model.id,
+                    child: Row(
+                      children: [
+                        model.icon,
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            model.name,
+                            style: TextStyle(
+                              color: isCurrent ? const Color(0xFF4CAF50) : textColor,
+                              fontSize: 13,
+                              fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (model.provider != null && !model.isCopilot) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '(${model.provider})',
+                            style: TextStyle(color: textColor.withAlpha(100), fontSize: 11),
+                          ),
+                        ],
+                        if (model.rateLabel != null) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            model.rateLabel!,
+                            style: TextStyle(
+                              color: textColor.withAlpha(150),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                        if (isCurrent) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.check_rounded, size: 16, color: Color(0xFF4CAF50)),
+                        ],
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (modelId) {
+                  if (modelId == null) return;
+                  _updateBlocState(selectedModelId: modelId);
+                  final currentModelSelected = Map<String, dynamic>.from(aiState.modelSelected);
+                  currentModelSelected['chat'] = modelId;
+                  context.read<AIBloc>().add(ModelSelectEvent(currentModelSelected));
+                },
+              ),
+            ),
+          ),
         ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: currentModelId,
-          isDense: true,
-          isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: textColor.withAlpha(180), size: 20),
-          dropdownColor: isDark ? const Color(0xff2d2d2d) : Colors.white,
-          style: TextStyle(color: textColor, fontSize: 13),
-          items: models.map((model) {
-            final isCurrent = model.id == currentModelId;
-            return DropdownMenuItem<String>(
-              value: model.id,
+        if (currentApiKeys.length > 1) ...[
+          const SizedBox(width: 6),
+          PopupMenuButton<String>(
+            tooltip: 'Changer de clé API',
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            color: isDark ? const Color(0xff2d2d2d) : Colors.white,
+            child: Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF4CAF50).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.3)),
+              ),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  model.icon,
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      model.name,
-                      style: TextStyle(
-                        color: isCurrent ? const Color(0xFF4CAF50) : textColor,
-                        fontSize: 13,
-                        fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  const Icon(Icons.vpn_key_rounded, size: 12, color: Color(0xFF4CAF50)),
+                  const SizedBox(width: 4),
+                  Text(
+                    activeKeyLabel.toString(),
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF4CAF50)),
                   ),
-                  if (model.provider != null && !model.isCopilot) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      '(${model.provider})',
-                      style: TextStyle(color: textColor.withAlpha(100), fontSize: 11),
-                    ),
-                  ],
-                  if (model.rateLabel != null) ...[
-                    const SizedBox(width: 4),
-                    Text(
-                      model.rateLabel!,
-                      style: TextStyle(
-                        color: textColor.withAlpha(150),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                  if (isCurrent) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.check_rounded, size: 16, color: Color(0xFF4CAF50)),
-                  ],
+                  const Icon(Icons.arrow_drop_down, size: 14, color: Color(0xFF4CAF50)),
                 ],
               ),
-            );
-          }).toList(),
-          onChanged: (modelId) {
-            if (modelId == null) return;
-            _updateBlocState(selectedModelId: modelId);
-            final currentModelSelected = Map<String, dynamic>.from(aiState.modelSelected);
-            currentModelSelected['chat'] = modelId;
-            context.read<AIBloc>().add(ModelSelectEvent(currentModelSelected));
-          }
-        ),
-      ),
+            ),
+            itemBuilder: (ctx) {
+              return currentApiKeys.map((kMap) {
+                final kId = kMap['id']?.toString() ?? '';
+                final kLabel = (kMap['label'] ?? 'Clé').toString();
+                final isSelectedKey = kId == activeKeyId;
+                return PopupMenuItem<String>(
+                  value: kId,
+                  height: 36,
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSelectedKey ? Icons.vpn_key_rounded : Icons.vpn_key_outlined,
+                        size: 14,
+                        color: isSelectedKey ? const Color(0xFF4CAF50) : textColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          kLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelectedKey ? FontWeight.w600 : FontWeight.normal,
+                            color: isSelectedKey ? const Color(0xFF4CAF50) : textColor,
+                          ),
+                        ),
+                      ),
+                      if (isSelectedKey)
+                        const Icon(Icons.check_rounded, size: 14, color: Color(0xFF4CAF50)),
+                    ],
+                  ),
+                );
+              }).toList();
+            },
+            onSelected: (selectedKeyId) {
+              final aiBloc = context.read<AIBloc>();
+              final updatedConfig = Map<String, dynamic>.from(aiBloc.state.config);
+              final cfg = updatedConfig[currentModelId] is Map
+                  ? Map<String, dynamic>.from(updatedConfig[currentModelId] as Map)
+                  : <String, dynamic>{};
+
+              final List<Map<String, dynamic>> keys = (cfg['apiKeys'] as List?)
+                  ?.whereType<Map>()
+                  .map((k) => Map<String, dynamic>.from(k))
+                  .toList() ?? [];
+
+              final kIdx = keys.indexWhere((k) => k['id'] == selectedKeyId);
+
+              cfg['activeKeyId'] = selectedKeyId;
+              if (kIdx >= 0) {
+                cfg['activeKeyIndex'] = kIdx;
+                final keyVal = (keys[kIdx]['key'] ?? keys[kIdx]['apiKey'])?.toString() ?? '';
+                if (keyVal.isNotEmpty) {
+                  cfg['apiKey'] = keyVal;
+                  cfg['key'] = keyVal;
+                }
+              }
+
+              updatedConfig[currentModelId] = cfg;
+              aiBloc.add(AIConfigEvent(updatedConfig));
+            },
+          ),
+        ],
+      ],
     );
   }
 

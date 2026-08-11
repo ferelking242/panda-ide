@@ -32,6 +32,32 @@ sealed class Models {
   bool get supportsToolCalling => toolCallingMethod != ToolCallingMethod.none;
   String get chatUrl => url;
 
+  static String resolveApiKey(Map<String, dynamic> cfg) {
+    if (cfg['apiKeys'] is List) {
+      final list = (cfg['apiKeys'] as List)
+          .whereType<Map>()
+          .map((k) => Map<String, dynamic>.from(k))
+          .where((k) => (k['key'] ?? k['apiKey'])?.toString().trim().isNotEmpty == true)
+          .toList();
+      if (list.isNotEmpty) {
+        final activeId = cfg['activeKeyId']?.toString();
+        if (activeId != null && activeId.isNotEmpty) {
+          final match = list.firstWhere(
+            (k) => k['id']?.toString() == activeId,
+            orElse: () => list.first,
+          );
+          return (match['key'] ?? match['apiKey']).toString().trim();
+        }
+        final activeIndex = (cfg['activeKeyIndex'] as num?)?.toInt() ?? 0;
+        if (activeIndex >= 0 && activeIndex < list.length) {
+          return (list[activeIndex]['key'] ?? list[activeIndex]['apiKey']).toString().trim();
+        }
+        return (list.first['key'] ?? list.first['apiKey']).toString().trim();
+      }
+    }
+    return (cfg['apiKey'] ?? cfg['key'] ?? cfg['api_key'] ?? cfg['secretKey'] ?? '').toString().trim();
+  }
+
   static const String instruction =
       "You are a code completion engine. "
       "The input contains partial code context split into sections, with the exact insertion point marked by the placeholder '<|CURSOR|>'. "

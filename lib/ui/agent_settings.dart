@@ -742,7 +742,7 @@ class _AgentSettingsState extends State<AgentSettings>
   Models? _modelFromAiConfig(Map<String, dynamic> cfg) {
     final providerRaw = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
     final provider    = providerRaw.toLowerCase();
-    final apiKey      = (cfg['apiKey'] ?? cfg['key'] ?? cfg['api_key'] ?? cfg['secretKey'] ?? '').toString();
+    final apiKey      = Models.resolveApiKey(cfg);
     final modelName   = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
 
     switch (provider) {
@@ -1038,11 +1038,37 @@ class _AgentSettingsState extends State<AgentSettings>
     final aiBloc  = context.read<AIBloc>();
     final newCfg  = Map<String, dynamic>.from(aiBloc.state.config);
     final modelId = 'agent_${_selectedProviderId}';
+
+    final existingMap = newCfg[modelId] is Map ? Map<String, dynamic>.from(newCfg[modelId] as Map) : <String, dynamic>{};
+    final List<Map<String, dynamic>> apiKeys = (existingMap['apiKeys'] as List?)
+        ?.whereType<Map>()
+        .map((k) => Map<String, dynamic>.from(k))
+        .toList() ?? [];
+
+    String activeKeyId = existingMap['activeKeyId']?.toString() ?? '';
+
+    if (apiKey.isNotEmpty) {
+      final existingIndex = apiKeys.indexWhere((k) => (k['key'] ?? k['apiKey']) == apiKey);
+      if (existingIndex >= 0) {
+        activeKeyId = apiKeys[existingIndex]['id']?.toString() ?? 'k_$existingIndex';
+      } else {
+        final newId = 'k_${DateTime.now().millisecondsSinceEpoch}';
+        apiKeys.add({
+          'id': newId,
+          'label': 'Clé ${apiKeys.length + 1}',
+          'key': apiKey,
+        });
+        activeKeyId = newId;
+      }
+    }
+
     newCfg[modelId] = {
       'provider':   _selectedProviderId,
       'apiProvider': _selectedProviderId,
       if (_selectedProviderId != 'copilot') 'apiKey': apiKey,
       if (_selectedProviderId != 'copilot') 'key': apiKey,
+      if (_selectedProviderId != 'copilot') 'apiKeys': apiKeys,
+      if (_selectedProviderId != 'copilot') 'activeKeyId': activeKeyId,
       'modelName':  modelName,
       'model':      modelName,
       'availableModels': models,
