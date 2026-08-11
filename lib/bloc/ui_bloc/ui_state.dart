@@ -153,7 +153,7 @@ Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
   final provider = (modelConfig['provider'] ?? modelConfig['apiProvider'] ?? '')
       .toString()
       .toLowerCase();
-  final apiKey = (modelConfig['apiKey'] ?? '').toString();
+  final apiKey = (modelConfig['apiKey'] ?? modelConfig['key'] ?? modelConfig['api_key'] ?? modelConfig['secretKey'] ?? '').toString();
   final modelName = (modelConfig['modelName'] ?? modelConfig['model'] ?? '').toString();
 
   switch (provider) {

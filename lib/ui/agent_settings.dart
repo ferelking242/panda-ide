@@ -742,7 +742,7 @@ class _AgentSettingsState extends State<AgentSettings>
   Models? _modelFromAiConfig(Map<String, dynamic> cfg) {
     final providerRaw = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
     final provider    = providerRaw.toLowerCase();
-    final apiKey      = (cfg['apiKey'] ?? '').toString();
+    final apiKey      = (cfg['apiKey'] ?? cfg['key'] ?? cfg['api_key'] ?? cfg['secretKey'] ?? '').toString();
     final modelName   = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
 
     switch (provider) {
@@ -965,7 +965,7 @@ class _AgentSettingsState extends State<AgentSettings>
     return _normalizeModelCatalog(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
-  List<Map<String, dynamic>> _normalizeModelCatalog(Map<String, dynamic> raw) {
+  List<Map<String, dynamic>> _normalizeModelCatalog(Map<String, dynamic> raw, {bool showAll = false}) {
     final data   = raw['data'] ?? raw['models'] ?? raw;
     final models = <Map<String, dynamic>>[];
     if (data is List) {
@@ -987,7 +987,43 @@ class _AgentSettingsState extends State<AgentSettings>
         }
       }
     }
-    return models.where((m) => m['id'].toString().isNotEmpty && _looksChatCapable(m)).toList();
+    final allCapable = models.where((m) => m['id'].toString().isNotEmpty && _looksChatCapable(m)).toList();
+    if (showAll) return allCapable;
+
+    final cleanOnly = allCapable.where((m) => _isCleanCurrentModel(_selectedProviderId, m['id'].toString())).toList();
+    return cleanOnly.isNotEmpty ? cleanOnly : allCapable;
+  }
+
+  static bool _isCleanCurrentModel(String provider, String modelId) {
+    final p = provider.toLowerCase();
+    final id = modelId.toLowerCase();
+
+    if (p == 'gemini') {
+      return id == 'gemini-2.0-flash' ||
+             id == 'gemini-2.0-flash-lite' ||
+             id == 'gemini-1.5-flash' ||
+             id == 'gemini-1.5-pro' ||
+             id == 'gemini-1.5-flash-8b';
+    }
+    if (p == 'deepseek') {
+      return id == 'deepseek-chat' || id == 'deepseek-reasoner';
+    }
+    if (p == 'openai') {
+      return id == 'gpt-4o' || id == 'gpt-4o-mini' || id == 'o1' || id == 'o3-mini';
+    }
+    if (p == 'claude') {
+      return id.contains('claude-3-5') || id.contains('claude-3-opus');
+    }
+    if (p == 'groq') {
+      return id.contains('llama-3.3') || id.contains('llama-3.1') || id.contains('deepseek-r1') || id.contains('mixtral');
+    }
+    if (p == 'mistral') {
+      return id.contains('mistral-large') || id.contains('mistral-small') || id.contains('codestral');
+    }
+    if (p == 'grok') {
+      return id.contains('grok-2') || id.contains('grok-beta');
+    }
+    return !RegExp(r'(embedding|embed|moderation|whisper|transcri|tts|speech|audio|image|bison|aqa|preview-05)').hasMatch(id);
   }
 
   Future<void> _saveProviderConfig(BuildContext context, {
@@ -1006,6 +1042,7 @@ class _AgentSettingsState extends State<AgentSettings>
       'provider':   _selectedProviderId,
       'apiProvider': _selectedProviderId,
       if (_selectedProviderId != 'copilot') 'apiKey': apiKey,
+      if (_selectedProviderId != 'copilot') 'key': apiKey,
       'modelName':  modelName,
       'model':      modelName,
       'availableModels': models,

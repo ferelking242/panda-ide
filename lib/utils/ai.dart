@@ -884,7 +884,7 @@ class Gemini extends Models {
 
   Gemini({
     required this.apiKey,
-    String model = 'gemini-2.5-flash-lite',
+    String model = 'gemini-2.0-flash',
     this.temperature,
     this.maxOutputTokens,
     this.topP,
@@ -894,10 +894,15 @@ class Gemini extends Models {
         url = 'https://generativelanguage.googleapis.com/v1beta/models/${_normalizeGeminiModelId(model)}:generateContent?key=$apiKey';
 
   static String _normalizeGeminiModelId(String value) {
-    final trimmed = value.trim();
-    return trimmed.startsWith('models/')
-        ? trimmed.substring('models/'.length)
-        : trimmed;
+    var trimmed = value.trim();
+    if (trimmed.startsWith('models/')) {
+      trimmed = trimmed.substring('models/'.length);
+    }
+    if (trimmed.isEmpty) return 'gemini-2.0-flash';
+    // Replace non-existent 2.5 aliases with 2.0
+    if (trimmed == 'gemini-2.5-flash-lite') return 'gemini-2.0-flash-lite';
+    if (trimmed == 'gemini-2.5-flash' || trimmed == 'gemini-2.5-pro') return 'gemini-2.0-flash';
+    return trimmed;
   }
 
   @override
@@ -1113,7 +1118,8 @@ class DeepSeek extends OpenAiCompatible {
   String get baseUrl => "https://api.deepseek.com";
   @override
   final String apiKey, model;
-  DeepSeek({required this.apiKey, required this.model});
+  DeepSeek({required this.apiKey, String model = 'deepseek-chat'})
+      : model = model.trim().isEmpty ? 'deepseek-chat' : model.trim();
 }
 
 class Mistral extends OpenAiCompatible {

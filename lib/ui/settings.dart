@@ -1133,7 +1133,7 @@ int main() {
   String _modelNameHintForProvider(String? provider) {
     switch (provider) {
       case 'Gemini':
-        return 'e.g. gemini-2.5-flash';
+        return 'e.g. gemini-2.0-flash';
       case 'Claude':
         return 'e.g. claude-opus-4-5';
       case 'OpenAI':

@@ -10113,21 +10113,25 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           value: currentModelId,
           isDense: true,
           isExpanded: true,
-          icon: Icon(Icons.arrow_drop_down, color: textColor.withAlpha(150), size: 18),
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: textColor.withAlpha(180), size: 20),
           dropdownColor: isDark ? const Color(0xff2d2d2d) : Colors.white,
           style: TextStyle(color: textColor, fontSize: 13),
           items: models.map((model) {
+            final isCurrent = model.id == currentModelId;
             return DropdownMenuItem<String>(
               value: model.id,
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   model.icon,
                   const SizedBox(width: 6),
-                  Flexible(
+                  Expanded(
                     child: Text(
                       model.name,
-                      style: TextStyle(color: textColor, fontSize: 13),
+                      style: TextStyle(
+                        color: isCurrent ? const Color(0xFF4CAF50) : textColor,
+                        fontSize: 13,
+                        fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -10148,6 +10152,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  ],
+                  if (isCurrent) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.check_rounded, size: 16, color: Color(0xFF4CAF50)),
                   ],
                 ],
               ),

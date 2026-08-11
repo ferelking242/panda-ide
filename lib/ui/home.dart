@@ -5245,12 +5245,22 @@ class _SelectTypeState extends State<SelectType>
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Text('Choisir un modèle',
-                    style: TextStyle(fontSize: 15,
-                        fontWeight: FontWeight.w600, color: fg)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Choisir un modèle',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: fg,
+                      ),
+                    ),
+                    Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: muted),
+                  ],
+                ),
               ),
-              const Divider(height: 1),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
               // One section per configured provider
               for (final entry in agentEntries) ...[
@@ -5312,6 +5322,14 @@ class _SelectTypeState extends State<SelectType>
                                       fontWeight: FontWeight.w600)),
                             ),
                           ],
+                          const Spacer(),
+                          Icon(
+                            isSelectedProvider
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            size: 18,
+                            color: muted,
+                          ),
                         ]),
                       ),
 
@@ -5348,12 +5366,12 @@ class _SelectTypeState extends State<SelectType>
                                   horizontal: 10, vertical: 8),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? _kAccent.withValues(alpha: 0.1)
+                                    ? const Color(0xFF4CAF50).withValues(alpha: 0.1)
                                     : card,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: isSelected
-                                      ? _kAccent.withValues(alpha: 0.4)
+                                      ? const Color(0xFF4CAF50).withValues(alpha: 0.5)
                                       : border,
                                 ),
                               ),
@@ -5363,7 +5381,7 @@ class _SelectTypeState extends State<SelectType>
                                     displayName,
                                     style: TextStyle(
                                       fontSize: 12,
-                                      color: isSelected ? _kAccent : fg,
+                                      color: isSelected ? const Color(0xFF4CAF50) : fg,
                                       fontWeight: isSelected
                                           ? FontWeight.w600
                                           : FontWeight.normal,
@@ -5372,13 +5390,13 @@ class _SelectTypeState extends State<SelectType>
                                   ),
                                 ),
                                 if (isSelected)
-                                  const Icon(Broken.tick_circle,
-                                      size: 14, color: _kAccent),
+                                  const Icon(Icons.check_rounded,
+                                      size: 16, color: Color(0xFF4CAF50)),
                               ]),
                             ),
                           );
                         }),
-                      Divider(color: border, height: 16),
+                      const SizedBox(height: 12),
                     ],
                   );
                 }),
@@ -6044,7 +6062,7 @@ class _SelectTypeState extends State<SelectType>
   Models? _modelFromAiConfig(Map<String, dynamic> cfg) {
     final providerRaw = (cfg['provider'] ?? cfg['apiProvider'] ?? '').toString();
     final provider    = providerRaw.toLowerCase();
-    final apiKey      = (cfg['apiKey'] ?? '').toString();
+    final apiKey      = (cfg['apiKey'] ?? cfg['key'] ?? cfg['api_key'] ?? cfg['secretKey'] ?? '').toString();
     final modelName   = (cfg['modelName'] ?? cfg['model'] ?? '').toString();
 
     switch (provider) {
