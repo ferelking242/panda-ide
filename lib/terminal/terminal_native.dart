@@ -485,18 +485,21 @@ class _SetupTerminalState extends State<SetupTerminal> {
       final bashrc = File('$homeDir/.bashrc');
 
       // ── Feature 2 : prompt oh-my-zsh style ──────────────────────────────
-      const gitBranchFn = r'''
-# Git branch helper
+      const gitBranchFn = r'''# Git branch helper & Termux pkg helper
 __git_branch() {
   local branch
   branch=$(git symbolic-ref --short HEAD 2>/dev/null) || return
-  echo " \033[0;33m(\033[1;33m${branch}\033[0;33m)\033[0m"
+  echo " \033[38;5;214m🌿 ${branch}\033[0m"
 }
-''';
-      const richPS1 = r'''
-# Prompt couleur : user@host dir (branch) $
-PS1='\[\033[0;32m\]\u\[\033[0;37m\]@\[\033[0;36m\]\h \[\033[0;34m\]\w\[\033[0m\]$(__git_branch) \[\033[0;32m\]\$\[\033[0m\] '
-''';
+pkg() {
+  if [ -x "/data/data/com.termux/files/usr/bin/pkg" ]; then
+    /data/data/com.termux/files/usr/bin/pkg "$@"
+  else
+    echo -e "\033[38;5;208m[Panda IDE]\033[0m \033[1m'pkg'\033[0m nécessite la connexion Termux. Allez dans \033[36mParamètres -> Termux\033[0m."
+  fi
+}''';
+      const richPS1 = r'''# Oh My Zsh / Starship Flash Prompt
+export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(__git_branch) \[\033[38;5;118m\]➜\[\033[0m\] ' ''';
       final aliases = [
         'alias ls="ls --color=auto"',
         'alias ll="ls -la --color=auto"',
@@ -751,7 +754,7 @@ PS1='\[\033[0;32m\]\u\[\033[0;37m\]@\[\033[0;36m\]\h \[\033[0;34m\]\w\[\033[0m\]
     final enVars = <String, String>{
       'HOME': homeDir,
       // PS1 is set by .bashrc (rich prompt with git branch) — keep a safe fallback
-      'PS1': r'\[\033[0;32m\]\u@\h \[\033[0;34m\]\w\[\033[0m\] \$ ',
+      'PS1': r'\[\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\] \[\033[38;5;118m\]➜\[\033[0m\] ',
       'PATH': pathParts.join(':'),
       'PROMPT_DIRTRIM': '2',
       'ROXUM_SHARED_PATH': _sharedPath,
@@ -787,7 +790,7 @@ PS1='\[\033[0;32m\]\u\[\033[0;37m\]@\[\033[0;36m\]\h \[\033[0;34m\]\w\[\033[0m\]
       environment: enVars,
       rows: runtime.terminal.viewHeight,
       columns: runtime.terminal.viewWidth,
-      arguments: args,
+      arguments: args.isNotEmpty ? args : ['--rcfile', '$homeDir/.bashrc', '-i'],
     );
 
     runtime.pty = process;
