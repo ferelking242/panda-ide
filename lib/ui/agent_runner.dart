@@ -69,6 +69,34 @@ class AgentChunk {
 class AgentRunner {
   http.Client? _client;
 
+  void cancel() {
+    try {
+      _client?.close();
+      _client = null;
+    } catch (_) {}
+  }
+
+  Stream<AgentChunk> run({
+    required Models model,
+    required List<Map<String, dynamic>> messages,
+    BuildContext? context,
+    String workspacePath = '',
+    String agentMode = 'agent',
+    String? systemPromptOverride,
+  }) {
+    final ctrl = StreamController<AgentChunk>();
+    _run(
+      model: model,
+      messages: messages,
+      systemPromptOverride: systemPromptOverride,
+      ctrl: ctrl,
+      context: context,
+      workspacePath: workspacePath,
+      agentMode: agentMode,
+    );
+    return ctrl.stream;
+  }
+
   /// Génère dynamiquement le system prompt à partir du contexte réel du projet.
   /// Appelé dans [_run] après que les toolSchemas sont connus.
   static Future<String> _buildSystemPrompt(
@@ -198,15 +226,45 @@ class AgentRunner {
       }
     } catch (_) {}
 
-    final String modeInstructions = (agentMode == 'ask')
-        ? '''====
-## MODE ASK ACTIF (QUESTIONS & RÉPONSES)
-- Tu es actuellement en MODE ASK (Lecture seule).
+    final String modeInstructions;
+    if (agentMode == 'ask') {
+      modeInstructions = '''====
+## MODE ASK ACTIF (QUESTIONS & RÉPONSES - TOKEN EFFICIENT)
+- Tu es actuellement en MODE ASK (Lecture seule & Conseils).
+- Ton objectif est d'être très concis, direct et efficace en tokens pour répondre aux questions, expliquer le code ou donner des conseils.
+- Tu peux utiliser tes outils en LECTURE SEULE (readFile, listFiles, grepInFiles) si nécessaire.
 - Tu ne peux PAS exécuter de commande shell (runShellCommand), ni créer, modifier ou supprimer des fichiers.
-- Si l'utilisateur te demande d'exécuter une action (ex: cloner un dépôt, installer des paquets, modifier du code), explique-lui ce qu'il faut faire et indique-lui de basculer en MODE AGENT dans la barre de chat pour exécuter la commande automatiquement.'''
-        : '''====
-## MODE AGENT ACTIF (AUTONOMIE TOTALE)
-- Tu es en MODE AGENT. Tu es entièrement libre de cloner des dépôts, créer/modifier des fichiers, exécuter des commandes shell, utiliser des secrets et des skills.''';
+- Si l'utilisateur te demande d'exécuter des modifications de code ou des commandes, explique brièvement la démarche et conseille de passer en MODE AGENT ou MODE PLAN.''';
+    } else if (agentMode == 'plan') {
+      modeInstructions = '''====
+## MODE PLAN ACTIF (PLANIFICATION ÉTAPE PAR ÉTAPE)
+- Tu es actuellement en MODE PLAN.
+- Ton rôle est de discuter avec l'utilisateur pour comprendre ses besoins, d'analyser le projet avec tes outils en lecture seule, et de proposer un plan de réalisation détaillé.
+- Tu ne peux PAS créer, modifier ou supprimer des fichiers directement, ni exécuter de commandes shell en Mode Plan.
+- Quand le plan est prêt et complet, rédiges-le de façon claire et structurée au format Markdown avec des sous-titres et des étapes à cocher `- [ ] Tâche`.
+- Inclus la balise spéciale `<plan>...</plan>` autour du plan final. Exemple :
+<plan>
+# 📋 Plan de réalisation : [Nom de la fonctionnalité / du projet]
+
+## 🎯 Objectif
+[Description concise de l'objectif]
+
+## 📐 Choix techniques & Architecture
+- ...
+
+## 📝 Liste des tâches
+- [ ] **Tâche 1** : ...
+- [ ] **Tâche 2** : ...
+- [ ] **Tâche 3** : ...
+</plan>
+L'interface affichera automatiquement une carte interactive avec des boutons pour approuver le plan et passer directement en Mode Agent pour commencer à coder !''';
+    } else {
+      modeInstructions = '''====
+## MODE AGENT ACTIF (AUTONOMIE ET ÉDITION DU CODE)
+- Tu es en MODE AGENT (Autonomie totale).
+- Tu as les pleins pouvoirs pour créer, modifier, supprimer des fichiers, exécuter des commandes shell, gérer les dépendances et effectuer des commits Git.
+- Si un plan a été préalablement validé (dans `.panda/plan.md` ou dans le chat), exécute-le méthodiquement étape par étape en cochant au fur et à mesure les tâches accomplies.''';
+    }
 
     final String customSection = customPrompt.trim().isNotEmpty
         ? '\n====\n## INSTRUCTIONS PERSONNALISÉES CLIENT\n${customPrompt.trim()}\n'
@@ -719,7 +777,7 @@ Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront 
         'updateProjectMemory',
       };
       if (!allowWrites && mutatingTools.contains(functionName)) {
-        return 'Blocked: this tool changes the workspace and is unavailable in Ask mode.';
+        return 'Blocage : L'outil "$functionName" modifie l'espace de travail et est indisponible en mode $agentMode. Veuillez passer en Mode Agent pour autoriser l'exécution.';
       }
       switch (functionName) {
         case 'activeEditorFile':

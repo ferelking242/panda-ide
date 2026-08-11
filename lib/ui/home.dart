@@ -161,6 +161,8 @@ class _SelectTypeState extends State<SelectType>
   // ── Agent UI state ───────────────────────────────────────────────
   /// 'ask' | 'agent' | 'plan'
   String _agentChatMode      = 'ask';
+  bool   _agentAutopilot     = true;
+  final List<String> _promptQueue = [];
   final List<Map<String,String>> _agentAttachments = [];
 
   // ── Floating agent overlay ────────────────────────────────────────
@@ -3841,6 +3843,9 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
 
+        // ── Suggestions bar & Prompt queue bar ─────────────────────────
+        _buildPromptSuggestionsBar(isDark, fg, muted),
+        _buildPromptQueueBar(isDark, fg, muted),
         // ── Input box ─────────────────────────────────────────────────
         Container(
           margin: const EdgeInsets.all(10),
@@ -3998,6 +4003,52 @@ class _SelectTypeState extends State<SelectType>
                         const SizedBox(width: 2),
                         Icon(Broken.arrow_down_2, size: 10, color: muted),
                       ]),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  // Autopilot / Approval toggle pill
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _agentAutopilot = !_agentAutopilot;
+                      });
+                      SharedPreferences.getInstance().then((p) {
+                        p.setBool('agent_autopilot', _agentAutopilot);
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _agentAutopilot
+                            ? (isDark ? const Color(0xff1d3326) : const Color(0xffe6f4ea))
+                            : (isDark ? const Color(0xff332b1a) : const Color(0xfffef7e0)),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: _agentAutopilot
+                              ? (isDark ? Colors.green[700]! : Colors.green[400]!)
+                              : (isDark ? Colors.orange[700]! : Colors.orange[400]!),
+                          width: 0.8,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _agentAutopilot ? Broken.flash_1 : Broken.security_safe,
+                            size: 11,
+                            color: _agentAutopilot ? Colors.green[400] : Colors.orange[400],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _agentAutopilot ? 'Autopilot' : 'Approbation',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: _agentAutopilot ? Colors.green[400] : Colors.orange[400],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   const Spacer(),
@@ -5954,6 +6005,225 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
+  String? _extractPlanFromText(String text) {
+    if (text.isEmpty) return null;
+    final planRegExp = RegExp(r'<plan>([\s\S]*?)</plan>', caseSensitive: false);
+    final match = planRegExp.firstMatch(text);
+    if (match != null && match.group(1) != null) {
+      return match.group(1)!.trim();
+    }
+    if (text.contains('# Plan') || text.contains('## Liste des tâches') || text.contains('- [ ]')) {
+      return text.trim();
+    }
+    return null;
+  }
+
+  Future<void> _approveAndExecutePlan(String planContent) async {
+    final workspacePath = _activeWorkspacePath;
+    if (workspacePath.isNotEmpty) {
+      try {
+        final pandaDir = Directory('$workspacePath/.panda');
+        if (!pandaDir.existsSync()) {
+          pandaDir.createSync(recursive: true);
+        }
+        final planFile = File('$workspacePath/.panda/plan.md');
+        await planFile.writeAsString(planContent);
+      } catch (e) {
+        PandaLog.e('PandaAgent', 'Error saving plan file', error: e);
+      }
+    }
+    setState(() {
+      _agentChatMode = 'agent';
+    });
+    _agentInputCtrl.text = "Plan d'action approuvé ! Voici le plan validé :\n\n$planContent\n\nCommence l'exécution du plan étape par étape en cochant la première tâche.";
+    _agentSend();
+  }
+
+  void _openPlanEditorDialog(String initialPlan) {
+    final ctrl = TextEditingController(text: initialPlan);
+    final isDark = _appTheme.isDark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xff1e1e1e) : Colors.white,
+        title: Row(
+          children: [
+            Icon(Broken.task_square, color: _kAccent, size: 20),
+            const SizedBox(width: 8),
+            const Text('Éditer le plan de réalisation', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: SizedBox(
+          width: 500,
+          height: 350,
+          child: TextField(
+            controller: ctrl,
+            maxLines: null,
+            expands: true,
+            style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: 'Modifiez votre plan au format Markdown...',
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kAccent,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Broken.tick_circle, size: 16),
+            label: const Text('Approuver le plan & Lancer'),
+            onPressed: () {
+              Navigator.pop(ctx);
+              final edited = ctrl.text.trim();
+              if (edited.isNotEmpty) {
+                _approveAndExecutePlan(edited);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPromptSuggestionsBar(bool isDark, Color fg, Color muted) {
+    final List<(String, String)> suggestions;
+    if (_agentChatMode == 'plan') {
+      suggestions = const [
+        ('📋 Proposer un plan', 'Peux-tu me proposer un plan d\'action complet et structuré pour ce projet ?'),
+        ('🔍 Analyser l\'architecture', 'Analyse la structure et l\'architecture de ce projet et résume les besoins.'),
+        ('🛠️ Plan de refactorisation', 'Propose un plan de refactorisation étape par étape pour le code existant.'),
+        ('🧪 Stratégie de tests', 'Établis un plan pour ajouter une couverture de tests unitaires et d\'intégration.'),
+      ];
+    } else if (_agentChatMode == 'ask') {
+      suggestions = const [
+        ('❓ Expliquer l\'architecture', 'Peux-tu m'expliquer l'architecture globale de ce projet ?'),
+        ('⚡ Optimiser les performances', 'Quelles sont les opportunités d'optimisation de performance dans ce projet ?'),
+        ('🐛 Détecter les bugs', 'Analyse le code pour identifier d'éventuels bugs ou failles de sécurité.'),
+        ('📁 Points d'entrée', 'Où se trouve le point d'entrée principal et comment fonctionne le flux de données ?'),
+      ];
+    } else {
+      suggestions = const [
+        ('🚀 Flutter analyze / build', 'Exécute la commande de vérification du code et analyse les erreurs éventuelles.'),
+        ('📝 Générer le README', 'Génère un fichier README.md complet documentant l'installation et l'utilisation.'),
+        ('🧪 Créer les tests', 'Crée des tests unitaires pour les composants principaux du projet.'),
+        ('🧹 Nettoyer le code', 'Vérifie et nettoie le code pour respecter les meilleures pratiques.'),
+      ];
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      height: 32,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: suggestions.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 6),
+        itemBuilder: (_, idx) {
+          final s = suggestions[idx];
+          return ActionChip(
+            elevation: 0,
+            pressElevation: 0,
+            padding: EdgeInsets.zero,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 8),
+            backgroundColor: isDark ? const Color(0xff2d2d2d) : const Color(0xffe8e8e8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: isDark ? Colors.white10 : Colors.black12),
+            ),
+            label: Text(s.$1, style: TextStyle(fontSize: 11, color: fg)),
+            onPressed: () {
+              setState(() {
+                _agentInputCtrl.text = s.$2;
+                _agentInputCtrl.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _agentInputCtrl.text.length));
+              });
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildPromptQueueBar(bool isDark, Color fg, Color muted) {
+    if (_promptQueue.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xff252014) : const Color(0xfffffbe2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(Broken.task_square, size: 14, color: Colors.amber[700]),
+          const SizedBox(width: 6),
+          Text(
+            'File (${_promptQueue.length}) :',
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isDark ? Colors.amber[200] : Colors.amber[900]),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _promptQueue.asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final text = entry.value;
+                  return Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.black26 : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          text.length > 20 ? '${text.substring(0, 20)}…' : text,
+                          style: TextStyle(fontSize: 10, color: fg),
+                        ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _promptQueue.removeAt(idx);
+                            });
+                          },
+                          child: Icon(Icons.close, size: 12, color: muted),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _promptQueue.clear();
+              });
+            },
+            child: Text(
+              'Vider',
+              style: TextStyle(fontSize: 10, color: Colors.amber[700], fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAgentMessages(bool isDark, Color fg, Color muted) {
     return ListView.builder(
       controller: _agentScrollCtrl,
@@ -6037,6 +6307,26 @@ class _SelectTypeState extends State<SelectType>
                     isStreaming: isStreaming,
                   ),
                 ),
+              // Plan approval card if plan generated
+              () {
+                final planContent = _extractPlanFromText(text);
+                if (!isStreaming && planContent != null) {
+                  return _PlanApprovalCard(
+                    planText: planContent,
+                    isDark: isDark,
+                    fg: fg,
+                    muted: muted,
+                    onApprove: () => _approveAndExecutePlan(planContent),
+                    onEdit: () => _openPlanEditorDialog(planContent),
+                    onRevise: () {
+                      _agentInputCtrl.text = "Je souhaite réviser le plan : ";
+                      _agentInputCtrl.selection = TextSelection.fromPosition(
+                          TextPosition(offset: _agentInputCtrl.text.length));
+                    },
+                  );
+                }
+                return const SizedBox.shrink();
+              }(),
 
               // Action row (copy + retry) — shown after generation
               if (!isStreaming && (text.isNotEmpty || isError))
@@ -7165,7 +7455,21 @@ class _SelectTypeState extends State<SelectType>
 
   Future<void> _agentSend() async {
     final text = _agentInputCtrl.text.trim();
-    if (text.isEmpty || _agentGenerating) return;
+    if (text.isEmpty) return;
+    if (_agentGenerating) {
+      setState(() {
+        _promptQueue.add(text);
+        _agentInputCtrl.clear();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Prompt ajouté à la file d\'attente (${_promptQueue.length} en attente)',
+              style: const TextStyle(fontSize: 12)),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
     final requestId = ++_agentRequestSerial;
     _sendAnimCtrl.repeat(reverse: true);
     setState(() {
@@ -7514,6 +7818,14 @@ class _SelectTypeState extends State<SelectType>
             // After the FIRST exchange, fire an async LLM title generation
             if (_agentMessages.length == 2) {
               _generateConversationTitle();
+            }
+            // Process next prompt in queue if present
+            if (_promptQueue.isNotEmpty) {
+              final nextPrompt = _promptQueue.removeAt(0);
+              Future.microtask(() {
+                _agentInputCtrl.text = nextPrompt;
+                _agentSend();
+              });
             }
           },
         );
@@ -8801,6 +9113,118 @@ class _StatusBarItem extends StatelessWidget {
             Text(label, style: TextStyle(fontSize: 11, color: fg, height: 1)),
           ],
         ]),
+      ),
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _PlanApprovalCard — Carte interactive de validation du plan
+// ─────────────────────────────────────────────────────────────────────────────
+class _PlanApprovalCard extends StatelessWidget {
+  final String planText;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final VoidCallback onApprove;
+  final VoidCallback onEdit;
+  final VoidCallback onRevise;
+
+  const _PlanApprovalCard({
+    required this.planText,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+    required this.onApprove,
+    required this.onEdit,
+    required this.onRevise,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xff1a261f) : const Color(0xffecfdf5);
+    final border = isDark ? const Color(0xff059669) : const Color(0xff10b981);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: border.withValues(alpha: 0.5), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: border.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Broken.task_square, size: 16, color: border),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Plan de projet prêt pour validation',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xff065f46),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Ce plan a été généré par l\'Agent. Approuvez-le pour basculer en Mode Agent et démarrer l\'exécution automatique des tâches.',
+            style: TextStyle(fontSize: 11, color: muted),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: border,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 0,
+                ),
+                icon: const Icon(Broken.play_cricle, size: 16),
+                label: const Text('Approuver & Lancer (Mode Agent)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                onPressed: onApprove,
+              ),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: fg,
+                  side: BorderSide(color: muted.withValues(alpha: 0.4)),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Broken.edit, size: 14),
+                label: const Text('Éditer le plan', style: TextStyle(fontSize: 11)),
+                onPressed: onEdit,
+              ),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: muted,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                ),
+                icon: const Icon(Broken.message_text, size: 14),
+                label: const Text('Réviser avec l'Agent', style: TextStyle(fontSize: 11)),
+                onPressed: onRevise,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
