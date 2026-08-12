@@ -1,3 +1,12 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:panda/bloc/app_theme/app_theme_bloc.dart';
+import 'package:panda/bloc/config/config_bloc.dart';
+import 'package:panda/bloc/copilot/copilot_bloc.dart';
+import 'package:panda/models/app_theme.dart';
+import 'package:panda/theme/terminal_themes.dart';
 
 enum _SettingsSection {
   general,
@@ -14,8 +23,71 @@ class _SettingsPillNav extends StatelessWidget {
 
   const _SettingsPillNav({required this.current, required this.onTap});
 
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: _SettingsSection.values.map((section) {
+          final isSelected = section == current;
+          String label;
+          IconData icon;
+          switch (section) {
+            case _SettingsSection.general:
+              label = 'Général';
+              icon = Icons.settings;
+              break;
+            case _SettingsSection.editor:
+              label = 'Éditeur';
+              icon = Icons.code;
+              break;
+            case _SettingsSection.terminal:
+              label = 'Terminal';
+              icon = Icons.terminal;
+              break;
+            case _SettingsSection.performance:
+              label = 'Performance';
+              icon = Icons.speed;
+              break;
+            case _SettingsSection.aiAndApi:
+              label = 'IA & API';
+              icon = Icons.psychology;
+              break;
+            case _SettingsSection.about:
+              label = 'À propos';
+              icon = Icons.info_outline;
+              break;
+          }
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              avatar: Icon(icon, size: 18, color: isSelected ? Colors.white : null),
+              label: Text(label),
+              selected: isSelected,
+              onSelected: (_) => onTap(section),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class Settings extends StatefulWidget {
+  final bool embedded;
+  const Settings({super.key, this.embedded = false});
 
   @override
+  State<Settings> createState() => _SettingsState();
+}
+
+class _SettingsState extends State<Settings> {
+  _SettingsSection _selectedSection = _SettingsSection.general;
+  final ScrollController scrollController = ScrollController();
+  final TextEditingController apiController = TextEditingController();
+
+@override
   Widget build(BuildContext context) {
     return BlocBuilder<ConfigBloc, ConfigState>(
       builder: (context, configState) {
