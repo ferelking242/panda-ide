@@ -35,6 +35,11 @@ jobs:
             fi
           done < <(find android/app/src -type f -print0)
           echo "Removed $removed unavailable Git LFS placeholder(s)."
+          if [ "$removed" -gt 0 ]; then
+            echo "PANDA_LFS_FALLBACK=true" >> "$GITHUB_ENV"
+          else
+            echo "PANDA_LFS_FALLBACK=false" >> "$GITHUB_ENV"
+          fi
 
       - name: Keep empty dynamic features resource-buildable
         # Some on-demand features contain only LFS-managed payloads. Once
@@ -43,6 +48,7 @@ jobs:
         # feature remains a valid, empty-on-disk module.
         run: |
           set -euo pipefail
+          [ "${PANDA_LFS_FALLBACK:-false}" = "true" ] || exit 0
           for module in android/app/src/*_feature; do
             [ -d "$module" ] || continue
             if ! find "$module/src/main" -type f ! -name AndroidManifest.xml -print -quit | grep -q .; then
@@ -55,6 +61,27 @@ jobs:
               echo "Added fallback resource to $(basename "$module")."
             fi
           done
+
+      - name: Skip unavailable dynamic features
+        # Dynamic feature payloads are all Git LFS-managed in this checkout.
+        # Do not ask AGP to build modules whose native payloads are absent.
+        run: |
+          set -euo pipefail
+          [ "${PANDA_LFS_FALLBACK:-false}" = "true" ] || exit 0
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("android/app/build.gradle.kts")
+          source = path.read_text()
+          start = source.find("    dynamicFeatures.addAll(")
+          if start == -1:
+              raise SystemExit("dynamicFeatures block not found")
+          end = source.find("\n    )\n", start)
+          if end == -1:
+              raise SystemExit("dynamicFeatures block end not found")
+          path.write_text(source[:start] + source[end + len("\n    )\n"):])
+          print("Disabled dynamic feature packaging for the LFS fallback build.")
+          PY
 
       - name: Set up Java JDK
         uses: actions/setup-java@v4
