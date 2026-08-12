@@ -1,3 +1,32 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:http/http.dart' as http;
+import 'package:code_forge/code_forge.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:flutter_svg/svg.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:re_highlight/styles/vs2015.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:xterm/xterm.dart';
+import '../utils/constants.dart';
+import '../bloc/ui_bloc/ui_bloc.dart';
+import '../utils/functions.dart';
+import '../utils/languages.dart';
+import '../utils/themes.dart';
+import 'browser/settings/browser_settings_page.dart';
+import 'downloads.dart';
+import 'adb_setup_page.dart';
+import 'widgets.dart';
+import '../extensions/ui/marketplace_page.dart';
+
 
 enum _SettingsSection {
   general,
@@ -13,6 +42,7 @@ class _SettingsPillNav extends StatelessWidget {
   final ValueChanged<_SettingsSection> onTap;
 
   const _SettingsPillNav({required this.current, required this.onTap});
+
 
 
   @override
@@ -166,7 +196,6 @@ class _SettingsPillNav extends StatelessWidget {
     );
   }
 
-  // 1. Général & Apparence
   Widget _buildGeneralSection(
     BuildContext context,
     ConfigState configState,
@@ -179,8 +208,8 @@ class _SettingsPillNav extends StatelessWidget {
     return Column(
       children: [
         _buildCardGroup(
-          title: 'Langue de l'application',
-          subtitle: 'Sélectionnez la langue d'affichage de Panda IDE',
+          title: "Langue de l'application",
+          subtitle: "Sélectionnez la langue d'affichage de Panda IDE",
           icon: Icons.language_rounded,
           isDark: isDark,
           cs: cs,
@@ -224,7 +253,7 @@ class _SettingsPillNav extends StatelessWidget {
 
         _buildCardGroup(
           title: 'Thème & Apparence',
-          subtitle: 'Mode sombre, clair et échelle de l'interface',
+          subtitle: "Mode sombre, clair et échelle de l'interface",
           icon: Icons.dark_mode_outlined,
           isDark: isDark,
           cs: cs,
@@ -255,7 +284,7 @@ class _SettingsPillNav extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Échelle de l'interface (Zoom UI)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      const Text("Échelle de l'interface (Zoom UI)", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       Text('${(_uiScale * 100).toInt()}%', style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold, fontSize: 13)),
                     ],
                   ),
@@ -280,7 +309,6 @@ class _SettingsPillNav extends StatelessWidget {
     );
   }
 
-  // 2. Éditeur de Code
   Widget _buildEditorSection(
     BuildContext context,
     ConfigState configState,
@@ -339,8 +367,8 @@ class _SettingsPillNav extends StatelessWidget {
         ),
 
         _buildCardGroup(
-          title: 'Options d'affichage de l'éditeur',
-          subtitle: 'Pliage, guides d'indentation, ligne de retour',
+          title: "Options d'affichage de l'éditeur",
+          subtitle: "Pliage, guides d'indentation, ligne de retour",
           icon: Icons.tune_rounded,
           isDark: isDark,
           cs: cs,
@@ -362,7 +390,7 @@ class _SettingsPillNav extends StatelessWidget {
             ),
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
             ListTile(
-              title: const Text('Guides d'indentation', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              title: const Text("Guides d'indentation", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
               trailing: Switch(
                 value: indentStatus,
                 onChanged: (val) async {
@@ -398,7 +426,6 @@ class _SettingsPillNav extends StatelessWidget {
     );
   }
 
-  // 3. Terminal & Shell
   Widget _buildTerminalSection(
     BuildContext context,
     ConfigState configState,
@@ -447,7 +474,6 @@ class _SettingsPillNav extends StatelessWidget {
     );
   }
 
-  // 4. Performance & RAM
   Widget _buildPerformanceSection(
     BuildContext context,
     ConfigState configState,
@@ -494,7 +520,7 @@ class _SettingsPillNav extends StatelessWidget {
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
             ListTile(
               title: const Text('Accélération Matérielle GPU / Vulkan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: const Text('Utiliser le GPU pour l'affichage et le calcul IA', style: TextStyle(fontSize: 11)),
+              subtitle: const Text("Utiliser le GPU pour l'affichage et le calcul IA", style: TextStyle(fontSize: 11)),
               trailing: Switch(
                 value: _gpuAccelerated,
                 onChanged: (val) async {
@@ -510,7 +536,6 @@ class _SettingsPillNav extends StatelessWidget {
     );
   }
 
-  // 5. IA & Confidentialité
   Widget _buildAiAndApiSection(
     BuildContext context,
     ConfigState configState,
@@ -550,7 +575,7 @@ class _SettingsPillNav extends StatelessWidget {
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
             ListTile(
               title: const Text('GitHub Copilot', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: const Text('Paramètres et état d'authentification Copilot', style: TextStyle(fontSize: 11)),
+              subtitle: const Text("Paramètres et état d'authentification Copilot", style: TextStyle(fontSize: 11)),
               trailing: ElevatedButton.icon(
                 icon: const Icon(Icons.account_circle, size: 14),
                 label: const Text('Gérer'),
@@ -566,7 +591,6 @@ class _SettingsPillNav extends StatelessWidget {
     );
   }
 
-  // 6. À propos & Système
   Widget _buildAboutSection(
     BuildContext context,
     ConfigState configState,
@@ -667,4 +691,247 @@ class _SettingsPillNav extends StatelessWidget {
     );
   }
 
+  void _showCopilotSettings(BuildContext context, CopilotState state, AppThemeState appThemeState) {
+    final isDark = appThemeState.appTheme.isDark;
+    final textColor = appThemeState.appTheme.selectScreenCardTextColor;
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
+            width: 340,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: isDark
+                    ? [const Color(0xff2b2b2b), const Color(0xff1a1a1a)]
+                    : [const Color(0xfffafafa), const Color(0xfff0f0f0)],
+              ),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: SvgPicture.asset(
+                        'assets/icons/github-copilot-icon.svg',
+                        height: 28,
+                        width: 28,
+                        colorFilter: const ColorFilter.mode(
+                          Colors.green,
+                          BlendMode.srcIn,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'GitHub Copilot',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.green,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                'Connected',
+                                style: TextStyle(
+                                  color: Colors.green,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: Icon(
+                        Icons.close,
+                        color: textColor.withValues(alpha: 0.5),
+                        size: 20,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: const Color(0xff238636).withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.person,
+                          color: Color(0xff238636),
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            state.user ?? 'User',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'GitHub Account',
+                            style: TextStyle(
+                              color: textColor.withValues(alpha: 0.5),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                BlocBuilder<CopilotBloc, CopilotState>(
+                  builder: (context, copilotState) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                copilotState.isEnabled
+                                    ? Icons.auto_awesome
+                                    : Icons.auto_awesome_outlined,
+                                color: copilotState.isEnabled
+                                    ? const Color(0xff238636)
+                                    : textColor.withValues(alpha: 0.5),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Enable Copilot',
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: copilotState.isEnabled,
+                            activeThumbColor: const Color(0xff238636),
+                            onChanged: (value) {
+                              context.read<CopilotBloc>().add(CopilotSetEnabled(value));
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      context.read<CopilotBloc>().add(CopilotSignOut());
+                      Navigator.pop(dialogContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Row(
+                            children: [
+                              Icon(Icons.logout, color: Colors.white, size: 18),
+                              SizedBox(width: 8),
+                              Text('Signed out from Copilot'),
+                            ],
+                          ),
+                          backgroundColor: Colors.grey[700],
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.logout, size: 18),
+                    label: const Text('Sign Out'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+
+class _BrowserSettingsRoute extends StatelessWidget {
+  const _BrowserSettingsRoute();
+
+  @override
+  Widget build(BuildContext context) => const BrowserSettingsPage();
 }
