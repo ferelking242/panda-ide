@@ -5,8 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:panda/models/app_theme.dart';
-import 'package:panda/theme/terminal_themes.dart';
+import 'package:panda/utils/themes.dart';
 
 enum _SettingsSection {
   general,
@@ -415,7 +414,7 @@ class _SettingsState extends State<Settings> {
         ),
 
         _buildCardGroup(
-          title: 'Options d'affichage de l'éditeur',
+          title: "Options d'affichage de l'éditeur",
           subtitle: "Pliage, guides d'indentation, ligne de retour",
           icon: Icons.tune_rounded,
           isDark: isDark,
@@ -431,7 +430,7 @@ class _SettingsState extends State<Settings> {
                   currentState['lineWrap'] = val;
                   await prefs.setString('codeForgeConfig', jsonEncode(currentState));
                   if (context.mounted) {
-                    context.read<ConfigBloc>().add(ChangeChangeConfigEvent( currentState));
+                    context.read<ConfigBloc>().add(ChangeConfigEvent(currentState));
                   }
                 },
               ),
@@ -447,7 +446,7 @@ class _SettingsState extends State<Settings> {
                   currentState['indentLineStatus'] = val;
                   await prefs.setString('codeForgeConfig', jsonEncode(currentState));
                   if (context.mounted) {
-                    context.read<ConfigBloc>().add(ChangeChangeConfigEvent( currentState));
+                    context.read<ConfigBloc>().add(ChangeConfigEvent(currentState));
                   }
                 },
               ),
@@ -463,7 +462,7 @@ class _SettingsState extends State<Settings> {
                   currentState['enableFolding'] = val;
                   await prefs.setString('codeForgeConfig', jsonEncode(currentState));
                   if (context.mounted) {
-                    context.read<ConfigBloc>().add(ChangeChangeConfigEvent( currentState));
+                    context.read<ConfigBloc>().add(ChangeConfigEvent(currentState));
                   }
                 },
               ),
@@ -504,7 +503,7 @@ class _SettingsState extends State<Settings> {
                 child: Container(
                           padding: const EdgeInsets.all(12),
                           color: Colors.black,
-                          child: const Text('user@panda-ide:~$ echo "Panda Terminal Preview"', style: TextStyle(color: Colors.greenAccent, fontFamily: 'monospace', fontSize: 11)),
+                          child: const Text('user@panda-ide:~\$ echo "Panda Terminal Preview"', style: TextStyle(color: Colors.greenAccent, fontFamily: 'monospace', fontSize: 11)),
                         ),
               ),
             ),
@@ -734,7 +733,7 @@ class _SettingsState extends State<Settings> {
                     curr['theme'] = key;
                     await prefs.setString('codeForgeConfig', jsonEncode(curr));
                     if (context.mounted) {
-                      context.read<ConfigBloc>().add(ChangeChangeConfigEvent( curr));
+                      context.read<ConfigBloc>().add(ChangeConfigEvent(curr));
                       Navigator.pop(dialogCtx);
                     }
                   },
