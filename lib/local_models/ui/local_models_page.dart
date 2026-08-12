@@ -167,7 +167,7 @@ class _LocalModelsPageState extends State<LocalModelsPage> {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: cs.primaryContainer.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: cs.primary.withValues(alpha: 0.25)),
       ),
       child: Row(
@@ -348,7 +348,7 @@ class _ModelTile extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: dark ? const Color(0xff252526) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: installed
                 ? cs.primary.withValues(alpha: 0.6)

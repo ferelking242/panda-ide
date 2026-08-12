@@ -414,6 +414,7 @@ class _DownloadManagerState extends State<DownloadManager> {
       'copilot': 'copilot-language-server',
       'github-copilot': 'copilot-language-server',
       'github-copilot-for-roxum': 'copilot-language-server',
+      'github-copilot-for-panda': 'copilot-language-server',
     };
     return aliases[parentName] ?? parentName;
   }
