@@ -1845,40 +1845,121 @@ class AgenticTools {
   }
 
   Future<ToolResult<List<WebResult>>> searchInWeb(String searchQuery) async {
-    final url = "https://duckduckgo.com/html/?q=$searchQuery";
-    final response = await http.get(Uri.parse(url));
-    final document = html.parse(response.body);
-    final results = <WebResult>[];
-    final resultDivs = document.querySelectorAll('.result');
+    try {
+      final encodedQuery = Uri.encodeComponent(searchQuery.trim());
+      final headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
+      };
 
-    for (final div in resultDivs) {
-      final titleAnchor = div.querySelector('.result__a');
-      final snippetEl = div.querySelector('.result__snippet');
-      final urlAnchor = div.querySelector('.result__url');
+      final results = <WebResult>[];
 
-      if (titleAnchor == null || urlAnchor == null) continue;
+      // Primary: DuckDuckGo HTML endpoint
+      try {
+        final url = "https://html.duckduckgo.com/html/?q=$encodedQuery";
+        final response = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 8));
+        if (response.statusCode == 200) {
+          final document = html.parse(response.body);
+          final resultDivs = document.querySelectorAll('.result');
+          for (final div in resultDivs) {
+            final titleAnchor = div.querySelector('.result__a');
+            final snippetEl = div.querySelector('.result__snippet');
+            final urlAnchor = div.querySelector('.result__url');
 
-      final title = titleAnchor.text.trim();
-      final snippet = snippetEl?.text.trim() ?? '';
-      final rawHref = urlAnchor.attributes['href'];
-      final realUrl = (() {
-        if (rawHref == null) return null;
-        final fullUrl = rawHref.startsWith('//') ? 'https:$rawHref' : rawHref;
+            if (titleAnchor == null) continue;
 
-        final uri = Uri.parse(fullUrl);
+            final title = titleAnchor.text.trim();
+            final snippet = snippetEl?.text.trim() ?? '';
+            String? realUrl;
 
-        final uddg = uri.queryParameters['uddg'];
-        if (uddg == null) return null;
+            if (urlAnchor != null) {
+              final rawHref = urlAnchor.attributes['href'] ?? titleAnchor.attributes['href'];
+              if (rawHref != null) {
+                if (rawHref.contains('uddg=')) {
+                  try {
+                    final uri = Uri.parse(rawHref.startsWith('//') ? 'https:$rawHref' : rawHref);
+                    final uddg = uri.queryParameters['uddg'];
+                    if (uddg != null) realUrl = Uri.decodeComponent(uddg);
+                  } catch (_) {}
+                }
+                realUrl ??= rawHref.startsWith('//') ? 'https:$rawHref' : rawHref;
+              }
+            }
 
-        return Uri.decodeComponent(uddg);
-      })();
+            if (title.isNotEmpty && realUrl != null) {
+              results.add(WebResult(title: title, url: realUrl, snippet: snippet));
+            }
+          }
+        }
+      } catch (e) {
+        PandaLog.w('searchInWeb', 'Primary DDG HTML search failed: $e');
+      }
 
-      if (realUrl == null) continue;
+      // Fallback 1: DuckDuckGo Lite endpoint
+      if (results.isEmpty) {
+        try {
+          final url = "https://lite.duckduckgo.com/lite/?q=$encodedQuery";
+          final response = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 6));
+          if (response.statusCode == 200) {
+            final document = html.parse(response.body);
+            final rows = document.querySelectorAll('tr');
+            String lastTitle = '';
+            String lastUrl = '';
+            for (final row in rows) {
+              final link = row.querySelector('a.result-link');
+              final snippetTd = row.querySelector('td.result-snippet');
+              if (link != null) {
+                lastTitle = link.text.trim();
+                lastUrl = link.attributes['href'] ?? '';
+              } else if (snippetTd != null && lastTitle.isNotEmpty) {
+                results.add(WebResult(title: lastTitle, url: lastUrl, snippet: snippetTd.text.trim()));
+                lastTitle = '';
+                lastUrl = '';
+              }
+            }
+          }
+        } catch (e) {
+          PandaLog.w('searchInWeb', 'DDG Lite fallback failed: $e');
+        }
+      }
 
-      results.add(WebResult(title: title, url: realUrl, snippet: snippet));
+      // Fallback 2: GitHub Repository Search if query relates to code / github / packages
+      if (results.isEmpty && (searchQuery.contains('github') || searchQuery.contains('flutter') || searchQuery.contains('code') || searchQuery.contains('package'))) {
+        try {
+          final ghUrl = "https://api.github.com/search/repositories?q=$encodedQuery&per_page=5";
+          final ghHeaders = {...headers, 'Accept': 'application/vnd.github.v3+json'};
+          final response = await http.get(Uri.parse(ghUrl), headers: ghHeaders).timeout(const Duration(seconds: 6));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final items = data['items'] as List? ?? [];
+            for (final item in items) {
+              results.add(WebResult(
+                title: item['full_name']?.toString() ?? '',
+                url: item['html_url']?.toString() ?? '',
+                snippet: item['description']?.toString() ?? 'Dépôt GitHub',
+              ));
+            }
+          }
+        } catch (e) {
+          PandaLog.w('searchInWeb', 'GitHub API fallback failed: $e');
+        }
+      }
+
+      if (results.isEmpty) {
+        return ToolResult.success([
+          WebResult(
+            title: 'Aucun résultat web direct',
+            url: 'https://duckduckgo.com/?q=$encodedQuery',
+            snippet: 'Aucun résultat direct pour "$searchQuery".',
+          )
+        ]);
+      }
+
+      return ToolResult.success(results);
+    } catch (e) {
+      return ToolResult.error('Erreur lors de la recherche web: $e');
     }
-
-    return ToolResult.success(results);
   }
 
   
@@ -2718,7 +2799,7 @@ class WebResult {
 
   @override
   String toString() {
-    return toJson().toString();
+    return '• $title\n  URL: $url\n  Snippet: $snippet\n';
   }
 }
 

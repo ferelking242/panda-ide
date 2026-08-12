@@ -4007,51 +4007,6 @@ class _SelectTypeState extends State<SelectType>
                     ),
                   ),
                   const SizedBox(width: 4),
-                  // Autopilot / Approval toggle pill
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _agentAutopilot = !_agentAutopilot;
-                      });
-                      SharedPreferences.getInstance().then((p) {
-                        p.setBool('agent_autopilot', _agentAutopilot);
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _agentAutopilot
-                            ? (isDark ? const Color(0xff1d3326) : const Color(0xffe6f4ea))
-                            : (isDark ? const Color(0xff332b1a) : const Color(0xfffef7e0)),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _agentAutopilot
-                              ? (isDark ? Colors.green[700]! : Colors.green[400]!)
-                              : (isDark ? Colors.orange[700]! : Colors.orange[400]!),
-                          width: 0.8,
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _agentAutopilot ? Broken.flash_1 : Broken.security_safe,
-                            size: 11,
-                            color: _agentAutopilot ? Colors.green[400] : Colors.orange[400],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _agentAutopilot ? 'Autopilot' : 'Approbation',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: _agentAutopilot ? Colors.green[400] : Colors.orange[400],
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                   const Spacer(),
                   // Token estimate
                   Builder(builder: (ctx) {
@@ -4127,17 +4082,6 @@ class _SelectTypeState extends State<SelectType>
         Container(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Row(children: [
-            // + Agent shortcut
-            GestureDetector(
-              onTap: () {},
-              child: Row(children: [
-                Icon(Broken.add_circle, size: 13, color: muted),
-                const SizedBox(width: 4),
-                Icon(Broken.magic_star, size: 13, color: muted),
-                const SizedBox(width: 4),
-                Text('Agent', style: TextStyle(fontSize: 11, color: muted)),
-              ]),
-            ),
             const Spacer(),
             // Local pill
             Container(
@@ -4163,21 +4107,40 @@ class _SelectTypeState extends State<SelectType>
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(Broken.shield_tick, size: 11,
-                      color: _agentApprovalMode == 'bypass'
-                          ? Colors.orange[400]
-                          : _agentApprovalMode == 'autopilot'
-                              ? Colors.blue[400]
-                              : muted),
+                  Icon(
+                    _agentApprovalMode == 'autonome'
+                        ? Broken.flash_1
+                        : _agentApprovalMode == 'autopilot'
+                            ? Broken.send_2
+                            : Broken.shield_tick,
+                    size: 11,
+                    color: _agentApprovalMode == 'autonome'
+                        ? Colors.orange[400]
+                        : _agentApprovalMode == 'autopilot'
+                            ? Colors.green[400]
+                            : Colors.blue[400],
+                  ),
                   const SizedBox(width: 4),
                   Text(
-                    _agentApprovalMode == 'bypass'
-                        ? 'Contournement'
+                    _agentApprovalMode == 'autonome'
+                        ? 'Exécution automatique'
                         : _agentApprovalMode == 'autopilot'
-                            ? 'Autopilot'
-                            : 'Approbations par défaut',
+                            ? 'Autonomie maximale'
+                            : 'Contrôle manuel',
                     style: TextStyle(
                         fontSize: 11,
+                        color: _agentApprovalMode == 'autonome'
+                            ? Colors.orange[400]
+                            : _agentApprovalMode == 'autopilot'
+                                ? Colors.green[400]
+                                : muted,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ]),
+              ),
+            ),
+          ]),
+        ),
                         color: muted,
                         fontWeight: FontWeight.w500),
                   ),
@@ -4219,59 +4182,36 @@ class _SelectTypeState extends State<SelectType>
                       color: muted.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(2))),
 
-              // ── Option: Approbations par défaut ──
+              // ── Option: Default / Contrôle manuel ──
               _approvalOption(
                 context: ctx, setS: setS, appTheme: appTheme,
                 mode: 'default',
                 icon: Broken.shield_tick,
-                iconColor: Colors.grey[400]!,
-                title: 'Approbations par défaut',
-                subtitle: 'Copilot utilise vos paramètres configurés',
+                iconColor: Colors.blue[400]!,
+                title: 'Contrôle manuel',
+                subtitle: 'Vous devez approuver l’exécution des commandes et des actions sensibles. L’agent s’arrête pour demander votre autorisation.',
                 selBg: selBg, fg: fg, muted: muted,
-                extra: Padding(
-                  padding: const EdgeInsets.fromLTRB(36, 8, 0, 0),
-                  child: Row(children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Bac à sable pour le terminal',
-                              style: TextStyle(fontSize: 13, color: fg)),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: _agentSandboxTerminal,
-                      onChanged: (v) => setState(() {
-                        _agentSandboxTerminal = v;
-                        setS(() {});
-                      }),
-                      activeColor: _kAccent,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ]),
-                ),
               ),
 
-              // ── Option: Contournement ──
+              // ── Option: Autonome / Exécution automatique ──
               _approvalOption(
                 context: ctx, setS: setS, appTheme: appTheme,
-                mode: 'bypass',
-                icon: Broken.warning_2,
+                mode: 'autonome',
+                icon: Broken.flash_1,
                 iconColor: Colors.orange[400]!,
-                title: 'Contournement des approbations',
-                subtitle: 'Tous les appels d\'outils sont automatiquement approuvés',
+                title: 'Exécution automatique',
+                subtitle: 'L’agent exécute seul les commandes et actions courantes. Il vous consulte uniquement lorsqu’une décision importante nécessite votre intervention.',
                 selBg: selBg, fg: fg, muted: muted,
               ),
 
-              // ── Option: Autopilot ──
+              // ── Option: Autopilot / Autonomie maximale ──
               _approvalOption(
                 context: ctx, setS: setS, appTheme: appTheme,
                 mode: 'autopilot',
                 icon: Broken.send_2,
-                iconColor: Colors.blue[400]!,
-                title: 'Autopilot (Aperçu)',
-                subtitle: 'Itère de manière autonome, du début à la fin',
+                iconColor: Colors.green[400]!,
+                title: 'Autonomie maximale',
+                subtitle: 'L’agent travaille sans interruption, prend les décisions nécessaires et gère les blocages automatiquement. Il continue jusqu’à considérer la tâche terminée.',
                 selBg: selBg, fg: fg, muted: muted,
               ),
 
@@ -6093,6 +6033,42 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
+  Future<void> _openPlanFileInEditor(String planContent) async {
+    try {
+      final filePath = path.join(workspacePath, '.panda', 'plan.md');
+      final file = File(filePath);
+      await file.parent.create(recursive: true);
+      await file.writeAsString(planContent, flush: true);
+
+      final activeEditorBloc = context.read<ActiveEditorBloc>();
+      final currentEditors = List<ActiveEditor>.from(activeEditorBloc.state.activeEditors);
+      final existingIdx = currentEditors.indexWhere((e) => e.file == file.path);
+      if (existingIdx != -1) {
+        currentEditors[existingIdx].controller?.text = planContent;
+        activeEditorBloc.add(ActiveEditorEvent(currentEditors));
+      } else {
+        final lang = languages.firstWhere((l) => l.name == 'Markdown', orElse: () => languages.first);
+        final newEditor = ActiveEditor(
+          file: file.path,
+          lang: lang.name,
+          controller: CodeForgeController()..text = planContent,
+        );
+        currentEditors.add(newEditor);
+        activeEditorBloc.add(ActiveEditorEvent(currentEditors));
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Plan ouvert dans l\'éditeur (.panda/plan.md)', style: TextStyle(fontSize: 12)),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      PandaLog.e('PlanCard', 'Error opening plan file', error: e);
+    }
+  }
+
   Widget _buildPromptSuggestionsBar(bool isDark, Color fg, Color muted) {
     final List<(String, String)> suggestions;
     if (_agentChatMode == 'plan') {
@@ -6272,42 +6248,77 @@ class _SelectTypeState extends State<SelectType>
                 return const SizedBox.shrink();
               }(),
 
-              // Thinking block (collapsible)
-              if (think.isNotEmpty)
-                _ThinkingBlock(
-                    thinking: think,
+              // Sequential blocks (thinking, tool calls, text in exact interleaved order)
+              ...() {
+                final blocks = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                if (blocks.isNotEmpty) {
+                  return blocks.map((b) {
+                    final type = b['type'] as String? ?? 'text';
+                    if (type == 'thinking') {
+                      final t = b['thinking'] as String? ?? '';
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return _ThinkingBlock(
+                        thinking: t,
+                        isDark: isDark,
+                        fg: fg,
+                        muted: muted,
+                      );
+                    } else if (type == 'toolCall') {
+                      return _ToolCallBlock(
+                        toolName: b['name'] as String? ?? '',
+                        args: (b['args'] as Map?)?.cast<String, dynamic>() ?? {},
+                        result: b['result'] as String?,
+                        status: b['status'] as String? ?? 'running',
+                        isDark: isDark,
+                        fg: fg,
+                        muted: muted,
+                      );
+                    } else if (type == 'text') {
+                      final txt = b['text'] as String? ?? '';
+                      if (txt.isEmpty && !isStreaming) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                        child: _AgentMarkdownView(
+                          markdown: txt,
+                          isDark: isDark,
+                          fg: fg,
+                          isError: isError,
+                          isStreaming: isStreaming,
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  });
+                }
+
+                // Fallback for older messages
+                final calls = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+                return [
+                  if (think.isNotEmpty)
+                    _ThinkingBlock(thinking: think, isDark: isDark, fg: fg, muted: muted),
+                  ...calls.map((call) => _ToolCallBlock(
+                    toolName: call['name'] as String? ?? '',
+                    args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
+                    result: call['result'] as String?,
+                    status: call['status'] as String? ?? 'running',
                     isDark: isDark,
                     fg: fg,
-                    muted: muted),
-
-              // Tool call blocks (expandable, Replit-style)
-              ...() {
-                final calls = (msg['toolCalls'] as List?)
-                    ?.cast<Map<String, dynamic>>() ?? [];
-                return calls.map((call) => _ToolCallBlock(
-                  toolName: call['name'] as String? ?? '',
-                  args: (call['args'] as Map?)
-                      ?.cast<String, dynamic>() ?? {},
-                  result: call['result'] as String?,
-                  status: call['status'] as String? ?? 'running',
-                  isDark: isDark,
-                  fg: fg,
-                  muted: muted,
-                ));
+                    muted: muted,
+                  )),
+                  if (text.isNotEmpty || isStreaming)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                      child: _AgentMarkdownView(
+                        markdown: text,
+                        isDark: isDark,
+                        fg: fg,
+                        isError: isError,
+                        isStreaming: isStreaming,
+                      ),
+                    ),
+                ];
               }(),
 
-              // Agent response text
-              if (text.isNotEmpty || isStreaming)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                  child: _AgentMarkdownView(
-                    markdown: text,
-                    isDark: isDark,
-                    fg: fg,
-                    isError: isError,
-                    isStreaming: isStreaming,
-                  ),
-                ),
               // Plan approval card if plan generated
               () {
                 final planContent = _extractPlanFromText(text);
@@ -6319,6 +6330,7 @@ class _SelectTypeState extends State<SelectType>
                     muted: muted,
                     onApprove: () => _approveAndExecutePlan(planContent),
                     onEdit: () => _openPlanEditorDialog(planContent),
+                    onReadPlan: () => _openPlanFileInEditor(planContent),
                     onRevise: () {
                       _agentInputCtrl.text = "Je souhaite réviser le plan : ";
                       _agentInputCtrl.selection = TextSelection.fromPosition(
@@ -7691,6 +7703,8 @@ class _SelectTypeState extends State<SelectType>
         'text': '',
         'thinking': '',
         'phase': 'streaming',
+        'toolCalls': <Map<String, dynamic>>[],
+        'blocks': <Map<String, dynamic>>[],
       });
       _agentInputCtrl.clear();
       _agentGenerating  = true;
@@ -7720,16 +7734,26 @@ class _SelectTypeState extends State<SelectType>
           (chunk) {
             if (!mounted || requestId != _agentRequestSerial) return;
             setState(() {
+              final blocks = List<Map<String, dynamic>>.from(
+                (_agentMessages[agentIdx]['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? []
+              );
+
               switch (chunk.phase) {
                 case AgentPhase.thinking:
                   _agentPhase = AgentPhase.thinking;
                   _agentThinkingBuf += chunk.text;
                   _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
+                  if (blocks.isNotEmpty && blocks.last['type'] == 'thinking') {
+                    blocks.last['thinking'] = (blocks.last['thinking'] as String? ?? '') + chunk.text;
+                  } else {
+                    blocks.add({'type': 'thinking', 'thinking': chunk.text});
+                  }
+                  _agentMessages[agentIdx]['blocks'] = blocks;
+
                 case AgentPhase.toolRunning:
                   _agentPhase = AgentPhase.toolRunning;
                   _agentCurrentTool = chunk.toolName ?? '';
                   _agentMessages[agentIdx]['toolName'] = _agentCurrentTool;
-                  // Append a running tool call entry
                   final runningCalls = List<Map<String,dynamic>>.from(
                     (_agentMessages[agentIdx]['toolCalls'] as List?)
                         ?.cast<Map<String,dynamic>>() ?? []);
@@ -7740,9 +7764,17 @@ class _SelectTypeState extends State<SelectType>
                     'status': 'running',
                   });
                   _agentMessages[agentIdx]['toolCalls'] = runningCalls;
+                  blocks.add({
+                    'type': 'toolCall',
+                    'name': chunk.toolName ?? '',
+                    'args': chunk.toolArgs ?? {},
+                    'result': null,
+                    'status': 'running',
+                  });
+                  _agentMessages[agentIdx]['blocks'] = blocks;
+
                 case AgentPhase.toolDone:
                   _agentCurrentTool = '';
-                  // Find last entry with matching name and update it
                   final doneCalls = List<Map<String,dynamic>>.from(
                     (_agentMessages[agentIdx]['toolCalls'] as List?)
                         ?.cast<Map<String,dynamic>>() ?? []);
@@ -7757,6 +7789,18 @@ class _SelectTypeState extends State<SelectType>
                     };
                   }
                   _agentMessages[agentIdx]['toolCalls'] = doneCalls;
+                  final bIdx = blocks.lastIndexWhere(
+                    (b) => b['type'] == 'toolCall' && b['name'] == chunk.toolName && b['status'] == 'running',
+                  );
+                  if (bIdx >= 0) {
+                    blocks[bIdx] = {
+                      ...blocks[bIdx],
+                      'result': chunk.toolResult ?? '',
+                      'status': 'done',
+                    };
+                  }
+                  _agentMessages[agentIdx]['blocks'] = blocks;
+
                 case AgentPhase.streaming:
                   _agentPhase = AgentPhase.streaming;
                   _agentCurrentTool = '';
@@ -7765,6 +7809,12 @@ class _SelectTypeState extends State<SelectType>
                   _agentThinkingBuf = processed['thinking']!;
                   _agentMessages[agentIdx]['text'] = processed['text']!;
                   _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
+                  if (blocks.isNotEmpty && blocks.last['type'] == 'text') {
+                    blocks.last['text'] = (blocks.last['text'] as String? ?? '') + chunk.text;
+                  } else {
+                    blocks.add({'type': 'text', 'text': chunk.text});
+                  }
+                  _agentMessages[agentIdx]['blocks'] = blocks;
                 case AgentPhase.done:
                   _agentPhase = AgentPhase.done;
                   _agentCurrentTool = '';
@@ -8531,14 +8581,14 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(children: [
-              Icon(Broken.message_tick,
-                  size: 12, color: widget.muted),
+              Icon(Icons.psychology,
+                  size: 15, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
               const SizedBox(width: 6),
               Text('Réflexion interne',
                   style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: widget.muted)),
+                      color: widget.isDark ? Colors.purple[200] : Colors.purple[900])),
               const Spacer(),
               Icon(
                 _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
@@ -9123,7 +9173,7 @@ class _StatusBarItem extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // _PlanApprovalCard — Carte interactive de validation du plan
 // ─────────────────────────────────────────────────────────────────────────────
-class _PlanApprovalCard extends StatelessWidget {
+class _PlanApprovalCard extends StatefulWidget {
   final String planText;
   final bool isDark;
   final Color fg;
@@ -9131,6 +9181,7 @@ class _PlanApprovalCard extends StatelessWidget {
   final VoidCallback onApprove;
   final VoidCallback onEdit;
   final VoidCallback onRevise;
+  final VoidCallback onReadPlan;
 
   const _PlanApprovalCard({
     required this.planText,
@@ -9140,93 +9191,148 @@ class _PlanApprovalCard extends StatelessWidget {
     required this.onApprove,
     required this.onEdit,
     required this.onRevise,
+    required this.onReadPlan,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final bg = isDark ? const Color(0xff1a261f) : const Color(0xffecfdf5);
-    final border = isDark ? const Color(0xff059669) : const Color(0xff10b981);
+  State<_PlanApprovalCard> createState() => _PlanApprovalCardState();
+}
 
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: border.withValues(alpha: 0.5), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: border.withValues(alpha: 0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Broken.task_square, size: 16, color: border),
+class _PlanApprovalCardState extends State<_PlanApprovalCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pulseCtrl;
+  late Animation<double> _glowAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+    _glowAnim = Tween<double>(begin: 0.3, end: 0.85).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = widget.isDark ? const Color(0xff12221a) : const Color(0xffecfdf5);
+    final border = widget.isDark ? const Color(0xff10b981) : const Color(0xff059669);
+
+    return AnimatedBuilder(
+      animation: _glowAnim,
+      builder: (context, child) {
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: border.withValues(alpha: _glowAnim.value),
+              width: 1.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: border.withValues(alpha: 0.15 * _glowAnim.value),
+                blurRadius: 10 * _glowAnim.value,
+                spreadRadius: 1 * _glowAnim.value,
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Plan de projet prêt pour validation',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : const Color(0xff065f46),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: border.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Broken.task_square, size: 18, color: border),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Plan de projet prêt pour validation',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: widget.isDark ? Colors.white : const Color(0xff065f46),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Ce plan a été généré par l\'Agent. Approuvez-le pour démarrer l\'exécution ou lisez-le/éditez-le directement dans l\'éditeur.',
+                style: TextStyle(fontSize: 11, color: widget.muted),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: border,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    icon: const Icon(Broken.play_cricle, size: 16),
+                    label: const Text('Approuver & Lancer', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    onPressed: widget.onApprove,
+                  ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: border,
+                      side: BorderSide(color: border.withValues(alpha: 0.6)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Broken.document_text, size: 14),
+                    label: const Text('Lire le plan', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    onPressed: widget.onReadPlan,
+                  ),
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: widget.fg,
+                      side: BorderSide(color: widget.muted.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    icon: const Icon(Broken.edit, size: 14),
+                    label: const Text('Éditer le plan', style: TextStyle(fontSize: 11)),
+                    onPressed: widget.onEdit,
+                  ),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      foregroundColor: widget.muted,
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                    ),
+                    icon: const Icon(Broken.message_text, size: 14),
+                    label: const Text("Réviser", style: TextStyle(fontSize: 11)),
+                    onPressed: widget.onRevise,
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Ce plan a été généré par l\'Agent. Approuvez-le pour basculer en Mode Agent et démarrer l\'exécution automatique des tâches.',
-            style: TextStyle(fontSize: 11, color: muted),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: border,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  elevation: 0,
-                ),
-                icon: const Icon(Broken.play_cricle, size: 16),
-                label: const Text('Approuver & Lancer (Mode Agent)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                onPressed: onApprove,
-              ),
-              OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: fg,
-                  side: BorderSide(color: muted.withValues(alpha: 0.4)),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                icon: const Icon(Broken.edit, size: 14),
-                label: const Text('Éditer le plan', style: TextStyle(fontSize: 11)),
-                onPressed: onEdit,
-              ),
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: muted,
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                ),
-                icon: const Icon(Broken.message_text, size: 14),
-                label: const Text("Réviser avec l'Agent", style: const TextStyle(fontSize: 11)),
-                onPressed: onRevise,
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -9295,10 +9401,20 @@ class _AgentMarkdownView extends StatelessWidget {
     if (markdown.isEmpty && isStreaming) {
       return const SizedBox.shrink();
     }
+
+    final baseConfig = isDark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
+    final config = baseConfig.copy(
+      configs: [
+        PConfig(textStyle: TextStyle(color: fg, fontSize: 13, height: 1.45)),
+        StrongConfig(textStyle: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 13)),
+        CodeConfig(style: TextStyle(color: isDark ? Colors.amber[300] : Colors.blue[900], fontSize: 12, fontFamily: 'monospace')),
+      ],
+    );
+
     return MarkdownWidget(
       data: markdown,
       shrinkWrap: true,
-      config: isDark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig,
+      config: config,
     );
   }
 }
