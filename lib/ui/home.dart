@@ -8517,8 +8517,6 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 
   @override
   Widget build(BuildContext context) {
-    final purple = widget.isDark ? const Color(0xffb388ff) : const Color(0xff7c4dff);
-
     // Clean up thinking text if it contains tool execution artifacts
     final cleanThinking = widget.thinking
         .replaceAll(RegExp(r'Executing \d+ tool\(s\)\.\.\.', caseSensitive: false), '')
@@ -8526,6 +8524,21 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
         .trim();
 
     if (cleanThinking.isEmpty) return const SizedBox.shrink();
+
+    // Dynamic title from first line of thinking
+    final lines = cleanThinking
+        .split('\n')
+        .map((l) => l.trim().replaceAll(RegExp(r'^[#*-\s>]+'), '').trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    String title = 'Pensée de l\'agent';
+    if (lines.isNotEmpty) {
+      final candidate = lines.first;
+      if (candidate.length >= 3) {
+        title = candidate.length > 60 ? '${candidate.substring(0, 60)}\u2026' : candidate;
+      }
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 2),
@@ -8540,20 +8553,24 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.psychology, size: 16, color: purple),
+                  Icon(Icons.psychology, size: 15, color: widget.fg.withValues(alpha: 0.7)),
                   const SizedBox(width: 6),
-                  Text(
-                    'Réflexion',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: purple,
+                  Flexible(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: widget.fg.withValues(alpha: 0.85),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 4),
                   Icon(
                     _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
-                    size: 13,
+                    size: 12,
                     color: widget.muted,
                   ),
                 ],
@@ -8567,7 +8584,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
                 cleanThinking,
                 style: TextStyle(
                   fontSize: 11,
-                  color: widget.fg.withValues(alpha: 0.8),
+                  color: widget.fg.withValues(alpha: 0.75),
                   height: 1.45,
                   fontStyle: FontStyle.italic,
                 ),
@@ -9457,7 +9474,21 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
 
     final bg = isDark ? const Color(0xff1e1e24) : const Color(0xfff4f4f8);
     final border = isDark ? const Color(0xff333342) : const Color(0xffe0e0ea);
-    final purple = isDark ? const Color(0xffb388ff) : const Color(0xff7c4dff);
+    final textC = widget.fg.withValues(alpha: 0.9);
+
+    // Dynamic step title from active status or first line of thinking
+    String stepTitle = 'Étapes de l\'agent';
+    if (activeStatusText.isNotEmpty) {
+      stepTitle = activeStatusText;
+    } else if (combinedThink.isNotEmpty) {
+      final firstLine = combinedThink
+          .split('\n')
+          .map((l) => l.trim().replaceAll(RegExp(r'^[#*-\s>]+'), '').trim())
+          .firstWhere((l) => l.isNotEmpty, defaultValue: () => '');
+      if (firstLine.length >= 3) {
+        stepTitle = firstLine.length > 50 ? '${firstLine.substring(0, 50)}\u2026' : firstLine;
+      }
+    }
 
     // Current status text for pulsing indicator
     String activeStatusText = '';
@@ -9496,15 +9527,19 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
               child: Row(
                 children: [
                   // Brain Icon 🧠 / Icons.psychology
-                  Icon(Icons.psychology, size: 16, color: purple),
+                  Icon(Icons.psychology, size: 16, color: widget.fg.withValues(alpha: 0.8)),
                   const SizedBox(width: 6),
-                  Text(
-                    'Réflexion & Étapes',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: purple,
-                      letterSpacing: 0.2,
+                  Flexible(
+                    child: Text(
+                      stepTitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: textC,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -9519,17 +9554,17 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: purple.withValues(alpha: 0.15),
+                                color: widget.fg.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.psychology, size: 11, color: purple),
+                                  Icon(Icons.psychology, size: 11, color: widget.fg.withValues(alpha: 0.8)),
                                   const SizedBox(width: 3),
                                   Text(
                                     'Pensée',
-                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: purple),
+                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: widget.fg),
                                   ),
                                 ],
                               ),
@@ -9573,7 +9608,7 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                     const SizedBox(width: 4),
                     Text(
                       activeStatusText,
-                      style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: purple),
+                      style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: widget.fg.withValues(alpha: 0.8)),
                     ),
                   ],
 
