@@ -61,7 +61,7 @@ jobs:
             --release \
             --no-tree-shake-icons \
             --no-source-maps \
-            --dart2js-optimization O4 \
+            -O4 \
             --base-href "/panda-ide/"
 
       - name: Setup Pages

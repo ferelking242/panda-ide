@@ -114,7 +114,7 @@ jobs:
 
       - name: Build APK
         run: |
-          flutter build apk --release --split-per-abi
+          flutter build apk --release --target-platform android-arm64 --split-per-abi
 
       - name: Prepare APK release artifacts
         run: |
