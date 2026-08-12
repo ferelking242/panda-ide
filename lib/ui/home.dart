@@ -4141,14 +4141,6 @@ class _SelectTypeState extends State<SelectType>
             ),
           ]),
         ),
-                        color: muted,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ]),
-              ),
-            ),
-          ]),
-        ),
       ],
     );
   }
@@ -6035,27 +6027,18 @@ class _SelectTypeState extends State<SelectType>
 
   Future<void> _openPlanFileInEditor(String planContent) async {
     try {
+      final workspacePath = _currentWorkspaceDir ?? _activeProjectDir() ?? '';
+      if (workspacePath.isEmpty) return;
       final filePath = path.join(workspacePath, '.panda', 'plan.md');
       final file = File(filePath);
       await file.parent.create(recursive: true);
       await file.writeAsString(planContent, flush: true);
 
-      final activeEditorBloc = context.read<ActiveEditorBloc>();
-      final currentEditors = List<ActiveEditor>.from(activeEditorBloc.state.activeEditors);
-      final existingIdx = currentEditors.indexWhere((e) => e.file == file.path);
-      if (existingIdx != -1) {
-        currentEditors[existingIdx].controller?.text = planContent;
-        activeEditorBloc.add(ActiveEditorEvent(currentEditors));
-      } else {
-        final lang = languages.firstWhere((l) => l.name == 'Markdown', orElse: () => languages.first);
-        final newEditor = ActiveEditor(
-          file: file.path,
-          lang: lang.name,
-          controller: CodeForgeController()..text = planContent,
-        );
-        currentEditors.add(newEditor);
-        activeEditorBloc.add(ActiveEditorEvent(currentEditors));
-      }
+      _openEditorTab(
+        file: file,
+        rootDir: workspacePath,
+      );
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -9406,7 +9389,6 @@ class _AgentMarkdownView extends StatelessWidget {
     final config = baseConfig.copy(
       configs: [
         PConfig(textStyle: TextStyle(color: fg, fontSize: 13, height: 1.45)),
-        StrongConfig(textStyle: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 13)),
         CodeConfig(style: TextStyle(color: isDark ? Colors.amber[300] : Colors.blue[900], fontSize: 12, fontFamily: 'monospace')),
       ],
     );

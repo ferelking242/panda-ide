@@ -1893,7 +1893,7 @@ class AgenticTools {
           }
         }
       } catch (e) {
-        PandaLog.w('searchInWeb', 'Primary DDG HTML search failed: $e');
+        debugPrint('searchInWeb Primary DDG HTML search failed: $e');
       }
 
       // Fallback 1: DuckDuckGo Lite endpoint
@@ -1920,7 +1920,7 @@ class AgenticTools {
             }
           }
         } catch (e) {
-          PandaLog.w('searchInWeb', 'DDG Lite fallback failed: $e');
+          debugPrint('searchInWeb DDG Lite fallback failed: $e');
         }
       }
 
@@ -1942,7 +1942,7 @@ class AgenticTools {
             }
           }
         } catch (e) {
-          PandaLog.w('searchInWeb', 'GitHub API fallback failed: $e');
+          debugPrint('searchInWeb GitHub API fallback failed: $e');
         }
       }
 
