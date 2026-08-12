@@ -1,21 +1,4 @@
 
-Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
-  final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
-  final matches = thinkRegex.allMatches(rawText);
-  if (matches.isEmpty) {
-    return {'text': rawText, 'thinking': existingThinking};
-  }
-  String newThink = existingThinking;
-  for (final m in matches) {
-    final val = m.group(2)?.trim() ?? '';
-    if (val.isNotEmpty) {
-      if (newThink.isNotEmpty && !newThink.endsWith('\n')) newThink += '\n';
-      newThink += val;
-    }
-  }
-  final cleanText = rawText.replaceAll(RegExp(r'<(think|thought)>[\s\S]*?(?:</\1>|$)', caseSensitive: false), '').trim();
-  return {'text': cleanText, 'thinking': newThink};
-}
 import 'package:markdown_widget/markdown_widget.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -71,6 +54,24 @@ import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
     if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
+
+Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
+  final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
+  final matches = thinkRegex.allMatches(rawText);
+  if (matches.isEmpty) {
+    return {'text': rawText, 'thinking': existingThinking};
+  }
+  String newThink = existingThinking;
+  for (final m in matches) {
+    final val = m.group(2)?.trim() ?? '';
+    if (val.isNotEmpty) {
+      if (newThink.isNotEmpty && !newThink.endsWith('\n')) newThink += '\n';
+      newThink += val;
+    }
+  }
+  final cleanText = rawText.replaceAll(RegExp(r'<(think|thought)>[\s\S]*?(?:</\1>|$)', caseSensitive: false), '').trim();
+  return {'text': cleanText, 'thinking': newThink};
+}
 
 // ── VSCode colour tokens ──────────────────────────────────────────────────────
 // activity-bar colours (dark / light)
