@@ -1,10 +1,11 @@
+import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:panda/bloc/app_theme/app_theme_bloc.dart';
-import 'package:panda/bloc/config/config_bloc.dart';
-import 'package:panda/bloc/copilot/copilot_bloc.dart';
+
+
+
 import 'package:panda/models/app_theme.dart';
 import 'package:panda/theme/terminal_themes.dart';
 
@@ -83,6 +84,12 @@ class Settings extends StatefulWidget {
 }
 
 class _SettingsState extends State<Settings> {
+  _SettingsSection _selectedSection = _SettingsSection.general;
+  final ScrollController scrollController = ScrollController();
+  final TextEditingController apiController = TextEditingController();
+  String _currentLanguage = 'Français 🇫🇷';
+  double _uiScale = 1.0;
+  double _ramLimitGb = 4.0;
   _SettingsSection _selectedSection = _SettingsSection.general;
   final ScrollController scrollController = ScrollController();
   final TextEditingController apiController = TextEditingController();
@@ -497,7 +504,12 @@ class _SettingsState extends State<Settings> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: TerminalView(terminal),
+                child: Container(
+                          padding: const EdgeInsets.all(12),
+                          color: Colors.black,
+                          child: const Text('user@panda-ide:~$ echo "Panda Terminal Preview"
+Panda Terminal Preview', style: TextStyle(color: Colors.greenAccent, fontFamily: 'monospace', fontSize: 11)),
+                        ),
               ),
             ),
             ListTile(
