@@ -6217,7 +6217,7 @@ class _SelectTypeState extends State<SelectType>
           );
         }
 
-        // ── Agent message (Replit style: full-width, main text top, ReplitStepBar bottom) ──────
+        // ── Agent message (Replit style: direct background, chronologically ordered block items) ──────
         final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user')
             ? i - 1
             : -1;
@@ -6229,82 +6229,84 @@ class _SelectTypeState extends State<SelectType>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Phase chip — displayed during streaming if active
-              () {
-                final hasCalls = calls.isNotEmpty || blocks.any((b) => b['type'] == 'toolCall');
-                if (isStreaming && think.isNotEmpty)
-                  return _AgentPhaseChip(phase: AgentPhase.thinking, isDark: isDark);
-                if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isNotEmpty)
-                  return _AgentPhaseChip(
-                      phase: AgentPhase.toolRunning,
-                      isDark: isDark,
-                      toolName: msg['toolName'] as String? ?? '');
-                if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isEmpty)
-                  return _AgentPhaseChip(phase: AgentPhase.streaming, isDark: isDark);
-                return const SizedBox.shrink();
+              // Render blocks sequentially in the order they were produced
+              ...() {
+                if (blocks.isNotEmpty) {
+                  return blocks.map((b) {
+                    final type = b['type'] as String? ?? 'text';
+                    if (type == 'thinking') {
+                      final t = (b['thinking'] as String? ?? '').trim();
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return _ThinkingBlock(
+                        thinking: t,
+                        isDark: isDark,
+                        fg: fg,
+                        muted: muted,
+                      );
+                    } else if (type == 'toolCall') {
+                      return _ToolCallBlock(
+                        toolName: b['name'] as String? ?? '',
+                        args: (b['args'] as Map?)?.cast<String, dynamic>() ?? {},
+                        result: b['result'] as String?,
+                        status: b['status'] as String? ?? 'done',
+                        isDark: isDark,
+                        fg: fg,
+                        muted: muted,
+                      );
+                    } else if (type == 'text') {
+                      final txt = (b['text'] as String? ?? '').trim();
+                      if (txt.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                        child: _AgentMarkdownView(
+                          markdown: txt,
+                          isDark: isDark,
+                          fg: fg,
+                          isError: isError,
+                          isStreaming: false,
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  });
+                }
+
+                // Fallback for flat structure
+                return [
+                  if (think.isNotEmpty)
+                    _ThinkingBlock(thinking: think, isDark: isDark, fg: fg, muted: muted),
+                  ...calls.map((call) => _ToolCallBlock(
+                        toolName: call['name'] as String? ?? '',
+                        args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
+                        result: call['result'] as String?,
+                        status: call['status'] as String? ?? 'done',
+                        isDark: isDark,
+                        fg: fg,
+                        muted: muted,
+                      )),
+                  if (text.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                      child: _AgentMarkdownView(
+                        markdown: text,
+                        isDark: isDark,
+                        fg: fg,
+                        isError: isError,
+                        isStreaming: isStreaming,
+                      ),
+                    ),
+                ];
               }(),
 
-              // 2. Main generated text rendered AT THE TOP of message
-              if (text.isNotEmpty || (isStreaming && blocks.isEmpty))
+              // Active streaming indicator chip when running
+              if (isStreaming)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  child: _AgentMarkdownView(
-                    markdown: text,
+                  padding: const EdgeInsets.only(top: 6, bottom: 2),
+                  child: _AgentPhaseChip(
+                    phase: think.isNotEmpty ? AgentPhase.thinking : AgentPhase.generating,
                     isDark: isDark,
-                    fg: fg,
-                    isError: isError,
-                    isStreaming: isStreaming,
                   ),
                 ),
-
-              ...blocks.where((b) => b['type'] == 'text').map((b) {
-                final txt = b['text'] as String? ?? '';
-                if (txt.isEmpty) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                  child: _AgentMarkdownView(
-                    markdown: txt,
-                    isDark: isDark,
-                    fg: fg,
-                    isError: isError,
-                    isStreaming: false,
-                  ),
-                );
-              }),
-
-              // 3. Plan approval card if plan generated
-              () {
-                final planContent = _extractPlanFromText(text);
-                if (!isStreaming && planContent != null) {
-                  return _PlanApprovalCard(
-                    planText: planContent,
-                    isDark: isDark,
-                    fg: fg,
-                    muted: muted,
-                    onApprove: () => _approveAndExecutePlan(planContent),
-                    onEdit: () => _openPlanEditorDialog(planContent),
-                    onReadPlan: () => _openPlanFileInEditor(planContent),
-                    onRevise: () {
-                      _agentInputCtrl.text = "Je souhaite réviser le plan : ";
-                      _agentInputCtrl.selection = TextSelection.fromPosition(
-                          TextPosition(offset: _agentInputCtrl.text.length));
-                    },
-                  );
-                }
-                return const SizedBox.shrink();
-              }(),
-
-              // 4. Positionnement en Bas de Message : _ReplitStepBar (Réflexion & Tracé des Étapes)
-              _ReplitStepBar(
-                think: think,
-                calls: calls,
-                blocks: blocks,
-                isStreaming: isStreaming,
-                toolName: msg['toolName'] as String? ?? '',
-                isDark: isDark,
-                fg: fg,
-                muted: muted,
-              ),
 
               // Action row (copy + retry) — shown after generation
               if (!isStreaming && (text.isNotEmpty || isError))
@@ -8525,52 +8527,60 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.isDark
-        ? const Color(0xff2a2a3a)
-        : const Color(0xfff0f0ff);
-    final border = widget.isDark
-        ? const Color(0xff4a4a6a)
-        : const Color(0xffbbbbdd);
+    final purple = widget.isDark ? const Color(0xffb388ff) : const Color(0xff7c4dff);
+    final bg = widget.isDark ? const Color(0xff1c1c26) : const Color(0xfff0f0f5);
 
-    return GestureDetector(
-      onTap: () => setState(() => _expanded = !_expanded),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: bg,
-          border: Border.all(color: border, width: 1),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Icon(Icons.psychology,
-                  size: 15, color: widget.isDark ? Colors.purple[300] : Colors.purple[700]),
-              const SizedBox(width: 6),
-              Text('Réflexion interne',
-                  style: TextStyle(
-                      fontSize: 11,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.psychology, size: 15, color: purple),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Réflexion',
+                    style: TextStyle(
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: widget.isDark ? Colors.purple[200] : Colors.purple[900])),
-              const Spacer(),
-              Icon(
-                _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
-                size: 12,
-                color: widget.muted,
+                      color: purple,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                    size: 13,
+                    color: widget.muted,
+                  ),
+                ],
               ),
-            ]),
-            if (_expanded) ...[
-              const SizedBox(height: 6),
-              Text(widget.thinking,
-                  style: TextStyle(
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                      color: widget.fg.withValues(alpha: 0.7))),
-            ],
-          ],
-        ),
+            ),
+          ),
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              child: Text(
+                widget.thinking,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: widget.fg.withValues(alpha: 0.85),
+                  height: 1.4,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
