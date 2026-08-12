@@ -8536,7 +8536,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
     if (lines.isNotEmpty) {
       final candidate = lines.firstWhere(
         (l) => !l.startsWith('{') && !l.startsWith('[') && !l.contains('":') && l.length >= 3,
-        defaultValue: () => lines.first,
+        orElse: () => lines.first,
       );
       final cleanCandidate = candidate.replaceAll(RegExp(r'^["' "'" r']+|["' "'" r']+$'), '').trim();
       if (cleanCandidate.isNotEmpty) {
@@ -9506,7 +9506,7 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
       final firstLine = combinedThink
           .split('\n')
           .map((l) => l.trim().replaceAll(RegExp(r'^[#*-\s>]+'), '').trim())
-          .firstWhere((l) => l.isNotEmpty, defaultValue: () => '');
+          .firstWhere((l) => l.isNotEmpty, orElse: () => '');
       if (firstLine.length >= 3) {
         stepTitle = firstLine.length > 50 ? '${firstLine.substring(0, 50)}\u2026' : firstLine;
       }
