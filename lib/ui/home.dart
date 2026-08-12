@@ -1334,7 +1334,7 @@ class _SelectTypeState extends State<SelectType>
         _openTabs.add(const _TabDef(
           id: 'agent',
           title: 'Panda Agent',
-          icon: Broken.magic_star,
+          icon: Broken.cpu_setting,
         ));
         _activeTabIdx = _openTabs.length - 1;
       } else {
@@ -1438,7 +1438,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
-        _RailItem(icon: Broken.magic_star,          label: 'Panda Agent',       idx: 10),
+        _RailItem(icon: Broken.cpu_setting,         label: 'Panda Agent',       idx: 10),
         _RailItem(icon: Broken.cpu_setting,         label: 'Local Models',      idx: 11),
       ];
 
@@ -1568,9 +1568,15 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
 
-            const SizedBox(height: 8),
+            // ── Separator Divider ──────────────────────────────────────────
+            Divider(
+              color: isDark ? const Color(0xff3a3a4a) : const Color(0xffe0e0e8),
+              height: 1,
+            ),
+            const SizedBox(height: 12),
 
-            // ── Theme toggle ───────────────────────────────────────────────
+            // ── Detached Bottom Section (Theme, Account, Settings) ─────────
+            // 1. Theme toggle
             BlocBuilder<AppThemeBloc, AppThemeState>(
               builder: (context, state) => _ActivityBtnEx(
                 item: _RailItem(
@@ -1595,7 +1601,9 @@ class _SelectTypeState extends State<SelectType>
                 },
               ),
             ),
+            const SizedBox(height: 12),
 
+            // 2. Compte GitHub
             Tooltip(
               message: 'Compte GitHub',
               child: _GithubAvatarEx(
@@ -1616,7 +1624,9 @@ class _SelectTypeState extends State<SelectType>
                 },
               ),
             ),
+            const SizedBox(height: 12),
 
+            // 3. Paramètres
             _ActivityBtnEx(
               item:      _RailItem(icon: Broken.setting_3, label: 'Parametres', idx: 99),
               selected:  false,
@@ -1637,7 +1647,7 @@ class _SelectTypeState extends State<SelectType>
                 });
               },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
           ],
         ),
       );
@@ -3747,7 +3757,7 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
             const SizedBox(width: 4),
-            bubble(tabIdx: 0, icon: Broken.magic_star,  label: '',      w: chatW),
+            bubble(tabIdx: 0, icon: Broken.cpu_setting,  label: '',      w: chatW),
             const SizedBox(width: 4),
             bubble(tabIdx: 1, icon: Broken.setting_3,   label: 'Tools', w: toolsW),
             const SizedBox(width: 4),
@@ -6207,18 +6217,21 @@ class _SelectTypeState extends State<SelectType>
           );
         }
 
-        // ── Agent message (Replit style: full-width, no avatar) ──────
+        // ── Agent message (Replit style: full-width, main text top, ReplitStepBar bottom) ──────
         final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user')
             ? i - 1
             : -1;
+        final blocks = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final calls = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Phase chip — only when no tool calls to avoid double indicator
+              // 1. Phase chip — displayed during streaming if active
               () {
-                final hasCalls = (msg['toolCalls'] as List?)?.isNotEmpty ?? false;
+                final hasCalls = calls.isNotEmpty || blocks.any((b) => b['type'] == 'toolCall');
                 if (isStreaming && think.isNotEmpty)
                   return _AgentPhaseChip(phase: AgentPhase.thinking, isDark: isDark);
                 if (isStreaming && !hasCalls && (msg['toolName'] as String? ?? '').isNotEmpty)
@@ -6231,78 +6244,35 @@ class _SelectTypeState extends State<SelectType>
                 return const SizedBox.shrink();
               }(),
 
-              // Sequential blocks (thinking, tool calls, text in exact interleaved order)
-              ...() {
-                final blocks = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-                if (blocks.isNotEmpty) {
-                  return blocks.map((b) {
-                    final type = b['type'] as String? ?? 'text';
-                    if (type == 'thinking') {
-                      final t = b['thinking'] as String? ?? '';
-                      if (t.isEmpty) return const SizedBox.shrink();
-                      return _ThinkingBlock(
-                        thinking: t,
-                        isDark: isDark,
-                        fg: fg,
-                        muted: muted,
-                      );
-                    } else if (type == 'toolCall') {
-                      return _ToolCallBlock(
-                        toolName: b['name'] as String? ?? '',
-                        args: (b['args'] as Map?)?.cast<String, dynamic>() ?? {},
-                        result: b['result'] as String?,
-                        status: b['status'] as String? ?? 'running',
-                        isDark: isDark,
-                        fg: fg,
-                        muted: muted,
-                      );
-                    } else if (type == 'text') {
-                      final txt = b['text'] as String? ?? '';
-                      if (txt.isEmpty && !isStreaming) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                        child: _AgentMarkdownView(
-                          markdown: txt,
-                          isDark: isDark,
-                          fg: fg,
-                          isError: isError,
-                          isStreaming: isStreaming,
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  });
-                }
-
-                // Fallback for older messages
-                final calls = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-                return [
-                  if (think.isNotEmpty)
-                    _ThinkingBlock(thinking: think, isDark: isDark, fg: fg, muted: muted),
-                  ...calls.map((call) => _ToolCallBlock(
-                    toolName: call['name'] as String? ?? '',
-                    args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
-                    result: call['result'] as String?,
-                    status: call['status'] as String? ?? 'running',
+              // 2. Main generated text rendered AT THE TOP of message
+              if (text.isNotEmpty || (isStreaming && blocks.isEmpty))
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: _AgentMarkdownView(
+                    markdown: text,
                     isDark: isDark,
                     fg: fg,
-                    muted: muted,
-                  )),
-                  if (text.isNotEmpty || isStreaming)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                      child: _AgentMarkdownView(
-                        markdown: text,
-                        isDark: isDark,
-                        fg: fg,
-                        isError: isError,
-                        isStreaming: isStreaming,
-                      ),
-                    ),
-                ];
-              }(),
+                    isError: isError,
+                    isStreaming: isStreaming,
+                  ),
+                ),
 
-              // Plan approval card if plan generated
+              ...blocks.where((b) => b['type'] == 'text').map((b) {
+                final txt = b['text'] as String? ?? '';
+                if (txt.isEmpty) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: _AgentMarkdownView(
+                    markdown: txt,
+                    isDark: isDark,
+                    fg: fg,
+                    isError: isError,
+                    isStreaming: false,
+                  ),
+                );
+              }),
+
+              // 3. Plan approval card if plan generated
               () {
                 final planContent = _extractPlanFromText(text);
                 if (!isStreaming && planContent != null) {
@@ -6323,6 +6293,18 @@ class _SelectTypeState extends State<SelectType>
                 }
                 return const SizedBox.shrink();
               }(),
+
+              // 4. Positionnement en Bas de Message : _ReplitStepBar (Réflexion & Tracé des Étapes)
+              _ReplitStepBar(
+                think: think,
+                calls: calls,
+                blocks: blocks,
+                isStreaming: isStreaming,
+                toolName: msg['toolName'] as String? ?? '',
+                isDark: isDark,
+                fg: fg,
+                muted: muted,
+              ),
 
               // Action row (copy + retry) — shown after generation
               if (!isStreaming && (text.isNotEmpty || isError))
@@ -7132,7 +7114,7 @@ class _SelectTypeState extends State<SelectType>
                   color: _kAccent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Center(child: Icon(Broken.magic_star, size: 13, color: _kAccent)),
+                child: Center(child: Icon(Broken.cpu_setting, size: 13, color: _kAccent)),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -9397,6 +9379,296 @@ class _AgentMarkdownView extends StatelessWidget {
       data: markdown,
       shrinkWrap: true,
       config: config,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _ReplitStepBar — Replit-style Reflection & Step Trace drawer at bottom of agent message
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReplitStepBar extends StatefulWidget {
+  final String think;
+  final List<Map<String, dynamic>> calls;
+  final List<Map<String, dynamic>> blocks;
+  final bool isStreaming;
+  final String toolName;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  const _ReplitStepBar({
+    required this.think,
+    required this.calls,
+    required this.blocks,
+    required this.isStreaming,
+    required this.toolName,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  State<_ReplitStepBar> createState() => _ReplitStepBarState();
+}
+
+class _ReplitStepBarState extends State<_ReplitStepBar> {
+  bool _expanded = false;
+
+  static IconData _iconForTool(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('read') || lower.contains('list') || lower.contains('file')) return Broken.document_text;
+    if (lower.contains('write') || lower.contains('edit') || lower.contains('create')) return Broken.edit;
+    if (lower.contains('shell') || lower.contains('command') || lower.contains('terminal') || lower.contains('exec')) return Broken.command_square;
+    if (lower.contains('web') || lower.contains('search') || lower.contains('link') || lower.contains('http')) return Broken.global;
+    return Broken.code_1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final isRunning = widget.isStreaming;
+
+    // Collect thinking items and tool call items
+    final thinkTexts = <String>[];
+    if (widget.think.isNotEmpty) thinkTexts.add(widget.think);
+
+    final toolCalls = <Map<String, dynamic>>[];
+    if (widget.blocks.isNotEmpty) {
+      for (final b in widget.blocks) {
+        if (b['type'] == 'thinking' && (b['thinking'] as String? ?? '').isNotEmpty) {
+          thinkTexts.add(b['thinking'] as String);
+        } else if (b['type'] == 'toolCall') {
+          toolCalls.add(b);
+        }
+      }
+    } else {
+      toolCalls.addAll(widget.calls);
+    }
+
+    final combinedThink = thinkTexts.join('\n\n').trim();
+
+    if (combinedThink.isEmpty && toolCalls.isEmpty && !isRunning) {
+      return const SizedBox.shrink();
+    }
+
+    final bg = isDark ? const Color(0xff1e1e24) : const Color(0xfff4f4f8);
+    final border = isDark ? const Color(0xff333342) : const Color(0xffe0e0ea);
+    final purple = isDark ? const Color(0xffb388ff) : const Color(0xff7c4dff);
+
+    // Current status text for pulsing indicator
+    String activeStatusText = '';
+    if (isRunning) {
+      if (widget.toolName.isNotEmpty) {
+        if (widget.toolName.contains('search') || widget.toolName.contains('web')) {
+          activeStatusText = 'Recherche sur le web...';
+        } else if (widget.toolName.contains('command') || widget.toolName.contains('shell')) {
+          activeStatusText = 'Exécution de commande (${widget.toolName})...';
+        } else {
+          activeStatusText = 'Exécution de ${widget.toolName}...';
+        }
+      } else if (combinedThink.isNotEmpty) {
+        activeStatusText = 'Réflexion interne...';
+      } else {
+        activeStatusText = 'Génération...';
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Header Bar (Clickable Replit-style step bar) ──
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  // Brain Icon 🧠 / Icons.psychology
+                  Icon(Icons.psychology, size: 16, color: purple),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Réflexion & Étapes',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: purple,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Horizontal sequence of bullet icons for actions
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          if (combinedThink.isNotEmpty) ...[
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: purple.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.psychology, size: 11, color: purple),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'Pensée',
+                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: purple),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          ...toolCalls.map((call) {
+                            final name = call['name'] as String? ?? call['toolName'] as String? ?? '';
+                            final icon = _iconForTool(name);
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? Colors.grey[800] : Colors.grey[200])!,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(icon, size: 11, color: widget.fg),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      name,
+                                      style: TextStyle(fontSize: 9, fontFamily: 'monospace', color: widget.fg),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Pulsing Purple Indicator when running
+                  if (isRunning) ...[
+                    const SizedBox(width: 6),
+                    _PulsingPurpleDot(),
+                    const SizedBox(width: 4),
+                    Text(
+                      activeStatusText,
+                      style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: purple),
+                    ),
+                  ],
+
+                  const SizedBox(width: 6),
+                  Icon(
+                    _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                    size: 13,
+                    color: widget.muted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // ── Expanded Drawer Content ──
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Divider(height: 12),
+                  // Detailed Thinking Text
+                  if (combinedThink.isNotEmpty) ...[
+                    _ThinkingBlock(
+                      thinking: combinedThink,
+                      isDark: isDark,
+                      fg: widget.fg,
+                      muted: widget.muted,
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+
+                  // Tool Execution Trace
+                  if (toolCalls.isNotEmpty) ...[
+                    Text(
+                      'Tracé des outils exécutés :',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: widget.muted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    ...toolCalls.map((call) => _ToolCallBlock(
+                          toolName: call['name'] as String? ?? call['toolName'] as String? ?? '',
+                          args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
+                          result: call['result'] as String?,
+                          status: call['status'] as String? ?? 'done',
+                          isDark: isDark,
+                          fg: widget.fg,
+                          muted: widget.muted,
+                        )),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Pulsing purple dot animation for active generation / tool execution
+class _PulsingPurpleDot extends StatefulWidget {
+  @override
+  State<_PulsingPurpleDot> createState() => _PulsingPurpleDotState();
+}
+
+class _PulsingPurpleDotState extends State<_PulsingPurpleDot> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
+    _scale = Tween<double>(begin: 0.6, end: 1.2).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: const BoxDecoration(
+          color: Color(0xff9c27b0),
+          shape: BoxShape.circle,
+        ),
+      ),
     );
   }
 }

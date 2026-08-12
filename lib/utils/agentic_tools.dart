@@ -1846,7 +1846,9 @@ class AgenticTools {
 
   Future<ToolResult<List<WebResult>>> searchInWeb(String searchQuery) async {
     try {
-      final encodedQuery = Uri.encodeComponent(searchQuery.trim());
+      final cleanQuery = searchQuery.trim();
+      if (cleanQuery.isEmpty) return ToolResult.error('Query parameter cannot be empty');
+      final encodedQuery = Uri.encodeComponent(cleanQuery);
       final headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -1855,7 +1857,21 @@ class AgenticTools {
 
       final results = <WebResult>[];
 
-      // Primary: DuckDuckGo HTML endpoint
+      // Helper for cleaning HTML tags and unescaping entities
+      String cleanText(String input) {
+        if (input.isEmpty) return '';
+        var text = input.replaceAll(RegExp(r'<[^>]*>'), '');
+        text = text
+            .replaceAll('&quot;', '"')
+            .replaceAll('&amp;', '&')
+            .replaceAll('&#39;', "'")
+            .replaceAll('&lt;', '<')
+            .replaceAll('&gt;', '>')
+            .replaceAll('&nbsp;', ' ');
+        return text.trim();
+      }
+
+      // 1. Primary: DuckDuckGo HTML endpoint
       try {
         final url = "https://html.duckduckgo.com/html/?q=$encodedQuery";
         final response = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 8));
@@ -1869,8 +1885,8 @@ class AgenticTools {
 
             if (titleAnchor == null) continue;
 
-            final title = titleAnchor.text.trim();
-            final snippet = snippetEl?.text.trim() ?? '';
+            final title = cleanText(titleAnchor.text);
+            final snippet = cleanText(snippetEl?.text ?? '');
             String? realUrl;
 
             if (urlAnchor != null) {
@@ -1896,8 +1912,8 @@ class AgenticTools {
         debugPrint('searchInWeb Primary DDG HTML search failed: $e');
       }
 
-      // Fallback 1: DuckDuckGo Lite endpoint
-      if (results.isEmpty) {
+      // 2. Fallback / Source: DuckDuckGo Lite endpoint
+      if (results.length < 3) {
         try {
           final url = "https://lite.duckduckgo.com/lite/?q=$encodedQuery";
           final response = await http.get(Uri.parse(url), headers: headers).timeout(const Duration(seconds: 6));
@@ -1910,10 +1926,10 @@ class AgenticTools {
               final link = row.querySelector('a.result-link');
               final snippetTd = row.querySelector('td.result-snippet');
               if (link != null) {
-                lastTitle = link.text.trim();
+                lastTitle = cleanText(link.text);
                 lastUrl = link.attributes['href'] ?? '';
               } else if (snippetTd != null && lastTitle.isNotEmpty) {
-                results.add(WebResult(title: lastTitle, url: lastUrl, snippet: snippetTd.text.trim()));
+                results.add(WebResult(title: lastTitle, url: lastUrl, snippet: cleanText(snippetTd.text)));
                 lastTitle = '';
                 lastUrl = '';
               }
@@ -1924,8 +1940,90 @@ class AgenticTools {
         }
       }
 
-      // Fallback 2: GitHub Repository Search if query relates to code / github / packages
-      if (results.isEmpty && (searchQuery.contains('github') || searchQuery.contains('flutter') || searchQuery.contains('code') || searchQuery.contains('package'))) {
+      // 3. Fallback / Source: Wikipedia Search API (FR + EN)
+      if (results.length < 4) {
+        for (final lang in ['fr', 'en']) {
+          try {
+            final wikiUrl = "https://$lang.wikipedia.org/w/api.php?action=query&list=search&srsearch=$encodedQuery&format=json&origin=*";
+            final response = await http.get(Uri.parse(wikiUrl)).timeout(const Duration(seconds: 5));
+            if (response.statusCode == 200) {
+              final data = jsonDecode(response.body) as Map<String, dynamic>;
+              final searchList = (data['query']?['search'] as List?) ?? [];
+              for (final item in searchList.take(3)) {
+                final pageTitle = item['title']?.toString() ?? '';
+                final pageSnippet = cleanText(item['snippet']?.toString() ?? '');
+                if (pageTitle.isNotEmpty) {
+                  final wikiPageUrl = "https://$lang.wikipedia.org/wiki/${Uri.encodeComponent(pageTitle)}";
+                  results.add(WebResult(
+                    title: "$pageTitle - Wikipedia (${lang.toUpperCase()})",
+                    url: wikiPageUrl,
+                    snippet: pageSnippet,
+                  ));
+                }
+              }
+            }
+          } catch (e) {
+            debugPrint('searchInWeb Wikipedia $lang fallback failed: $e');
+          }
+        }
+      }
+
+      // 4. Fallback / Source: Pub.dev API (Flutter/Dart)
+      final lowerQuery = cleanQuery.toLowerCase();
+      if (results.length < 5 && (lowerQuery.contains('flutter') || lowerQuery.contains('dart') || lowerQuery.contains('pub') || lowerQuery.contains('package') || lowerQuery.contains('widget'))) {
+        try {
+          final pubUrl = "https://pub.dev/api/search?q=$encodedQuery";
+          final response = await http.get(Uri.parse(pubUrl)).timeout(const Duration(seconds: 5));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final packages = (data['packages'] as List?) ?? [];
+            for (final pkg in packages.take(3)) {
+              final pkgName = pkg['package']?.toString() ?? '';
+              if (pkgName.isNotEmpty) {
+                results.add(WebResult(
+                  title: "$pkgName | Pub.dev Package",
+                  url: "https://pub.dev/packages/$pkgName",
+                  snippet: "Package Dart/Flutter $pkgName disponible sur Pub.dev",
+                ));
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('searchInWeb Pub.dev API fallback failed: $e');
+        }
+      }
+
+      // 5. Fallback / Source: NPM Search API (JavaScript / Node)
+      if (results.length < 5 && (lowerQuery.contains('npm') || lowerQuery.contains('js') || lowerQuery.contains('react') || lowerQuery.contains('node') || lowerQuery.contains('ts'))) {
+        try {
+          final npmUrl = "https://registry.npmjs.org/-/v1/search?text=$encodedQuery&size=4";
+          final response = await http.get(Uri.parse(npmUrl)).timeout(const Duration(seconds: 5));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final objects = (data['objects'] as List?) ?? [];
+            for (final obj in objects) {
+              final pkg = obj['package'] as Map<String, dynamic>?;
+              if (pkg != null) {
+                final name = pkg['name']?.toString() ?? '';
+                final desc = cleanText(pkg['description']?.toString() ?? '');
+                final link = pkg['links']?['npm']?.toString() ?? "https://www.npmjs.com/package/$name";
+                if (name.isNotEmpty) {
+                  results.add(WebResult(
+                    title: "$name - NPM Package",
+                    url: link,
+                    snippet: desc,
+                  ));
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('searchInWeb NPM API fallback failed: $e');
+        }
+      }
+
+      // 6. Fallback / Source: GitHub Repository Search
+      if (results.isEmpty || lowerQuery.contains('github') || lowerQuery.contains('repo') || lowerQuery.contains('code')) {
         try {
           final ghUrl = "https://api.github.com/search/repositories?q=$encodedQuery&per_page=5";
           final ghHeaders = {...headers, 'Accept': 'application/vnd.github.v3+json'};
@@ -1937,7 +2035,7 @@ class AgenticTools {
               results.add(WebResult(
                 title: item['full_name']?.toString() ?? '',
                 url: item['html_url']?.toString() ?? '',
-                snippet: item['description']?.toString() ?? 'Dépôt GitHub',
+                snippet: cleanText(item['description']?.toString() ?? 'Dépôt GitHub'),
               ));
             }
           }
@@ -1946,17 +2044,33 @@ class AgenticTools {
         }
       }
 
-      if (results.isEmpty) {
+      // Deduplicate results by URL and title
+      final uniqueResults = <WebResult>[];
+      final seenUrls = <String>{};
+      final seenTitles = <String>{};
+
+      for (final res in results) {
+        final normUrl = res.url.trim().toLowerCase();
+        final normTitle = res.title.trim().toLowerCase();
+        if (normUrl.isEmpty || seenUrls.contains(normUrl) || (normTitle.isNotEmpty && seenTitles.contains(normTitle))) {
+          continue;
+        }
+        seenUrls.add(normUrl);
+        if (normTitle.isNotEmpty) seenTitles.add(normTitle);
+        uniqueResults.add(res);
+      }
+
+      if (uniqueResults.isEmpty) {
         return ToolResult.success([
           WebResult(
             title: 'Aucun résultat web direct',
             url: 'https://duckduckgo.com/?q=$encodedQuery',
-            snippet: 'Aucun résultat direct pour "$searchQuery".',
+            snippet: 'Aucun résultat direct pour "$cleanQuery".',
           )
         ]);
       }
 
-      return ToolResult.success(results);
+      return ToolResult.success(uniqueResults);
     } catch (e) {
       return ToolResult.error('Erreur lors de la recherche web: $e');
     }
