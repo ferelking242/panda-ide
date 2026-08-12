@@ -69,18 +69,29 @@ jobs:
           set -euo pipefail
           [ "${PANDA_LFS_FALLBACK:-false}" = "true" ] || exit 0
           python3 - <<'PY'
+          import re
           from pathlib import Path
 
-          path = Path("android/app/build.gradle.kts")
-          source = path.read_text()
-          start = source.find("    dynamicFeatures.addAll(")
-          if start == -1:
+          app_gradle = Path("android/app/build.gradle.kts")
+          app_source = app_gradle.read_text()
+          start = app_source.find("    dynamicFeatures.addAll(")
+          end = app_source.find("\n    )\n", start)
+          if start == -1 or end == -1:
               raise SystemExit("dynamicFeatures block not found")
-          end = source.find("\n    )\n", start)
-          if end == -1:
-              raise SystemExit("dynamicFeatures block end not found")
-          path.write_text(source[:start] + source[end + len("\n    )\n"):])
-          print("Disabled dynamic feature packaging for the LFS fallback build.")
+          app_gradle.write_text(app_source[:start] + app_source[end + len("\n    )\n"):])
+
+          settings_gradle = Path("android/settings.gradle.kts")
+          settings_source = settings_gradle.read_text()
+          settings_source, removed = re.subn(
+              r'^\s*(?:include|project)\(":app:[^"]+_feature"\).*\n?',
+              "",
+              settings_source,
+              flags=re.MULTILINE,
+          )
+          if removed == 0:
+              raise SystemExit("dynamic feature includes not found")
+          settings_gradle.write_text(settings_source)
+          print(f"Disabled {removed} dynamic feature declarations for the LFS fallback build.")
           PY
 
       - name: Set up Java JDK
