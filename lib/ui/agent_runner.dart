@@ -312,7 +312,8 @@ $toolLines
 ====
 ## PROCESSUS DE RÉFLEXION INTERNE
 Avant chaque action ou réponse, formule ta réflexion interne pour analyser la demande de l'utilisateur, vérifier les noms de fichiers/dépôts et planifier les étapes.
-Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront automatiquement extraites et affichées dans la bulle de réflexion dédiée.
+- **Règle importante pour le titre de réflexion :** La toute première ligne de ta réflexion doit être une phrase ou un titre très court, clair et d'action explicite (ex: "Analyse de la demande...", "Recherche des fichiers dans lib/...", "Modification du composant UI...", "Exécution du build et vérification...").
+- Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront automatiquement extraites et affichées dans la zone de réflexion dédiée.
 
 ====
 ## FORMAT ET STYLE DE RÉPONSE

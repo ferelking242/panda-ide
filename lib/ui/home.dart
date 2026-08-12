@@ -8528,15 +8528,19 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
     // Dynamic title from first line of thinking
     final lines = cleanThinking
         .split('\n')
-        .map((l) => l.trim().replaceAll(RegExp(r'^[#*-\s>]+'), '').trim())
+        .map((l) => l.trim().replaceAll(RegExp(r'^[#*-\s>]+'), '').replaceAll(RegExp(r'`+'), '').trim())
         .where((l) => l.isNotEmpty)
         .toList();
 
-    String title = 'Pensée de l\'agent';
+    String title = 'Réflexion';
     if (lines.isNotEmpty) {
-      final candidate = lines.first;
-      if (candidate.length >= 3) {
-        title = candidate.length > 60 ? '${candidate.substring(0, 60)}\u2026' : candidate;
+      final candidate = lines.firstWhere(
+        (l) => !l.startsWith('{') && !l.startsWith('[') && !l.contains('":') && l.length >= 3,
+        defaultValue: () => lines.first,
+      );
+      final cleanCandidate = candidate.replaceAll(RegExp(r'^["' "'" r']+|["' "'" r']+$'), '').trim();
+      if (cleanCandidate.isNotEmpty) {
+        title = cleanCandidate.length > 55 ? '${cleanCandidate.substring(0, 55)}\u2026' : cleanCandidate;
       }
     }
 
