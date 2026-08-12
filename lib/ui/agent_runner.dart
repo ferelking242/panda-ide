@@ -412,7 +412,7 @@ Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront 
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites}
+    {required bool allowWrites, String agentMode = 'agent'}
   ) async {
     final conversationMessages = <Map<String, dynamic>>[
       <String, dynamic>{'role': 'system', 'content': systemPrompt},
@@ -518,6 +518,7 @@ Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront 
           name,
           args,
           allowWrites: allowWrites,
+          agentMode: agentMode,
         )
             .timeout(const Duration(seconds: 45), onTimeout: () {
           PandaLog.w('Gemini', 'Tool $name timed out after 45 s');
@@ -552,7 +553,7 @@ Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront 
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites}
+    {required bool allowWrites, String agentMode = 'agent'}
   ) async {
     final conversationMessages = <Map<String, dynamic>>[
       <String, dynamic>{'role': 'system', 'content': systemPrompt},
@@ -736,6 +737,7 @@ Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront 
           functionName,
           args,
           allowWrites: allowWrites,
+          agentMode: agentMode,
         )
             .timeout(const Duration(seconds: 45), onTimeout: () {
           PandaLog.w('SSE', 'Tool $functionName timed out after 45 s');
@@ -762,7 +764,7 @@ Si tu utilises des balises de réflexion (ex: <think>...</think>), elles seront 
     AgenticTools tools,
     String functionName,
     Map<String, dynamic> args,
-    {required bool allowWrites}
+    {required bool allowWrites, String agentMode = 'agent'}
   ) async {
     try {
       const mutatingTools = {

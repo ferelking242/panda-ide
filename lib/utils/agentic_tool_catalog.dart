@@ -160,7 +160,7 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     AgenticToolSpec(
     name: 'requestSecret',
     label: 'Demander un secret / clé API',
-    description: 'Demande à l'utilisateur de saisir un secret ou une clé API manquante via une boîte de dialogue interactive.',
+    description: "Demande à l'utilisateur de saisir un secret ou une clé API manquante via une boîte de dialogue interactive.",
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
@@ -178,7 +178,7 @@ const List<AgenticToolSpec> agenticToolSpecs = [
   AgenticToolSpec(
     name: 'createCheckpoint',
     label: 'Créer un point de sauvegarde',
-    description: 'Crée un instantané / checkpoint de l'état actuel du projet dans .panda/checkpoints/.',
+    description: "Crée un instantané / checkpoint de l'état actuel du projet dans .panda/checkpoints/.",
     requiresWriteAccess: true,
   ),
   AgenticToolSpec(

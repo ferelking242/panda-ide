@@ -6019,7 +6019,7 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Future<void> _approveAndExecutePlan(String planContent) async {
-    final workspacePath = _activeWorkspacePath;
+    final workspacePath = _currentWorkspaceDir ?? _activeProjectDir() ?? '';
     if (workspacePath.isNotEmpty) {
       try {
         final pandaDir = Directory('$workspacePath/.panda');
@@ -6041,7 +6041,7 @@ class _SelectTypeState extends State<SelectType>
 
   void _openPlanEditorDialog(String initialPlan) {
     final ctrl = TextEditingController(text: initialPlan);
-    final isDark = _appTheme.isDark;
+    final isDark = context.read<AppThemeBloc>().state.appTheme.isDark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -6103,7 +6103,7 @@ class _SelectTypeState extends State<SelectType>
       ];
     } else if (_agentChatMode == 'ask') {
       suggestions = const [
-        ('❓ Expliquer l\'architecture', 'Peux-tu m'expliquer l'architecture globale de ce projet ?'),
+        ('❓ Expliquer l\'architecture', "Peux-tu m'expliquer l'architecture globale de ce projet ?"),
         ('⚡ Optimiser les performances', 'Quelles sont les opportunités d\'optimisation de performance dans ce projet ?'),
         ('🐛 Détecter les bugs', 'Analyse le code pour identifier d\'éventuels bugs ou failles de sécurité.'),
         ('📁 Points d\'entrée', 'Où se trouve le point d\'entrée principal et comment fonctionne le flux de données ?'),
@@ -6111,7 +6111,7 @@ class _SelectTypeState extends State<SelectType>
     } else {
       suggestions = const [
         ('🚀 Flutter analyze / build', 'Exécute la commande de vérification du code et analyse les erreurs éventuelles.'),
-        ('📝 Générer le README', 'Génère un fichier README.md complet documentant l'installation et l'utilisation.'),
+        ('📝 Générer le README', "Génère un fichier README.md complet documentant l'installation et l'utilisation."),
         ('🧪 Créer les tests', 'Crée des tests unitaires pour les composants principaux du projet.'),
         ('🧹 Nettoyer le code', 'Vérifie et nettoie le code pour respecter les meilleures pratiques.'),
       ];
@@ -9226,6 +9226,78 @@ class _PlanApprovalCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Agent Chat Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _UserMessageBubble extends StatelessWidget {
+  final String text;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  const _UserMessageBubble({
+    required this.text,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xff2d2d2d) : const Color(0xffe2e8f0),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(color: fg, fontSize: 13),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgentMarkdownView extends StatelessWidget {
+  final String markdown;
+  final bool isDark;
+  final Color fg;
+  final bool isError;
+  final bool isStreaming;
+
+  const _AgentMarkdownView({
+    required this.markdown,
+    required this.isDark,
+    required this.fg,
+    required this.isError,
+    required this.isStreaming,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isError) {
+      return Text(
+        markdown,
+        style: TextStyle(color: Colors.red[400], fontSize: 13),
+      );
+    }
+    if (markdown.isEmpty && isStreaming) {
+      return const SizedBox.shrink();
+    }
+    return MarkdownWidget(
+      data: markdown,
+      shrinkWrap: true,
+      config: isDark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig,
     );
   }
 }
