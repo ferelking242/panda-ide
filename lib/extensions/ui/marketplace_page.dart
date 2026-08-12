@@ -825,21 +825,22 @@ class _ExtensionDetailOverlay extends StatefulWidget {
 }
 
 class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late AnimationController _anim;
-  late Animation<Offset>   _slide;
-
+  late Animation<Offset> _slide;
+  late TabController _tabController;
   String? _readme;
-  bool    _readmeLoading = true;
+  bool _readmeLoading = true;
   late _InstallState _installState;
 
   @override
   void initState() {
     super.initState();
     _installState = widget.installState;
-    _anim  = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
+    _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
     _slide = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
         .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
+    _tabController = TabController(length: 4, vsync: this);
     _anim.forward();
     _loadReadme();
   }
@@ -847,6 +848,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
   @override
   void dispose() {
     _anim.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -881,10 +883,10 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-    final ext   = widget.ext;
-    final alreadyInstalled = ExtensionRegistry.instance.isInstalled(ext.id) ||
-        _installState == _InstallState.installed;
+    final cs = theme.colorScheme;
+    final ext = widget.ext;
+    final installedExt = ExtensionRegistry.instance.get(ext.id);
+    final alreadyInstalled = installedExt != null || _installState == _InstallState.installed;
 
     return SlideTransition(
       position: _slide,
@@ -892,7 +894,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
         color: theme.scaffoldBackgroundColor,
         child: Column(
           children: [
-            // ── Bar ──────────────────────────────────────────────────────
+            // Top Navigation Bar
             Container(
               height: 44,
               color: theme.scaffoldBackgroundColor,
@@ -900,8 +902,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
               child: Row(
                 children: [
                   IconButton(
-                    icon: Icon(Icons.arrow_back_ios_new_rounded,
-                        size: 18, color: cs.onSurface),
+                    icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: cs.onSurface),
                     onPressed: _close,
                     tooltip: 'Back',
                   ),
@@ -915,44 +916,55 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (alreadyInstalled)
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, size: 20),
+                      tooltip: 'Extension Settings',
+                      onPressed: () {
+                        if (installedExt != null && context.mounted) {
+                          Navigator.push(context, MaterialPageRoute(
+                            builder: (_) => ExtensionSettingsPage(extension: installedExt),
+                          ));
+                        }
+                      },
+                    ),
                 ],
               ),
             ),
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
 
-            // ── Scrollable body ───────────────────────────────────────────
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
+            // Hero Header Section
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Hero
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(10),
-                        child: ext.iconUrl != null
-                            ? Image.network(ext.iconUrl!, width: 72, height: 72,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 72))
-                            : _DefaultExtIcon(size: 72),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: ext.iconUrl != null
+                        ? Image.network(ext.iconUrl!, width: 64, height: 64,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 64))
+                        : _DefaultExtIcon(size: 64),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(ext.namespace,
+                            style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
+                        const SizedBox(height: 8),
+                        Row(
                           children: [
-                            Text(
-                              ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: cs.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(ext.namespace,
-                                style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
-                            const SizedBox(height: 8),
                             if (alreadyInstalled)
                               _OutlineBadge(
                                 icon: Icons.check_circle_rounded,
@@ -960,9 +972,9 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                                 color: cs.primary,
                               )
                             else if (_installState == _InstallState.installing)
-                              SizedBox(
-                                width: 24, height: 24,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
+                              const SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
                               )
                             else
                               FilledButton.icon(
@@ -970,74 +982,200 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                                 icon: const Icon(Icons.download_rounded, size: 16),
                                 label: const Text('Install'),
                                 style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                                 ),
                               ),
                           ],
                         ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // TabBar (VSCode Style)
+            TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
+              tabs: const [
+                Tab(text: 'Details'),
+                Tab(text: 'Contributions'),
+                Tab(text: 'Settings ⚙️'),
+                Tab(text: 'Usage & F5 💡'),
+              ],
+            ),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
+
+            // TabBar View Body
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // Tab 1: Details (Overview + README)
+                  ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      Text(ext.description,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                              color: cs.onSurface.withValues(alpha: 0.85))),
+                      const SizedBox(height: 16),
+                      _StatsRow(ext: ext),
+                      const SizedBox(height: 16),
+                      _InfoTile(label: 'Publisher', value: ext.namespace),
+                      _InfoTile(label: 'Version', value: ext.version),
+                      if (ext.license != null && ext.license!.isNotEmpty)
+                        _InfoTile(label: 'License', value: ext.license!),
+                      if (ext.categories.isNotEmpty)
+                        _InfoTile(label: 'Categories', value: ext.categories.join(', ')),
+                      if (_readmeLoading) ...[
+                        const SizedBox(height: 24),
+                        const Center(child: CircularProgressIndicator()),
+                      ] else if (_readme != null && _readme!.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
+                        const SizedBox(height: 12),
+                        _MarkdownText(source: _readme!),
+                      ],
+                    ],
+                  ),
+
+                  // Tab 2: Contributions
+                  ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      Text('Contributed Features',
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text('Features and capabilities registered by this extension in package.json.',
+                          style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6))),
+                      const SizedBox(height: 16),
+                      if (installedExt != null) ...[
+                        _buildContributionCategory(
+                          context,
+                          'Commands (${installedExt.manifest.contributes.commands.length})',
+                          Icons.terminal,
+                          installedExt.manifest.contributes.commands.map((c) =>
+                              '• ${c["title"] ?? c["command"]} (${c["command"]})').toList(),
+                        ),
+                        _buildContributionCategory(
+                          context,
+                          'Configuration Settings (${installedExt.manifest.contributes.configuration.length})',
+                          Icons.settings,
+                          installedExt.manifest.contributes.configuration.map((s) =>
+                              '• ${s["title"] ?? "Setting"}').toList(),
+                        ),
+                        _buildContributionCategory(
+                          context,
+                          'Languages & Grammars (${installedExt.manifest.contributes.languages.length})',
+                          Icons.code,
+                          installedExt.manifest.contributes.languages.map((l) =>
+                              '• ${l["id"] ?? "Language"}').toList(),
+                        ),
+                      ] else ...[
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(
+                              'Install this extension to inspect all contributed commands, grammars, and settings.',
+                              style: TextStyle(color: cs.onSurfaceVariant),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  // Tab 3: Settings
+                  ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (installedExt != null) ...[
+                        Text('Extension Settings',
+                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => ExtensionSettingsPage(extension: installedExt),
+                            ));
+                          },
+                          icon: const Icon(Icons.tune),
+                          label: const Text('Open Full Extension Settings Page'),
+                        ),
+                      ] else ...[
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.settings_suggest, size: 48, color: cs.primary),
+                                const SizedBox(height: 12),
+                                const Text('No active settings', style: TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                const Text('Install extension to configure its options.', style: TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  // Tab 4: Usage & F5 Guide
+                  ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      Text('How to Use Installed Extensions in Panda IDE',
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.touch_app, color: Colors.blueAccent),
+                                  SizedBox(width: 8),
+                                  Text('Workspace Box & Command Palette', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              SizedBox(height: 6),
+                              Text('• Tap the Workspace Box at the top of Panda IDE to open the Command Palette.
+• Type ">" to search and run any command registered by this extension.'),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.play_circle_fill, color: Colors.green),
+                                  SizedBox(width: 8),
+                                  Text('Running & Debugging (No F5 Needed)', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                              SizedBox(height: 6),
+                              Text('• Open the EXÉCUTER / DEBUG panel in the left sidebar.
+• Tap ▶ Start Debugging or ⚡ Hot Reload directly without needing a physical keyboard F5 key.'),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-
-                  // Description
-                  Text(ext.description,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.85))),
-                  const SizedBox(height: 16),
-
-                  // Stats
-                  _StatsRow(ext: ext),
-                  const SizedBox(height: 16),
-
-                  // Meta
-                  _InfoTile(label: 'Publisher', value: ext.namespace),
-                  _InfoTile(label: 'Version',   value: ext.version),
-                  if (ext.license != null && ext.license!.isNotEmpty)
-                    _InfoTile(label: 'License', value: ext.license!),
-                  if (ext.categories.isNotEmpty)
-                    _InfoTile(label: 'Categories', value: ext.categories.join(', ')),
-                  if (ext.tags.isNotEmpty)
-                    _InfoTile(label: 'Tags', value: ext.tags.take(8).join(', ')),
-                  if (ext.repository != null && ext.repository!.isNotEmpty)
-                    _InfoTile(label: 'Repository', value: ext.repository!),
-
-                  // Settings / uninstall (if installed)
-                  if (alreadyInstalled) ...[
-                    const SizedBox(height: 12),
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        final installed = ExtensionRegistry.instance.get(ext.id);
-                        if (installed != null && context.mounted) {
-                          Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ExtensionSettingsPage(extension: installed),
-                          ));
-                        }
-                      },
-                      icon: const Icon(Icons.settings_outlined, size: 16),
-                      label: const Text('Extension Settings'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: null,
-                      icon: const Icon(Icons.delete_outline, size: 16),
-                      label: const Text('Uninstall'),
-                      style: OutlinedButton.styleFrom(foregroundColor: cs.error),
-                    ),
-                  ],
-
-                  // README
-                  if (_readmeLoading) ...[
-                    const SizedBox(height: 24),
-                    const Center(child: CircularProgressIndicator()),
-                  ] else if (_readme != null && _readme!.isNotEmpty) ...[
-                    const SizedBox(height: 20),
-                    Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
-                    const SizedBox(height: 12),
-                    _MarkdownText(source: _readme!),
-                  ],
-
-                  const SizedBox(height: 32),
                 ],
               ),
             ),
@@ -1046,9 +1184,24 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
       ),
     );
   }
+
+  Widget _buildContributionCategory(BuildContext context, String title, IconData icon, List<String> items) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ExpansionTile(
+        leading: Icon(icon, size: 20),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        children: items.map((item) => ListTile(
+          dense: true,
+          title: Text(item, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
+        )).toList(),
+      ),
+    );
+  }
 }
 
-// ── Stats row ──────────────────────────────────────────────────────────────────
+
 class _StatsRow extends StatelessWidget {
   final MarketplaceExtension ext;
   const _StatsRow({required this.ext});

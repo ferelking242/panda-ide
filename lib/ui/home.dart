@@ -2238,27 +2238,158 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Debug panel ───────────────────────────────────────────────────────────
   Widget _sidebarDebug(BuildContext ctx, AppTheme t, bool dark) {
+    final fg = dark ? Colors.grey[200]! : Colors.grey[800]!;
+    final cardBg = dark ? const Color(0xff2d2d2d) : const Color(0xffffffff);
+
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       children: [
+        // Launch configuration selector header
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: dark ? const Color(0xff3c3c3c) : const Color(0xffdddddd)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.bug_report_outlined, size: 16, color: Colors.greenAccent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _currentWorkspaceName != null ? 'Launch Target: Auto' : 'No Active Workspace',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Starting debug session... (Auto launch config applied)')),
+                    );
+                  },
+                  icon: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
+                  label: const Text('Start Debugging (▶)'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green[700],
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('⚡ Hot Reload triggered')),
+                        );
+                      },
+                      icon: const Icon(Icons.bolt, size: 14, color: Colors.amber),
+                      label: const Text('Hot Reload', style: TextStyle(fontSize: 11)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('🔄 Hot Restart triggered')),
+                        );
+                      },
+                      icon: const Icon(Icons.refresh, size: 14, color: Colors.blueLight),
+                      label: const Text('Restart', style: TextStyle(fontSize: 11)),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // Quick Tools Cards
         _panelItem(ctx, t, Broken.cpu, 'Ouvrir le terminal',
             () => _push(ctx, SetupTerminal(
                   projectDir: homeDir,
                   sshId: null,
                   termuxId: null,
                 ))),
-        _panelItem(ctx, t, Broken.play_circle, 'Exécuter un fichier…',
+        _panelItem(ctx, t, Broken.play_circle, 'Exécuter le fichier actif…',
             () => _doOpenFile(ctx)),
-        const Divider(indent: 12, endIndent: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Text(
-            'Ouvrez un projet pour accéder aux configurations de lancement.',
-            style: TextStyle(
-                fontSize: 12,
-                color: dark ? Colors.grey[500] : Colors.grey[600]),
+
+        const SizedBox(height: 12),
+        const Divider(height: 1),
+        const SizedBox(height: 12),
+
+        // Call Stack & Breakpoints Section
+        Text('INSPECTION & VARIABLES',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: dark ? Colors.grey[500] : Colors.grey[600], letterSpacing: 1.1)),
+        const SizedBox(height: 8),
+
+        Card(
+          color: cardBg,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: dark ? const Color(0xff3c3c3c) : const Color(0xffdddddd)),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const ExpansionTile(
+            dense: true,
+            leading: Icon(Icons.data_object, size: 16),
+            title: Text('Variables (Local & Global)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            children: [
+              ListTile(
+                dense: true,
+                title: Text('No active debug session variables', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              ),
+            ],
           ),
         ),
+
+        const SizedBox(height: 6),
+
+        Card(
+          color: cardBg,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: dark ? const Color(0xff3c3c3c) : const Color(0xffdddddd)),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const ExpansionTile(
+            dense: true,
+            leading: Icon(Icons.circle_notifications_outlined, size: 16, color: Colors.redAccent),
+            title: Text('Breakpoints', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            children: [
+              ListTile(
+                dense: true,
+                title: Text('All Exceptions (Uncaught)', style: TextStyle(fontSize: 11)),
+                trailing: Icon(Icons.check_box, size: 16, color: Colors.blue),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
       ],
     );
   }
@@ -3024,25 +3155,26 @@ class _SelectTypeState extends State<SelectType>
         final Offset off = box.localToGlobal(Offset.zero);
         final pos = RelativeRect.fromLTRB(
             off.dx, off.dy + box.size.height, off.dx + box.size.width, 0);
+
         showMenu<String>(
           context: ctx,
           position: pos,
           color: bg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
           items: [
             // ── Current workspace header ────────────────────────────────
             if (_currentWorkspaceName != null) ...[
               PopupMenuItem<String>(
                 enabled: false, height: 28,
                 child: Row(children: [
-                  Icon(Broken.folder_open, size: 13,
+                  Icon(Broken.folder_open, size: 14,
                       color: isDark ? Colors.blue[300]! : Colors.blue[700]!),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   Flexible(child: Text(
                     _currentWorkspaceName!,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 11, fontWeight: FontWeight.w600,
+                        fontSize: 12, fontWeight: FontWeight.w700,
                         color: isDark ? Colors.blue[200]! : Colors.blue[800]!),
                   )),
                 ]),
@@ -3052,40 +3184,96 @@ class _SelectTypeState extends State<SelectType>
                   Icon(Broken.close_circle, size: 14, color: Colors.red[400]),
                   const SizedBox(width: 8),
                   Text('Fermer le projet',
-                      style: TextStyle(fontSize: 13, color: Colors.red[400])),
+                      style: TextStyle(fontSize: 12, color: Colors.red[400])),
                 ])),
               const PopupMenuDivider(height: 6),
             ],
+
+            // ── VSCode-Style Command Palette & Core Actions ───────────
             PopupMenuItem<String>(
-              enabled: false, height: 28,
-              child: Text('ESPACE DE TRAVAIL',
+              enabled: false, height: 24,
+              child: Text('COMMANDE & RACCOURCIS',
                   style: TextStyle(
                       fontSize: 10, fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2,
+                      letterSpacing: 1.1,
+                      color: isDark ? Colors.grey[500]! : Colors.grey[600]!)),
+            ),
+            PopupMenuItem<String>(value: 'command_palette', height: 36,
+              child: Row(children: [
+                Icon(Icons.terminal, size: 16, color: Colors.amber[400]),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Palette de commandes...',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg)),
+                      Text('Exécuter actions & extensions (">")',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                    ],
+                  ),
+                ),
+              ])),
+            PopupMenuItem<String>(value: 'run_debug', height: 34,
+              child: Row(children: [
+                const Icon(Icons.play_circle_fill, size: 16, color: Colors.greenAccent),
+                const SizedBox(width: 10),
+                Text('Exécuter / Déboguer (▶ / ⚡)', style: TextStyle(fontSize: 12, color: fg)),
+              ])),
+            PopupMenuItem<String>(value: 'global_search', height: 34,
+              child: Row(children: [
+                Icon(Broken.search_normal_1, size: 16, color: fg),
+                const SizedBox(width: 10),
+                Text('Recherche Globale (Ctrl+Shift+F)', style: TextStyle(fontSize: 12, color: fg)),
+              ])),
+            PopupMenuItem<String>(value: 'marketplace', height: 34,
+              child: Row(children: [
+                Icon(Broken.category, size: 16, color: fg),
+                const SizedBox(width: 10),
+                Text('Extensions & Marketplace', style: TextStyle(fontSize: 12, color: fg)),
+              ])),
+            const PopupMenuDivider(height: 6),
+
+            // ── File & Project Operations ─────────────────────────────
+            PopupMenuItem<String>(
+              enabled: false, height: 24,
+              child: Text('PROJET & FICHIERS',
+                  style: TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.w700,
+                      letterSpacing: 1.1,
                       color: isDark ? Colors.grey[500]! : Colors.grey[600]!)),
             ),
             PopupMenuItem<String>(value: 'open_folder', height: 32,
               child: Row(children: [
                 Icon(Broken.folder_open, size: 15, color: fg),
-                const SizedBox(width: 8),
-                Text('Ouvrir un dossier…', style: TextStyle(fontSize: 13, color: fg)),
+                const SizedBox(width: 10),
+                Text('Ouvrir un dossier…', style: TextStyle(fontSize: 12, color: fg)),
               ])),
             PopupMenuItem<String>(value: 'open_file', height: 32,
               child: Row(children: [
                 Icon(Broken.document, size: 15, color: fg),
-                const SizedBox(width: 8),
-                Text('Ouvrir un fichier…', style: TextStyle(fontSize: 13, color: fg)),
+                const SizedBox(width: 10),
+                Text('Ouvrir un fichier…', style: TextStyle(fontSize: 12, color: fg)),
               ])),
             PopupMenuItem<String>(value: 'new_project', height: 32,
               child: Row(children: [
                 Icon(Broken.folder_add, size: 15, color: fg),
-                const SizedBox(width: 8),
-                Text('Nouveau projet…', style: TextStyle(fontSize: 13, color: fg)),
+                const SizedBox(width: 10),
+                Text('Nouveau projet…', style: TextStyle(fontSize: 12, color: fg)),
               ])),
           ],
         ).then((value) {
           if (value == null) return;
-          if (value == 'close_workspace') {
+          if (value == 'command_palette') {
+            CommandPalette.show(ctx);
+          } else if (value == 'run_debug') {
+            setState(() { _activeRail = 4; _sidebarState = 2; });
+          } else if (value == 'global_search') {
+            setState(() { _activeRail = 2; _sidebarState = 2; });
+          } else if (value == 'marketplace') {
+            setState(() { _activeRail = 6; _sidebarState = 2; });
+          } else if (value == 'close_workspace') {
             setState(() {
               _currentWorkspaceDir  = null;
               _currentWorkspaceName = null;
@@ -3100,7 +3288,6 @@ class _SelectTypeState extends State<SelectType>
         });
       }
 
-      // ── Branch picker ────────────────────────────────────────────────────────
       void _showBranchPicker(BuildContext ctx, bool isDark, AppTheme appTheme,
           RepoStatusLoaded repoState) {
         final fg   = isDark ? Colors.grey[200]! : Colors.grey[800]!;
