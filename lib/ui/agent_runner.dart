@@ -314,12 +314,11 @@ $toolLines
 8. **En Mode Ask** → NE TENTE PAS d'exécuter de commande shell ni de modifier de fichier. Indique la démarche et propose le passage en Mode Agent.
 
 ====
-## PROCESSUS DE RÉFLEXION INTERNE OBLIGATOIRE
-OBLIGATOIRE : Tu DOIS TOUJOURS commencer TOUTE réponse ou action par une balise de réflexion enveloppée dans <think>...</think>.
-Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoirement générer la balise <think> avec ta réflexion complète avant toute action ou réponse.
-- **Règle absolue pour le titre (1ère ligne) :** La TOUTE PREMIÈRE LIGNE immédiatement après <think> DOIT être un titre ou une phrase d'action courte et explicite (ex: "Analyse de la demande utilisateur...", "Inspection des fichiers du projet...", "Résolution des erreurs...", "Exécution de la commande de vérification...").
-- **Structure :** Développe ton analyse, tes hypothèses et ton plan d'action de manière fluide et structurée.
-- Ferme obligatoirement avec </think> avant de procéder aux réponses ou appels d'outils.
+## PROCESSUS DE RÉFLEXION INTERNE
+- Si le provider supporte un "thinking mode" natif (Claude extended thinking, Gemini thinking, o1/o3 reasoning), utilise-le.
+- Sinon, garde ta réflexion interne courte et structurée, sans la rendre visible dans la réponse finale.
+- Priorité : réfléchir correctement, puis produire une réponse claire et utile en français.
+- N'inclue pas de contenu de réflexion brute dans le texte visible.
 
 ====
 ## FORMAT ET STYLE DE RÉPONSE
@@ -342,6 +341,7 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
     String approvalMode = 'default',
   }) async {
     _client = http.Client();
+    bool terminalError = false;
     try {
       // Tools are always available in agent and ask modes.
       // Only 'normal' (free conversation) mode disables them entirely.
@@ -405,6 +405,7 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
         );
       }
     } catch (e) {
+      terminalError = true;
       PandaLog.e('AgentRunner', 'Uncaught error in _run', error: e);
       if (!ctrl.isClosed) {
         ctrl.add(AgentChunk(phase: AgentPhase.error, text: e.toString()));
@@ -413,6 +414,9 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
       _client?.close();
       _client = null;
       PandaLog.i('AgentRunner', 'Run complete');
+      if (!terminalError && !ctrl.isClosed) {
+        ctrl.add(const AgentChunk(phase: AgentPhase.done, text: ''));
+      }
       await ctrl.close();
     }
   }
@@ -1016,8 +1020,38 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
     return actionTerms.any(lowered.contains);
   }
 
+  static (String, String) _extractThinkingTags(String text) {
+    final matches = RegExp(r'<think>([\s\S]*?)</think>').allMatches(text);
+    if (matches.isEmpty) {
+      return ('', text);
+    }
+
+    final thinkingParts = <String>[];
+    String cleaned = text;
+    for (final match in matches.toList().reversed) {
+      final value = match.group(1)?.trim() ?? '';
+      if (value.isNotEmpty) {
+        thinkingParts.add(value);
+      }
+      cleaned = cleaned.replaceRange(match.start, match.end, '');
+    }
+
+    return (thinkingParts.join('\n').trim(), cleaned.trim());
+  }
+
   static List<AgentChunk> parseSsePayload(Map<String, dynamic> payload) {
     final chunks = <AgentChunk>[];
+
+    void addTextChunk(String text) {
+      if (text.trim().isEmpty) return;
+      final (thinking, cleaned) = _extractThinkingTags(text);
+      if (thinking.isNotEmpty) {
+        chunks.add(AgentChunk(phase: AgentPhase.thinking, text: thinking));
+      }
+      if (cleaned.isNotEmpty) {
+        chunks.add(AgentChunk(phase: AgentPhase.streaming, text: cleaned));
+      }
+    }
 
     final choices = payload['choices'];
     if (choices is List && choices.isNotEmpty) {
@@ -1027,15 +1061,15 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
         if (delta is Map) {
           final content = delta['content'];
           if (content is String && content.isNotEmpty) {
-            chunks.add(AgentChunk(phase: AgentPhase.streaming, text: content));
+            addTextChunk(content);
           } else if (content is List) {
             for (final item in content) {
               if (item is String && item.isNotEmpty) {
-                chunks.add(AgentChunk(phase: AgentPhase.streaming, text: item));
+                addTextChunk(item);
               } else if (item is Map) {
                 final text = item['text']?.toString();
                 if (text != null && text.isNotEmpty) {
-                  chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+                  addTextChunk(text);
                 }
               }
             }
@@ -1051,15 +1085,15 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
         if (message is Map) {
           final content = message['content'];
           if (content is String && content.isNotEmpty) {
-            chunks.add(AgentChunk(phase: AgentPhase.streaming, text: content));
+            addTextChunk(content);
           } else if (content is List) {
             for (final item in content) {
               if (item is String && item.isNotEmpty) {
-                chunks.add(AgentChunk(phase: AgentPhase.streaming, text: item));
+                addTextChunk(item);
               } else if (item is Map) {
                 final text = item['text']?.toString();
                 if (text != null && text.isNotEmpty) {
-                  chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+                  addTextChunk(text);
                 }
               }
             }
@@ -1079,7 +1113,7 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
             if (part is Map) {
               final text = part['text']?.toString();
               if (text != null && text.isNotEmpty) {
-                chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+                addTextChunk(text);
               }
             }
           }
@@ -1090,7 +1124,7 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
 
     final content = payload['content'];
     if (content is String && content.isNotEmpty) {
-      chunks.add(AgentChunk(phase: AgentPhase.streaming, text: content));
+      addTextChunk(content);
       return chunks;
     }
     if (content is List) {
@@ -1098,10 +1132,10 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
         if (item is Map) {
           final text = item['text']?.toString();
           if (text != null && text.isNotEmpty) {
-            chunks.add(AgentChunk(phase: AgentPhase.streaming, text: text));
+            addTextChunk(text);
           }
         } else if (item is String && item.isNotEmpty) {
-          chunks.add(AgentChunk(phase: AgentPhase.streaming, text: item));
+          addTextChunk(item);
         }
       }
     }
@@ -1113,7 +1147,7 @@ Même si le modèle n'a pas de système de pensée natif, tu DOIS obligatoiremen
         final dtType = dt['type']?.toString() ?? '';
         if (dtType == 'text_delta') {
           final t = dt['text']?.toString() ?? '';
-          if (t.isNotEmpty) chunks.add(AgentChunk(phase: AgentPhase.streaming, text: t));
+          if (t.isNotEmpty) addTextChunk(t);
         } else if (dtType == 'thinking_delta') {
           final t = dt['thinking']?.toString() ?? '';
           if (t.isNotEmpty) chunks.add(AgentChunk(phase: AgentPhase.thinking, text: t));
