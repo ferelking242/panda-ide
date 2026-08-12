@@ -48,6 +48,7 @@ import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
+import '../extensions/ui/command_palette.dart';
 import '../extensions/language_feature_router.dart';
 import '../ui/gateway_panel.dart';
 import '../ui/browser/browser_panel.dart';
