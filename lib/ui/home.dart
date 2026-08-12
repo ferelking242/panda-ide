@@ -6298,16 +6298,6 @@ class _SelectTypeState extends State<SelectType>
                 ];
               }(),
 
-              // Active streaming indicator chip when running
-              if (isStreaming)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6, bottom: 2),
-                  child: _AgentPhaseChip(
-                    phase: think.isNotEmpty ? AgentPhase.thinking : AgentPhase.streaming,
-                    isDark: isDark,
-                  ),
-                ),
-
               // Action row (copy + retry) — shown after generation
               if (!isStreaming && (text.isNotEmpty || isError))
                 Padding(
@@ -8528,26 +8518,29 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
   @override
   Widget build(BuildContext context) {
     final purple = widget.isDark ? const Color(0xffb388ff) : const Color(0xff7c4dff);
-    final bg = widget.isDark ? const Color(0xff1c1c26) : const Color(0xfff0f0f5);
+
+    // Clean up thinking text if it contains tool execution artifacts
+    final cleanThinking = widget.thinking
+        .replaceAll(RegExp(r'Executing \d+ tool\(s\)\.\.\.', caseSensitive: false), '')
+        .replaceAll(RegExp(r'Tool call:.*', caseSensitive: false), '')
+        .trim();
+
+    if (cleanThinking.isEmpty) return const SizedBox.shrink();
 
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(6),
-      ),
+      margin: const EdgeInsets.symmetric(vertical: 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(4),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.psychology, size: 15, color: purple),
+                  Icon(Icons.psychology, size: 16, color: purple),
                   const SizedBox(width: 6),
                   Text(
                     'Réflexion',
@@ -8569,14 +8562,14 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
           ),
           if (_expanded)
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+              padding: const EdgeInsets.fromLTRB(6, 2, 6, 6),
               child: Text(
-                widget.thinking,
+                cleanThinking,
                 style: TextStyle(
                   fontSize: 11,
-                  color: widget.fg.withValues(alpha: 0.85),
-                  height: 1.4,
-                  fontFamily: 'monospace',
+                  color: widget.fg.withValues(alpha: 0.8),
+                  height: 1.45,
+                  fontStyle: FontStyle.italic,
                 ),
               ),
             ),
