@@ -36,6 +36,26 @@ jobs:
           done < <(find android/app/src -type f -print0)
           echo "Removed $removed unavailable Git LFS placeholder(s)."
 
+      - name: Keep empty dynamic features resource-buildable
+        # Some on-demand features contain only LFS-managed payloads. Once
+        # those unavailable placeholders are removed, AGP has no processed
+        # resource output for the feature. Add a CI-only resource so the
+        # feature remains a valid, empty-on-disk module.
+        run: |
+          set -euo pipefail
+          for module in android/app/src/*_feature; do
+            [ -d "$module" ] || continue
+            if ! find "$module/src/main" -type f ! -name AndroidManifest.xml -print -quit | grep -q .; then
+              mkdir -p "$module/src/main/res/values"
+              cat > "$module/src/main/res/values/ci_lfs_fallback.xml" <<'EOF'
+          <resources>
+              <string name="ci_lfs_fallback" translatable="false">Panda IDE optional feature</string>
+          </resources>
+          EOF
+              echo "Added fallback resource to $(basename "$module")."
+            fi
+          done
+
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
