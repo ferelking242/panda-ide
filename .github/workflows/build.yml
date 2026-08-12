@@ -1,0 +1,69 @@
+name: Build & Release APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk --release --split-per-abi
+
+      - name: Prepare APK release artifacts
+        run: |
+          mkdir -p build/out
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/out/panda-ide-arm64-release.apk 2>/dev/null || cp build/app/outputs/flutter-apk/app-release.apk build/out/panda-ide-release.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/out/panda-ide-universal-release.apk 2>/dev/null || true
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: panda-ide-apk
+          path: build/out/*.apk
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v2.3.3-build.${{ github.run_number }}"
+          name: "Release v2.3.3 Build ${{ github.run_number }}"
+          body: |
+            Automated build from commit ${{ github.sha }}
+            
+            - Features: Inline agent command approval UI, Autopilot mode, Session permission whitelist
+            - Auto-update sidebar progress tracker
+          draft: false
+          prerelease: false
+          files: build/out/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
