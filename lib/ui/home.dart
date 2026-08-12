@@ -1493,7 +1493,6 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
         _RailItem(icon: Broken.cpu_setting,         label: 'Panda Agent',       idx: 10),
-        _RailItem(icon: Broken.cpu_setting,         label: 'Local Models',      idx: 11),
       ];
 
       return Container(

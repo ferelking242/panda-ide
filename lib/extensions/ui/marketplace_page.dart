@@ -32,6 +32,7 @@ import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../utils/constants.dart';
 import '../../utils/languages.dart';
 import '../../services/package_downloader.dart';
+import '../../local_models/ui/local_models_page.dart';
 
 // ── Categories ─────────────────────────────────────────────────────────────────
 const _kCategories = [
@@ -54,7 +55,7 @@ const _kSortOptions = {
 };
 
 // ── Section enum ───────────────────────────────────────────────────────────────
-enum _Section { extensions, runtimes, sdks, pandaExt, installed }
+enum _Section { extensions, pandaExt, sdks, localModels, installed }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MarketplacePage
@@ -358,14 +359,14 @@ class _MarketplacePageState extends State<MarketplacePage> {
           },
         );
 
-      case _Section.runtimes:
-        return _RuntimesSection(scrollCtrl: _scrollCtrl, showSdks: false);
-
       case _Section.sdks:
         return _RuntimesSection(scrollCtrl: _scrollCtrl, showSdks: true);
 
       case _Section.pandaExt:
         return _PandaExtensionsSection(scrollCtrl: _scrollCtrl);
+
+      case _Section.localModels:
+        return LocalModelsPage(embedded: true);
 
       case _Section.installed:
         return _InstalledSection(
@@ -553,11 +554,11 @@ class _TopPillNav extends StatelessWidget {
   const _TopPillNav({required this.current, required this.compact, required this.onTap});
 
   static const _items = [
-    _NavItem(_Section.extensions, Icons.extension_outlined, Icons.extension,         'Extensions'),
-    _NavItem(_Section.runtimes,   Icons.terminal_rounded,   Icons.terminal_rounded,  'Runtimes'),
-    _NavItem(_Section.sdks,       Icons.layers_outlined,    Icons.layers_rounded,    'SDK'),
-    _NavItem(_Section.pandaExt,   Icons.download_outlined,  Icons.download_rounded,  'Panda Ext.'),
-    _NavItem(_Section.installed,  Icons.check_circle_outline, Icons.check_circle,   'Installed'),
+    _NavItem(_Section.extensions, Icons.extension_outlined, Icons.extension,         'Extensions VS Code'),
+    _NavItem(_Section.pandaExt,   Icons.extension_rounded,  Icons.extension_rounded,  'Extensions Panda'),
+    _NavItem(_Section.sdks,       Icons.layers_outlined,    Icons.layers_rounded,    'Panda Runtime SDK'),
+    _NavItem(_Section.localModels,Icons.smart_toy_outlined, Icons.smart_toy_rounded,  'Local Models'),
+    _NavItem(_Section.installed,  Icons.check_circle_outline, Icons.check_circle,   'Installés'),
   ];
 
   @override
