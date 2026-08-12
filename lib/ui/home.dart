@@ -6303,7 +6303,7 @@ class _SelectTypeState extends State<SelectType>
                 Padding(
                   padding: const EdgeInsets.only(top: 6, bottom: 2),
                   child: _AgentPhaseChip(
-                    phase: think.isNotEmpty ? AgentPhase.thinking : AgentPhase.generating,
+                    phase: think.isNotEmpty ? AgentPhase.thinking : AgentPhase.streaming,
                     isDark: isDark,
                   ),
                 ),
