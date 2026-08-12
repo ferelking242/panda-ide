@@ -15,7 +15,7 @@
 library;
 
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -30,7 +30,7 @@ import 'extension_settings_page.dart';
 import '../../ui/adb_setup_page.dart';
 import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../utils/constants.dart';
-import '../../utils/languages.dart';
+import '../../utils/languages.dart' as lang;
 import '../../services/package_downloader.dart';
 import '../../local_models/ui/local_models_page.dart';
 
@@ -1661,7 +1661,7 @@ class _RuntimeCard extends StatelessWidget {
                 _InlineDownloadButton(
                   index: catalogIndex!,
                   onDownload: () => _triggerDownload(context),
-                  installDir: Directory('$runtimesDir/${info.key}'),
+                  installDir: io.Directory('$runtimesDir/${info.key}'),
                 )
               else
                 Icon(Icons.download_rounded, size: 22, color: cs.onSurface.withValues(alpha: 0.3)),
@@ -1695,7 +1695,7 @@ class _RuntimeCard extends StatelessWidget {
 class _InlineDownloadButton extends StatelessWidget {
   final int index;
   final VoidCallback onDownload;
-  final Directory installDir;
+  final io.Directory installDir;
 
   const _InlineDownloadButton({
     required this.index,
@@ -1871,7 +1871,8 @@ class _RuntimeDetailPage extends StatelessWidget {
                 final percent      = dlState.downloadProgress[idx] ?? 0.0;
                 final isExtracting = dlState.isExtracting(idx);
                 final extractPct   = dlState.extractionProgress[idx] ?? 0.0;
-                final isInstalled  = Directory('$runtimesDir/${info.key}').existsSync() ||
+                final runtimeDir = io.Directory('$runtimesDir/${info.key}');
+                final isInstalled  = runtimeDir.existsSync() ||
                     dlState.isFullyCompleted(idx);
 
                 if (isExtracting || (percent > 0 && percent < 100) || PackageDownloader.isActive(idx)) {
@@ -2082,7 +2083,7 @@ class _PandaExtensionsSectionState extends State<_PandaExtensionsSection> {
 }
 
 class _PandaExtCard extends StatelessWidget {
-  final Extension ext;
+  final lang.Extension ext;
   final int index;
   final bool hasUpdate;
 
@@ -2097,7 +2098,8 @@ class _PandaExtCard extends StatelessWidget {
     final theme  = Theme.of(context);
     final cs     = theme.colorScheme;
     final sub    = cs.onSurface.withValues(alpha: 0.55);
-    final extDir = Directory('$extensionDir/${ext.parentName}');
+    final String pName = ext.parentName;
+    final extDir = io.Directory('$extensionDir/$pName');
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
