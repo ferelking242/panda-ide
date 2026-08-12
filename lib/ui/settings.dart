@@ -1,11 +1,10 @@
 import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
+import 'package:panda/utils/functions.dart';
+import 'package:panda/ui/adb_setup_page.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-
-
 import 'package:panda/models/app_theme.dart';
 import 'package:panda/theme/terminal_themes.dart';
 
@@ -90,9 +89,7 @@ class _SettingsState extends State<Settings> {
   String _currentLanguage = 'Français 🇫🇷';
   double _uiScale = 1.0;
   double _ramLimitGb = 4.0;
-  _SettingsSection _selectedSection = _SettingsSection.general;
-  final ScrollController scrollController = ScrollController();
-  final TextEditingController apiController = TextEditingController();
+  bool _gpuAccelerated = true;
 
 @override
   Widget build(BuildContext context) {
@@ -258,8 +255,8 @@ class _SettingsState extends State<Settings> {
     return Column(
       children: [
         _buildCardGroup(
-          title: 'Langue de l'application',
-          subtitle: 'Sélectionnez la langue d'affichage de Panda IDE',
+          title: "Langue de l'application",
+          subtitle: "Sélectionnez la langue d'affichage de Panda IDE",
           icon: Icons.language_rounded,
           isDark: isDark,
           cs: cs,
@@ -303,7 +300,7 @@ class _SettingsState extends State<Settings> {
 
         _buildCardGroup(
           title: 'Thème & Apparence',
-          subtitle: 'Mode sombre, clair et échelle de l'interface',
+          subtitle: "Mode sombre, clair et échelle de l'interface",
           icon: Icons.dark_mode_outlined,
           isDark: isDark,
           cs: cs,
@@ -334,7 +331,7 @@ class _SettingsState extends State<Settings> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Échelle de l'interface (Zoom UI)', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      const Text("Échelle de l'interface (Zoom UI)", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                       Text('${(_uiScale * 100).toInt()}%', style: TextStyle(color: cs.primary, fontWeight: FontWeight.bold, fontSize: 13)),
                     ],
                   ),
@@ -419,7 +416,7 @@ class _SettingsState extends State<Settings> {
 
         _buildCardGroup(
           title: 'Options d'affichage de l'éditeur',
-          subtitle: 'Pliage, guides d'indentation, ligne de retour',
+          subtitle: "Pliage, guides d'indentation, ligne de retour",
           icon: Icons.tune_rounded,
           isDark: isDark,
           cs: cs,
@@ -434,14 +431,14 @@ class _SettingsState extends State<Settings> {
                   currentState['lineWrap'] = val;
                   await prefs.setString('codeForgeConfig', jsonEncode(currentState));
                   if (context.mounted) {
-                    context.read<ConfigBloc>().add(ConfigEvent(codeForgeConfig: currentState));
+                    context.read<ConfigBloc>().add(ChangeChangeConfigEvent( currentState));
                   }
                 },
               ),
             ),
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
             ListTile(
-              title: const Text('Guides d'indentation', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              title: const Text("Guides d'indentation", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
               trailing: Switch(
                 value: indentStatus,
                 onChanged: (val) async {
@@ -450,7 +447,7 @@ class _SettingsState extends State<Settings> {
                   currentState['indentLineStatus'] = val;
                   await prefs.setString('codeForgeConfig', jsonEncode(currentState));
                   if (context.mounted) {
-                    context.read<ConfigBloc>().add(ConfigEvent(codeForgeConfig: currentState));
+                    context.read<ConfigBloc>().add(ChangeChangeConfigEvent( currentState));
                   }
                 },
               ),
@@ -466,7 +463,7 @@ class _SettingsState extends State<Settings> {
                   currentState['enableFolding'] = val;
                   await prefs.setString('codeForgeConfig', jsonEncode(currentState));
                   if (context.mounted) {
-                    context.read<ConfigBloc>().add(ConfigEvent(codeForgeConfig: currentState));
+                    context.read<ConfigBloc>().add(ChangeChangeConfigEvent( currentState));
                   }
                 },
               ),
@@ -507,8 +504,7 @@ class _SettingsState extends State<Settings> {
                 child: Container(
                           padding: const EdgeInsets.all(12),
                           color: Colors.black,
-                          child: const Text('user@panda-ide:~$ echo "Panda Terminal Preview"
-Panda Terminal Preview', style: TextStyle(color: Colors.greenAccent, fontFamily: 'monospace', fontSize: 11)),
+                          child: const Text('user@panda-ide:~$ echo "Panda Terminal Preview"', style: TextStyle(color: Colors.greenAccent, fontFamily: 'monospace', fontSize: 11)),
                         ),
               ),
             ),
@@ -578,7 +574,7 @@ Panda Terminal Preview', style: TextStyle(color: Colors.greenAccent, fontFamily:
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
             ListTile(
               title: const Text('Accélération Matérielle GPU / Vulkan', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: const Text('Utiliser le GPU pour l'affichage et le calcul IA', style: TextStyle(fontSize: 11)),
+              subtitle: const Text("Utiliser le GPU pour l'affichage et le calcul IA", style: TextStyle(fontSize: 11)),
               trailing: Switch(
                 value: _gpuAccelerated,
                 onChanged: (val) async {
@@ -634,7 +630,7 @@ Panda Terminal Preview', style: TextStyle(color: Colors.greenAccent, fontFamily:
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
             ListTile(
               title: const Text('GitHub Copilot', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: const Text('Paramètres et état d'authentification Copilot', style: TextStyle(fontSize: 11)),
+              subtitle: const Text("Paramètres et état d'authentification Copilot", style: TextStyle(fontSize: 11)),
               trailing: ElevatedButton.icon(
                 icon: const Icon(Icons.account_circle, size: 14),
                 label: const Text('Gérer'),
@@ -738,13 +734,41 @@ Panda Terminal Preview', style: TextStyle(color: Colors.greenAccent, fontFamily:
                     curr['theme'] = key;
                     await prefs.setString('codeForgeConfig', jsonEncode(curr));
                     if (context.mounted) {
-                      context.read<ConfigBloc>().add(ConfigEvent(codeForgeConfig: curr));
+                      context.read<ConfigBloc>().add(ChangeChangeConfigEvent( curr));
                       Navigator.pop(dialogCtx);
                     }
                   },
                 );
               },
             ),
+          ),
+        );
+      },
+    );
+  }
+
+
+  void _showCopilotSettings(
+    BuildContext context,
+    CopilotState copilotState,
+    AppThemeState appThemeState,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: const Text('GitHub Copilot'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Statut : ${copilotState.status}'),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogCtx),
+                child: const Text('Fermer'),
+              ),
+            ],
           ),
         );
       },
