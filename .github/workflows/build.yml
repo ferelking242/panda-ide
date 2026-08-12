@@ -20,6 +20,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Remove unavailable Git LFS placeholders
+        # The repository's LFS budget is currently exhausted. With LFS
+        # disabled, checkout leaves tiny pointer files in Android's native
+        # asset directories; Gradle/llvm-strip must not treat those as .so
+        # binaries. Real assets are left untouched.
+        run: |
+          set -euo pipefail
+          removed=0
+          while IFS= read -r -d '' file; do
+            if [ "$(head -n 1 "$file")" = "version https://git-lfs.github.com/spec/v1" ]; then
+              rm "$file"
+              removed=$((removed + 1))
+            fi
+          done < <(find android/app/src -type f -print0)
+          echo "Removed $removed unavailable Git LFS placeholder(s)."
+
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
