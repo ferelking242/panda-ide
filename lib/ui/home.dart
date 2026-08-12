@@ -9480,20 +9480,6 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
     final border = isDark ? const Color(0xff333342) : const Color(0xffe0e0ea);
     final textC = widget.fg.withValues(alpha: 0.9);
 
-    // Dynamic step title from active status or first line of thinking
-    String stepTitle = 'Étapes de l\'agent';
-    if (activeStatusText.isNotEmpty) {
-      stepTitle = activeStatusText;
-    } else if (combinedThink.isNotEmpty) {
-      final firstLine = combinedThink
-          .split('\n')
-          .map((l) => l.trim().replaceAll(RegExp(r'^[#*-\s>]+'), '').trim())
-          .firstWhere((l) => l.isNotEmpty, defaultValue: () => '');
-      if (firstLine.length >= 3) {
-        stepTitle = firstLine.length > 50 ? '${firstLine.substring(0, 50)}\u2026' : firstLine;
-      }
-    }
-
     // Current status text for pulsing indicator
     String activeStatusText = '';
     if (isRunning) {
@@ -9509,6 +9495,20 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
         activeStatusText = 'Réflexion interne...';
       } else {
         activeStatusText = 'Génération...';
+      }
+    }
+
+    // Dynamic step title from active status or first line of thinking
+    String stepTitle = 'Étapes de l\'agent';
+    if (activeStatusText.isNotEmpty) {
+      stepTitle = activeStatusText;
+    } else if (combinedThink.isNotEmpty) {
+      final firstLine = combinedThink
+          .split('\n')
+          .map((l) => l.trim().replaceAll(RegExp(r'^[#*-\s>]+'), '').trim())
+          .firstWhere((l) => l.isNotEmpty, defaultValue: () => '');
+      if (firstLine.length >= 3) {
+        stepTitle = firstLine.length > 50 ? '${firstLine.substring(0, 50)}\u2026' : firstLine;
       }
     }
 
