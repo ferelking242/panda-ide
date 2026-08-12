@@ -38,6 +38,8 @@ import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
 import '../ui/github_page.dart';
 import '../utils/constants.dart';
+import '../utils/agentic_tools.dart';
+
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 import '../utils/panda_log.dart';

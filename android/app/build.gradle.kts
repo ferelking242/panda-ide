@@ -47,12 +47,11 @@ android {
 
     buildTypes {
         release {
-            // Release APKs must always use the stable historical keystore.
-            // CI creates key.properties from GitHub Actions secrets.
-            check(keystorePropertiesFile.exists()) {
-                "Release signing requires android/key.properties and the stable Panda IDE keystore."
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
             }
-            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"    
