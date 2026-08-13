@@ -621,6 +621,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
         '-b', '/dev',
         '-b', '/proc',
         '-b', '/sys',
+        '-b', appDir,
         '-b', widget.projectDir,
         '-b', '/storage',
         '-w', widget.projectDir,

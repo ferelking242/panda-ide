@@ -256,11 +256,119 @@ class _StartScreenState extends State<StartScreen> {
 
     if (Directory(alpineDir).existsSync()) {
       try {
-        final pandaCli = File('$alpineDir/bin/panda');
-        pandaCli.writeAsStringSync('#!/bin/sh\necho "\$@" | nc 127.0.0.1 ${PandaBridge.port}\n');
+        final localBinDir = Directory('$alpineDir/usr/local/bin');
+        if (!localBinDir.existsSync()) {
+          localBinDir.createSync(recursive: true);
+        }
+
+        // Phase 1: Panda CLI (Bridge)
+        final pandaCli = File('${localBinDir.path}/panda');
+        pandaCli.writeAsStringSync('#!/bin/sh
+echo "$@" | nc 127.0.0.1 ${PandaBridge.port}
+');
         Process.runSync('chmod', ['+x', pandaCli.path]);
+
+        // Phase 2: Native FastPath Shims
+        final nativeBinaries = ['node', 'npm', 'npx', 'git', 'python', 'python3', 'pip', 'pip3', 'clang', 'clang++', 'rustc', 'cargo'];
+        for (final bin in nativeBinaries) {
+          final shim = File('${localBinDir.path}/$bin');
+          if (!shim.existsSync()) {
+            shim.writeAsStringSync('#!/bin/sh
+exec $binDir/$bin "$@"
+');
+            Process.runSync('chmod', ['+x', shim.path]);
+          }
+        }
+
+        // Phase 3: panda-service (Supervisor)
+        final pandaService = File('${localBinDir.path}/panda-service');
+        pandaService.writeAsStringSync('''#!/bin/sh
+# Panda Service Manager (Phase 3)
+case "\$1" in
+  start)
+    echo "[Panda Services] Starting \$2..."
+    nohup "\$2" > /tmp/"\$2".log 2>&1 &
+    echo \$! > /tmp/"\$2".pid
+    ;;
+  stop)
+    echo "[Panda Services] Stopping \$2..."
+    kill \$(cat /tmp/"\$2".pid) 2>/dev/null
+    rm -f /tmp/"\$2".pid
+    ;;
+  status)
+    if [ -f /tmp/"\$2".pid ]; then
+      echo "[Panda Services] \$2 is RUNNING (PID \$(cat /tmp/"\$2".pid))"
+    else
+      echo "[Panda Services] \$2 is STOPPED"
+    fi
+    ;;
+  *)
+    echo "Usage: panda-service [start|stop|status] <command>"
+    ;;
+esac
+''');
+        Process.runSync('chmod', ['+x', pandaService.path]);
+
       } catch (e) {
-        PandaLog.e('StartScreen', 'Error injecting Panda CLI: $e');
+        PandaLog.e('StartScreen', 'Error injecting Panda tools: $e');
+      }
+    }|    if (Directory(alpineDir).existsSync()) {
+      try {
+        final localBinDir = Directory('$alpineDir/usr/local/bin');
+        if (!localBinDir.existsSync()) {
+          localBinDir.createSync(recursive: true);
+        }
+
+        // Phase 1: Panda CLI (Bridge)
+        final pandaCli = File('${localBinDir.path}/panda');
+        pandaCli.writeAsStringSync('#!/bin/sh
+echo "$@" | nc 127.0.0.1 ${PandaBridge.port}
+');
+        Process.runSync('chmod', ['+x', pandaCli.path]);
+
+        // Phase 2: Native FastPath Shims
+        final nativeBinaries = ['node', 'npm', 'npx', 'git', 'python', 'python3', 'pip', 'pip3', 'clang', 'clang++', 'rustc', 'cargo'];
+        for (final bin in nativeBinaries) {
+          final shim = File('${localBinDir.path}/$bin');
+          if (!shim.existsSync()) {
+            shim.writeAsStringSync('#!/bin/sh
+exec $binDir/$bin "$@"
+');
+            Process.runSync('chmod', ['+x', shim.path]);
+          }
+        }
+
+        // Phase 3: panda-service (Supervisor)
+        final pandaService = File('${localBinDir.path}/panda-service');
+        pandaService.writeAsStringSync('''#!/bin/sh
+# Panda Service Manager (Phase 3)
+case "\$1" in
+  start)
+    echo "[Panda Services] Starting \$2..."
+    nohup "\$2" > /tmp/"\$2".log 2>&1 &
+    echo \$! > /tmp/"\$2".pid
+    ;;
+  stop)
+    echo "[Panda Services] Stopping \$2..."
+    kill \$(cat /tmp/"\$2".pid) 2>/dev/null
+    rm -f /tmp/"\$2".pid
+    ;;
+  status)
+    if [ -f /tmp/"\$2".pid ]; then
+      echo "[Panda Services] \$2 is RUNNING (PID \$(cat /tmp/"\$2".pid))"
+    else
+      echo "[Panda Services] \$2 is STOPPED"
+    fi
+    ;;
+  *)
+    echo "Usage: panda-service [start|stop|status] <command>"
+    ;;
+esac
+''');
+        Process.runSync('chmod', ['+x', pandaService.path]);
+
+      } catch (e) {
+        PandaLog.e('StartScreen', 'Error injecting Panda tools: $e');
       }
     }
 
