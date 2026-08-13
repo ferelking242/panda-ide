@@ -334,7 +334,7 @@ class Extension with IconBuilder{
           iconUrl,
           height: size,
           width: size,
-          colorFilter: name == "Github Copilot" ? ColorFilter.mode(Colors.grey[600]!, .srcIn) : null,
+          colorFilter: name == "Github Copilot" ? ColorFilter.mode(Colors.grey[600]!, BlendMode.srcIn) : null,
         );
       }
 

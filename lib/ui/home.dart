@@ -2313,7 +2313,7 @@ class _SelectTypeState extends State<SelectType>
                           const SnackBar(content: Text('🔄 Hot Restart triggered')),
                         );
                       },
-                      icon: const Icon(Icons.refresh, size: 14, color: Colors.blueLight),
+                      icon: const Icon(Icons.refresh, size: 14, color: Colors.lightBlue),
                       label: const Text('Restart', style: TextStyle(fontSize: 11)),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),

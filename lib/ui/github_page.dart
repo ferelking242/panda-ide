@@ -150,7 +150,7 @@ class _GithubPageState extends State<GithubPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: appTheme.scaffoldBg,
-              shape: RoundedRectangleBorder(borderRadius: .circular(10))
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
             ),
             onPressed: () => Navigator.pop(context),
             child: const Text('OK'),
@@ -647,7 +647,7 @@ class _GithubPageState extends State<GithubPage> {
                       ? Image.network(
                           _userInfo!['avatar_url'],
                           fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => Icon(
+                          errorBuilder: (ctx, err, stack) => Icon(
                             Icons.person,
                             size: 40,
                             color: appTheme.selectScreenCardTextColor,
@@ -1159,7 +1159,7 @@ class _GithubPageState extends State<GithubPage> {
                 FutureBuilder<int?>(
                   future: _getSubscribers(repo['owner']['login'] ?? '', repo['name'] ?? ''),
                   builder:(context, subSnapshot) {
-                    if(subSnapshot.connectionState == .waiting) {
+                    if(subSnapshot.connectionState == ConnectionState.waiting) {
                       return const SizedBox(
                         width: 25,
                         height: 25,

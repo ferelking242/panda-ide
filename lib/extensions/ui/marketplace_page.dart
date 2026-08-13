@@ -1147,8 +1147,8 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                                 ],
                               ),
                               SizedBox(height: 6),
-                              Text('• Tap the Workspace Box at the top of Panda IDE to open the Command Palette.
-• Type ">" to search and run any command registered by this extension.'),
+                              Text('''• Tap the Workspace Box at the top of Panda IDE to open the Command Palette.
+• Type ">" to search and run any command registered by this extension.'''),
                             ],
                           ),
                         ),
@@ -1168,8 +1168,8 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                                 ],
                               ),
                               SizedBox(height: 6),
-                              Text('• Open the EXÉCUTER / DEBUG panel in the left sidebar.
-• Tap ▶ Start Debugging or ⚡ Hot Reload directly without needing a physical keyboard F5 key.'),
+                              Text('''• Open the EXÉCUTER / DEBUG panel in the left sidebar.
+• Tap ▶ Start Debugging or ⚡ Hot Reload directly without needing a physical keyboard F5 key.'''),
                             ],
                           ),
                         ),
@@ -1582,7 +1582,7 @@ class _RuntimesSectionState extends State<_RuntimesSection> {
 class _RuntimeCard extends StatelessWidget {
   final _RuntimeInfo info;
   final int? catalogIndex;
-  final RunTime? catalogRuntime;
+  final lang.RunTime? catalogRuntime;
   final PackageCatalogState catalogState;
 
   const _RuntimeCard({
@@ -1794,7 +1794,7 @@ class _InlineDownloadButton extends StatelessWidget {
 class _RuntimeDetailPage extends StatelessWidget {
   final _RuntimeInfo info;
   final int? catalogIndex;
-  final RunTime? catalogRuntime;
+  final lang.RunTime? catalogRuntime;
   final PackageCatalogState catalogState;
 
   const _RuntimeDetailPage({

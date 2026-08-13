@@ -245,7 +245,7 @@ class CopilotChat {
       'User-Agent': 'Panda/2.3.0',
       'Editor-Version': 'Panda/2.3.0',
       'X-GitHub-Api-Version': '2025-10-01',
-      'X-Initiator': ?initiator,
+      if (initiator != null) 'X-Initiator': initiator,
       if (initiator != null) 'X-Interaction-Type': 'conversation-panel',
       if (initiator != null) 'OpenAI-Intent': 'conversation-panel',
       if (isJsonBody) 'Content-Type': 'application/json; charset=utf-8',

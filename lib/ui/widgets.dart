@@ -1519,11 +1519,11 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
             ),
           ),
           child: Row(
-            mainAxisAlignment: .end,
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
               ValueListenableBuilder(
                 valueListenable: cursor,
-                builder: (_, lineColValue, _) {
+                builder: (ctx, lineColValue, child) {
                   return Text(
                     'Ln ${lineColValue.line + 1}, Col ${lineColValue.col + 1}',
                     style: TextStyle(
@@ -1584,7 +1584,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
           ),
         ),
         Align(
-          alignment: .centerEnd,
+          alignment: Alignment.centerEnd,
           child: ValueListenableBuilder(
             valueListenable: isGeneratingCompletion,
             builder:(context, aiValue, _) => aiValue ? Padding(
@@ -1594,7 +1594,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                 width: 300,
                 decoration: BoxDecoration(
                   color: appTheme.selectScreenDrawerBg,
-                  borderRadius: .circular(10)
+                  borderRadius: BorderRadius.circular(10)
                 ),
                 child: Column(
                   children: [
@@ -1626,7 +1626,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 3),
                         child: LinearProgressIndicator(
-                          borderRadius: .circular(5)
+                          borderRadius: BorderRadius.circular(5)
                         ),
                       )
                     )
@@ -12119,7 +12119,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                                   child: Container(
                                                     decoration: BoxDecoration(
                                                       color: Colors.teal.withAlpha(30),
-                                                      borderRadius: .circular(8)
+                                                      borderRadius: BorderRadius.circular(8)
                                                     ),
                                                     padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                                                     child: Row(
@@ -13052,11 +13052,11 @@ Widget copyArea(
     width: 350,
     decoration: BoxDecoration(
       color: appTheme.scaffoldBg,
-      border: .all(
+      border: Border.all(
         color: appTheme.selectScreenCardTextColor.withAlpha(120),
         width: 1
       ),
-      borderRadius: .circular(6)
+      borderRadius: BorderRadius.circular(6)
     ),
   child: Stack(
     children: [
@@ -13503,7 +13503,7 @@ class _GgufDownloadManagerState extends State<GgufDownloadManager>
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(borderRadius: .circular(10))
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
                                 ),
                                 child: const Text('Remove'),
                               ),

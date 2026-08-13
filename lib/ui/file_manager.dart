@@ -701,7 +701,7 @@ class _FileManagerPageState extends State<FileManagerPage> {
                       )
                     : ListView.separated(
                         itemCount: _entries.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final entry = _entries[index];
                           final isDir = entry is Directory;
