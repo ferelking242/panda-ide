@@ -292,23 +292,44 @@ class MainActivity : FlutterActivity() {
 
     private fun downloadUpdateApk(url: String, filename: String, onProgress: (Double, Long, Long) -> Unit): File {
         val target = File(cacheDir, filename)
-        if (target.exists()) target.delete()
+        var downloadedBytes = 0L
+        if (target.exists()) {
+            downloadedBytes = target.length()
+        }
+
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 120_000
             instanceFollowRedirects = true
             setRequestProperty("Accept", "application/vnd.android.package-archive")
-        }
-        try {
-            if (connection.responseCode !in 200..299) {
-                throw IllegalStateException("HTTP ${connection.responseCode}")
+            if (downloadedBytes > 0) {
+                setRequestProperty("Range", "bytes=$downloadedBytes-")
             }
-            val totalBytes = connection.contentLengthLong
-            var copiedBytes = 0L
+        }
+
+        try {
+            val responseCode = connection.responseCode
+            val isPartial = responseCode == HttpURLConnection.HTTP_PARTIAL
+            if (responseCode !in 200..299) {
+                if (responseCode == 416) {
+                    return target // Already fully downloaded
+                }
+                throw IllegalStateException("HTTP $responseCode")
+            }
+            
+            if (!isPartial && downloadedBytes > 0) {
+                downloadedBytes = 0L
+                if (target.exists()) target.delete()
+            }
+
+            val contentLength = connection.contentLengthLong
+            val totalBytes = if (contentLength > 0) contentLength + downloadedBytes else -1L
+            var copiedBytes = downloadedBytes
             val buffer = ByteArray(8192)
+
             connection.inputStream.use { input ->
-                FileOutputStream(target).use { output ->
+                FileOutputStream(target, isPartial).use { output ->
                     while (true) {
                         val read = input.read(buffer)
                         if (read < 0) break

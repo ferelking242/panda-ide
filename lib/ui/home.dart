@@ -6720,6 +6720,16 @@ class _SelectTypeState extends State<SelectType>
                 ];
               }(),
 
+              if (i == _agentMessages.length - 1 && _agentGenerating)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: _AgentPhaseChip(
+                    phase: _agentPhase,
+                    isDark: isDark,
+                    toolName: _agentCurrentTool,
+                  ),
+                ),
+
               // Action row (copy + retry) — shown after generation
               if (!isStreaming && (text.isNotEmpty || isError))
                 Padding(

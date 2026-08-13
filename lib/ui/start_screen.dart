@@ -1,3 +1,4 @@
+import 'package:flutter_archive/flutter_archive.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
@@ -228,19 +229,22 @@ class _StartScreenState extends State<StartScreen> {
     if (!File(prootBin).existsSync() || !Directory(alpineDir).existsSync()) {
       PandaLog.i('StartScreen', 'Installing built-in Alpine Linux environment...');
       try {
-        final prootBytes = await rootBundle.load('assets/runtimes/proot');
-        File(prootBin).writeAsBytesSync(prootBytes.buffer.asUint8List());
-        await Process.run('chmod', ['+x', prootBin]);
+        final zipPath = '$runtimesDir/alpine-proot.zip';
+        final zipBytes = await rootBundle.load('assets/runtimes/alpine-proot.zip');
+        File(zipPath).writeAsBytesSync(zipBytes.buffer.asUint8List());
 
-        Directory(alpineDir).createSync(recursive: true);
-        final tarPath = '$runtimesDir/alpine-minirootfs.tar.gz';
-        final tarBytes = await rootBundle.load('assets/runtimes/alpine-minirootfs.tar.gz');
-        File(tarPath).writeAsBytesSync(tarBytes.buffer.asUint8List());
+        await ZipFile.extractToDirectory(
+          zipFile: File(zipPath),
+          destinationDir: Directory(runtimesDir),
+        );
 
-        final res = await Process.run('tar', ['-xzf', tarPath, '-C', alpineDir]);
-        if (res.exitCode != 0) {
-          PandaLog.e('StartScreen', 'Failed to extract Alpine: ${res.stderr}');
-        } else {
+        if (File('$runtimesDir/proot').existsSync()) {
+          File('$runtimesDir/proot').copySync(prootBin);
+          await Process.run('chmod', ['+x', prootBin]);
+          File('$runtimesDir/proot').deleteSync();
+        }
+
+        if (Directory(alpineDir).existsSync()) {
           final resolv = File('$alpineDir/etc/resolv.conf');
           if (!resolv.existsSync()) {
             resolv.parent.createSync(recursive: true);

@@ -5,13 +5,13 @@ import 'package:flutter/widgets.dart';
 class Broken {
   const Broken._();
 
-  static const String _fontFamilyFilled = 'broken_filled';
+  static const String _fontFamilyFilled = 'BrokenFilledIcons';
 
   static const IconData dislike_filled = IconData(0xe900, fontFamily: _fontFamilyFilled);
   static const IconData like_filled = IconData(0xe901, fontFamily: _fontFamilyFilled);
   static const IconData heart_filled = IconData(0xe902, fontFamily: _fontFamilyFilled);
 
-  static const String _fontFamily = 'broken';
+  static const String _fontFamily = 'BrokenIcons';
 
   static const IconData woman = IconData(0xe900, fontFamily: _fontFamily);
   static const IconData wind = IconData(0xe901, fontFamily: _fontFamily);

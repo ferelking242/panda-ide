@@ -1,7 +1,7 @@
 name: panda
 description: "Panda IDE — A powerful mobile IDE for Android, built with Flutter."
 publish_to: 'none'
-version: 2.3.3+39
+version: 2.3.3+50
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -63,6 +63,7 @@ flutter:
     - assets/icons/
     - assets/material_icons/
     - assets/webview/
+    - assets/runtimes/
     - assets/fonts/
     - assets/certificates/
     - assets/extension_host/
@@ -75,10 +76,10 @@ flutter:
     - assets/local_models_catalog.json
   fonts:
     # ── Broken (Iconsax) icon fonts ─────────────────────────────────────
-    - family: broken
+    - family: BrokenIcons
       fonts:
         - asset: assets/fonts/broken.ttf
-    - family: broken_filled
+    - family: BrokenFilledIcons
       fonts:
         - asset: assets/fonts/broken_filled.ttf
     # ── Monospace code fonts ─────────────────────────────────────────────

@@ -11,7 +11,7 @@ const appVersion = String.fromEnvironment(
 );
 const appBuildNumber = int.fromEnvironment(
   'APP_BUILD_NUMBER',
-  defaultValue: 39,
+  defaultValue: 50,
 );
 
 class AndroidUpdateInfo {
