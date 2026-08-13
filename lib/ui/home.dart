@@ -9496,58 +9496,6 @@ class _AgentPhaseChip extends StatefulWidget {
   State<_AgentPhaseChip> createState() => _AgentPhaseChipState();
 }
 
-class _AgentPhaseChipState extends State<_AgentPhaseChip> {
-  @override
-  Widget build(BuildContext context) {
-    final String rawLabel;
-    final Color color;
-
-    switch (widget.phase) {
-      case AgentPhase.thinking:
-        rawLabel = 'Réflexion…';
-        color    = Colors.purple;
-        break;
-      case AgentPhase.toolRunning:
-        rawLabel = widget.toolName.isNotEmpty ? widget.toolName : 'Outil…';
-        color    = Colors.orange;
-        break;
-      case AgentPhase.streaming:
-        rawLabel = 'Génération…';
-        color    = _kAccent;
-        break;
-      case AgentPhase.error:
-        rawLabel = 'Erreur';
-        color    = Colors.red;
-        break;
-      default:
-        rawLabel = '';
-        color    = Colors.green;
-    }
-
-    if (rawLabel.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: widget.isDark ? 0.15 : 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        _AnimatedOrb(phase: widget.phase, color: color.withValues(alpha: 0.9)),
-        const SizedBox(width: 8),
-        Text(rawLabel,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.3,
-                color: color)),
-      ]),
-    );
-  }
-}
-
 class _AgentPhaseChipState extends State<_AgentPhaseChip>
     with SingleTickerProviderStateMixin {
   late AnimationController _ctrl;
