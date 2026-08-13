@@ -273,9 +273,9 @@ class _StartScreenState extends State<StartScreen> {
 
         // Phase 1: Panda CLI (Bridge)
         final pandaCli = File('${localBinDir.path}/panda');
-        pandaCli.writeAsStringSync('#!/bin/sh
+        pandaCli.writeAsStringSync('''#!/bin/sh
 echo "$@" | nc 127.0.0.1 ${PandaBridge.port}
-');
+''');
         Process.runSync('chmod', ['+x', pandaCli.path]);
 
         // Phase 2: Native FastPath Shims
@@ -283,9 +283,9 @@ echo "$@" | nc 127.0.0.1 ${PandaBridge.port}
         for (final bin in nativeBinaries) {
           final shim = File('${localBinDir.path}/$bin');
           if (!shim.existsSync()) {
-            shim.writeAsStringSync('#!/bin/sh
+            shim.writeAsStringSync('''#!/bin/sh
 exec $binDir/$bin "$@"
-');
+''');
             Process.runSync('chmod', ['+x', shim.path]);
           }
         }

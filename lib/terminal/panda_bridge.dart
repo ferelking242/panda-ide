@@ -27,7 +27,7 @@ class PandaBridge {
   }
 
   static void _handleConnection(Socket socket) {
-    socket.transform(utf8.decoder).listen((data) async {
+    socket.cast<List<int>>().transform(utf8.decoder).listen((data) async {
       final args = data.trim().split(' ').where((s) => s.isNotEmpty).toList();
       if (args.isEmpty) {
         socket.close();
