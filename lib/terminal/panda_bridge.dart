@@ -9,6 +9,7 @@ class PandaBridge {
   static ServerSocket? _server;
   static const int port = 20300;
   static final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  static final Map<int, ServerSocket> _proxies = {};
 
   static Future<void> start() async {
     if (_server != null) return;
@@ -57,6 +58,47 @@ class PandaBridge {
               const NotificationDetails(android: AndroidNotificationDetails('panda_channel', 'Panda Linux', importance: Importance.defaultImportance)),
             );
             socket.writeln('Notification sent.');
+            break;
+          
+          case 'server':
+            if (args.length > 2 && args[1] == 'expose') {
+              final exposePort = int.tryParse(args[2]);
+              if (exposePort == null || exposePort < 1) {
+                socket.writeln('Invalid port number.');
+              } else if (exposePort < 1024) {
+                socket.writeln('Error: Ports below 1024 require root privileges on Android.');
+              } else if (_proxies.containsKey(exposePort)) {
+                socket.writeln('Port $exposePort is already exposed.');
+              } else {
+                try {
+                  final proxyServer = await ServerSocket.bind(InternetAddress.anyIPv4, exposePort);
+                  _proxies[exposePort] = proxyServer;
+                  socket.writeln('Port $exposePort exposed: LAN(0.0.0.0:$exposePort) -> Alpine(127.0.0.1:$exposePort)');
+                  
+                  proxyServer.listen((clientSocket) async {
+                    try {
+                      final targetSocket = await Socket.connect(InternetAddress.loopbackIPv4, exposePort);
+                      clientSocket.listen(
+                        targetSocket.add,
+                        onError: (_) => targetSocket.destroy(),
+                        onDone: () => targetSocket.destroy(),
+                      );
+                      targetSocket.listen(
+                        clientSocket.add,
+                        onError: (_) => clientSocket.destroy(),
+                        onDone: () => clientSocket.destroy(),
+                      );
+                    } catch (e) {
+                      clientSocket.destroy();
+                    }
+                  });
+                } catch (e) {
+                  socket.writeln('Failed to expose port $exposePort: $e');
+                }
+              }
+            } else {
+              socket.writeln('Usage: panda server expose <port>');
+            }
             break;
           case 'intent':
             if (args.length > 2 && args[1] == 'open') {

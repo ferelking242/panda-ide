@@ -244,7 +244,17 @@ class _StartScreenState extends State<StartScreen> {
           final resolv = File('$alpineDir/etc/resolv.conf');
           if (!resolv.existsSync()) {
             resolv.parent.createSync(recursive: true);
-            resolv.writeAsStringSync('nameserver 8.8.8.8\nnameserver 1.1.1.1\n');
+                        // Phase 4: Dynamic DNS resolution mapping via Android properties
+            String dnsServers = 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n';
+            try {
+              final dns1 = Process.runSync('getprop', ['net.dns1']).stdout.toString().trim();
+              final dns2 = Process.runSync('getprop', ['net.dns2']).stdout.toString().trim();
+              if (dns1.isNotEmpty && dns1 != 'null') {
+                dnsServers = 'nameserver $dns1\n';
+                if (dns2.isNotEmpty && dns2 != 'null') dnsServers += 'nameserver $dns2\n';
+              }
+            } catch (_) {}
+            resolv.writeAsStringSync(dnsServers);
           }
           PandaLog.i('StartScreen', 'Alpine Linux environment installed successfully.');
         }
