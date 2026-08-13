@@ -13,6 +13,7 @@ import '../ui/splash_screen.dart';
 import '../ui/permission_screen.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
+import '../terminal/panda_bridge.dart';
 
 const List<String> javaTools = [
   'jar', 'jarsigner', 'java', 'javac', 'javadoc', 'javap', 'jcmd',
@@ -252,6 +253,18 @@ class _StartScreenState extends State<StartScreen> {
         PandaLog.e('StartScreen', 'Error setting up Alpine: $e');
       }
     }
+
+    if (Directory(alpineDir).existsSync()) {
+      try {
+        final pandaCli = File('$alpineDir/bin/panda');
+        pandaCli.writeAsStringSync('#!/bin/sh\necho "\$@" | nc 127.0.0.1 ${PandaBridge.port}\n');
+        Process.runSync('chmod', ['+x', pandaCli.path]);
+      } catch (e) {
+        PandaLog.e('StartScreen', 'Error injecting Panda CLI: $e');
+      }
+    }
+
+    await PandaBridge.start();
 
     PandaLog.i('StartScreen', 'Initialization complete');
   }
