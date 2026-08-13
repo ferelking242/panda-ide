@@ -23,6 +23,8 @@ import '../utils/panda_log.dart';
 import '../terminal/terminal_bridge.dart';
 import '../utils/pandarules_service.dart';
 import '../utils/agent_history_service.dart';
+import '../utils/agent_settings_service.dart';
+import '../utils/agent_thinking_parser.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -217,11 +219,16 @@ class AgentRunner {
         .join('\n');
 
     String customPrompt = '';
+    String customRules  = '';
+    Map<String, String> secretsMap = {};
+    List<String> activeSkills      = [];
     String? projectRules;
     String memoryContent = '';
     try {
-      final prefs = await SharedPreferences.getInstance();
-      customPrompt = prefs.getString('agent_custom_prompt') ?? '';
+      customPrompt = await AgentSettingsService.getCustomPrompt();
+      customRules  = await AgentSettingsService.getCustomRules();
+      secretsMap   = await AgentSettingsService.getSecrets();
+      activeSkills = await AgentSettingsService.getSkills();
       projectRules = await PandaRulesService.loadRules(workspacePath);
       final memFile = File('$workspacePath/.panda/memory.md');
       if (await memFile.exists()) {
@@ -232,12 +239,12 @@ class AgentRunner {
     final String modeInstructions;
     if (agentMode == 'ask') {
       modeInstructions = '''====
-## MODE ASK ACTIF (QUESTIONS & RÉPONSES - TOKEN EFFICIENT)
-- Tu es actuellement en MODE ASK (Lecture seule & Conseils).
-- Ton objectif est d'être très concis, direct et efficace en tokens pour répondre aux questions, expliquer le code ou donner des conseils.
-- Tu peux utiliser tes outils en LECTURE SEULE (readFile, listFiles, grepInFiles) si nécessaire.
-- Tu ne peux PAS exécuter de commande shell (runShellCommand), ni créer, modifier ou supprimer des fichiers.
-- Si l'utilisateur te demande d'exécuter des modifications de code ou des commandes, explique brièvement la démarche et conseille de passer en MODE AGENT ou MODE PLAN.''';
+## MODE ASK ACTIF (QUESTIONS & RÉPONSES)
+- Tu es actuellement en MODE ASK (Discussion et explications).
+- En Mode Ask, tu n'exécutes AUCUN outil ni AUCUNE commande shell.
+- Tu dois répondre directement à l'utilisateur de manière pédagogique, claire et concise en français.
+- Fournis des explications conceptuelles et des exemples de code parfaitement formatés en Markdown.
+- Si l'utilisateur demande d'effectuer des modifications de code, des installations ou des commandes shell (ex: clone, git push, build), indique la démarche à suivre et invite-le à basculer en MODE AGENT.''';
     } else if (agentMode == 'plan') {
       modeInstructions = '''====
 ## MODE PLAN ACTIF (PLANIFICATION ÉTAPE PAR ÉTAPE)
@@ -270,7 +277,11 @@ L'interface affichera automatiquement une carte interactive avec des boutons pou
     }
 
     final String customSection = customPrompt.trim().isNotEmpty
-        ? '\n====\n## INSTRUCTIONS PERSONNALISÉES CLIENT\n${customPrompt.trim()}\n'
+        ? '\n====\n## INSTRUCTIONS PERSONNALISÉES UTILISATEUR\n${customPrompt.trim()}\n'
+        : '';
+
+    final String userRulesSection = customRules.trim().isNotEmpty
+        ? '\n====\n## RÈGLES PERSONNALISÉES UTILISATEUR\n${customRules.trim()}\n'
         : '';
 
     final String rulesSection = (projectRules != null && projectRules.trim().isNotEmpty)
@@ -281,14 +292,25 @@ L'interface affichera automatiquement une carte interactive avec des boutons pou
         ? '\n====\n## MÉMOIRE DU PROJET (.panda/memory.md)\n${memoryContent.trim()}\n'
         : '';
 
+    final String secretsSection = secretsMap.isNotEmpty
+        ? '\n====\n## SECRETS D\'ENVIRONNEMENT DISPONIBLES\nSecrets configurés : ${secretsMap.keys.join(', ')}\n'
+        : '';
+
+    final String skillsSection = activeSkills.isNotEmpty
+        ? '\n====\n## COMPÉTENCES ACTIVÉES\n${activeSkills.map((s) => '• $s').join('\n')}\n'
+        : '';
+
     return '''Tu es **Panda Agent**, un ingénieur logiciel senior d'élite intégré à Panda IDE.
 Tu possèdes une expertise approfondie en de nombreux langages, frameworks, patterns de conception et outils d'ingénierie.
 Tu fonctionnes dans un environnement IDE complet (web / mobile) avec un terminal PTY, un gestionnaire de fichiers et des outils de développement.
 
 $modeInstructions
 $customSection
+$userRulesSection
 $rulesSection
 $memorySection
+$secretsSection
+$skillsSection
 
 ${projectSection.isNotEmpty ? projectSection.toString() : ''}
 ${repoSection.isNotEmpty ? repoSection.toString() : ''}
@@ -343,9 +365,8 @@ $toolLines
     _client = http.Client();
     bool terminalError = false;
     try {
-      // Tools are always available in agent and ask modes.
-      // Only 'normal' (free conversation) mode disables them entirely.
-      final shouldUseTools = context != null && agentMode != 'normal';
+      // In ask mode, tools are completely disabled so that the model does not attempt any tool calls or shell commands.
+      final shouldUseTools = context != null && agentMode == 'agent';
       final agenticTools = shouldUseTools
           ? AgenticTools(
               workspacePath: workspacePath,

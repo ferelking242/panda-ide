@@ -9906,7 +9906,7 @@ class _PlanApprovalCardState extends State<_PlanApprovalCard>
 // Agent Chat Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _UserMessageBubble extends StatelessWidget {
+class _UserMessageBubble extends StatefulWidget {
   final String text;
   final bool isDark;
   final Color fg;
@@ -9920,19 +9920,97 @@ class _UserMessageBubble extends StatelessWidget {
   });
 
   @override
+  State<_UserMessageBubble> createState() => _UserMessageBubbleState();
+}
+
+class _UserMessageBubbleState extends State<_UserMessageBubble> {
+  bool _showCopy = false;
+
+  @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
     return Align(
       alignment: Alignment.centerRight,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xff2d2d2d) : const Color(0xffe2e8f0),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(color: fg, fontSize: 13),
+      child: GestureDetector(
+        onTap: () => setState(() => _showCopy = !_showCopy),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.88,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: widget.isDark
+                      ? const Color(0xff1e293b)
+                      : const Color(0xffe2e8f0),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: widget.isDark
+                        ? const Color(0xff334155)
+                        : const Color(0xffcbd5e1),
+                    width: 1,
+                  ),
+                ),
+                child: SelectableText(
+                  widget.text,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: widget.isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: AnimatedCrossFade(
+                  duration: const Duration(milliseconds: 150),
+                  crossFadeState: _showCopy
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  firstChild: Text(
+                    timeStr,
+                    style: TextStyle(fontSize: 10, color: widget.muted),
+                  ),
+                  secondChild: InkWell(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: widget.text));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Copié !', style: TextStyle(fontSize: 12)),
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Broken.copy, size: 11, color: widget.muted),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Copier',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: widget.muted,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -9971,6 +10049,88 @@ class _AgentMarkdownView extends StatelessWidget {
       configs: [
         PConfig(textStyle: TextStyle(color: fg, fontSize: 13, height: 1.45)),
         CodeConfig(style: TextStyle(color: isDark ? Colors.amber[300] : Colors.blue[900], fontSize: 12, fontFamily: 'monospace')),
+        PreConfig(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xff181825) : const Color(0xfff8fafc),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isDark ? const Color(0xff313244) : const Color(0xffe2e8f0),
+            ),
+          ),
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          padding: const EdgeInsets.all(10),
+          textStyle: TextStyle(
+            fontSize: 12,
+            fontFamily: 'monospace',
+            color: isDark ? const Color(0xffcdd6f4) : const Color(0xff0f172a),
+          ),
+          wrapper: (child, code, language) {
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xff181825) : const Color(0xfff8fafc),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark ? const Color(0xff313244) : const Color(0xffe2e8f0),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xff11111b) : const Color(0xffe2e8f0),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(
+                          language.isNotEmpty ? language : 'code',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.grey[400] : Colors.grey[700],
+                          ),
+                        ),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: code));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Code copié !', style: TextStyle(fontSize: 12)),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(2),
+                            child: Row(
+                              children: [
+                                Icon(Broken.copy, size: 12, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Copier',
+                                  style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[700]),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.all(10),
+                    child: child,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
       ],
     );
 
