@@ -1,6 +1,7 @@
 
 import 'package:markdown_widget/markdown_widget.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart'
@@ -178,14 +179,27 @@ class _SelectTypeState extends State<SelectType>
       final blocks = List<Map<String, dynamic>>.from(
         (_agentMessages[agentIdx]['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? []
       );
-      blocks.add({
-        'type': 'toolCall',
-        'name': toolName,
-        'args': {'command': command},
-        'status': 'pending_approval',
-      });
+      final toolCalls = List<Map<String, dynamic>>.from(
+        (_agentMessages[agentIdx]['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? []
+      );
+      
+      final bIdx = blocks.lastIndexWhere((b) => b['type'] == 'toolCall' && b['name'] == toolName && b['status'] == 'running');
+      if (bIdx >= 0) {
+        blocks[bIdx]['status'] = 'pending_approval';
+        if (blocks[bIdx]['args'] == null) blocks[bIdx]['args'] = {};
+        if (blocks[bIdx]['args'] is Map) {
+          blocks[bIdx]['args']['command'] = command;
+        }
+      }
+      
+      final cIdx = toolCalls.lastIndexWhere((c) => c['name'] == toolName && c['status'] == 'running');
+      if (cIdx >= 0) {
+        toolCalls[cIdx]['status'] = 'pending_approval';
+      }
+
       setState(() {
         _agentMessages[agentIdx]['blocks'] = blocks;
+        _agentMessages[agentIdx]['toolCalls'] = toolCalls;
       });
     }
 
@@ -196,6 +210,10 @@ class _SelectTypeState extends State<SelectType>
       final blocks = List<Map<String, dynamic>>.from(
         (_agentMessages[agentIdx]['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? []
       );
+      final toolCalls = List<Map<String, dynamic>>.from(
+        (_agentMessages[agentIdx]['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? []
+      );
+      
       for (int k = blocks.length - 1; k >= 0; k--) {
         if (blocks[k]['type'] == 'toolCall' && blocks[k]['status'] == 'pending_approval') {
           blocks[k]['status'] = result ? 'running' : 'cancelled';
@@ -205,8 +223,20 @@ class _SelectTypeState extends State<SelectType>
           break;
         }
       }
+      
+      for (int k = toolCalls.length - 1; k >= 0; k--) {
+        if (toolCalls[k]['status'] == 'pending_approval') {
+          toolCalls[k]['status'] = result ? 'running' : 'cancelled';
+          if (!result) {
+            toolCalls[k]['result'] = 'Annulé par l\'utilisateur';
+          }
+          break;
+        }
+      }
+
       setState(() {
         _agentMessages[agentIdx]['blocks'] = blocks;
+        _agentMessages[agentIdx]['toolCalls'] = toolCalls;
       });
     }
 
@@ -9340,10 +9370,122 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
 }
 
 /// Animated spinning indicator for agent thinking / streaming states.
+class _AnimatedOrb extends StatefulWidget {
+  final AgentPhase phase;
+  final Color color;
+
+  const _AnimatedOrb({required this.phase, required this.color});
+
+  @override
+  State<_AnimatedOrb> createState() => _AnimatedOrbState();
+}
+
+class _AnimatedOrbState extends State<_AnimatedOrb> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, child) {
+        return CustomPaint(
+          size: const Size(14, 14),
+          painter: _OrbPainter(
+            phase: widget.phase,
+            color: widget.color,
+            progress: _ctrl.value,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _OrbPainter extends CustomPainter {
+  final AgentPhase phase;
+  final Color color;
+  final double progress;
+
+  _OrbPainter({required this.phase, required this.color, required this.progress});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final baseRadius = size.width / 2 - 2;
+
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = color;
+
+    if (phase == AgentPhase.thinking) {
+      for (int i = 0; i < 3; i++) {
+        final angle = (progress * 2 * math.pi) + (i * 2 * math.pi / 3);
+        final offset = Offset(
+          center.dx + math.cos(angle) * (baseRadius),
+          center.dy + math.sin(angle) * (baseRadius),
+        );
+        canvas.drawCircle(offset, 2.5, paint..color = color.withValues(alpha: 0.8));
+      }
+      canvas.drawCircle(center, 2, paint..color = color.withValues(alpha: 0.4));
+    } else if (phase == AgentPhase.toolRunning) {
+      final scale = 1.0 + 0.3 * math.sin(progress * 2 * math.pi);
+      final glowPaint = Paint()
+        ..style = PaintingStyle.fill
+        ..color = color.withValues(alpha: 0.4 * scale)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      canvas.drawCircle(center, baseRadius * scale, glowPaint);
+      canvas.drawCircle(center, baseRadius * 0.8, paint..color = color);
+    } else if (phase == AgentPhase.streaming) {
+      final path = Path();
+      final points = 8;
+      for (int i = 0; i < points; i++) {
+        final angle = (i * 2 * math.pi / points);
+        final radiusOffset = math.sin((progress * 4 * math.pi) + angle * 3) * 1.5;
+        final r = baseRadius + radiusOffset;
+        final p = Offset(center.dx + math.cos(angle) * r, center.dy + math.sin(angle) * r);
+        if (i == 0) path.moveTo(p.dx, p.dy);
+        else path.lineTo(p.dx, p.dy);
+      }
+      path.close();
+      canvas.drawPath(path, paint);
+    } else if (phase == AgentPhase.error) {
+      final shake = math.sin(progress * 10 * math.pi) * 2;
+      canvas.drawCircle(Offset(center.dx + shake, center.dy), baseRadius, paint);
+    } else if (phase == AgentPhase.toolDone) {
+      for (int i = 0; i < 4; i++) {
+        final angle = (i * math.pi / 2) + (progress * math.pi / 2);
+        final r = baseRadius + (progress * 4);
+        final offset = Offset(center.dx + math.cos(angle) * r, center.dy + math.sin(angle) * r);
+        canvas.drawCircle(offset, 1.5 * (1 - progress), paint);
+      }
+      canvas.drawCircle(center, baseRadius, paint);
+    } else {
+      canvas.drawCircle(center, baseRadius, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _OrbPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.phase != phase || oldDelegate.color != color;
+}
+
 class _AgentPhaseChip extends StatefulWidget {
   final AgentPhase phase;
   final bool       isDark;
   final String     toolName;
+
   const _AgentPhaseChip({
     required this.phase,
     required this.isDark,
@@ -9352,6 +9494,58 @@ class _AgentPhaseChip extends StatefulWidget {
 
   @override
   State<_AgentPhaseChip> createState() => _AgentPhaseChipState();
+}
+
+class _AgentPhaseChipState extends State<_AgentPhaseChip> {
+  @override
+  Widget build(BuildContext context) {
+    final String rawLabel;
+    final Color color;
+
+    switch (widget.phase) {
+      case AgentPhase.thinking:
+        rawLabel = 'Réflexion…';
+        color    = Colors.purple;
+        break;
+      case AgentPhase.toolRunning:
+        rawLabel = widget.toolName.isNotEmpty ? widget.toolName : 'Outil…';
+        color    = Colors.orange;
+        break;
+      case AgentPhase.streaming:
+        rawLabel = 'Génération…';
+        color    = _kAccent;
+        break;
+      case AgentPhase.error:
+        rawLabel = 'Erreur';
+        color    = Colors.red;
+        break;
+      default:
+        rawLabel = '';
+        color    = Colors.green;
+    }
+
+    if (rawLabel.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: widget.isDark ? 0.15 : 0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        _AnimatedOrb(phase: widget.phase, color: color.withValues(alpha: 0.9)),
+        const SizedBox(width: 8),
+        Text(rawLabel,
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+                color: color)),
+      ]),
+    );
+  }
 }
 
 class _AgentPhaseChipState extends State<_AgentPhaseChip>
