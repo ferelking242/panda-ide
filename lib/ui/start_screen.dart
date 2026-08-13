@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
@@ -50,12 +51,11 @@ class _StartScreenState extends State<StartScreen> {
       debugPrint("Startup error: $e\n$stack");
       if (!mounted) return;
       setState(() => _initError = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: Colors.red,
-          content: Text("Startup failed: $e",
-              style: const TextStyle(color: Colors.white)),
-        ),
+      PandaNotifications.show(
+        context: context,
+        title: 'Erreur de Démarrage',
+        message: e.toString(),
+        isError: true,
       );
     }
     if (mounted) setState(() => _initDone = true);
@@ -210,11 +210,15 @@ class _StartScreenState extends State<StartScreen> {
       File('$certDir/cacert.pem').writeAsBytesSync(certBytes.buffer.asUint8List());
     }
 
-    await Process.run(
-      "$binDir/git",
-      ["config", "--global", "--add", "safe.directory", "*"],
-      environment: gitEnvs(sharedPath),
-    );
+    try {
+      await Process.run(
+        "$binDir/git",
+        ["config", "--global", "--add", "safe.directory", "*"],
+        environment: gitEnvs(sharedPath),
+      );
+    } catch (e) {
+      PandaLog.w('StartScreen', 'Git global config failed (ignored): $e');
+    }
 
     PandaLog.i('StartScreen', 'Initialization complete');
   }

@@ -8,6 +8,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:xterm/xterm.dart';
 import 'package:flutter/material.dart';
+import '../ui/notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
@@ -390,12 +391,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
     await _startPty(runtime, args: args, externalServer: externalServer, useProot: useProot);
 
     if (showFeedback && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('New session created: $sessionTitle'),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
+      PandaNotifications.show(
+        context: context,
+        title: 'Session Créée',
+        message: 'Nouvelle session: $sessionTitle',
       );
     }
   }
@@ -565,12 +564,15 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
                   createdAt: DateTime.now(),
                   isRunning: false,
                 ));
-    _exitBannerTimer?.cancel();
-    _exitBannerNotifier.value =
-        _ExitBannerData(exitCode: code, sessionTitle: meta.title);
-    _exitBannerTimer = Timer(const Duration(seconds: 5), () {
-      if (mounted) _exitBannerNotifier.value = null;
-    });
+                
+    if (code != 0) {
+      PandaNotifications.show(
+        context: context,
+        title: 'Session Terminée: ${meta.title}',
+        message: 'Le processus s\'est terminé avec le code d\'erreur $code.',
+        isError: true,
+      );
+    }
   }
 
   double _terminalFontSizeFromConfig() {
@@ -633,10 +635,12 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
         '-b', '/dev',
         '-b', '/proc',
         '-b', '/sys',
-        '-w', '/root',
+        '-b', widget.projectDir,
+        '-b', '/storage',
+        '-w', widget.projectDir,
         '/bin/sh',
       ],
-      workingDirectory: rootfsDir,
+      workingDirectory: widget.projectDir,
       environment: {
         'HOME': '/root',
         'TERM': 'xterm-256color',
@@ -687,7 +691,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
     SSHInfo? externalServer,
     bool useProot = false,
   }) async {
-    if (useProot) {
+    if (useProot || (externalServer == null && _isAlpineInstalled())) {
       await _startProotSession(runtime);
       return;
     }
@@ -1225,65 +1229,9 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
 
   // ── Feature 1: Exit code overlay banner ─────────────────────────────────
   Widget _buildExitBanner() {
-    return ValueListenableBuilder<_ExitBannerData?>(
-      valueListenable: _exitBannerNotifier,
-      builder: (context, data, _) {
-        if (data == null) return const SizedBox.shrink();
-        final isSuccess = data.exitCode == 0;
-        final bgColor   = isSuccess ? const Color(0xff1b4332) : const Color(0xff4a1919);
-        final bdColor   = isSuccess ? const Color(0xff40b06e) : const Color(0xffef5350);
-        final fgColor   = isSuccess ? const Color(0xff86efac) : const Color(0xffef9a9a);
-        return Positioned(
-          top: 8,
-          left: 12,
-          right: 12,
-          child: Material(
-            elevation: 10,
-            borderRadius: BorderRadius.circular(12),
-            shadowColor: bdColor.withValues(alpha: 0.4),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: bdColor, width: 1),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isSuccess ? Icons.check_circle_outline_rounded : Icons.error_outline_rounded,
-                    size: 18,
-                    color: bdColor,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isSuccess
-                          ? '✓  ${data.sessionTitle} — terminé avec succès (code 0)'
-                          : '✗  ${data.sessionTitle} — exit code ${data.exitCode}',
-                      style: TextStyle(
-                        color: fgColor,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w500,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  GestureDetector(
-                    onTap: () => _exitBannerNotifier.value = null,
-                    child: Icon(Icons.close_rounded, size: 15, color: fgColor.withValues(alpha: 0.7)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
+    return const SizedBox.shrink();
   }
 
-  // ── Feature 4: Split terminal view ──────────────────────────────────────
   Widget _buildSingleTerminalPage(TerminalSessionState state, TerminalThemePreset activeTheme) {
     if (state.sessions.isEmpty) return const Center(child: CircularProgressIndicator());
     return PageView.builder(
@@ -1903,16 +1851,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
             leadingIcon: SvgPicture.asset("assets/icons/Termux.svg", height: 18, width: 18),
             child: Text(termuxInfo!.name, style: TextStyle(color: appTheme.selectScreenCardTextColor)),
           ),
-        MenuItemButton(
-          onPressed: () => _createSession(
-            makeActive: true,
-            showFeedback: true,
-            title: 'Alpine Linux',
-            useProot: true,
-          ),
-          leadingIcon: Icon(Icons.terminal_rounded, color: Colors.blue.shade300, size: 18),
-          child: Text('Alpine Linux (proot)', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
-        ),
+
       ],
       builder: (context, controller, child) => InkWell(
         onTap: () => _terminalSelectionStatus.isForwardOrCompleted

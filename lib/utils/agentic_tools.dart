@@ -1063,6 +1063,29 @@ class AgenticTools {
   Future<ProcessResult> _runGitCommand(List<String> args) async {
     final env = await _buildAgentShellEnvironment(workspacePath);
 
+    final String prootBin = '$binDir/proot';
+    final String rootfsDir = '$runtimesDir/alpine-linux';
+    
+    if (File(prootBin).existsSync() && Directory(rootfsDir).existsSync()) {
+      final List<String> prootArgs = [
+        '--rootfs=$rootfsDir',
+        '-b', '/dev',
+        '-b', '/proc',
+        '-b', '/sys',
+        '-b', workspacePath,
+          '-b', '/storage',
+        '-w', workspacePath,
+        '/usr/bin/git',
+        ...args
+      ];
+      return Process.run(
+        prootBin,
+        prootArgs,
+        environment: env,
+        workingDirectory: workspacePath,
+      );
+    }
+
     return Process.run(
       'git',
       args,
@@ -1596,16 +1619,43 @@ class AgenticTools {
       final env = await _buildAgentShellEnvironment(workspacePath);
 
       env.addAll(envs);
-      final process = await Process.run(
-        command,
-        args,
-        environment: env,
-        workingDirectory: workspacePath,
-      ).timeout(
-        const Duration(seconds: 120),
-        onTimeout: () => throw TimeoutException(
-            'runShellCommand "$command" exceeded 120 s timeout'),
-      );
+      final String prootBin = '$binDir/proot';
+      final String rootfsDir = '$runtimesDir/alpine-linux';
+      
+      ProcessResult process;
+      if (File(prootBin).existsSync() && Directory(rootfsDir).existsSync()) {
+        final List<String> prootArgs = [
+          '--rootfs=$rootfsDir',
+          '-b', '/dev',
+          '-b', '/proc',
+          '-b', '/sys',
+          '-b', workspacePath,
+          '-b', '/storage',
+          '-w', workspacePath,
+          '/bin/sh',
+          '-c',
+          fullCmdStr
+        ];
+        process = await Process.run(
+          prootBin,
+          prootArgs,
+          environment: env,
+          workingDirectory: workspacePath,
+        ).timeout(
+          const Duration(seconds: 120),
+          onTimeout: () => throw TimeoutException('runShellCommand "$command" exceeded 120 s timeout'),
+        );
+      } else {
+        process = await Process.run(
+          command,
+          args,
+          environment: env,
+          workingDirectory: workspacePath,
+        ).timeout(
+          const Duration(seconds: 120),
+          onTimeout: () => throw TimeoutException('runShellCommand "$command" exceeded 120 s timeout'),
+        );
+      }
       return ToolResult.success({
         "pid": process.pid.toString(),
         "exitCode": process.exitCode.toString(),
