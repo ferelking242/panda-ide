@@ -632,6 +632,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
         'HOME': '/root',
         'TERM': 'xterm-256color',
         'SHELL': '/bin/sh',
+        'DISPLAY': ':0',
         'ENV': '/root/.profile',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
         'TMPDIR': '/tmp',

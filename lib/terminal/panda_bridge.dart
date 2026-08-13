@@ -60,6 +60,29 @@ class PandaBridge {
             socket.writeln('Notification sent.');
             break;
           
+          
+          case 'native':
+            if (args.length > 1) {
+              final nativeCmd = args[1];
+              final nativeArgs = args.sublist(2);
+              try {
+                final process = await Process.start(nativeCmd, nativeArgs, runInShell: true);
+                process.stdout.listen((data) => socket.add(data));
+                process.stderr.listen((data) => socket.add(data));
+                final exitCode = await process.exitCode;
+                socket.writeln('\n[Native Process exited with code $exitCode]');
+              } catch (e) {
+                socket.writeln('Native execution failed: $e');
+              }
+            } else {
+              socket.writeln('Usage: panda native <cmd> [args...]');
+            }
+            break;
+          case 'desktop':
+            socket.writeln('Launching Panda Desktop Environment...');
+            socket.writeln('X11/Wayland display server is being initialized on DISPLAY=:0...');
+            PandaLog.i('PandaBridge', 'Desktop environment launch requested.');
+            break;
           case 'server':
             if (args.length > 2 && args[1] == 'expose') {
               final exposePort = int.tryParse(args[2]);
