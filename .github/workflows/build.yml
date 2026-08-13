@@ -78,7 +78,7 @@ jobs:
           app_gradle = Path("android/app/build.gradle.kts")
           app_source = app_gradle.read_text()
           new_app_source, count = re.subn(
-              r'^\s*dynamicFeatures\.addAll\([\s\S]*?\)\s*\n?',
+              r'^\s*dynamicFeatures\.addAll\([\s\S]*?\)\s*\)\s*\n?',
               "",
               app_source,
               flags=re.MULTILINE,
