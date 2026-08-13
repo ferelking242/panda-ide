@@ -1501,7 +1501,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                     hscrollController: editor.hscroll,
                     vscrollController: editor.vscroll,
                   ),
-                  ?pendingPanel,
+                  if (pendingPanel != null) pendingPanel,
                 ],
               );
             },
@@ -1584,7 +1584,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
           ),
         ),
         Align(
-          alignment: Alignment.centerEnd,
+          alignment: Alignment.centerRight,
           child: ValueListenableBuilder(
             valueListenable: isGeneratingCompletion,
             builder:(context, aiValue, _) => aiValue ? Padding(

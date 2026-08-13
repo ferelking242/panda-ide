@@ -1564,7 +1564,7 @@ class _RuntimesSectionState extends State<_RuntimesSection> {
         final resolvedKey = PackageDownloader.resolveAlias(info.key);
         final idx  = keyToIndex[resolvedKey];
         // Find the catalog RunTime for url/archiveName
-        RunTime? rt;
+        lang.RunTime? rt;
         if (idx != null) {
           rt = catalogState.runtimes[idx];
         }
