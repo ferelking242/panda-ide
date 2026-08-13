@@ -220,6 +220,39 @@ class _StartScreenState extends State<StartScreen> {
       PandaLog.w('StartScreen', 'Git global config failed (ignored): $e');
     }
 
+    // Alpine native integration
+    final alpineDir = '$runtimesDir/alpine-linux';
+    final prootBin = '$binDir/proot';
+    
+    if (!File(prootBin).existsSync() || !Directory(alpineDir).existsSync()) {
+      PandaLog.i('StartScreen', 'Installing built-in Alpine Linux environment...');
+      try {
+        final prootBytes = await rootBundle.load('assets/runtimes/proot');
+        File(prootBin).writeAsBytesSync(prootBytes.buffer.asUint8List());
+        await Process.run('chmod', ['+x', prootBin]);
+
+        Directory(alpineDir).createSync(recursive: true);
+        final tarPath = '$runtimesDir/alpine-minirootfs.tar.gz';
+        final tarBytes = await rootBundle.load('assets/runtimes/alpine-minirootfs.tar.gz');
+        File(tarPath).writeAsBytesSync(tarBytes.buffer.asUint8List());
+
+        final res = await Process.run('tar', ['-xzf', tarPath, '-C', alpineDir]);
+        if (res.exitCode != 0) {
+          PandaLog.e('StartScreen', 'Failed to extract Alpine: ${res.stderr}');
+        } else {
+          final resolv = File('$alpineDir/etc/resolv.conf');
+          if (!resolv.existsSync()) {
+            resolv.parent.createSync(recursive: true);
+            resolv.writeAsStringSync('nameserver 8.8.8.8\nnameserver 1.1.1.1\n');
+          }
+          PandaLog.i('StartScreen', 'Alpine Linux environment installed successfully.');
+        }
+        try { File(tarPath).deleteSync(); } catch (_) {}
+      } catch (e) {
+        PandaLog.e('StartScreen', 'Error setting up Alpine: $e');
+      }
+    }
+
     PandaLog.i('StartScreen', 'Initialization complete');
   }
 

@@ -481,38 +481,27 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   Future<void> _ensureBashRc() async {
     try {
-      final bashrc = File('$homeDir/.bashrc');
+      final alpineRoot = '$runtimesDir/alpine-linux/root';
+      if (!Directory(alpineRoot).existsSync()) {
+        Directory(alpineRoot).createSync(recursive: true);
+      }
+      final bashrc = File('$alpineRoot/.profile');
 
       // ── Feature 2 : prompt oh-my-zsh style ──────────────────────────────
-      const gitBranchFn = r'''# Git branch helper & Termux pkg helper
+      const gitBranchFn = r'''# Git branch helper
 __git_branch() {
   local branch
   branch=$(git symbolic-ref --short HEAD 2>/dev/null) || return
   echo " \033[38;5;214m🌿 ${branch}\033[0m"
 }
-apk() {
-  if [ -x "/data/data/com.panda.ide/bin/proot" ] && [ -d "/data/data/com.panda.ide/runtimes/alpine-linux" ]; then
-    "/data/data/com.panda.ide/bin/proot" --rootfs="/data/data/com.panda.ide/runtimes/alpine-linux" -b /dev -b /proc -b /sys -w /root /sbin/apk "$@"
-  else
-    echo -e "\033[38;5;208m[Panda Linux]\033[0m L'environnement Alpine Linux n'est pas installé."
-    echo -e "Téléchargez-le depuis la \033[36mMarketplace (Section Runtimes -> Alpine Linux)\033[0m."
-  fi
-}
 pkg() {
-  if [ -x "/data/data/com.panda.ide/bin/proot" ] && [ -d "/data/data/com.panda.ide/runtimes/alpine-linux" ]; then
-    apk "$@"
-  elif [ -x "/data/data/com.termux/files/usr/bin/pkg" ]; then
-    /data/data/com.termux/files/usr/bin/pkg "$@"
-  else
-    echo -e "\033[38;5;208m[Panda Linux]\033[0m 'pkg' nécessite l'environnement Linux (Alpine)."
-    echo -e "Téléchargez \033[36mAlpine Linux\033[0m depuis la Marketplace (Runtimes) pour installer tout paquet Linux (git, node, python...)."
-  fi
+  apk "$@"
 }
 apt() {
-  pkg "$@"
+  apk "$@"
 }
 winget() {
-  echo -e "\033[38;5;208m[Panda Linux]\033[0m 'winget' est pour Windows. Sur Panda Linux Android, utilisez \033[1m'apk add <paquet>'\033[0m ou \033[1m'pkg install <paquet>'\033[0m."
+  echo -e "\033[38;5;208m[Panda Linux]\033[0m 'winget' est pour Windows. Utilisez \033[1m'apk add <paquet>'\033[0m."
 }''';
       const richPS1 = r'''# Oh My Zsh / Starship Flash Prompt
 export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(__git_branch) \[\033[38;5;118m\]➜\[\033[0m\] ' ''';
@@ -604,25 +593,22 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
 
   // ── proot + Alpine helpers ─────────────────────────────────────────────────
 
-  bool _isAlpineInstalled() {
-    return File('$binDir/proot').existsSync() &&
-        Directory('$runtimesDir/alpine-linux').existsSync();
-  }
-
   Future<void> _startProotSession(_TerminalRuntime runtime) async {
     final prootBin = '$binDir/proot';
     final rootfsDir = '$runtimesDir/alpine-linux';
 
+    await _ensureBashRc();
+
     if (!File(prootBin).existsSync()) {
       runtime.terminal.write(
-        '\r\n\x1b[31m[proot binary not found. Install Alpine Linux from the Downloads section.]\x1b[0m\r\n',
+        '\r\n\x1b[31m[proot binary not found. Try restarting the app to trigger installation.]\x1b[0m\r\n',
       );
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
       return;
     }
     if (!Directory(rootfsDir).existsSync()) {
       runtime.terminal.write(
-        '\r\n\x1b[31m[Alpine rootfs not found. Install Alpine Linux from the Downloads section.]\x1b[0m\r\n',
+        '\r\n\x1b[31m[Alpine rootfs not found. Try restarting the app to trigger installation.]\x1b[0m\r\n',
       );
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
       return;
@@ -645,6 +631,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
         'HOME': '/root',
         'TERM': 'xterm-256color',
         'SHELL': '/bin/sh',
+        'ENV': '/root/.profile',
         'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
         'TMPDIR': '/tmp',
         'PROOT_TMP_DIR': tempDir,
@@ -691,7 +678,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
     SSHInfo? externalServer,
     bool useProot = false,
   }) async {
-    if (useProot || (externalServer == null && _isAlpineInstalled())) {
+    if (externalServer == null) {
       await _startProotSession(runtime);
       return;
     }
@@ -746,113 +733,6 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
       });
 
       return;
-    }
-
-    if (_sharedPath.isEmpty) {
-      _sharedPath = await NativeChannel.getLibraryPath();
-    }
-
-    await _ensureBashRc();
-
-    // Detect which runtimes are installed so we only add their dirs to PATH.
-    final flutterInstalled =
-        Directory('$runtimesDir/flutter/bin').existsSync();
-    final androidSdkInstalled =
-        Directory('$runtimesDir/android-sdk/platform-tools').existsSync();
-
-    final pathParts = [
-      binDir,
-      if (flutterInstalled)  '$runtimesDir/flutter/bin',
-      if (androidSdkInstalled) '$runtimesDir/android-sdk/platform-tools',
-      if (androidSdkInstalled) '$runtimesDir/android-sdk/build-tools/current',
-      '$runtimesDir/node/bin',
-      '/bin',
-      '/usr/bin',
-      '/sbin',
-      '/usr/sbin',
-    ];
-
-    final enVars = <String, String>{
-      'HOME': homeDir,
-      // PS1 is set by .bashrc (rich prompt with git branch) — keep a safe fallback
-      'PS1': r'\[\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\] \[\033[38;5;118m\]➜\[\033[0m\] ',
-      'PATH': pathParts.join(':'),
-      'PROMPT_DIRTRIM': '2',
-      'ROXUM_SHARED_PATH': _sharedPath,
-      'LD_LIBRARY_PATH': '$_sharedPath:$libDir:$runtimesDir/clang',
-      'PREFIX': appDir,
-      'TMPDIR': tempDir,
-      'JAVA_HOME': '$runtimesDir/java-21-openjdk',
-      'GIT_EXEC_PATH': '$binDir/git-core',
-      'GIT_SSL_CAINFO': '$certDir/cacert.pem',
-      'RUSTFLAGS': '--sysroot $runtimesDir/rust',
-      'GOROOT': '$runtimesDir/go',
-      'CC': 'clang',
-      // ── Flutter SDK (injected when $runtimesDir/flutter is present) ──────
-      if (flutterInstalled) ...{
-        'FLUTTER_ROOT'              : '$runtimesDir/flutter',
-        'PUB_CACHE'                 : '$runtimesDir/flutter/.pub-cache',
-        'PUB_HOSTED_URL'            : 'https://pub.dartlang.org',
-        'FLUTTER_STORAGE_BASE_URL'  : 'https://storage.googleapis.com',
-        'FLUTTER_SUPPRESS_ANALYTICS': 'true',
-        'DART_VM_OPTIONS'           : '--disable-dart-dev',
-      },
-      // ── Android SDK (injected when platform-tools are present) ───────────
-      if (androidSdkInstalled) ...{
-        'ANDROID_HOME'    : '$runtimesDir/android-sdk',
-        'ANDROID_SDK_ROOT': '$runtimesDir/android-sdk',
-      },
-    };
-
-    final process = Pty.start(
-      '$_sharedPath/libbash.so',
-      workingDirectory: widget.projectDir,
-      environment: enVars,
-      rows: runtime.terminal.viewHeight,
-      columns: runtime.terminal.viewWidth,
-      arguments: args.isNotEmpty ? args : ['--rcfile', '$homeDir/.bashrc', '-i'],
-    );
-
-    runtime.pty = process;
-    _sessionBloc.add(
-      UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true),
-    );
-
-    process.output
-      .cast<List<int>>()
-      .transform(const Utf8Decoder())
-      .listen(runtime.terminal.write);
-
-    process.exitCode.then((code) {
-      if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
-      runtime.pty = null;
-      runtime.terminal.write('\r\n\n[Program finished with exit code $code]');
-      _sessionBloc.add(
-        UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
-      );
-      _showExitBanner(runtime.sessionId, code);
-    });
-
-    runtime.terminal.onOutput = (data) {
-      if (widget.readOnly) {
-        return;
-      }
-
-      final activeSessionId = _sessionBloc.state.activeSessionId;
-      process.write(const Utf8Encoder().convert(data));
-      if (activeSessionId == runtime.sessionId) {
-        _handleInputForAutocomplete(runtime, data);
-      }
-    };
-
-    runtime.terminal.onResize = (w, h, pw, ph) {
-      process.resize(h, w);
-    };
-
-    if (widget.readOnly) {
-      _suggestionsNotifier.value = null;
-      _hideSelectionToolbar();
-      runtime.controller.clearSelection();
     }
   }
 

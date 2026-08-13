@@ -475,7 +475,7 @@ class PackageDownloader {
       if (n == 'go'          || archiveName == 'go.zip')                await _createGoSymlinks();
       if (n == 'ruby'        || archiveName == 'ruby.zip')              await _createRubySymlinks();
       if (n == 'lua'         || archiveName == 'lua.zip')               await _createLuaSymlinks();
-      if (n == 'alpine-linux'|| archiveName == 'alpine-proot.tar.gz')  await _setupAlpineProot();
+      // if (n == 'alpine-linux'|| archiveName == 'alpine-proot.tar.gz')  await _setupAlpineProot();
 
       downloadBloc.markFullyCompleted(index);
     } catch (e) {
