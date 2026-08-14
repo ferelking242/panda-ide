@@ -16,6 +16,7 @@ import 'package:panda/utils/agentic_tool_catalog.dart';
 import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
+import 'package:panda/utils/alpine_setup.dart';
 
 typedef AgentConfirmCallback = Future<bool> Function({
   required String toolName,
@@ -1063,8 +1064,9 @@ class AgenticTools {
   Future<ProcessResult> _runGitCommand(List<String> args) async {
     final env = await _buildAgentShellEnvironment(workspacePath);
 
-    final String prootBin = '$binDir/proot';
     final String rootfsDir = '$runtimesDir/alpine-linux';
+    final resolvedProotBin = AlpineSetup.locateProotBinary(rootfsDir) ?? '$binDir/proot';
+    final prootBin = File(resolvedProotBin).existsSync() ? resolvedProotBin : '$binDir/proot';
     
     if (File(prootBin).existsSync() && Directory(rootfsDir).existsSync()) {
       final List<String> prootArgs = [
@@ -1619,8 +1621,9 @@ class AgenticTools {
       final env = await _buildAgentShellEnvironment(workspacePath);
 
       env.addAll(envs);
-      final String prootBin = '$binDir/proot';
       final String rootfsDir = '$runtimesDir/alpine-linux';
+      final resolvedProotBin = AlpineSetup.locateProotBinary(rootfsDir) ?? '$binDir/proot';
+      final prootBin = File(resolvedProotBin).existsSync() ? resolvedProotBin : '$binDir/proot';
       
       ProcessResult process;
       if (File(prootBin).existsSync() && Directory(rootfsDir).existsSync()) {
