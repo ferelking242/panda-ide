@@ -12,6 +12,7 @@ import '../ui/notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
+import '../utils/alpine_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
@@ -594,8 +595,9 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
   // ── proot + Alpine helpers ─────────────────────────────────────────────────
 
   Future<void> _startProotSession(_TerminalRuntime runtime) async {
-    final prootBin = '$binDir/proot';
     final rootfsDir = '$runtimesDir/alpine-linux';
+    final resolvedProotBin = AlpineSetup.locateProotBinary(rootfsDir) ?? '$binDir/proot';
+    final prootBin = File(resolvedProotBin).existsSync() ? resolvedProotBin : '$binDir/proot';
 
     await _ensureBashRc();
 

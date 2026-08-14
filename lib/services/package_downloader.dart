@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import '../bloc/ui_bloc/ui_bloc.dart';
+import '../utils/alpine_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
@@ -644,16 +645,9 @@ class PackageDownloader {
         orElse: () => alpineDir,
       );
 
-      final prootCandidates = <String>[
-        '$resolvedRootfs/proot',
-        '$resolvedRootfs/bin/proot',
-        '$alpineDir/proot',
-        '$alpineDir/bin/proot',
-      ];
-      final prootSrc = prootCandidates.firstWhere(
-        (path) => File(path).existsSync(),
-        orElse: () => '',
-      );
+      final prootSrc = AlpineSetup.locateProotBinary(resolvedRootfs) ??
+          AlpineSetup.locateProotBinary(alpineDir) ??
+          '';
       final prootDst = '$binDir/proot';
 
       if (prootSrc.isNotEmpty) {
