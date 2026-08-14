@@ -262,7 +262,7 @@ class _StartScreenState extends State<StartScreen> {
           }
           PandaLog.i('StartScreen', 'Alpine Linux environment installed successfully.');
         }
-        try { File(tarPath).deleteSync(); } catch (_) {}
+        try { File(zipPath).deleteSync(); } catch (_) {}
       } catch (e) {
         PandaLog.e('StartScreen', 'Error setting up Alpine: $e');
       }
