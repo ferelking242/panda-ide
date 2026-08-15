@@ -121,7 +121,7 @@ class AiStudioIndicatorPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _AiStudioIndicatorPainter oldDelegate) {
+  bool shouldRepaint(covariant AiStudioIndicatorPainter oldDelegate) {
     return oldDelegate.progress != progress;
   }
 }

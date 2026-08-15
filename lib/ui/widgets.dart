@@ -1715,10 +1715,8 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                                   final end = sel.end >= 0 ? sel.end : 0;
                                   final currentText = controller.text;
                                   final newText = currentText.replaceRange(start, end, text);
-                                  controller.value = TextEditingValue(
-                                    text: newText,
-                                    selection: TextSelection.collapsed(offset: start + text.length),
-                                  );
+                                  controller.text = newText;
+                                  controller.selection = TextSelection.collapsed(offset: start + text.length);
                                 }
                               },
                             ),
@@ -1736,10 +1734,8 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                                   final start = sel.start;
                                   final end = sel.end;
                                   final newText = controller.text.replaceRange(start, end, '');
-                                  controller.value = TextEditingValue(
-                                    text: newText,
-                                    selection: TextSelection.collapsed(offset: start),
-                                  );
+                                  controller.text = newText;
+                                  controller.selection = TextSelection.collapsed(offset: start);
                                 }
                               },
                             ),
@@ -2125,9 +2121,10 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                 )
               ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
+    ),
     ],
   );
     return pageContent;
