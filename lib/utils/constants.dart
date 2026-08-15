@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 // ── App private directories (no special permission needed) ────────────────────
 const appDir = "/data/data/com.panda.ide";
 const binDir = "$appDir/bin";
@@ -44,13 +42,3 @@ void usePublicStorageRoots() {
 
 // Legacy download cache (app-private, no permission needed)
 const downloadsDir = "/storage/emulated/0/Android/data/com.panda.ide/files/data/user/0/com.panda.ide/files";
-
-class EditorStatusInfo {
-  final String lineCol;
-  final String language;
-  const EditorStatusInfo({required this.lineCol, required this.language});
-}
-
-final globalEditorStatusNotifier = ValueNotifier<EditorStatusInfo?>(null);
-final globalToolbarVisibleNotifier = ValueNotifier<bool>(true);
-

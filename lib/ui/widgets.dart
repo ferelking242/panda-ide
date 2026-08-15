@@ -280,14 +280,14 @@ Widget bottomTool(
     : Colors.grey.shade500;
 
   return SizedBox(
-    height: 26,
-    width: 38,
+    height: 37,
+    width: 50,
     child: IconButton(
       highlightColor: Colors.lightBlue.withAlpha(160),
       style: ButtonStyle(
         shape: WidgetStateProperty.all(
           const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(6)),
+            borderRadius: BorderRadius.all(Radius.circular(10)),
           ),
         ),
       ),
@@ -302,12 +302,11 @@ Widget bottomTool(
       
       icon: iconData is IconData ? Icon(
         iconData,
-        size: 16,
         color: effectiveEnabled ? iconColor : disabledColor,
       ) : Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            padding: EdgeInsets.all(5.5),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
                 color: effectiveEnabled
                   ? (isDark ? Colors.grey[400]! : Colors.grey)
@@ -321,7 +320,7 @@ Widget bottomTool(
                 color: effectiveEnabled
                   ? (isDark ? Colors.grey[400]! : Colors.grey)
                   : disabledColor,
-                fontSize: 10
+                fontSize: 12
               )
             )
       )
@@ -578,56 +577,47 @@ class _CodeEditorState extends State<CodeEditor> with AutomaticKeepAliveClientMi
                   final ext = path.extension(widget.filePath.path).toLowerCase();
                   final primaryMode = widget.language.language;
 
-                  final mergedThemes = getMergedHighlightThemes(configState.codeForgeConfig);
-                  final selectedThemeKey = configState.codeForgeConfig['theme'];
-                  final selectedTheme = mergedThemes[selectedThemeKey];
-                  final appTheme = context.watch<AppThemeBloc>().state.appTheme;
-                  final editorBg = selectedTheme?['root']?.backgroundColor ?? (appTheme.isDark ? const Color(0xff181818) : Colors.white);
-
-                  return Container(
-                    color: editorBg,
-                    child: CodeForge(
-                      key: ValueKey('${widget.filePath.path}:${widget.language.name}'),
-                      horizontalScrollController: null,
-                      verticalScrollController: null,
-                      lineWrap: (configState.codeForgeConfig['lineWrap'] ?? false) as bool,
-                      enableFolding: (configState.codeForgeConfig['enableFolding'] ?? true) as bool,
-                      language: primaryMode,
-                      extraLanguages: (() {
-                        if (ext == '.tsx' || ext == '.jsx') {
-                          final Mode? xmlMode = langxml.language;
-                          if (xmlMode != null) {
-                            return <Mode>[xmlMode];
-                          }
+                  return CodeForge(
+                    key: ValueKey('${widget.filePath.path}:${widget.language.name}'),
+                    horizontalScrollController: null,
+                    verticalScrollController: null,
+                    lineWrap: (configState.codeForgeConfig['lineWrap'] ?? false) as bool,
+                    enableFolding: (configState.codeForgeConfig['enableFolding'] ?? true) as bool,
+                    language: primaryMode,
+                    extraLanguages: (() {
+                      if (ext == '.tsx' || ext == '.jsx') {
+                        final Mode? xmlMode = langxml.language;
+                        if (xmlMode != null) {
+                          return <Mode>[xmlMode];
                         }
-                        return const <Mode>[];
-                      })(),
-                      customCodeSnippets: widget.language.customCodeSnippet,
-                      filePath: widget.filePath.path,
-                      enableGuideLines: (configState.codeForgeConfig['indentLineStatus'] ?? true) as bool,
-                      selectionStyle: CodeSelectionStyle(
-                        selectionColor: Colors.blueAccent.withAlpha(80),
-                        cursorBubbleColor: Colors.blue,
-                      ),
-                      matchHighlightStyle: const MatchHighlightStyle(
-                        currentMatchStyle: TextStyle(backgroundColor: Color(0xFFFFA726)),
-                        otherMatchStyle: TextStyle(backgroundColor: Color(0x55FFFF00)),
-                      ),
-                      editorTheme: selectedTheme,
-                      textStyle: TextStyle(
-                        fontFamily: configState.codeForgeConfig['fontFamily'],
-                        fontSize: configState.fontSize,
-                      ),
-                      controller: codeController,
-                      undoController: widget.undoRedoController,
-                      findController: widget.findController,
-                      finderBuilder: (context, findController) {
-                        return FindPanelWidget(
-                          controller: findController,
-                          onClose: widget.onFindPanelClose,
-                        );
-                      },
+                      }
+                      return const <Mode>[];
+                    })(),
+                    customCodeSnippets: widget.language.customCodeSnippet,
+                    filePath: widget.filePath.path,
+                    enableGuideLines: (configState.codeForgeConfig['indentLineStatus'] ?? true) as bool,
+                    selectionStyle: CodeSelectionStyle(
+                      selectionColor: Colors.blueAccent.withAlpha(80),
+                      cursorBubbleColor: Colors.blue,
                     ),
+                    matchHighlightStyle: const MatchHighlightStyle(
+                      currentMatchStyle: TextStyle(backgroundColor: Color(0xFFFFA726)),
+                      otherMatchStyle: TextStyle(backgroundColor: Color(0x55FFFF00)),
+                    ),
+                    editorTheme: getMergedHighlightThemes(configState.codeForgeConfig)[configState.codeForgeConfig['theme']],
+                    textStyle: TextStyle(
+                      fontFamily: configState.codeForgeConfig['fontFamily'],
+                      fontSize: configState.fontSize,
+                    ),
+                    controller: codeController,
+                    undoController: widget.undoRedoController,
+                    findController: widget.findController,
+                    finderBuilder: (context, findController) {
+                      return FindPanelWidget(
+                        controller: findController,
+                        onClose: widget.onFindPanelClose,
+                      );
+                    },
                   );
                 },
               ),
@@ -1102,21 +1092,6 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
     });
   }
 
-  void _updateGlobalStatus() {
-    if (editor.isActive) {
-      final line = cursor.value.line + 1;
-      final col = cursor.value.col + 1;
-      final langName = language.name;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        globalEditorStatusNotifier.value = EditorStatusInfo(
-          lineCol: 'Ln $line, Col $col',
-          language: langName,
-        );
-      });
-    }
-  }
-
   @override
   void initState() {
     editor = widget.editor;
@@ -1136,8 +1111,6 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
       if(!mounted || !context.mounted || !controller.selection.isValid) return;
       cursor.value = _lineAndColumnAtCursor(controller);
     });
-    cursor.addListener(_updateGlobalStatus);
-    _updateGlobalStatus();
     super.initState();
   }
 
@@ -1147,7 +1120,6 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
     if (oldWidget.editor.file.path != widget.editor.file.path) {
       _reloadPendingEdits();
     }
-    _updateGlobalStatus();
   }
 
   Future<void> _reloadPendingEdits({bool silent = false}) async {
@@ -1466,10 +1438,6 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
 
   @override
   void dispose() {
-    cursor.removeListener(_updateGlobalStatus);
-    if (globalEditorStatusNotifier.value?.language == language.name) {
-      globalEditorStatusNotifier.value = null;
-    }
     _pendingRefreshTimer?.cancel();
     super.dispose();
   }
@@ -1539,6 +1507,82 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
             },
           ),
         ),
+        Container(
+          height: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: appTheme.isDark
+                ? const Color.fromARGB(255, 25, 25, 25)
+                : const Color.fromARGB(255, 236, 236, 236),
+            border: Border(
+              top: BorderSide(color: Colors.grey.withValues(alpha: 0.3), width: 0.5),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              ValueListenableBuilder(
+                valueListenable: cursor,
+                builder: (ctx, lineColValue, child) {
+                  return Text(
+                    'Ln ${lineColValue.line + 1}, Col ${lineColValue.col + 1}',
+                    style: TextStyle(
+                      color: appTheme.selectScreenCardTextColor,
+                      fontSize: 11,
+                    ),
+                  );
+                }
+              ),
+              const SizedBox(width: 20),
+              Padding(
+                padding: const EdgeInsets.only(right: 5),
+                child: SizedBox(
+                  width: _languageDropdownWidth(context),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<Language>(
+                      dropdownColor: appTheme.editorPageDrawerBg,
+                      isDense: true,
+                      isExpanded: true,
+                      value: language,
+                      iconSize: 16,
+                      style: TextStyle(
+                        color: appTheme.selectScreenCardTextColor,
+                        fontSize: 11,
+                      ),
+                      items: languages.map((lang) {
+                        return DropdownMenuItem<Language>(
+                          value: lang,
+                          child: Row(
+                            spacing: 3,
+                            children: [
+                              SizedBox(
+                                height:14,
+                                width: 14,
+                                child: lang.icon
+                              ),
+                              Text(
+                                lang.name,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                                style: TextStyle(
+                                  color: appTheme.selectScreenCardTextColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        _overrideLanguage(value);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
         Align(
           alignment: Alignment.centerRight,
           child: ValueListenableBuilder(
@@ -1592,12 +1636,8 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
             ) : SizedBox.shrink(),
           ),
         ),
-        ValueListenableBuilder<bool>(
-          valueListenable: globalToolbarVisibleNotifier,
-          builder: (context, visible, child) {
-            if (!visible) return const SizedBox.shrink();
-            return RawScrollbar(
-              controller: sctrl,
+        RawScrollbar(
+          controller: sctrl,
           scrollbarOrientation: ScrollbarOrientation.top,
           thumbColor: appTheme.selectScreenCardTextColor.withAlpha(50),
           interactive: false,
@@ -1610,7 +1650,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  height: 56,
+                  height: 78,
                   color: appTheme.isDark
                     ? const Color.fromARGB(255, 32, 32, 32)
                     : const Color.fromARGB(255, 219, 218, 218),
@@ -1619,8 +1659,8 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                       Row(
                         children: [
                           SizedBox(
-                            height: 26,
-                            width: 38,
+                            height: 37,
+                            width: 50,
                             child: Tooltip(
                               message: "tab",
                               child: IconButton(
@@ -1628,7 +1668,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                                 style: ButtonStyle(
                                   shape: WidgetStateProperty.all(
                                     const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.all(Radius.circular(6)),
+                                      borderRadius: BorderRadius.all(Radius.circular(10)),
                                     ),
                                   ),
                                 ),
@@ -1644,8 +1684,8 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                                 },
                                 icon: SvgPicture.asset(
                                   "assets/icons/tab.svg",
-                                  height: 16,
-                                  width: 16,
+                                  height: 25,
+                                  width: 25,
                                   colorFilter: ColorFilter.mode(
                                     appTheme.isDark
                                       ? const Color.fromARGB(255, 194, 194, 194)
@@ -1687,78 +1727,24 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                             ),
                           ),
                           Tooltip(
-                            message: "copier",
-                            child: bottomTool(
-                              appTheme.isDark,
-                              Icons.copy,
-                              () {
-                                final sel = controller.selection;
-                                if (sel.isValid && !sel.isCollapsed) {
-                                  Clipboard.setData(ClipboardData(text: sel.textInside(controller.text)));
-                                } else {
-                                  Clipboard.setData(ClipboardData(text: controller.text));
-                                }
-                              },
-                            ),
-                          ),
-                          Tooltip(
-                            message: "coller",
-                            child: bottomTool(
-                              appTheme.isDark,
-                              Icons.paste,
-                              () async {
-                                final data = await Clipboard.getData(Clipboard.kTextPlain);
-                                if (data?.text != null) {
-                                  final text = data!.text!;
-                                  final sel = controller.selection;
-                                  final start = sel.start >= 0 ? sel.start : 0;
-                                  final end = sel.end >= 0 ? sel.end : 0;
-                                  final currentText = controller.text;
-                                  final newText = currentText.replaceRange(start, end, text);
-                                  controller.text = newText;
-                                  controller.selection = TextSelection.collapsed(offset: start + text.length);
-                                }
-                              },
-                            ),
-                          ),
-                          Tooltip(
-                            message: "couper",
-                            child: bottomTool(
-                              appTheme.isDark,
-                              Icons.cut,
-                              () {
-                                final sel = controller.selection;
-                                if (sel.isValid && !sel.isCollapsed) {
-                                  final selectedText = sel.textInside(controller.text);
-                                  Clipboard.setData(ClipboardData(text: selectedText));
-                                  final start = sel.start;
-                                  final end = sel.end;
-                                  final newText = controller.text.replaceRange(start, end, '');
-                                  controller.text = newText;
-                                  controller.selection = TextSelection.collapsed(offset: start);
-                                }
-                              },
-                            ),
-                          ),
-                          Tooltip(
                             message: "upward",
                             child: bottomTool(
                               appTheme.isDark,
-                              Icons.keyboard_arrow_up,
+                              Icons.arrow_upward,
                               controller.pressUpArrowKey,
                             ),
                           ),
                           Tooltip(
                             message: "request ai completion",
                             child: SizedBox(
-                              height: 26,
-                              width: 38,
+                              height: 37,
+                              width: 50,
                               child: IconButton(
                                 highlightColor: Colors.lightBlue.withAlpha(160),
                                 style: ButtonStyle(
                                   shape: WidgetStateProperty.all(
                                     const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.all(Radius.circular(6)),
+                                      borderRadius: BorderRadius.all(Radius.circular(10)),
                                     ),
                                   ),
                                 ),
@@ -1784,15 +1770,15 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                                 },
                                 icon: SvgPicture.asset(
                                   "assets/icons/ai.svg",
-                                  height: 16,
-                                  width: 16,
+                                  height: 25,
+                                  width: 25,
                                 ),
                               ),
                             ),
                           ),
                         ],
                       ),
-                       Row(
+                      Row(
                         children: [
                           Tooltip(
                             message: "zoom in",
@@ -1812,7 +1798,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                             message: "backward",
                             child: bottomTool(
                               appTheme.isDark,
-                              Icons.keyboard_arrow_left,
+                              Icons.arrow_back,
                               controller.pressLetfArrowKey,
                             ),
                           ),
@@ -1820,7 +1806,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                             message: "downward",
                             child: bottomTool(
                               appTheme.isDark,
-                              Icons.keyboard_arrow_down,
+                              Icons.arrow_downward,
                               controller.pressDownArrowKey,
                             ),
                           ),
@@ -1828,7 +1814,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                             message: "forward",
                             child: bottomTool(
                               appTheme.isDark,
-                              Icons.keyboard_arrow_right,
+                              Icons.arrow_forward,
                               controller.pressRightArrowKey,
                             ),
                           ),
@@ -1838,7 +1824,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                   ),
                 ),
                 Container(
-                  height: 56,
+                  height: 78,
                   color: appTheme.isDark
                     ? const Color.fromARGB(255, 32, 32, 32)
                     : const Color.fromARGB(255, 219, 218, 218),
@@ -1861,8 +1847,8 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                           Tooltip(
                             message: "inlay hints",
                             child: SizedBox(
-                              height: 26,
-                              width: 38,
+                              height: 37,
+                              width: 50,
                               child: InkWell(
                                 onTap: inlayHintEnabled
                                   ? (){
@@ -1886,7 +1872,6 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                                 onLongPressUp: inlayHintEnabled ? controller.hideInlayHints : null,
                                 child: Icon(
                                   Icons.highlight_outlined,
-                                  size: 16,
                                   color: inlayHintEnabled
                                     ? (!appTheme.isDark
                                         ? const Color.fromARGB(255, 40, 40, 40)
@@ -2122,11 +2107,9 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
               ],
             ),
           ),
-        );
-      },
-    ),
-    ],
-  );
+        ),
+      ],
+    );
     return pageContent;
   }
 

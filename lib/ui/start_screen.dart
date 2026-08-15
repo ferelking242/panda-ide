@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../ui/home.dart';
 import '../ui/splash_screen.dart';
 import '../ui/permission_screen.dart';
+import '../utils/alpine_setup.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import '../terminal/panda_bridge.dart';
@@ -238,10 +239,14 @@ class _StartScreenState extends State<StartScreen> {
           destinationDir: Directory(runtimesDir),
         );
 
-        if (File('$runtimesDir/proot').existsSync()) {
-          File('$runtimesDir/proot').copySync(prootBin);
+        final prootSrc = AlpineSetup.locateProotBinary(alpineDir) ??
+            AlpineSetup.locateProotBinary('$alpineDir/rootfs');
+        if (prootSrc != null && File(prootSrc).existsSync()) {
+          File(prootSrc).copySync(prootBin);
           await Process.run('chmod', ['+x', prootBin]);
-          File('$runtimesDir/proot').deleteSync();
+          PandaLog.i('StartScreen', 'proot binary installed at $prootBin from $prootSrc');
+        } else {
+          PandaLog.w('StartScreen', 'proot binary not found under $alpineDir after extraction');
         }
 
         if (Directory(alpineDir).existsSync()) {

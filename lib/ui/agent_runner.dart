@@ -720,12 +720,7 @@ $toolLines
       PandaLog.d('SSE', 'Parsed response — text=${assistantText.length} chars toolCalls=${toolCalls.length}');
 
       if (assistantText.isNotEmpty) {
-        const chunkSize = 12;
-        for (int i = 0; i < assistantText.length; i += chunkSize) {
-          final end = (i + chunkSize < assistantText.length) ? i + chunkSize : assistantText.length;
-          ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: assistantText.substring(i, end)));
-          await Future.delayed(const Duration(milliseconds: 15));
-        }
+        ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: assistantText));
       } else {
         final fallbackChunks = parseSsePayload(decoded);
         if (fallbackChunks.isNotEmpty) {

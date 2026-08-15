@@ -5,16 +5,14 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
-const _envAppVersion = String.fromEnvironment(
+const appVersion = String.fromEnvironment(
   'APP_VERSION',
   defaultValue: '2.3.3',
 );
-String appVersion = _envAppVersion;
-const _envAppBuildNumber = int.fromEnvironment(
+const appBuildNumber = int.fromEnvironment(
   'APP_BUILD_NUMBER',
   defaultValue: 50,
 );
-int appBuildNumber = _envAppBuildNumber;
 
 class AndroidUpdateInfo {
   final String version;
@@ -77,16 +75,6 @@ class AndroidUpdateService {
   static bool _initialized = false;
 
   static void init() {
-    if (!_initialized) {
-      _channel.invokeMethod("getVersion").then((value) {
-        if (value is Map) {
-          final build = value["build"];
-          final version = value["version"];
-          if (version is String) appVersion = version;
-          if (build is int) appBuildNumber = build;
-        }
-      }).catchError((_) {});
-    }
     if (_initialized) return;
     _initialized = true;
 
@@ -114,18 +102,6 @@ class AndroidUpdateService {
   }
 
   static Future<AndroidUpdateInfo?> checkForUpdate() async {
-    if (!_initialized) {
-      try {
-        final value = await _channel.invokeMethod("getVersion");
-        if (value is Map) {
-          final build = value["build"];
-          final version = value["version"];
-          if (version is String) appVersion = version;
-          if (build is int) appBuildNumber = build;
-        }
-      } catch (_) {}
-    }
-    init();
     init();
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
 

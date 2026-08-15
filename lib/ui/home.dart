@@ -7,7 +7,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
-import 'ai_studio_working_indicator.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -1077,7 +1076,7 @@ class _SelectTypeState extends State<SelectType>
             child: Scaffold(
             key: _scaffoldKey,
             resizeToAvoidBottomInset: false,
-            backgroundColor: appTheme.isDark ? const Color(0xff333333) : const Color(0xffe8e8e8),
+            backgroundColor: appTheme.isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
 
             // ── Drawer (unchanged behaviour) ──────────────────────────────
             drawer: Drawer(
@@ -1532,10 +1531,6 @@ class _SelectTypeState extends State<SelectType>
         color: railBg,
         child: Column(
           children: [
-                Divider(
-              color: isDark ? const Color(0xff444444) : const Color(0xffcccccc),
-              height: 1,
-            ),
             const SizedBox(height: 4),
 
             // ── Sidebar items (scrollable so they never overlap bottom) ───
@@ -1652,40 +1647,10 @@ class _SelectTypeState extends State<SelectType>
                 ),
               ),
             ),
-
-            const Spacer(),
-            // ── Separator Divider ──────────────────────────────────────────
-            Divider(
-              color: isDark ? const Color(0xff3a3a4a) : const Color(0xffe0e0e8),
-              height: 1,
-            ),
             const SizedBox(height: 12),
 
-            // ── Detached Bottom Section (Account, Theme, Settings) ─────────
-            // 1. Compte GitHub (placed before theme)
-            Tooltip(
-              message: 'Compte GitHub',
-              child: _GithubAvatarEx(
-                iconColor: iconColor,
-                onTap: () {
-                  setState(() {
-                    if (!_openTabs.any((t) => t.id == 'github')) {
-                      _openTabs.add(const _TabDef(
-                          id:    'github',
-                          title: 'GitHub',
-                          icon:  Broken.programming_arrows));
-                      _activeTabIdx = _openTabs.length - 1;
-                    } else {
-                      _activeTabIdx =
-                          _openTabs.indexWhere((t) => t.id == 'github');
-                    }
-                  });
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // 2. Theme toggle
+            // ── Detached Bottom Section (Theme, Account, Settings) ─────────
+            // 1. Theme toggle
             BlocBuilder<AppThemeBloc, AppThemeState>(
               builder: (context, state) => _ActivityBtnEx(
                 item: _RailItem(
@@ -1707,6 +1672,29 @@ class _SelectTypeState extends State<SelectType>
                       prefs.setString('savedAppTheme', 'dark');
                     }
                   }
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // 2. Compte GitHub
+            Tooltip(
+              message: 'Compte GitHub',
+              child: _GithubAvatarEx(
+                iconColor: iconColor,
+                onTap: () {
+                  setState(() {
+                    if (!_openTabs.any((t) => t.id == 'github')) {
+                      _openTabs.add(const _TabDef(
+                          id:    'github',
+                          title: 'GitHub',
+                          icon:  Broken.programming_arrows));
+                      _activeTabIdx = _openTabs.length - 1;
+                    } else {
+                      _activeTabIdx =
+                          _openTabs.indexWhere((t) => t.id == 'github');
+                    }
+                  });
                 },
               ),
             ),
@@ -2976,7 +2964,7 @@ class _SelectTypeState extends State<SelectType>
         BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
       final isDark = appTheme.isDark;
       final fg     = isDark ? Colors.grey[400]! : Colors.grey[700]!;
-      final bg     = isDark ? const Color(0xff333333) : const Color(0xffe8e8e8);
+      final bg     = isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede);
       final boxBg  = isDark ? const Color(0xff3a3a3a) : const Color(0xfff5f5f5);
       final boxBdr = isDark ? const Color(0xff666666) : const Color(0xffbbbbbb);
       final nameFg = isDark ? Colors.grey[200]! : Colors.grey[800]!;
@@ -8099,7 +8087,7 @@ class _SelectTypeState extends State<SelectType>
       });
       _agentInputCtrl.clear();
       _agentGenerating  = true;
-      _agentPhase       = AgentPhase.thinking;
+      _agentPhase       = AgentPhase.streaming;
       _agentThinkingBuf = '';
       _agentStreamBuf   = '';
     });
@@ -9534,35 +9522,16 @@ class _AgentPhaseChipState extends State<_AgentPhaseChip>
     final Color color;
     switch (widget.phase) {
       case AgentPhase.thinking:
-        rawLabel = 'Thinking';
+        rawLabel = 'Réflexion\u2026';
         color    = Colors.purple;
       case AgentPhase.toolRunning:
-        if (widget.toolName.isNotEmpty) {
-          final name = widget.toolName.toLowerCase();
-          if (name.contains('search') || name.contains('web') || name.contains('google')) {
-            rawLabel = 'Searching web';
-          } else if (name.contains('read') || name.contains('list') || name.contains('file') || name.contains('glob')) {
-            rawLabel = 'Analyzing directory';
-          } else if (name.contains('edit') || name.contains('create') || name.contains('write')) {
-            rawLabel = 'Editing file';
-          } else if (name.contains('clone')) {
-            rawLabel = 'Cloning repo';
-          } else if (name.contains('push') || name.contains('commit') || name.contains('git')) {
-            rawLabel = 'Git action';
-          } else if (name.contains('command') || name.contains('shell') || name.contains('bash') || name.contains('terminal') || name.contains('run')) {
-            rawLabel = 'Running command';
-          } else {
-            rawLabel = 'Working';
-          }
-        } else {
-          rawLabel = 'Working';
-        }
+        rawLabel = widget.toolName.isNotEmpty ? widget.toolName : 'Outil\u2026';
         color    = Colors.orange;
       case AgentPhase.streaming:
-        rawLabel = 'Working';
+        rawLabel = 'Génération\u2026';
         color    = _kAccent;
       case AgentPhase.error:
-        rawLabel = 'Error';
+        rawLabel = 'Erreur';
         color    = Colors.red;
       default:
         rawLabel = '';
@@ -9582,13 +9551,18 @@ class _AgentPhaseChipState extends State<_AgentPhaseChip>
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         // Spinning square — inspired by Replit Agent cube
         AnimatedBuilder(
-          animation: _ctrl,
-          builder: (context, child) {
-            return CustomPaint(
-              size: const Size(14, 14),
-              painter: AiStudioIndicatorPainter(_ctrl.value),
-            );
-          },
+          animation: _spin,
+          builder: (_, __) => Transform.rotate(
+            angle: _spin.value * 6.2832,
+            child: Container(
+              width: 11,
+              height: 11,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
         ),
         const SizedBox(width: 6),
         Text(label,
@@ -10202,8 +10176,6 @@ class _AgentMarkdownView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    String md = markdown;
-    if (isStreaming && !isError) md += " █";
     if (isError) {
       return Text(
         markdown,
@@ -10305,7 +10277,7 @@ class _AgentMarkdownView extends StatelessWidget {
     );
 
     return MarkdownWidget(
-      data: md,
+      data: markdown,
       shrinkWrap: true,
       config: config,
     );
@@ -10520,9 +10492,11 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                   // Spinning Square Indicator when running
                   if (isRunning) ...[
                     const SizedBox(width: 6),
-                    AiStudioWorkingIndicator(
-                      text: activeStatusText,
-                      textColor: isDark ? const Color(0xffcccccc) : const Color(0xff444444),
+                    const _SpinningSquareIndicator(color: _kAccent, size: 10),
+                    const SizedBox(width: 4),
+                    Text(
+                      activeStatusText,
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _kAccent),
                     ),
                   ],
 

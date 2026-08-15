@@ -85,16 +85,6 @@ class MainActivity : FlutterActivity() {
             CORE_CHANNEL
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "getVersion" -> {
-                    try {
-                        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                        val version = pInfo.versionName
-                        val build = if (android.os.Build.VERSION.SDK_INT >= 28) pInfo.longVersionCode else pInfo.versionCode.toLong()
-                        result.success(mapOf("version" to version, "build" to build))
-                    } catch (e: Exception) {
-                        result.error("ERROR", e.message, null)
-                    }
-                }
                 "getLibraryPath" -> result.success(applicationInfo.nativeLibraryDir)
                 "consumePendingOpenFiles" -> {
                     val files = pendingOpenFiles.toList()
@@ -116,16 +106,6 @@ class MainActivity : FlutterActivity() {
         )
         updateChannel.setMethodCallHandler { call, result ->
             when (call.method) {
-                "getVersion" -> {
-                    try {
-                        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                        val version = pInfo.versionName
-                        val build = if (android.os.Build.VERSION.SDK_INT >= 28) pInfo.longVersionCode else pInfo.versionCode.toLong()
-                        result.success(mapOf("version" to version, "build" to build))
-                    } catch (e: Exception) {
-                        result.error("ERROR", e.message, null)
-                    }
-                }
                 "downloadAndInstallApk" -> {
                     val url = call.argument<String>("url")
                     val filename = call.argument<String>("filename")
@@ -172,16 +152,6 @@ class MainActivity : FlutterActivity() {
             SAF_CHANNEL
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "getVersion" -> {
-                    try {
-                        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                        val version = pInfo.versionName
-                        val build = if (android.os.Build.VERSION.SDK_INT >= 28) pInfo.longVersionCode else pInfo.versionCode.toLong()
-                        result.success(mapOf("version" to version, "build" to build))
-                    } catch (e: Exception) {
-                        result.error("ERROR", e.message, null)
-                    }
-                }
 
                 "pickSafDir" -> {
                     if (pendingSafResult != null) {
@@ -260,16 +230,6 @@ class MainActivity : FlutterActivity() {
             PFD_CHANNEL,
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "getVersion" -> {
-                    try {
-                        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-                        val version = pInfo.versionName
-                        val build = if (android.os.Build.VERSION.SDK_INT >= 28) pInfo.longVersionCode else pInfo.versionCode.toLong()
-                        result.success(mapOf("version" to version, "build" to build))
-                    } catch (e: Exception) {
-                        result.error("ERROR", e.message, null)
-                    }
-                }
                 "isModuleInstalled" -> {
                     val moduleName = call.argument<String>("moduleName")
                     if (moduleName.isNullOrBlank()) {
@@ -337,56 +297,39 @@ class MainActivity : FlutterActivity() {
             downloadedBytes = target.length()
         }
 
-        var currentUrl = url
-        var connection: java.net.HttpURLConnection? = null
-        var redirects = 0
-
-        while (redirects < 5) {
-            connection = (java.net.URL(currentUrl).openConnection() as java.net.HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 15_000
-                readTimeout = 120_000
-                instanceFollowRedirects = false
-                setRequestProperty("Accept", "application/vnd.android.package-archive")
-                if (downloadedBytes > 0) {
-                    setRequestProperty("Range", "bytes=$downloadedBytes-")
-                }
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 15_000
+            readTimeout = 120_000
+            instanceFollowRedirects = true
+            setRequestProperty("Accept", "application/vnd.android.package-archive")
+            if (downloadedBytes > 0) {
+                setRequestProperty("Range", "bytes=$downloadedBytes-")
             }
-            val responseCode = connection.responseCode
-            if (responseCode == java.net.HttpURLConnection.HTTP_MOVED_PERM || responseCode == java.net.HttpURLConnection.HTTP_MOVED_TEMP || responseCode == java.net.HttpURLConnection.HTTP_SEE_OTHER || responseCode == 307 || responseCode == 308) {
-                val location = connection.getHeaderField("Location")
-                if (location != null) {
-                    currentUrl = location
-                    redirects++
-                    continue
-                }
-            }
-            break
         }
 
-        val finalConnection = connection ?: throw IllegalStateException("Failed to connect")
         try {
-            val responseCode = finalConnection.responseCode
-            val isPartial = responseCode == java.net.HttpURLConnection.HTTP_PARTIAL
+            val responseCode = connection.responseCode
+            val isPartial = responseCode == HttpURLConnection.HTTP_PARTIAL
             if (responseCode !in 200..299) {
                 if (responseCode == 416) {
-                    return target
+                    return target // Already fully downloaded
                 }
                 throw IllegalStateException("HTTP $responseCode")
             }
-
+            
             if (!isPartial && downloadedBytes > 0) {
                 downloadedBytes = 0L
                 if (target.exists()) target.delete()
             }
 
-            val contentLength = finalConnection.contentLengthLong
+            val contentLength = connection.contentLengthLong
             val totalBytes = if (contentLength > 0) contentLength + downloadedBytes else -1L
             var copiedBytes = downloadedBytes
             val buffer = ByteArray(8192)
 
-            finalConnection.inputStream.use { input ->
-                java.io.FileOutputStream(target, isPartial).use { output ->
+            connection.inputStream.use { input ->
+                FileOutputStream(target, isPartial).use { output ->
                     while (true) {
                         val read = input.read(buffer)
                         if (read < 0) break
