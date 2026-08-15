@@ -12,7 +12,6 @@ import '../ui/notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
-import '../utils/alpine_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
@@ -364,7 +363,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     String? title,
     bool showFeedback = false,
     SSHInfo? externalServer,
-    bool useProot = false,
+    bool useProot = true,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final sessionTitle = title ?? _nextSessionTitle();
@@ -595,9 +594,8 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
   // ── proot + Alpine helpers ─────────────────────────────────────────────────
 
   Future<void> _startProotSession(_TerminalRuntime runtime) async {
+    final prootBin = '$binDir/proot';
     final rootfsDir = '$runtimesDir/alpine-linux';
-    final resolvedProotBin = AlpineSetup.locateProotBinary(rootfsDir) ?? '$binDir/proot';
-    final prootBin = File(resolvedProotBin).existsSync() ? resolvedProotBin : '$binDir/proot';
 
     await _ensureBashRc();
 
@@ -1717,9 +1715,9 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
       onAnimationStatusChanged: (status) => _terminalSelectionStatus = status,
       menuChildren: [
         MenuItemButton(
-          onPressed: () => _createSession(makeActive: true, showFeedback: true),
+          onPressed: () => _createSession(makeActive: true, showFeedback: true, useProot: true),
           leadingIcon: Icon(Icons.terminal, color: appTheme.selectScreenCardTextColor, size: 18),
-          child: Text('bash', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+          child: Text('Alpine', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
         ),
         ...sshServerList.map((server) => MenuItemButton(
           onPressed: () => _createSession(makeActive: true, showFeedback: true, externalServer: server),

@@ -15,7 +15,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import '../bloc/ui_bloc/ui_bloc.dart';
-import '../utils/alpine_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
@@ -633,41 +632,25 @@ class PackageDownloader {
   static Future<void> _setupAlpineProot() async {
     try {
       final alpineDir = '$runtimesDir/alpine-linux';
-      final rootfsCandidates = <String>[
-        alpineDir,
-        '$alpineDir/rootfs',
-        '$alpineDir/alpine',
-        '$alpineDir/minirootfs',
-        '$alpineDir/alpine-minirootfs',
-      ];
-      final resolvedRootfs = rootfsCandidates.firstWhere(
-        (path) => Directory(path).existsSync(),
-        orElse: () => alpineDir,
-      );
+      final prootSrc  = '$alpineDir/proot';       // from archive
+      final prootDst  = '$binDir/proot';
 
-      final prootSrc = AlpineSetup.locateProotBinary(resolvedRootfs) ??
-          AlpineSetup.locateProotBinary(alpineDir) ??
-          '';
-      final prootDst = '$binDir/proot';
-
-      if (prootSrc.isNotEmpty) {
+      // Move proot binary to binDir and make it executable
+      if (File(prootSrc).existsSync()) {
         if (!Directory(binDir).existsSync()) {
           await Directory(binDir).create(recursive: true);
         }
         await _fileCopy(src: prootSrc, dst: prootDst);
         await Process.run('chmod', ['+x', prootDst]);
-        final sourceFile = File(prootSrc);
-        if (sourceFile.existsSync() && sourceFile.path != prootDst) {
-          try { await sourceFile.delete(); } catch (_) {}
-        }
+        try { await File(prootSrc).delete(); } catch (_) {}
       }
 
-      final rootfsDir = Directory(resolvedRootfs);
-      if (!rootfsDir.existsSync()) await rootfsDir.create(recursive: true);
-      final tmpDir = Directory('$resolvedRootfs/tmp');
+      // Ensure /tmp inside rootfs
+      final tmpDir = Directory('$alpineDir/tmp');
       if (!tmpDir.existsSync()) await tmpDir.create(recursive: true);
 
-      final resolv = File('$resolvedRootfs/etc/resolv.conf');
+      // Write a basic /etc/resolv.conf for DNS if missing
+      final resolv = File('$alpineDir/etc/resolv.conf');
       if (!resolv.existsSync()) {
         try {
           await resolv.parent.create(recursive: true);
@@ -675,7 +658,7 @@ class PackageDownloader {
         } catch (_) {}
       }
 
-      debugPrint('Alpine proot setup complete — rootfs at $resolvedRootfs, proot at $prootDst');
+      debugPrint('Alpine proot setup complete — rootfs at $alpineDir, proot at $prootDst');
     } catch (e) {
       debugPrint('Alpine proot setup error: $e');
     }

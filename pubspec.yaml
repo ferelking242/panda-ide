@@ -63,7 +63,7 @@ flutter:
     - assets/icons/
     - assets/material_icons/
     - assets/webview/
-    - assets/runtimes/
+    - assets/runtimes/alpine-proot.zip
     - assets/fonts/
     - assets/certificates/
     - assets/extension_host/
