@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/broken_icons.dart';
 
 // ── DESIGN SYSTEM & CONSTANTS ────────────────────────────────────────────────
@@ -291,8 +293,19 @@ class _StreamingTextViewState extends State<StreamingTextView> {
   void didUpdateWidget(StreamingTextView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.fullText != oldWidget.fullText) {
-      _splitText();
-      _startReveal();
+      final oldText = oldWidget.fullText;
+      final newText = widget.fullText;
+      if (newText.startsWith(oldText) && oldText.isNotEmpty) {
+        final extraText = newText.substring(oldText.length);
+        final extraWords = extraText.split(RegExp(r'(?<=\s)|(?=\s)'));
+        setState(() {
+          _words.addAll(extraWords);
+        });
+        _resumeReveal();
+      } else {
+        _splitText();
+        _startReveal();
+      }
     }
   }
 
@@ -320,12 +333,293 @@ class _StreamingTextViewState extends State<StreamingTextView> {
     });
   }
 
+  void _resumeReveal() {
+    if (_timer == null || !_timer!.isActive) {
+      _timer = Timer.periodic(const Duration(milliseconds: 25), (timer) {
+        if (_visibleWords < _words.length) {
+          setState(() {
+            _visibleWords++;
+          });
+        } else {
+          _timer?.cancel();
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final textToShow = _words.take(_visibleWords).join('');
     return Text(
       textToShow,
       style: widget.style,
+    );
+  }
+}
+
+// ── 3B. PIXEL GRID LOADER COMPONENTS ─────────────────────────────────────────
+class PixelGridCell extends StatefulWidget {
+  final int? delay;
+  final int durationMs;
+  final bool round;
+  final Color color;
+
+  const PixelGridCell({
+    super.key,
+    required this.delay,
+    required this.durationMs,
+    required this.round,
+    required this.color,
+  });
+
+  @override
+  State<PixelGridCell> createState() => _PixelGridCellState();
+}
+
+class _PixelGridCellState extends State<PixelGridCell> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _opacityAnimation;
+  Timer? _delayTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: widget.durationMs),
+    );
+
+    _opacityAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.15, end: 1.0).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.15).chain(CurveTween(curve: Curves.easeInOut)),
+        weight: 50,
+      ),
+    ]).animate(_controller);
+
+    if (widget.delay == null) {
+      // Static dim state
+    } else {
+      _delayTimer = Timer(Duration(milliseconds: widget.delay!), () {
+        if (mounted) {
+          _controller.repeat();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _delayTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.delay == null) {
+      return Container(
+        width: 4,
+        height: 4,
+        decoration: BoxDecoration(
+          color: widget.color.withOpacity(0.07),
+          borderRadius: widget.round ? BorderRadius.circular(2) : BorderRadius.circular(1),
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _opacityAnimation,
+      builder: (context, child) {
+        return Container(
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(
+            color: widget.color.withOpacity(_opacityAnimation.value),
+            borderRadius: widget.round ? BorderRadius.circular(2) : BorderRadius.circular(1),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class ElapsedTimerWidget extends StatefulWidget {
+  const ElapsedTimerWidget({super.key});
+
+  @override
+  State<ElapsedTimerWidget> createState() => _ElapsedTimerWidgetState();
+}
+
+class _ElapsedTimerWidgetState extends State<ElapsedTimerWidget> {
+  int _ds = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+      if (mounted) {
+        setState(() {
+          _ds++;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double total = _ds / 10.0;
+    final String text;
+    if (total < 60) {
+      text = '${total.toStringAsFixed(1)}s';
+    } else {
+      final minutes = (total / 60).floor();
+      final seconds = (total % 60).toStringAsFixed(1);
+      text = '${minutes}m ${seconds}s';
+    }
+
+    return Text(
+      text,
+      style: const TextStyle(
+        fontFamily: 'monospace',
+        fontSize: 12,
+        color: Colors.grey,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
+    );
+  }
+}
+
+class ShimmerText extends StatefulWidget {
+  final String text;
+  final TextStyle? style;
+
+  const ShimmerText({super.key, required this.text, this.style});
+
+  @override
+  State<ShimmerText> createState() => _ShimmerTextState();
+}
+
+class _ShimmerTextState extends State<ShimmerText> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    final highlightColor = isDark ? Colors.white : Colors.black;
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [baseColor, highlightColor, baseColor],
+              stops: [
+                _controller.value - 0.3,
+                _controller.value,
+                _controller.value + 0.3,
+              ],
+            ).createShader(bounds);
+          },
+          child: Text(
+            widget.text,
+            style: (widget.style ?? const TextStyle(fontSize: 13, fontWeight: FontWeight.bold)).copyWith(
+              color: Colors.white,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class LoadingStateWidget extends StatelessWidget {
+  final String label;
+  final String variant; // 'Drive', 'Dots', 'Orbit'
+  final Color color;
+
+  const LoadingStateWidget({
+    super.key,
+    required this.label,
+    this.variant = 'Drive',
+    this.color = const Color(0xff5090c8),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool round = variant == 'Dots';
+    final int durationMs = variant == 'Orbit' ? 950 : 650;
+    
+    final List<int?> delays;
+    if (variant == 'Orbit') {
+      delays = [0, 110, 220, 770, null, 330, 660, 550, 440];
+    } else {
+      delays = [90, 180, 270, 0, 90, 180, 90, 180, 270];
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 15,
+          height: 15,
+          child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              mainAxisSpacing: 1.5,
+              crossAxisSpacing: 1.5,
+            ),
+            itemCount: 9,
+            itemBuilder: (context, index) {
+              return PixelGridCell(
+                delay: delays[index],
+                durationMs: durationMs,
+                round: round,
+                color: color,
+              );
+            },
+          ),
+        ),
+        const SizedBox(width: 8),
+        ShimmerText(
+          text: label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(width: 8),
+        const ElapsedTimerWidget(),
+      ],
     );
   }
 }

@@ -9468,82 +9468,98 @@ class _AgentPhaseChip extends StatefulWidget {
   State<_AgentPhaseChip> createState() => _AgentPhaseChipState();
 }
 
-class _AgentPhaseChipState extends State<_AgentPhaseChip>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double>    _spin;
+class _AgentPhaseChipState extends State<_AgentPhaseChip> {
+  bool _isFrench = true;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1000))
-      ..repeat();
-    _spin = Tween<double>(begin: 0, end: 1).animate(_ctrl);
+    _detectLanguage();
   }
 
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
+  Future<void> _detectLanguage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedLang = prefs.getString('app_language') ?? '';
+      if (savedLang.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _isFrench = savedLang.toLowerCase().contains('fran');
+          });
+        }
+        return;
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      final locale = Localizations.maybeLocaleOf(context)?.languageCode ?? 'fr';
+      setState(() {
+        _isFrench = locale.startsWith('fr');
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final String rawLabel;
+    if (widget.phase == AgentPhase.idle || widget.phase == AgentPhase.done) {
+      return const SizedBox.shrink();
+    }
+
+    final String label;
+    final String variant;
     final Color color;
+
     switch (widget.phase) {
       case AgentPhase.thinking:
-        rawLabel = 'Réflexion\u2026';
-        color    = Colors.purple;
-      case AgentPhase.toolRunning:
-        rawLabel = widget.toolName.isNotEmpty ? widget.toolName : 'Outil\u2026';
-        color    = Colors.orange;
+        label = _isFrench ? 'Réflexion en cours\u2026' : 'Thinking\u2026';
+        variant = 'Orbit';
+        color = Colors.purple;
+        break;
       case AgentPhase.streaming:
-        rawLabel = 'Génération\u2026';
-        color    = _kAccent;
+        label = _isFrench ? 'Génération de la réponse\u2026' : 'Generating\u2026';
+        variant = 'Dots';
+        color = const Color(0xff5090c8);
+        break;
       case AgentPhase.error:
-        rawLabel = 'Erreur';
-        color    = Colors.red;
+        label = _isFrench ? 'Erreur' : 'Error';
+        variant = 'Drive';
+        color = Colors.red;
+        break;
+      case AgentPhase.toolRunning:
+        variant = 'Drive';
+        color = Colors.orange;
+        final tName = widget.toolName;
+        if (tName.contains('runShellCommand') || tName.contains('run_command')) {
+          label = _isFrench ? 'Exécution d\'une commande\u2026' : 'Running command\u2026';
+        } else if (tName.contains('codeEditorWrite') || tName.contains('create_file') || tName.contains('edit_file') || tName.contains('multi_edit_file')) {
+          label = _isFrench ? 'Écriture de code\u2026' : 'Coding\u2026';
+        } else if (tName.contains('gitClone') || tName.contains('clone')) {
+          label = _isFrench ? 'Clonage du dépôt\u2026' : 'Cloning repository\u2026';
+        } else if (tName.contains('compileApplet') || tName.contains('compile_applet')) {
+          label = _isFrench ? 'Compilation de l\'applet\u2026' : 'Compiling applet\u2026';
+        } else {
+          label = _isFrench ? 'Travail en cours\u2026' : 'Working\u2026';
+        }
+        break;
       default:
-        rawLabel = '';
-        color    = Colors.green;
+        label = _isFrench ? 'Traitement\u2026' : 'Working\u2026';
+        variant = 'Drive';
+        color = Colors.green;
     }
-    if (rawLabel.isEmpty) return const SizedBox.shrink();
-    final label = rawLabel;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: widget.isDark ? 0.15 : 0.08),
+        color: color.withOpacity(widget.isDark ? 0.12 : 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.25)),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        // Spinning square — inspired by Replit Agent cube
-        AnimatedBuilder(
-          animation: _spin,
-          builder: (_, __) => Transform.rotate(
-            angle: _spin.value * 6.2832,
-            child: Container(
-              width: 11,
-              height: 11,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.85),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.2,
-                color: color)),
-      ]),
+      child: LoadingStateWidget(
+        label: label,
+        variant: variant,
+        color: color,
+      ),
     );
   }
 }
@@ -10158,6 +10174,8 @@ class _AgentMarkdownView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final displayMarkdown = isStreaming ? '$markdown ▋' : markdown;
+
     final baseConfig = isDark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
     final config = baseConfig.copy(
       configs: [
@@ -10249,7 +10267,7 @@ class _AgentMarkdownView extends StatelessWidget {
     );
 
     return MarkdownWidget(
-      data: markdown,
+      data: displayMarkdown,
       shrinkWrap: true,
       config: config,
     );
