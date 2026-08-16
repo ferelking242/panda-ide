@@ -58,6 +58,7 @@ import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
     if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
+import 'panda_ai_ui/components.dart';
 
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
   final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
