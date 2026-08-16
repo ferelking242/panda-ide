@@ -4165,12 +4165,9 @@ class _SelectTypeState extends State<SelectType>
     final borderC    = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
     final fg         = isDark ? Colors.grey[300]! : Colors.grey[800]!;
     final muted      = isDark ? Colors.grey[500]! : Colors.grey[500]!;
-    final inputBg    = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
-    final inputBorder= isDark ? const Color(0xff404040) : const Color(0xffdddddd);
 
     final aiState          = context.watch<AIBloc>().state;
     final selectedProfile = _selectedAgentProfile(aiState);
-    final selectedProviderId = selectedProfile?.key;
     final selectedConfig   = selectedProfile?.value;
     final providerName     = selectedConfig is Map
         ? (selectedConfig['provider'] ?? selectedConfig['apiProvider'] ?? '')
@@ -4197,286 +4194,260 @@ class _SelectTypeState extends State<SelectType>
                   : _buildAgentMessages(isDark, fg, muted)),
         ),
 
-        // ── Attachments strip ──────────────────────────────────────────
-        if (_agentAttachments.isNotEmpty)
-          Container(
-            height: 52,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: inputBg,
-              border: Border(top: BorderSide(color: borderC)),
-            ),
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _agentAttachments.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 6),
-              itemBuilder: (_, i) {
-                final att = _agentAttachments[i];
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xff3a3a3a)
-                        : const Color(0xffe0e0e0),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Broken.document, size: 12, color: muted),
-                    const SizedBox(width: 4),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 80),
-                      child: Text(
-                        att['name'] ?? '',
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 11, color: fg),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: () =>
-                          setState(() => _agentAttachments.removeAt(i)),
-                      child: Icon(Broken.close_square, size: 11, color: muted),
-                    ),
-                  ]),
-                );
-              },
-            ),
-          ),
+        // ── Integrated PromptBar with Docked layout ────────────────────
+        Builder(builder: (context) {
+          final List<(String, String)> suggestions;
+          if (_agentChatMode == 'plan') {
+            suggestions = const [
+              ('📋 Proposer un plan', 'Peux-tu me proposer un plan d\'action complet et structuré pour ce projet ?'),
+              ('🔍 Analyser l\'architecture', 'Analyse la structure et l\'architecture de ce projet et résume les besoins.'),
+              ('🛠️ Plan de refactorisation', 'Propose un plan de refactorisation étape par étape pour le code existant.'),
+              ('🧪 Stratégie de tests', 'Établis un plan pour ajouter une couverture de tests unitaires et d\'intégration.'),
+            ];
+          } else if (_agentChatMode == 'ask') {
+            suggestions = const [
+              ('❓ Expliquer l\'architecture', "Peux-tu m'expliquer l'architecture globale de ce projet ?"),
+              ('⚡ Optimiser les performances', 'Quelles sont les opportunités d\'optimisation de performance dans ce projet ?'),
+              ('🐛 Détecter les bugs', 'Analyse le code pour identifier d\'éventuels bugs ou failles de sécurité.'),
+              ('📁 Points d\'entrée', 'Où se trouve le point d\'entrée principal et comment fonctionne le flux de données ?'),
+            ];
+          } else {
+            suggestions = const [
+              ('🚀 Flutter analyze / build', 'Exécute la commande de vérification du code et analyse les erreurs éventuelles.'),
+              ('📝 Générer le README', "Génère un fichier README.md complet documentant l'installation et l'utilisation."),
+              ('🧪 Créer les tests', 'Crée des tests unitaires pour les composants principaux du projet.'),
+              ('🧹 Nettoyer le code', 'Vérifie et nettoie le code pour respecter les meilleures pratiques.'),
+            ];
+          }
 
-        // ── Suggestions bar & Prompt queue bar ─────────────────────────
-        _buildPromptSuggestionsBar(isDark, fg, muted),
-        _buildPromptQueueBar(isDark, fg, muted),
-        // ── Input box ─────────────────────────────────────────────────
-        Container(
-          margin: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: inputBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: inputBorder),
-          ),
-          child: Column(
+          return Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              _buildPromptQueueBar(isDark, fg, muted),
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
-                child: TextField(
+                padding: const EdgeInsets.all(10),
+                child: PromptBar(
                   controller: _agentInputCtrl,
-                  maxLines: 5,
-                  minLines: 1,
-                  style: TextStyle(fontSize: 13, color: fg),
-                  decoration: InputDecoration(
-                    hintText: _agentChatMode == 'agent'
-                        ? 'Décrivez la tâche à réaliser…'
-                        : _agentChatMode == 'ask'
-                            ? 'Posez votre question…'
-                            : 'Décrivez ce que vous voulez planifier…',
-                    hintStyle: TextStyle(fontSize: 13, color: muted),
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _agentSend(),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 2, 8, 8),
-                child: Row(children: [
-                  // Attachment
-                  Tooltip(
-                    message: 'Joindre un fichier',
-                    child: InkWell(
-                      onTap: () async {
-                        final res = await FilePicker.pickFiles(
-                            allowMultiple: true, type: FileType.any);
-                        if (res != null && res.files.isNotEmpty) {
-                          setState(() {
-                            for (final f in res.files) {
-                              _agentAttachments.add(
-                                  {'name': f.name, 'path': f.path ?? ''});
-                            }
-                          });
-                        }
+                  isGenerating: _agentGenerating,
+                  onSubmitted: _agentSend,
+                  onCancel: _agentStop,
+                  contextCards: _agentAttachments.asMap().entries.map((entry) {
+                    final idx = entry.key;
+                    final att = entry.value;
+                    return ContextCard(
+                      fileName: att['name'] ?? '',
+                      onRemove: () => setState(() => _agentAttachments.removeAt(idx)),
+                    );
+                  }).toList(),
+                  recommendationCards: suggestions.map((s) {
+                    return RecommendationCard(
+                      promptText: s.$1,
+                      icon: Broken.lamp_charge,
+                      onTap: () {
+                        setState(() {
+                          _agentInputCtrl.text = s.$2;
+                          _agentInputCtrl.selection = TextSelection.fromPosition(
+                              TextPosition(offset: _agentInputCtrl.text.length));
+                        });
                       },
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child:
-                            Icon(Broken.paperclip, size: 16, color: muted),
-                      ),
-                    ),
-                  ),
-                  // Voice
-                  Tooltip(
-                    message: 'Dicter (micro)',
-                    child: InkWell(
-                      onTap: () => ScaffoldMessenger.of(context)
-                          .showSnackBar(const SnackBar(
-                        content: Text('Dictée vocale — bientôt disponible.',
-                            style: TextStyle(fontSize: 13)),
-                        duration: Duration(seconds: 2),
-                      )),
-                      borderRadius: BorderRadius.circular(6),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child:
-                            Icon(Broken.microphone, size: 16, color: muted),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  // Mode pill
-                  GestureDetector(
-                    onTap: () => _showModeSheet(context, appTheme),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xff3a3a3a)
-                            : const Color(0xffe0e0e0),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Broken.category, size: 11, color: muted),
-                        const SizedBox(width: 4),
-                        Text(
-                          _agentChatMode == 'ask'
-                              ? 'Ask'
-                              : _agentChatMode == 'agent'
-                                  ? 'Agent'
-                                  : 'Plan',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: muted,
-                              fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(width: 2),
-                        Icon(Broken.arrow_down_2, size: 10, color: muted),
-                      ]),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  // Model pill
-                  GestureDetector(
-                    onTap: () => _showModelPickerSheet(context, appTheme),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? const Color(0xff3a3a3a)
-                            : const Color(0xffe0e0e0),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Broken.cpu, size: 11, color: muted),
-                        const SizedBox(width: 4),
-                        ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth:
-                                MediaQuery.sizeOf(context).width * 0.2,
+                    );
+                  }).toList(),
+                  footer: Row(
+                    children: [
+                      // Attachment button
+                      Tooltip(
+                        message: 'Joindre un fichier',
+                        child: InkWell(
+                          onTap: () async {
+                            final res = await FilePicker.pickFiles(
+                                allowMultiple: true, type: FileType.any);
+                            if (res != null && res.files.isNotEmpty) {
+                              setState(() {
+                                for (final f in res.files) {
+                                  _agentAttachments.add(
+                                      {'name': f.name, 'path': f.path ?? ''});
+                                }
+                              });
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(Broken.paperclip, size: 16, color: muted),
                           ),
-                          child: Builder(builder: (_) {
-                            final selCfg = selectedConfig is Map
-                                ? Map<String, dynamic>.from(
-                                    selectedConfig as Map)
-                                : null;
-                            final modelLabel = selCfg != null
-                                ? (selCfg['modelName'] ??
-                                        selCfg['model'] ??
-                                        providerName)
-                                    .toString()
-                                : '';
-                            return Text(
-                              missingKey
-                                  ? 'No key configured'
-                                  : (modelLabel.isEmpty ? 'Modèle' : modelLabel),
-                              overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // Voice button
+                      Tooltip(
+                        message: 'Dicter (micro)',
+                        child: InkWell(
+                          onTap: () => ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                            content: Text('Dictée vocale — bientôt disponible.',
+                                style: TextStyle(fontSize: 13)),
+                            duration: Duration(seconds: 2),
+                          )),
+                          borderRadius: BorderRadius.circular(6),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Icon(Broken.microphone, size: 16, color: muted),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Mode pill
+                      GestureDetector(
+                        onTap: () => _showModeSheet(context, appTheme),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xff3a3a3a)
+                                : const Color(0xffe0e0e0),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Broken.category, size: 11, color: muted),
+                            const SizedBox(width: 4),
+                            Text(
+                              _agentChatMode == 'ask'
+                                  ? 'Ask'
+                                  : _agentChatMode == 'agent'
+                                      ? 'Agent'
+                                      : 'Plan',
                               style: TextStyle(
                                   fontSize: 11,
-                                  color: missingKey ? Colors.orange[400] : muted,
+                                  color: muted,
                                   fontWeight: FontWeight.w500),
-                            );
-                          }),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Broken.arrow_down_2, size: 10, color: muted),
+                          ]),
                         ),
-                        const SizedBox(width: 2),
-                        Icon(Broken.arrow_down_2, size: 10, color: muted),
-                      ]),
-                    ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Model pill
+                      GestureDetector(
+                        onTap: () => _showModelPickerSheet(context, appTheme),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xff3a3a3a)
+                                : const Color(0xffe0e0e0),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Broken.cpu, size: 11, color: muted),
+                            const SizedBox(width: 4),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.sizeOf(context).width * 0.2,
+                              ),
+                              child: Builder(builder: (_) {
+                                final selCfg = selectedConfig is Map
+                                    ? Map<String, dynamic>.from(
+                                        selectedConfig as Map)
+                                    : null;
+                                final modelLabel = selCfg != null
+                                    ? (selCfg['modelName'] ??
+                                            selCfg['model'] ??
+                                            providerName)
+                                        .toString()
+                                    : '';
+                                return Text(
+                                  missingKey
+                                      ? 'No key configured'
+                                      : (modelLabel.isEmpty ? 'Modèle' : modelLabel),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: missingKey ? Colors.orange[400] : muted,
+                                      fontWeight: FontWeight.w500),
+                                );
+                              }),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Broken.arrow_down_2, size: 10, color: muted),
+                          ]),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Token estimate
+                      Builder(builder: (ctx) {
+                        int totalChars = 0;
+                        for (final msg in _agentMessages) {
+                          totalChars +=
+                              (msg['text'] as String? ?? '').length;
+                          totalChars +=
+                              (msg['thinking'] as String? ?? '').length;
+                        }
+                        totalChars += _agentInputCtrl.text.length;
+                        final estTokens = (totalChars / 4).round();
+                        if (estTokens == 0) return const SizedBox.shrink();
+                        final label = estTokens < 1000
+                            ? '~${estTokens}tok'
+                            : '~${(estTokens / 1000).toStringAsFixed(1)}k';
+                        return Tooltip(
+                          message:
+                              'Tokens estimés ($estTokens ≈ chars÷4). '
+                              'Au-delà de 80k le modèle peut tronquer.',
+                          child: Text(label,
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: estTokens > 80000
+                                    ? Colors.red[400]
+                                    : estTokens > 40000
+                                        ? Colors.orange[400]
+                                        : muted,
+                              )),
+                        );
+                      }),
+                      const SizedBox(width: 6),
+                      // Send / Stop
+                      if (_agentGenerating)
+                        GestureDetector(
+                          onTap: _agentStop,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Broken.stop_circle,
+                                size: 18, color: Colors.red[400]),
+                          ),
+                        )
+                      else
+                        GestureDetector(
+                          onTap: _agentSend,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color:
+                                  _agentInputCtrl.text.trim().isEmpty
+                                      ? Colors.transparent
+                                      : _kAccent.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(Broken.send_2,
+                                size: 18,
+                                color: _agentInputCtrl.text.trim().isEmpty
+                                    ? muted
+                                    : Colors.white),
+                          ),
+                        ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  const Spacer(),
-                  // Token estimate
-                  Builder(builder: (ctx) {
-                    int totalChars = 0;
-                    for (final msg in _agentMessages) {
-                      totalChars +=
-                          (msg['text'] as String? ?? '').length;
-                      totalChars +=
-                          (msg['thinking'] as String? ?? '').length;
-                    }
-                    totalChars += _agentInputCtrl.text.length;
-                    final estTokens = (totalChars / 4).round();
-                    if (estTokens == 0) return const SizedBox.shrink();
-                    final label = estTokens < 1000
-                        ? '~${estTokens}tok'
-                        : '~${(estTokens / 1000).toStringAsFixed(1)}k';
-                    return Tooltip(
-                      message:
-                          'Tokens estimés ($estTokens ≈ chars÷4). '
-                          'Au-delà de 80k le modèle peut tronquer.',
-                      child: Text(label,
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: estTokens > 80000
-                                ? Colors.red[400]
-                                : estTokens > 40000
-                                    ? Colors.orange[400]
-                                    : muted,
-                          )),
-                    );
-                  }),
-                  const SizedBox(width: 6),
-                  // Send / Stop
-                  if (_agentGenerating)
-                    GestureDetector(
-                      onTap: _agentStop,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Broken.stop_circle,
-                            size: 18, color: Colors.red[400]),
-                      ),
-                    )
-                  else
-                    GestureDetector(
-                      onTap: _agentSend,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color:
-                              _agentInputCtrl.text.trim().isEmpty
-                                  ? Colors.transparent
-                                  : _kAccent.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Broken.send_2,
-                            size: 18,
-                            color: _agentInputCtrl.text.trim().isEmpty
-                                ? muted
-                                : Colors.white),
-                      ),
-                    ),
-                ]),
+                ),
               ),
             ],
-          ),
-        ),
+          );
+        }),
 
         // ── Footer: Local env + Approval mode ────────────────────────
         Container(
