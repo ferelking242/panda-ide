@@ -1648,7 +1648,7 @@ class _SelectTypeState extends State<SelectType>
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const Spacer(),
 
             // ── Detached Bottom Section (Theme, Account, Settings) ─────────
             // 1. Theme toggle
@@ -6586,103 +6586,115 @@ class _SelectTypeState extends State<SelectType>
           );
         }
 
-        // ── Agent message (Replit style: direct background, chronologically ordered block items) ──────
-        final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user')
-            ? i - 1
-            : -1;
-        final blocks = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
-        final calls = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        // Gather and combine thinking text
+        final thinkTexts = <String>[];
+        if (think.isNotEmpty) thinkTexts.add(think);
+        for (final b in blocks) {
+          if (b['type'] == 'thinking') {
+            final t = b['thinking'] as String? ?? '';
+            if (t.isNotEmpty) thinkTexts.add(t);
+          }
+        }
+        final combinedThinking = thinkTexts.join('\n\n').trim();
+
+        // Gather all tool calls
+        final allTools = <Map<String, dynamic>>[];
+        if (blocks.isNotEmpty) {
+          for (final b in blocks) {
+            if (b['type'] == 'toolCall') {
+              allTools.add(b);
+            }
+          }
+        } else {
+          allTools.addAll(calls);
+        }
+
+        // Separate pending approvals from completed/running tools
+        final pendingTools = allTools.where((t) => t['status'] == 'pending_approval' || t['status'] == 'pending').toList();
+        final completedTools = allTools.where((t) => t['status'] != 'pending_approval' && t['status'] != 'pending').toList();
+
+        // Gather final response text
+        String finalResponseText = text;
+        if (blocks.isNotEmpty) {
+          final textBlocks = blocks.where((b) => b['type'] == 'text').map((b) => b['text'] as String? ?? '').toList();
+          if (textBlocks.isNotEmpty) {
+            finalResponseText = textBlocks.join('').trim();
+          }
+        }
+
+        // Ensure streaming thinking tag content is stripped from the text view
+        final processedText = _extractThinkingFromText(finalResponseText, '');
+        final cleanResponseText = processedText['text']!;
+        final extractedStreamingThink = processedText['thinking']!.trim();
+        String finalThinking = combinedThinking;
+        if (extractedStreamingThink.isNotEmpty) {
+          if (finalThinking.isEmpty) {
+            finalThinking = extractedStreamingThink;
+          } else if (!finalThinking.contains(extractedStreamingThink)) {
+            finalThinking = '$finalThinking\n\n$extractedStreamingThink';
+          }
+        }
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Render blocks sequentially in the order they were produced
-              ...() {
-                if (blocks.isNotEmpty) {
-                  return blocks.map((b) {
-                    final type = b['type'] as String? ?? 'text';
-                    if (type == 'thinking') {
-                      final t = (b['thinking'] as String? ?? '').trim();
-                      if (t.isEmpty) return const SizedBox.shrink();
-                      return _ThinkingBlock(
-                        thinking: t,
-                        isDark: isDark,
-                        fg: fg,
-                        muted: muted,
-                      );
-                    } else if (type == 'toolCall') {
-                      return _ToolCallBlock(
-                        toolName: b['name'] as String? ?? '',
-                        args: (b['args'] as Map?)?.cast<String, dynamic>() ?? {},
-                        result: b['result'] as String?,
-                        status: b['status'] as String? ?? 'done',
-                        isDark: isDark,
-                        fg: fg,
-                        muted: muted,
-                        onApprove: () => _pendingApprovalCompleter?.complete(true),
-                        onDeny: () => _pendingApprovalCompleter?.complete(false),
-                        onAutopilot: () {
-                          setState(() => _agentApprovalMode = 'autopilot');
-                          _pendingApprovalCompleter?.complete(true);
-                        },
-                        onAllowSession: () {
-                          AgenticTools.allowAllCommandsThisSession = true;
-                          _pendingApprovalCompleter?.complete(true);
-                        },
-                        onWhitelist: () {
-                          final cmd = (b['args'] as Map?)?['command']?.toString() ?? '';
-                          if (cmd.isNotEmpty) AgenticTools.approvedCommandsWhitelist.add(cmd.trim());
-                          _pendingApprovalCompleter?.complete(true);
-                        },
-                      );
-                    } else if (type == 'text') {
-                      final txt = (b['text'] as String? ?? '').trim();
-                      if (txt.isEmpty) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                        child: _AgentMarkdownView(
-                          markdown: txt,
-                          isDark: isDark,
-                          fg: fg,
-                          isError: isError,
-                          isStreaming: false,
-                        ),
-                      );
-                    }
-                    return const SizedBox.shrink();
-                  });
-                }
+              // 1. Single, unified collapsible Replit/Cline-style step/thinking bar
+              if (finalThinking.isNotEmpty || completedTools.isNotEmpty || (i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.thinking))
+                _ReplitStepBar(
+                  think: finalThinking,
+                  calls: completedTools,
+                  blocks: const [],
+                  isStreaming: i == _agentMessages.length - 1 && _agentGenerating && (_agentPhase == AgentPhase.thinking || _agentPhase == AgentPhase.toolRunning),
+                  toolName: i == _agentMessages.length - 1 && _agentGenerating ? _agentCurrentTool : '',
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                ),
 
-                // Fallback for flat structure
-                return [
-                  if (think.isNotEmpty)
-                    _ThinkingBlock(thinking: think, isDark: isDark, fg: fg, muted: muted),
-                  ...calls.map((call) => _ToolCallBlock(
-                        toolName: call['name'] as String? ?? '',
-                        args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
-                        result: call['result'] as String?,
-                        status: call['status'] as String? ?? 'done',
-                        isDark: isDark,
-                        fg: fg,
-                        muted: muted,
-                      )),
-                  if (text.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-                      child: _AgentMarkdownView(
-                        markdown: text,
-                        isDark: isDark,
-                        fg: fg,
-                        isError: isError,
-                        isStreaming: isStreaming,
-                      ),
-                    ),
-                ];
-              }(),
+              // 2. Standalone interactive approval cards for pending tools immediately visible outside the step bar
+              if (pendingTools.isNotEmpty)
+                ...pendingTools.map((call) => _ToolCallBlock(
+                      toolName: call['name'] as String? ?? call['toolName'] as String? ?? '',
+                      args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
+                      result: call['result'] as String?,
+                      status: call['status'] as String? ?? 'pending_approval',
+                      isDark: isDark,
+                      fg: fg,
+                      muted: muted,
+                      onApprove: () => _pendingApprovalCompleter?.complete(true),
+                      onDeny: () => _pendingApprovalCompleter?.complete(false),
+                      onAutopilot: () {
+                        setState(() => _agentApprovalMode = 'autopilot');
+                        _pendingApprovalCompleter?.complete(true);
+                      },
+                      onAllowSession: () {
+                        AgenticTools.allowAllCommandsThisSession = true;
+                        _pendingApprovalCompleter?.complete(true);
+                      },
+                      onWhitelist: () {
+                        final cmd = (call['args'] as Map?)?['command']?.toString() ?? '';
+                        if (cmd.isNotEmpty) AgenticTools.approvedCommandsWhitelist.add(cmd.trim());
+                        _pendingApprovalCompleter?.complete(true);
+                      },
+                    )),
 
-              if (i == _agentMessages.length - 1 && _agentGenerating)
+              // 3. Clean streaming / static response markdown view
+              if (cleanResponseText.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                  child: _AgentMarkdownView(
+                    markdown: cleanResponseText,
+                    isDark: isDark,
+                    fg: fg,
+                    isError: isError,
+                    isStreaming: isStreaming,
+                  ),
+                ),
+
+              // 4. Fallback loader chip if generation is active and there is no text response yet
+              if (i == _agentMessages.length - 1 && _agentGenerating && cleanResponseText.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: _AgentPhaseChip(
@@ -10305,6 +10317,35 @@ class _ReplitStepBar extends StatefulWidget {
 
 class _ReplitStepBarState extends State<_ReplitStepBar> {
   bool _expanded = false;
+  bool _isFrench = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _detectLanguage();
+  }
+
+  Future<void> _detectLanguage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedLang = prefs.getString('app_language') ?? '';
+      if (savedLang.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _isFrench = savedLang.toLowerCase().contains('fran');
+          });
+        }
+        return;
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      final locale = Localizations.maybeLocaleOf(context)?.languageCode ?? 'fr';
+      setState(() {
+        _isFrench = locale.startsWith('fr');
+      });
+    }
+  }
 
   static IconData _iconForTool(String name) {
     final lower = name.toLowerCase();
@@ -10353,27 +10394,27 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
       final name = widget.toolName.toLowerCase();
       if (name.isNotEmpty) {
         if (name.contains('search') || name.contains('web') || name.contains('google')) {
-          activeStatusText = 'Recherche en cours\u2026';
+          activeStatusText = _isFrench ? 'Recherche en cours\u2026' : 'Searching\u2026';
         } else if (name.contains('read') || name.contains('list') || name.contains('file')) {
-          activeStatusText = 'Lecture du workspace\u2026';
+          activeStatusText = _isFrench ? 'Lecture du workspace\u2026' : 'Reading workspace\u2026';
         } else if (name.contains('edit') || name.contains('create') || name.contains('write')) {
-          activeStatusText = 'Édition du code\u2026';
+          activeStatusText = _isFrench ? 'Édition du code\u2026' : 'Editing code\u2026';
         } else if (name.contains('push') || name.contains('commit') || name.contains('git')) {
-          activeStatusText = 'Publication Git / Push\u2026';
+          activeStatusText = _isFrench ? 'Publication Git / Push\u2026' : 'Git Push\u2026';
         } else if (name.contains('command') || name.contains('shell') || name.contains('bash') || name.contains('terminal')) {
-          activeStatusText = 'Exécution terminal (${widget.toolName})\u2026';
+          activeStatusText = _isFrench ? 'Exécution terminal (${widget.toolName})\u2026' : 'Running terminal (${widget.toolName})\u2026';
         } else {
-          activeStatusText = 'Action : ${widget.toolName}\u2026';
+          activeStatusText = _isFrench ? 'Action : ${widget.toolName}\u2026' : 'Action: ${widget.toolName}\u2026';
         }
       } else if (combinedThink.isNotEmpty) {
-        activeStatusText = 'Réflexion & Analyse\u2026';
+        activeStatusText = _isFrench ? 'Réflexion & Analyse\u2026' : 'Thinking & Analysis\u2026';
       } else {
-        activeStatusText = 'Travail de l\'agent\u2026';
+        activeStatusText = _isFrench ? 'Travail de l\'agent\u2026' : 'Agent working\u2026';
       }
     }
 
     // Dynamic step title from active status or first line of thinking
-    String stepTitle = 'Étapes de l\'agent';
+    String stepTitle = _isFrench ? 'Étapes de l\'agent' : 'Agent steps';
     if (activeStatusText.isNotEmpty) {
       stepTitle = activeStatusText;
     } else if (combinedThink.isNotEmpty) {
@@ -10397,106 +10438,109 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Header Bar (Clickable Replit-style step bar) ──
-          InkWell(
-            onTap: () => setState(() => _expanded = !_expanded),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                children: [
-                  // Brain Icon 🧠 / Icons.psychology
-                  Icon(Icons.psychology, size: 16, color: widget.fg.withValues(alpha: 0.8)),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      stepTitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: textC,
-                        letterSpacing: 0.2,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                child: Row(
+                  children: [
+                    // Brain Icon 🧠 / Icons.psychology
+                    Icon(Icons.psychology, size: 16, color: widget.fg.withValues(alpha: 0.8)),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        stepTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: textC,
+                          letterSpacing: 0.2,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 8),
 
-                  // Horizontal sequence of bullet icons for actions
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          if (combinedThink.isNotEmpty) ...[
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: widget.fg.withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.psychology, size: 11, color: widget.fg.withValues(alpha: 0.8)),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    'Pensée',
-                                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: widget.fg),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                          ],
-                          ...toolCalls.map((call) {
-                            final name = call['name'] as String? ?? call['toolName'] as String? ?? '';
-                            final icon = _iconForTool(name);
-                            return Padding(
-                              padding: const EdgeInsets.only(right: 4),
-                              child: Container(
+                    // Horizontal sequence of bullet icons for actions
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            if (combinedThink.isNotEmpty) ...[
+                              Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: (isDark ? Colors.grey[800] : Colors.grey[200])!,
+                                  color: widget.fg.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(icon, size: 11, color: widget.fg),
+                                    Icon(Icons.psychology, size: 11, color: widget.fg.withValues(alpha: 0.8)),
                                     const SizedBox(width: 3),
                                     Text(
-                                      name,
-                                      style: TextStyle(fontSize: 9, fontFamily: 'monospace', color: widget.fg),
+                                      _isFrench ? 'Pensée' : 'Thinking',
+                                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.w500, color: widget.fg),
                                     ),
                                   ],
                                 ),
                               ),
-                            );
-                          }),
-                        ],
+                              const SizedBox(width: 4),
+                            ],
+                            ...toolCalls.map((call) {
+                              final name = call['name'] as String? ?? call['toolName'] as String? ?? '';
+                              final icon = _iconForTool(name);
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 4),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: (isDark ? Colors.grey[800] : Colors.grey[200])!,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(icon, size: 11, color: widget.fg),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        name,
+                                        style: TextStyle(fontSize: 9, fontFamily: 'monospace', color: widget.fg),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  // Spinning Square Indicator when running
-                  if (isRunning) ...[
+                    // Spinning Square Indicator when running
+                    if (isRunning) ...[
+                      const SizedBox(width: 6),
+                      const _SpinningSquareIndicator(color: _kAccent, size: 10),
+                      const SizedBox(width: 4),
+                      Text(
+                        activeStatusText,
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _kAccent),
+                      ),
+                    ],
+
                     const SizedBox(width: 6),
-                    const _SpinningSquareIndicator(color: _kAccent, size: 10),
-                    const SizedBox(width: 4),
-                    Text(
-                      activeStatusText,
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: _kAccent),
+                    Icon(
+                      _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                      size: 13,
+                      color: widget.muted,
                     ),
                   ],
-
-                  const SizedBox(width: 6),
-                  Icon(
-                    _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
-                    size: 13,
-                    color: widget.muted,
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -10523,7 +10567,7 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                   // Tool Execution Trace
                   if (toolCalls.isNotEmpty) ...[
                     Text(
-                      'Tracé des outils exécutés :',
+                      _isFrench ? 'Tracé des outils exécutés :' : 'Executed tools trace:',
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
