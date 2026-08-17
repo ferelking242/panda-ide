@@ -6578,6 +6578,7 @@ class _SelectTypeState extends State<SelectType>
         final isError     = phase == 'error';
         final blocks = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
         final calls  = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user') ? i - 1 : -1;
 
         if (isMe) {
           return _UserMessageBubble(
