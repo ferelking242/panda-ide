@@ -6576,6 +6576,8 @@ class _SelectTypeState extends State<SelectType>
         final think  = msg['thinking'] as String? ?? '';
         final isStreaming = phase == 'streaming';
         final isError     = phase == 'error';
+        final blocks = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final calls  = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
         if (isMe) {
           return _UserMessageBubble(
