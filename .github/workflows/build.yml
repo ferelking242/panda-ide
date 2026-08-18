@@ -117,14 +117,19 @@ jobs:
 
       - name: Setup release keystore
         run: |
-          echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/app/panda-ide.keystore
-          cat > android/key.properties <<EOF
-          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
-          keyPassword=${{ secrets.KEY_PASSWORD }}
-          keyAlias=${{ secrets.KEY_ALIAS }}
-          storeFile=../app/panda-ide.keystore
-          EOF
-          echo "✓ Keystore prêt (\$(du -sh android/app/panda-ide.keystore | cut -f1))"
+          if [ -n "${{ secrets.KEYSTORE_B64 }}" ] && [ -n "${{ secrets.KEYSTORE_PASSWORD }}" ] && [ -n "${{ secrets.KEY_PASSWORD }}" ] && [ -n "${{ secrets.KEY_ALIAS }}" ]; then
+            echo "Configuring release keystore..."
+            echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/app/panda-ide.keystore
+            cat > android/key.properties <<EOF
+            storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+            keyPassword=${{ secrets.KEY_PASSWORD }}
+            keyAlias=${{ secrets.KEY_ALIAS }}
+            storeFile=../app/panda-ide.keystore
+            EOF
+            echo "✓ Keystore release configuré avec succès"
+          else
+            echo "⚠️ Secrets de signature manquants. Le build utilisera la signature debug par défaut."
+          fi
 
       - name: Install dependencies
         run: flutter pub get
