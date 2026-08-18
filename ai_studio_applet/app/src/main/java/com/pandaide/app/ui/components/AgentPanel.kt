@@ -199,6 +199,75 @@ fun AgentPanel(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Footer indicators row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Circular Token Counter
+            val totalChars = messages.sumOf { it.text.length + (it.toolName?.length ?: 0) } + promptInput.length
+            val estTokens = (totalChars / 4)
+            if (estTokens > 0) {
+                val label = if (estTokens < 1000) "~$estTokens" else "~${String.format("%.1f", estTokens / 1000.0)}k"
+                val badgeColor = if (estTokens > 80000) Color(0xFFF38BA8) else if (estTokens > 40000) Color(0xFFFAB387) else Color(0xFFA6E3A1)
+                
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(badgeColor.copy(alpha = 0.15f))
+                        .border(BorderStroke(1.dp, badgeColor.copy(alpha = 0.3f)), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(badgeColor)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = label,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = theme.textSecondary
+                    )
+                }
+            } else {
+                Spacer(modifier = Modifier.width(1.dp))
+            }
+
+            // Status pills mirroring the flutter layout
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Local",
+                    fontSize = 10.sp,
+                    color = theme.textSecondary.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(theme.surfaceVariant)
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                )
+                Text(
+                    text = "Contrôle manuel",
+                    fontSize = 10.sp,
+                    color = Color(0xFF89B4FA),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(Color(0xFF89B4FA).copy(alpha = 0.15f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                )
+            }
+        }
     }
 }
 

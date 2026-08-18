@@ -4432,37 +4432,7 @@ class _SelectTypeState extends State<SelectType>
                         ),
                       ),
                       const Spacer(),
-                      // Token estimate
-                      Builder(builder: (ctx) {
-                        int totalChars = 0;
-                        for (final msg in _agentMessages) {
-                          totalChars +=
-                              (msg['text'] as String? ?? '').length;
-                          totalChars +=
-                              (msg['thinking'] as String? ?? '').length;
-                        }
-                        totalChars += _agentInputCtrl.text.length;
-                        final estTokens = (totalChars / 4).round();
-                        if (estTokens == 0) return const SizedBox.shrink();
-                        final label = estTokens < 1000
-                            ? '~${estTokens}tok'
-                            : '~${(estTokens / 1000).toStringAsFixed(1)}k';
-                        return Tooltip(
-                          message:
-                              'Tokens estimés ($estTokens ≈ chars÷4). '
-                              'Au-delà de 80k le modèle peut tronquer.',
-                          child: Text(label,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: estTokens > 80000
-                                    ? Colors.red[400]
-                                    : estTokens > 40000
-                                        ? Colors.orange[400]
-                                        : muted,
-                              )),
-                        );
-                      }),
-                      const SizedBox(width: 6),
+
                       // Send / Stop
                       if (_agentGenerating)
                         GestureDetector(
@@ -4508,6 +4478,75 @@ class _SelectTypeState extends State<SelectType>
         Container(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
           child: Row(children: [
+            // Circular Token Counter (moved from prompt area to far bottom-left!)
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _agentInputCtrl,
+              builder: (context, value, _) {
+                int totalChars = 0;
+                for (final msg in _agentMessages) {
+                  totalChars += (msg['text'] as String? ?? '').length;
+                  totalChars += (msg['thinking'] as String? ?? '').length;
+                }
+                totalChars += value.text.length;
+                final estTokens = (totalChars / 4).round();
+                if (estTokens == 0) return const SizedBox.shrink();
+                final label = estTokens < 1000
+                    ? '~$estTokens'
+                    : '~${(estTokens / 1000).toStringAsFixed(1)}k';
+                return Tooltip(
+                  message: 'Tokens estimés ($estTokens ≈ chars÷4). Au-delà de 80k le modèle peut tronquer.',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: estTokens > 80000
+                          ? Colors.red.withOpacity(0.15)
+                          : estTokens > 40000
+                              ? Colors.orange.withOpacity(0.15)
+                              : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: estTokens > 80000
+                            ? Colors.red.withOpacity(0.3)
+                            : estTokens > 40000
+                                ? Colors.orange.withOpacity(0.3)
+                                : (isDark ? Colors.white10 : Colors.black12),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: estTokens > 80000
+                                ? Colors.red[400]
+                                : estTokens > 40000
+                                    ? Colors.orange[400]
+                                    : Colors.green[400],
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: estTokens > 80000
+                                ? Colors.red[400]
+                                : estTokens > 40000
+                                    ? Colors.orange[400]
+                                    : muted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             const Spacer(),
             // Local pill
             Container(
@@ -6707,8 +6746,43 @@ class _SelectTypeState extends State<SelectType>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Single, unified collapsible Replit/Cline-style step/thinking bar
-              if (finalThinking.isNotEmpty || completedTools.isNotEmpty || (i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.thinking))
+              // 1. Chronological Step-by-Step Boxes (Each action gets its own box!)
+              if (blocks.isNotEmpty)
+                ...blocks.map((b) {
+                  final type = b['type'] as String? ?? '';
+                  if (type == 'thinking') {
+                    final thinkText = b['thinking'] as String? ?? '';
+                    if (thinkText.trim().isEmpty) return const SizedBox.shrink();
+                    return _ReplitStepBar(
+                      think: thinkText,
+                      calls: const [],
+                      blocks: const [],
+                      isStreaming: false,
+                      toolName: '',
+                      isDark: isDark,
+                      fg: fg,
+                      muted: muted,
+                    );
+                  } else if (type == 'toolCall') {
+                    final status = b['status'] as String? ?? 'done';
+                    if (status == 'pending_approval' || status == 'pending') {
+                      return const SizedBox.shrink(); // Handled separately below
+                    }
+                    return _ReplitStepBar(
+                      think: '',
+                      calls: [b],
+                      blocks: const [],
+                      isStreaming: status == 'running',
+                      toolName: b['name'] as String? ?? '',
+                      isDark: isDark,
+                      fg: fg,
+                      muted: muted,
+                    );
+                  } else {
+                    return const SizedBox.shrink(); // Markdown text handled below
+                  }
+                })
+              else if (finalThinking.isNotEmpty || completedTools.isNotEmpty || (i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.thinking))
                 _ReplitStepBar(
                   think: finalThinking,
                   calls: completedTools,
@@ -10400,12 +10474,13 @@ class _ReplitStepBar extends StatefulWidget {
 }
 
 class _ReplitStepBarState extends State<_ReplitStepBar> {
-  bool _expanded = false;
+  late bool _expanded;
   bool _isFrench = true;
 
   @override
   void initState() {
     super.initState();
+    _expanded = widget.isStreaming;
     _detectLanguage();
   }
 
