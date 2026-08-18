@@ -534,12 +534,6 @@ $toolLines
         }).toList(),
       });
 
-      // Notify user that tools are being executed
-      ctrl.add(AgentChunk(
-        phase: AgentPhase.thinking,
-        text: '\n🔧 Executing ${functionCalls.length} tool(s)...\n',
-      ));
-
       // Execute each tool call
       final toolResults = <Map<String, dynamic>>[];
       for (final fc in functionCalls) {
@@ -743,11 +737,6 @@ $toolLines
         'content': assistantText,
         if (toolCalls.isNotEmpty) 'tool_calls': toolCalls,
       });
-
-      ctrl.add(AgentChunk(
-        phase: AgentPhase.thinking,
-        text: '\n🔧 Executing ${toolCalls.length} tool(s)...\n',
-      ));
 
       final toolResults = <String>[];
       for (final call in toolCalls) {

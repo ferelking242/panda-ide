@@ -342,6 +342,7 @@ class _SelectTypeState extends State<SelectType>
       _maybeShowStorageMigrationNotice();
       _checkForAndroidUpdate();
       context.read<ChatSessionBloc>().add(LoadChatSessions());
+      checkAndRequestMissingPermissions(context);
     });
   }
 
@@ -1213,7 +1214,7 @@ class _SelectTypeState extends State<SelectType>
                                                 ),
                                         ),
                                         // Panda Agent panel
-                                        if (_rightPanelOpen)
+                                        if (_rightPanelOpen && MediaQuery.of(context).size.width >= 600)
                                           BlocProvider(
                                             create: (_) => AIChatUIBloc(),
                                             child: Builder(
@@ -1532,7 +1533,35 @@ class _SelectTypeState extends State<SelectType>
         color: railBg,
         child: Column(
           children: [
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
+            Tooltip(
+              message: 'Panda IDE Agent',
+              child: InkWell(
+                onTap: _openAgentTab,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                    shape: BoxShape.circle,
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/icons/app-icon.png',
+                      width: 24, height: 24, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const Text('🐼', style: TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              height: 1,
+              color: isDark ? Colors.white10 : Colors.black10,
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+            ),
+            const SizedBox(height: 8),
 
             // ── Sidebar items (scrollable so they never overlap bottom) ───
             Flexible(
@@ -2965,7 +2994,7 @@ class _SelectTypeState extends State<SelectType>
         BuildContext context, AppTheme appTheme, AppThemeState appThemestate) {
       final isDark = appTheme.isDark;
       final fg     = isDark ? Colors.grey[400]! : Colors.grey[700]!;
-      final bg     = isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede);
+      final bg     = isDark ? _kActivityBgDark : _kActivityBgLight;
       final boxBg  = isDark ? const Color(0xff3a3a3a) : const Color(0xfff5f5f5);
       final boxBdr = isDark ? const Color(0xff666666) : const Color(0xffbbbbbb);
       final nameFg = isDark ? Colors.grey[200]! : Colors.grey[800]!;
@@ -3142,7 +3171,14 @@ class _SelectTypeState extends State<SelectType>
               if (_activeRail == 0) _activeRail = 1;
             }
           }
-          if (value == 'sidebar_right') _rightPanelOpen = !_rightPanelOpen;
+          if (value == 'sidebar_right') {
+            final bool isMobile = MediaQuery.of(context).size.width < 600;
+            if (isMobile) {
+              _openAgentTab();
+            } else {
+              _rightPanelOpen = !_rightPanelOpen;
+            }
+          }
           if (value == 'panel_bottom') _bottomPanelOpen = !_bottomPanelOpen;
         });
       });
@@ -5757,11 +5793,16 @@ class _SelectTypeState extends State<SelectType>
                     OutlinedButton.icon(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        setState(() {
-                          _rightPanelOpen = true;
-                          _agentPanelPrevTab = _agentPanelTab;
-                          _agentPanelTab = 4;
-                        });
+                        final bool isMobile = MediaQuery.of(context).size.width < 600;
+                        if (isMobile) {
+                          _openAgentTab();
+                        } else {
+                          setState(() {
+                            _rightPanelOpen = true;
+                            _agentPanelPrevTab = _agentPanelTab;
+                            _agentPanelTab = 4;
+                          });
+                        }
                       },
                       icon: const Icon(Broken.add_circle, size: 14),
                       label: const Text('Ajouter un provider'),
@@ -6032,11 +6073,16 @@ class _SelectTypeState extends State<SelectType>
               TextButton.icon(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  setState(() {
-                    _rightPanelOpen    = true;
-                    _agentPanelPrevTab = _agentPanelTab;
-                    _agentPanelTab     = 4;
-                  });
+                  final bool isMobile = MediaQuery.of(context).size.width < 600;
+                  if (isMobile) {
+                    _openAgentTab();
+                  } else {
+                    setState(() {
+                      _rightPanelOpen    = true;
+                      _agentPanelPrevTab = _agentPanelTab;
+                      _agentPanelTab     = 4;
+                    });
+                  }
                 },
                 icon: Icon(Broken.add_circle, size: 14, color: muted),
                 label: Text('Ajouter un provider',
@@ -6812,10 +6858,17 @@ class _SelectTypeState extends State<SelectType>
                       tooltip: 'Ancrer',
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-                      onPressed: () => setState(() {
-                        _agentFloating  = false;
-                        _rightPanelOpen = true;
-                      }),
+                      onPressed: () {
+                        final bool isMobile = MediaQuery.of(context).size.width < 600;
+                        setState(() {
+                          _agentFloating  = false;
+                          if (isMobile) {
+                            _openAgentTab();
+                          } else {
+                            _rightPanelOpen = true;
+                          }
+                        });
+                      },
                     ),
                     IconButton(
                       icon: const Icon(Icons.close, size: 14),
@@ -7620,11 +7673,16 @@ class _SelectTypeState extends State<SelectType>
             muted: muted,
             onTap: () {
               Navigator.pop(context);
-              setState(() {
-                _rightPanelOpen    = true;
-                _agentPanelPrevTab = _agentPanelTab;
-                _agentPanelTab     = 3; // User Settings
-              });
+              final bool isMobile = MediaQuery.of(context).size.width < 600;
+              if (isMobile) {
+                _openAgentTab();
+              } else {
+                setState(() {
+                  _rightPanelOpen    = true;
+                  _agentPanelPrevTab = _agentPanelTab;
+                  _agentPanelTab     = 3; // User Settings
+                });
+              }
             },
           ),
           const SizedBox(height: 16),
@@ -7825,8 +7883,13 @@ class _SelectTypeState extends State<SelectType>
   void _sendToAgentFromBridge(String text) {
     if (!mounted || _agentGenerating) return;
     // Ouvre le panel agent si fermé
-    if (!_rightPanelOpen) {
-      setState(() => _rightPanelOpen = true);
+    final bool isMobile = MediaQuery.of(context).size.width < 600;
+    if (isMobile) {
+      _openAgentTab();
+    } else {
+      if (!_rightPanelOpen) {
+        setState(() => _rightPanelOpen = true);
+      }
     }
     _agentInputCtrl.text = text;
     _agentSend();

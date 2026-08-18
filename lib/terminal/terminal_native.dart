@@ -319,6 +319,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       args: widget.args,
       makeActive: true,
       title: 'Session 1',
+      useProot: true,
       externalServer: ((){
         final sshId = widget.sshId;
         final termuxId = widget.termuxId;
@@ -364,7 +365,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     String? title,
     bool showFeedback = false,
     SSHInfo? externalServer,
-    bool useProot = false,
+    bool useProot = true,
   }) async {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final sessionTitle = title ?? _nextSessionTitle();
@@ -594,84 +595,139 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
 
   // ── proot + Alpine helpers ─────────────────────────────────────────────────
 
-  Future<void> _startProotSession(_TerminalRuntime runtime) async {
+  Future<void> _startNativeSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
+    final shellPath = File('/system/bin/sh').existsSync() ? '/system/bin/sh' : '/bin/sh';
+    await _ensureBashRc();
+
+    try {
+      final process = Pty.start(
+        shellPath,
+        arguments: args,
+        workingDirectory: widget.projectDir,
+        environment: {
+          'HOME': widget.projectDir,
+          'TERM': 'xterm-256color',
+          'SHELL': shellPath,
+          'PATH': '/system/bin:/system/xbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+          'TMPDIR': '/tmp',
+        },
+        rows: runtime.terminal.viewHeight,
+        columns: runtime.terminal.viewWidth,
+      );
+
+      runtime.pty = process;
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
+
+      process.output
+        .cast<List<int>>()
+        .transform(const Utf8Decoder())
+        .listen(runtime.terminal.write);
+
+      process.exitCode.then((code) {
+        if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
+        runtime.pty = null;
+        runtime.terminal.write('\r\n\n[Session locale terminée avec le code $code]');
+        _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+        _showExitBanner(runtime.sessionId, code);
+      });
+
+      runtime.terminal.onOutput = (data) {
+        if (widget.readOnly) return;
+        process.write(const Utf8Encoder().convert(data));
+        final activeSessionId = _sessionBloc.state.activeSessionId;
+        if (activeSessionId == runtime.sessionId) {
+          _handleInputForAutocomplete(runtime, data);
+        }
+      };
+
+      runtime.terminal.onResize = (w, h, pw, ph) {
+        process.resize(h, w);
+      };
+    } catch (e) {
+      runtime.terminal.write('\r\n\x1b[31m[Échec du démarrage du terminal système : $e]\x1b[0m\r\n');
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+    }
+  }
+
+  Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
     final rootfsDir = '$runtimesDir/alpine-linux';
     final resolvedProotBin = AlpineSetup.locateProotBinary(rootfsDir) ?? '$binDir/proot';
     final prootBin = File(resolvedProotBin).existsSync() ? resolvedProotBin : '$binDir/proot';
 
     await _ensureBashRc();
 
-    if (!File(prootBin).existsSync()) {
+    if (!File(prootBin).existsSync() || !Directory(rootfsDir).existsSync()) {
       runtime.terminal.write(
-        '\r\n\x1b[31m[proot binary not found. Try restarting the app to trigger installation.]\x1b[0m\r\n',
+        '\r\n\x1b[33m[Alpine ou proot absent. Redirection automatique vers le terminal système local...]\x1b[0m\r\n',
       );
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
-      return;
-    }
-    if (!Directory(rootfsDir).existsSync()) {
-      runtime.terminal.write(
-        '\r\n\x1b[31m[Alpine rootfs not found. Try restarting the app to trigger installation.]\x1b[0m\r\n',
-      );
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      await _startNativeSession(runtime, args: args);
       return;
     }
 
-    final process = Pty.start(
-      prootBin,
-      arguments: [
-        '--rootfs=$rootfsDir',
-        '-b', '/dev',
-        '-b', '/proc',
-        '-b', '/sys',
-        '-b', appDir,
-        '-b', widget.projectDir,
-        '-b', '/storage',
-        '-w', widget.projectDir,
-        '/bin/sh',
-      ],
-      workingDirectory: widget.projectDir,
-      environment: {
-        'HOME': '/root',
-        'TERM': 'xterm-256color',
-        'SHELL': '/bin/sh',
-        'DISPLAY': ':0',
-        'ENV': '/root/.profile',
-        'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-        'TMPDIR': '/tmp',
-        'PROOT_TMP_DIR': tempDir,
-      },
-      rows: runtime.terminal.viewHeight,
-      columns: runtime.terminal.viewWidth,
-    );
+    try {
+      final process = Pty.start(
+        prootBin,
+        arguments: [
+          '--rootfs=$rootfsDir',
+          '-b', '/dev',
+          '-b', '/proc',
+          '-b', '/sys',
+          '-b', appDir,
+          '-b', widget.projectDir,
+          '-b', '/storage',
+          '-w', widget.projectDir,
+          '/bin/sh',
+          ...args,
+        ],
+        workingDirectory: widget.projectDir,
+        environment: {
+          'HOME': '/root',
+          'TERM': 'xterm-256color',
+          'SHELL': '/bin/sh',
+          'DISPLAY': ':0',
+          'ENV': '/root/.profile',
+          'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+          'TMPDIR': '/tmp',
+          'PROOT_TMP_DIR': tempDir,
+        },
+        rows: runtime.terminal.viewHeight,
+        columns: runtime.terminal.viewWidth,
+      );
 
-    runtime.pty = process;
-    _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
+      runtime.pty = process;
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
 
-    process.output
-      .cast<List<int>>()
-      .transform(const Utf8Decoder())
-      .listen(runtime.terminal.write);
+      process.output
+        .cast<List<int>>()
+        .transform(const Utf8Decoder())
+        .listen(runtime.terminal.write);
 
-    process.exitCode.then((code) {
-      if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
-      runtime.pty = null;
-      runtime.terminal.write('\r\n\n[Alpine session ended with exit code $code]');
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
-      _showExitBanner(runtime.sessionId, code);
-    });
+      process.exitCode.then((code) {
+        if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
+        runtime.pty = null;
+        runtime.terminal.write('\r\n\n[Alpine session ended with exit code $code]');
+        _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+        _showExitBanner(runtime.sessionId, code);
+      });
 
-    runtime.terminal.onOutput = (data) {
-      if (widget.readOnly) return;
-      process.write(const Utf8Encoder().convert(data));
-      final activeSessionId = _sessionBloc.state.activeSessionId;
-      if (activeSessionId == runtime.sessionId) {
-        _handleInputForAutocomplete(runtime, data);
-      }
-    };
+      runtime.terminal.onOutput = (data) {
+        if (widget.readOnly) return;
+        process.write(const Utf8Encoder().convert(data));
+        final activeSessionId = _sessionBloc.state.activeSessionId;
+        if (activeSessionId == runtime.sessionId) {
+          _handleInputForAutocomplete(runtime, data);
+        }
+      };
 
-    runtime.terminal.onResize = (w, h, pw, ph) {
-      process.resize(h, w);
-    };
+      runtime.terminal.onResize = (w, h, pw, ph) {
+        process.resize(h, w);
+      };
+    } catch (e) {
+      runtime.terminal.write(
+        '\r\n\x1b[33m[Erreur d’exécution de proot/Alpine : $e. Repli vers le terminal système...]\x1b[0m\r\n',
+      );
+      await _startNativeSession(runtime, args: args);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -683,7 +739,11 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
     bool useProot = false,
   }) async {
     if (externalServer == null) {
-      await _startProotSession(runtime);
+      if (useProot || runtime.isProot) {
+        await _startProotSession(runtime, args: args);
+      } else {
+        await _startNativeSession(runtime, args: args);
+      }
       return;
     }
 
@@ -1717,9 +1777,9 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
       onAnimationStatusChanged: (status) => _terminalSelectionStatus = status,
       menuChildren: [
         MenuItemButton(
-          onPressed: () => _createSession(makeActive: true, showFeedback: true),
-          leadingIcon: Icon(Icons.terminal, color: appTheme.selectScreenCardTextColor, size: 18),
-          child: Text('bash', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+          onPressed: () => _createSession(makeActive: true, showFeedback: true, useProot: true, title: 'Alpine Linux'),
+          leadingIcon: Icon(Icons.code, color: appTheme.selectScreenCardTextColor, size: 18),
+          child: Text('Alpine Linux (PRoot)', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
         ),
         ...sshServerList.map((server) => MenuItemButton(
           onPressed: () => _createSession(makeActive: true, showFeedback: true, externalServer: server),

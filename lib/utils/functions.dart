@@ -4274,3 +4274,100 @@ Map<String, dynamic>? normalizeRecentEntry(dynamic rawEntry) {
   }
   return null;
 }
+
+Future<void> checkAndRequestMissingPermissions(BuildContext context) async {
+  if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+
+  final storagePermission = Platform.isAndroid &&
+          ((Platform.operatingSystemVersion).contains('Android 11') ||
+              _isAndroid11PlusSafer())
+      ? Permission.manageExternalStorage
+      : Permission.storage;
+
+  final storageStatus = await storagePermission.status;
+  final notifStatus = await Permission.notification.status;
+  final overlayStatus = Platform.isAndroid
+      ? await Permission.systemAlertWindow.status
+      : PermissionStatus.granted;
+
+  if (storageStatus != PermissionStatus.granted ||
+      notifStatus != PermissionStatus.granted ||
+      (Platform.isAndroid && overlayStatus != PermissionStatus.granted)) {
+    if (!context.mounted) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xff181c24),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(20),
+          topRight: Radius.circular(20),
+        ),
+      ),
+      builder: (bCtx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.shield_outlined, color: Color(0xff5090c8), size: 24),
+                    SizedBox(width: 10),
+                    Text(
+                      'Permissions requises',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Certaines autorisations sont nécessaires pour que l\'IDE fonctionne à 100% (accès stockage pour PRoot/Alpine, notifications de build, superposition pour l\'Agent, etc.).',
+                  style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 45,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xff5090c8),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      Navigator.of(bCtx).pop();
+                      if (storageStatus != PermissionStatus.granted) {
+                        await storagePermission.request();
+                      }
+                      if (notifStatus != PermissionStatus.granted) {
+                        await Permission.notification.request();
+                      }
+                      if (Platform.isAndroid && overlayStatus != PermissionStatus.granted) {
+                        await Permission.systemAlertWindow.request();
+                      }
+                    },
+                    child: const Text('Accorder les autorisations manquantes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+bool _isAndroid11PlusSafer() {
+  try {
+    return Platform.isAndroid;
+  } catch (_) {
+    return false;
+  }
+}
