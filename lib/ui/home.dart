@@ -1558,7 +1558,7 @@ class _SelectTypeState extends State<SelectType>
             const SizedBox(height: 8),
             Container(
               height: 1,
-              color: isDark ? Colors.white10 : Colors.black10,
+              color: isDark ? Colors.white10 : Colors.black12,
               margin: const EdgeInsets.symmetric(horizontal: 8),
             ),
             const SizedBox(height: 8),
