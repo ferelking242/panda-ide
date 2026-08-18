@@ -1,0 +1,6 @@
+{
+  "name": "Panda IDE",
+  "description": "Next-generation mobile IDE & AI Coding Assistant inspired by Cursor & VS Code with multi-tab editor, syntax highlighting, Git integration, terminal, and AI agent.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

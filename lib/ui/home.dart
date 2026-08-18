@@ -1521,7 +1521,7 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',     idx: 3),
         _RailItem(icon: Broken.play_circle,         label: 'Exécuter / Debug', idx: 4),
         _RailItem(icon: Broken.cloud_connection,    label: 'Tunnel',           idx: 5),
-        _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
+
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
@@ -1534,34 +1534,7 @@ class _SelectTypeState extends State<SelectType>
         child: Column(
           children: [
             const SizedBox(height: 8),
-            Tooltip(
-              message: 'Panda IDE Agent',
-              child: InkWell(
-                onTap: _openAgentTab,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/icons/app-icon.png',
-                      width: 24, height: 24, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Text('🐼', style: TextStyle(fontSize: 18)),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 1,
-              color: isDark ? Colors.white10 : Colors.black12,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-            const SizedBox(height: 8),
+
 
             // ── Sidebar items (scrollable so they never overlap bottom) ───
             Flexible(
@@ -1678,6 +1651,51 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
             const Spacer(),
+            _ActivityBtnEx(
+              item:      _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
+              selected:  _sidebarState == 2 && _activeRail == 6,
+              iconColor: iconColor,
+              selColor:  selColor,
+              onTap: () {
+                setState(() {
+                  if (!_openTabs.any((t) => t.id == 'marketplace')) {
+                    _openTabs.add(const _TabDef(
+                        id:    'marketplace',
+                        title: 'Extensions',
+                        icon:  Broken.shop));
+                    _activeTabIdx = _openTabs.length - 1;
+                  } else {
+                    _activeTabIdx =
+                        _openTabs.indexWhere((t) => t.id == 'marketplace');
+                  }
+                  _sidebarState = 1;
+                  _activeRail = 0;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            Tooltip(
+              message: 'Panda IDE Agent',
+              child: InkWell(
+                onTap: _openAgentTab,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
+                    shape: BoxShape.circle,
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/icons/app-icon.png',
+                      width: 24, height: 24, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const Text('🐼', style: TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
 
             // ── Detached Bottom Section (Theme, Account, Settings) ─────────
             // 1. Theme toggle
