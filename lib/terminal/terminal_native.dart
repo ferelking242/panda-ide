@@ -729,9 +729,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
         process.resize(h, w);
       };
     } catch (e) {
-      runtime.terminal.write('
-[31m[Erreur d’exécution de PRoot / Alpine : ' + e.toString() + '][0m
-');
+      runtime.terminal.write('\r\n\x1b[31m[Erreur execution PRoot / Alpine : ' + e.toString() + ']\x1b[0m\r\n');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
     }
   }
