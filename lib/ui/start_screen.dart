@@ -223,54 +223,14 @@ class _StartScreenState extends State<StartScreen> {
       PandaLog.w('StartScreen', 'Git global config failed (ignored): $e');
     }
 
-    // Alpine native integration
+    // Alpine native integration (idempotent setup & runtime files)
     final alpineDir = '$runtimesDir/alpine-linux';
-    final prootBin = '$binDir/proot';
-    
-    if (!File(prootBin).existsSync() || !Directory(alpineDir).existsSync()) {
-      PandaLog.i('StartScreen', 'Installing built-in Alpine Linux environment...');
-      try {
-        final zipPath = '$runtimesDir/alpine-proot.zip';
-        final zipBytes = await rootBundle.load('assets/runtimes/alpine-proot.zip');
-        File(zipPath).writeAsBytesSync(zipBytes.buffer.asUint8List());
-
-        await ZipFile.extractToDirectory(
-          zipFile: File(zipPath),
-          destinationDir: Directory(runtimesDir),
-        );
-
-        final prootSrc = AlpineSetup.locateProotBinary(alpineDir) ??
-            AlpineSetup.locateProotBinary('$alpineDir/rootfs');
-        if (prootSrc != null && File(prootSrc).existsSync()) {
-          File(prootSrc).copySync(prootBin);
-          await Process.run('chmod', ['+x', prootBin]);
-          PandaLog.i('StartScreen', 'proot binary installed at $prootBin from $prootSrc');
-        } else {
-          PandaLog.w('StartScreen', 'proot binary not found under $alpineDir after extraction');
-        }
-
-        if (Directory(alpineDir).existsSync()) {
-          final resolv = File('$alpineDir/etc/resolv.conf');
-          if (!resolv.existsSync()) {
-            resolv.parent.createSync(recursive: true);
-                        // Phase 4: Dynamic DNS resolution mapping via Android properties
-            String dnsServers = 'nameserver 8.8.8.8\nnameserver 1.1.1.1\n';
-            try {
-              final dns1 = Process.runSync('getprop', ['net.dns1']).stdout.toString().trim();
-              final dns2 = Process.runSync('getprop', ['net.dns2']).stdout.toString().trim();
-              if (dns1.isNotEmpty && dns1 != 'null') {
-                dnsServers = 'nameserver $dns1\n';
-                if (dns2.isNotEmpty && dns2 != 'null') dnsServers += 'nameserver $dns2\n';
-              }
-            } catch (_) {}
-            resolv.writeAsStringSync(dnsServers);
-          }
-          PandaLog.i('StartScreen', 'Alpine Linux environment installed successfully.');
-        }
-        try { File(zipPath).deleteSync(); } catch (_) {}
-      } catch (e) {
-        PandaLog.e('StartScreen', 'Error setting up Alpine: $e');
-      }
+    try {
+      await AlpineSetup.ensureAlpineRootfs();
+      await AlpineSetup.ensureAlpineRuntimeFiles();
+      PandaLog.i('StartScreen', 'Alpine Linux environment ready.');
+    } catch (e) {
+      PandaLog.e('StartScreen', 'Error setting up Alpine: $e');
     }
 
     if (Directory(alpineDir).existsSync()) {

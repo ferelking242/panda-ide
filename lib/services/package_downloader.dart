@@ -645,8 +645,8 @@ class PackageDownloader {
         orElse: () => alpineDir,
       );
 
-      final prootSrc = AlpineSetup.locateProotBinary(resolvedRootfs) ??
-          AlpineSetup.locateProotBinary(alpineDir) ??
+      final prootSrc = (await AlpineSetup.locateProotBinary(resolvedRootfs)) ??
+          (await AlpineSetup.locateProotBinary(alpineDir)) ??
           '';
       final prootDst = '$binDir/proot';
 
