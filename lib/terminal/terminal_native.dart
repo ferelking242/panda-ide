@@ -596,19 +596,11 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
     final resolvedProotBin = await AlpineSetup.locateProotBinary(rootfsDir);
 
     if (resolvedProotBin == null || !Directory(rootfsDir).existsSync()) {
-      runtime.terminal.write(
-        '
-[33m[Alpine Linux ou PRoot introuvable / non exécutable. Tentative de configuration automatique...][0m
-',
-      );
+      runtime.terminal.write('\r\n\x1b[33m[Alpine Linux ou PRoot introuvable / non executable. Tentative de configuration automatique...]\x1b[0m\r\n');
       final repaired = await AlpineSetup.ensureAlpineRootfs(force: true);
       await AlpineSetup.ensureAlpineRuntimeFiles();
       if (!repaired) {
-        runtime.terminal.write(
-          '
-[31m[Échec de la configuration Alpine Linux. Impossible de démarrer le terminal.][0m
-',
-        );
+        runtime.terminal.write('\r\n\x1b[31m[Echec de la configuration Alpine Linux. Impossible de demarrer le terminal.]\x1b[0m\r\n');
         _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
         return;
       }
@@ -616,15 +608,10 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
 
     final prootBin = await AlpineSetup.locateProotBinary(rootfsDir) ?? resolvedProotBin;
     if (prootBin == null || !File(prootBin).existsSync()) {
-      runtime.terminal.write(
-        '
-[31m[Binaire PRoot introuvable ($prootBin). Impossible de démarrer le terminal.][0m
-',
-      );
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
-      return;
+      runtime.terminal.write('\r\n\x1b[31m[Binaire PRoot introuvable (' + prootBin.toString() + '). Impossible de demarrer le terminal.]\x1b[0m\r\n');
+        _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+        return;
     }
-
     await AlpineSetup.ensureAlpineRuntimeFiles();
     await _ensureBashRc();
 
@@ -709,9 +696,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
       process.exitCode.then((code) {
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
         runtime.pty = null;
-        runtime.terminal.write('
-
-[Alpine session ended with exit code $code]');
+        runtime.terminal.write('\r\n\r\n[Alpine session ended with exit code ' + code.toString() + ']');
         _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
         _showExitBanner(runtime.sessionId, code);
       });
