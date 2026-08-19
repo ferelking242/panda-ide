@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_archive/flutter_archive.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
-import 'package:panda/utils/log.dart';
+import 'package:panda/utils/panda_log.dart';
 
 class AlpineSetup {
   static Future<bool> _testProotBinary(String candidate) async {
