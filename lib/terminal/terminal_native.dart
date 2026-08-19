@@ -592,27 +592,33 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
   // ── PRoot + Alpine session ─────────────────────────────────────────────────
 
   Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
-    final rootfsDir = '$runtimesDir/alpine-linux';
-    final resolvedProotBin = await AlpineSetup.locateProotBinary(rootfsDir);
+    final rootfsDir = AlpineSetup.alpineDir;
 
-    if (resolvedProotBin == null || !Directory(rootfsDir).existsSync()) {
-      runtime.terminal.write('\r\n\x1b[33m[Alpine Linux ou PRoot introuvable / non executable. Tentative de configuration automatique...]\x1b[0m\r\n');
-      final repaired = await AlpineSetup.ensureAlpineRootfs(force: true);
-      await AlpineSetup.ensureAlpineRuntimeFiles();
+    // Provisioning idempotent a chaque lancement : rootfs, applets busybox,
+    // fichiers de configuration.
+    if (!AlpineSetup.isRootfsComplete()) {
+      runtime.terminal.write('\r\n\x1b[33m[Configuration du runtime Alpine Linux en cours...]\x1b[0m\r\n');
+      final repaired = await AlpineSetup.ensureAlpineRootfs();
       if (!repaired) {
         runtime.terminal.write('\r\n\x1b[31m[Echec de la configuration Alpine Linux. Impossible de demarrer le terminal.]\x1b[0m\r\n');
         _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
         return;
       }
+    } else {
+      await AlpineSetup.ensureBusyboxApplets();
+      await AlpineSetup.ensureAlpineRuntimeFiles();
     }
 
-    final prootBin = await AlpineSetup.locateProotBinary(rootfsDir) ?? resolvedProotBin;
-    if (prootBin == null || !File(prootBin).existsSync()) {
-      runtime.terminal.write('\r\n\x1b[31m[Binaire PRoot introuvable (' + prootBin.toString() + '). Impossible de demarrer le terminal.]\x1b[0m\r\n');
-        _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
-        return;
+    final prootBin = await AlpineSetup.locateProotBinary(rootfsDir);
+    if (prootBin == null) {
+      runtime.terminal.write('\r\n\x1b[31m[Binaire PRoot embarque introuvable ou non executable. Aucun repli sur le shell Android : session annulee.]\x1b[0m\r\n');
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      return;
     }
-    await AlpineSetup.ensureAlpineRuntimeFiles();
+    final loaderPath = await AlpineSetup.prootLoaderPath();
+    if (loaderPath == null) {
+      runtime.terminal.write('\r\n\x1b[33m[Avertissement: loader PRoot (libproot-loader.so) absent du dossier de libs natives.]\x1b[0m\r\n');
+    }
     await _ensureBashRc();
 
     try {
@@ -662,25 +668,16 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
         ...args,
       ]);
 
+      // LD_LIBRARY_PATH doit pointer vers le dossier des libs natives de
+      // l'APK : PRoot y trouve libtalloc.so / libandroid-shmem.so, et
+      // PROOT_LOADER designe le loader embarque (libproot-loader.so).
+      final sessionEnv = await AlpineSetup.prootSessionEnvironment();
+
       final process = Pty.start(
         prootBin,
         arguments: prootArgs,
         workingDirectory: widget.projectDir,
-        environment: {
-          'HOME': '/root',
-          'USER': 'root',
-          'LOGNAME': 'root',
-          'TERM': 'xterm-256color',
-          'SHELL': '/bin/sh',
-          'LANG': 'C.UTF-8',
-          'LC_ALL': 'C.UTF-8',
-          'DISPLAY': ':0',
-          'ENV': '/root/.profile',
-          'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-          'TMPDIR': '/tmp',
-          'PROOT_TMP_DIR': tempDir,
-          'LD_LIBRARY_PATH': '',
-        },
+        environment: sessionEnv,
         rows: runtime.terminal.viewHeight,
         columns: runtime.terminal.viewWidth,
       );

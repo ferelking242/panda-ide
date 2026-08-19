@@ -622,60 +622,22 @@ class PackageDownloader {
 
   // ── Alpine Linux + proot setup ────────────────────────────────────────────
   //
-  // The archive alpine-proot.tar.gz must contain:
-  //   proot            — the proot binary compiled for Android arm64
-  //   rootfs/          — the Alpine Linux minirootfs (aarch64)
-  //
-  // After extraction the layout is:
-  //   $runtimesDir/alpine-linux/           ← rootfs
-  //   $binDir/proot                        ← proot binary (chmod +x)
+  // PRoot et ses dependances natives (libtalloc.so, libandroid-shmem.so,
+  // libproot-loader.so) sont embarques dans l'APK et extraits par Android
+  // dans applicationInfo.nativeLibraryDir. On ne copie JAMAIS libproot.so
+  // vers /data/data : l'execution y est interdite depuis Android 10 (W^X),
+  // et l'ancienne copie supprimait le binaire natif de l'APK.
   //
   static Future<void> _setupAlpineProot() async {
     try {
-      final alpineDir = '$runtimesDir/alpine-linux';
-      final rootfsCandidates = <String>[
-        alpineDir,
-        '$alpineDir/rootfs',
-        '$alpineDir/alpine',
-        '$alpineDir/minirootfs',
-        '$alpineDir/alpine-minirootfs',
-      ];
-      final resolvedRootfs = rootfsCandidates.firstWhere(
-        (path) => Directory(path).existsSync(),
-        orElse: () => alpineDir,
+      await AlpineSetup.ensureAlpineRootfs();
+      await AlpineSetup.ensureAlpineRuntimeFiles();
+
+      final prootBin = await AlpineSetup.locateProotBinary(AlpineSetup.alpineDir);
+      debugPrint(
+        'Alpine proot setup complete — rootfs at ${AlpineSetup.alpineDir}, '
+        'proot at ${prootBin ?? "introuvable"}',
       );
-
-      final prootSrc = (await AlpineSetup.locateProotBinary(resolvedRootfs)) ??
-          (await AlpineSetup.locateProotBinary(alpineDir)) ??
-          '';
-      final prootDst = '$binDir/proot';
-
-      if (prootSrc.isNotEmpty) {
-        if (!Directory(binDir).existsSync()) {
-          await Directory(binDir).create(recursive: true);
-        }
-        await _fileCopy(src: prootSrc, dst: prootDst);
-        await Process.run('chmod', ['+x', prootDst]);
-        final sourceFile = File(prootSrc);
-        if (sourceFile.existsSync() && sourceFile.path != prootDst) {
-          try { await sourceFile.delete(); } catch (_) {}
-        }
-      }
-
-      final rootfsDir = Directory(resolvedRootfs);
-      if (!rootfsDir.existsSync()) await rootfsDir.create(recursive: true);
-      final tmpDir = Directory('$resolvedRootfs/tmp');
-      if (!tmpDir.existsSync()) await tmpDir.create(recursive: true);
-
-      final resolv = File('$resolvedRootfs/etc/resolv.conf');
-      if (!resolv.existsSync()) {
-        try {
-          await resolv.parent.create(recursive: true);
-          await resolv.writeAsString('nameserver 8.8.8.8\nnameserver 1.1.1.1\n');
-        } catch (_) {}
-      }
-
-      debugPrint('Alpine proot setup complete — rootfs at $resolvedRootfs, proot at $prootDst');
     } catch (e) {
       debugPrint('Alpine proot setup error: $e');
     }

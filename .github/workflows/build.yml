@@ -103,6 +103,28 @@ jobs:
               print("No dynamic feature declarations found in settings.gradle.kts — continuing.")
           PY
 
+      - name: Verify embedded PRoot runtime binaries
+        # PRoot et ses dependances ELF doivent etre de vrais binaires natifs
+        # dans le checkout (hors Git LFS). Si un pointeur/placeholder passe,
+        # l'APK produit echouera au runtime avec
+        # "library libtalloc.so not found: needed by main executable".
+        run: |
+          set -euo pipefail
+          dir=android/app/src/main/jniLibs/arm64-v8a
+          for lib in libproot.so libtalloc.so libandroid-shmem.so libproot-loader.so; do
+            path="$dir/$lib"
+            if [ ! -f "$path" ]; then
+              echo "::error::$path manquant"; exit 1
+            fi
+            magic=$(head -c 4 "$path" | od -An -tx1 | tr -d ' \n')
+            if [ "$magic" != "7f454c46" ]; then
+              echo "::error::$path n'est pas un ELF valide (magic=$magic)"; exit 1
+            fi
+            echo "OK  $lib  ($(stat -c%s "$path") octets)  $(file -b "$path")"
+          done
+          echo "--- dependances ELF ---"
+          readelf -d "$dir/libproot.so" | grep NEEDED
+
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
