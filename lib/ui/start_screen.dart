@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
+import '../ui/splash_screen.dart';
 import 'setup_screen.dart';
 
 class StartScreen extends StatefulWidget {
@@ -21,13 +23,11 @@ class _StartScreenState extends State<StartScreen> {
   @override
   void initState() {
     super.initState();
-    // Fire-and-forget: logger + prefs only. Never blocks navigation.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       _backgroundInit();
     }
   }
 
-  /// Lightweight background init — does NOT gate navigation.
   Future<void> _backgroundInit() async {
     try {
       await NativeChannel.getExternalMediaDir().timeout(
@@ -53,7 +53,6 @@ class _StartScreenState extends State<StartScreen> {
     }
   }
 
-  /// Called the instant the splash animation finishes — navigate NOW.
   void _onAnimationComplete() {
     if (!mounted || _navigated) return;
     _navigated = true;
@@ -69,7 +68,6 @@ class _StartScreenState extends State<StartScreen> {
       return;
     }
 
-    // Android → SetupScreen with progress bar + live logs
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) => const SetupScreen(),
