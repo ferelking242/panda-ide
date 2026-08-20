@@ -579,7 +579,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         runtime.terminal.write('\x1b[36m  Essayez:\x1b[0m\r\n');
         runtime.terminal.write('\x1b[36m    1. Fermer et relancer Panda IDE\x1b[0m\r\n');
         runtime.terminal.write('\x1b[36m    2. Aller dans Paramètres > Alpine > Réinitialiser\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[36m    3. Réinstaller l'application\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[36m    3. Réinstaller l\'application\x1b[0m\r\n');
         _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
         return;
       }

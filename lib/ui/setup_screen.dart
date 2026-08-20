@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/alpine_setup.dart';
 import '../utils/constants.dart';
+import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import 'home.dart';
 import 'permission_screen.dart';
@@ -164,7 +165,7 @@ class _SetupScreenState extends State<SetupScreen>
     } catch (e, stack) {
       _addLog('❌ Setup failed: $e');
       _addLog('Stack: $stack');
-      PandaLog.e('SetupScreen', 'Setup failed: $e', error: e, stackTrace: stack);
+      PandaLog.e('SetupScreen', 'Setup failed: $e', error: e.toString());
       setState(() => _setupError = true);
       _setStepState(_currentStepIndex, failed: true, error: e.toString());
     }
@@ -254,10 +255,13 @@ class _SetupScreenState extends State<SetupScreen>
   }
 
   Future<void> _setupRuntime() async {
-    final sharedPath = await NativeChannel.getLibraryPath().timeout(
-      const Duration(seconds: 5),
-      onTimeout: () => '',
-    );
+    String sharedPath = '';
+    try {
+      sharedPath = await NativeChannel.getLibraryPath().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => '',
+      );
+    } catch (_) {}
     _addLog('Native lib path: ${sharedPath.isNotEmpty ? sharedPath : "(unavailable)"}');
 
     if (sharedPath.isNotEmpty) {

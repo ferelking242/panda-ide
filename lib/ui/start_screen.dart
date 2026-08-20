@@ -177,7 +177,7 @@ class _StartScreenState extends State<StartScreen> {
         const Duration(seconds: 5),
         onTimeout: () {
           PandaLog.w('StartScreen', 'getExternalMediaDir timed out after 5s');
-          return null;
+          return '';
         },
       );
     } catch (e) {
