@@ -545,24 +545,39 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
     if (!AlpineSetup.isRootfsComplete()) {
       runtime.terminal.write('\r\n\x1b[33m[Configuration du runtime Alpine Linux en cours...]\x1b[0m\r\n');
+      PandaLog.i('Terminal', 'Alpine rootfs incomplete, starting extraction');
       final repaired = await AlpineSetup.ensureAlpineRootfs();
       if (!repaired) {
-        runtime.terminal.write('\r\n\x1b[31m[Echec de la configuration Alpine Linux. Impossible de demarrer le terminal.]\x1b[0m\r\n');
+        final errDetail = AlpineSetup.lastError.isNotEmpty
+            ? AlpineSetup.lastError
+            : 'Erreur inconnue';
+        runtime.terminal.write('\r\n\x1b[31m[\u00c9chec Alpine Linux]\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[31m  $errDetail\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[33m  Logs: /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[36m  Essayez de relancer ou vider le cache Alpine\x1b[0m\r\n');
         _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
         return;
       }
+      PandaLog.i('Terminal', 'Alpine rootfs extraction succeeded');
     } else {
+      PandaLog.d('Terminal', 'Alpine rootfs already complete');
       await AlpineSetup.ensureAlpineRuntimeFiles();
     }
 
+    PandaLog.i('Terminal', 'Locating PRoot binary in rootfs=$rootfsDir');
     final prootBin = await AlpineSetup.locateProotBinary(rootfsDir);
     if (prootBin == null) {
-      runtime.terminal.write('\r\n\x1b[31m[Binaire PRoot embarque introuvable ou non executable. Aucun repli sur le shell Android : session annulee.]\x1b[0m\r\n');
+      PandaLog.e('Terminal', 'PRoot binary not found or incompatible');
+      runtime.terminal.write('\r\n\x1b[31m[PRoot introuvable ou incompatible]\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[31m  Le binaire libproot.so est introuvable ou ne fonctionne pas.\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m  Logs: /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
       return;
     }
+    PandaLog.i('Terminal', 'PRoot binary found: $prootBin');
     final loaderPath = await AlpineSetup.prootLoaderPath();
     if (loaderPath == null) {
+      PandaLog.w('Terminal', 'PRoot loader (libproot-loader.so) not found');
       runtime.terminal.write('\r\n\x1b[33m[Avertissement: loader PRoot (libproot-loader.so) absent du dossier de libs natives.]\x1b[0m\r\n');
     }
 
@@ -636,6 +651,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       // l'APK : PRoot y trouve libtalloc.so / libandroid-shmem.so, et
       // PROOT_LOADER designe le loader embarque (libproot-loader.so).
       final sessionEnv = await AlpineSetup.prootSessionEnvironment();
+      PandaLog.i('Terminal', 'Starting PRoot PTY', body: 'bin=$prootBin args=${prootArgs.length} env=${sessionEnv.keys.join(',')}');
 
       final process = Pty.start(
         prootBin,
@@ -647,6 +663,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       );
 
       runtime.pty = process;
+      PandaLog.i('Terminal', 'PRoot PTY started successfully, session=${runtime.sessionId}');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
 
       process.output
@@ -655,6 +672,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         .listen(runtime.terminal.write);
 
       process.exitCode.then((code) {
+        PandaLog.i('Terminal', 'PRoot session ended with exit code $code', body: 'session=${runtime.sessionId}');
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
         runtime.pty = null;
         runtime.terminal.write('\r\n\r\n[Alpine session ended with exit code ' + code.toString() + ']');
@@ -675,7 +693,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
         process.resize(h, w);
       };
     } catch (e) {
-      runtime.terminal.write('\r\n\x1b[31m[Erreur execution PRoot / Alpine : ' + e.toString() + ']\x1b[0m\r\n');
+      PandaLog.e('Terminal', 'PRoot execution failed: $e');
+      runtime.terminal.write('\r\n\x1b[31m[Erreur PRoot / Alpine]\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[31m  $e\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m  Logs: /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
     }
   }

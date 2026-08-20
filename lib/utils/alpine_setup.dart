@@ -21,11 +21,16 @@ class AlpineSetup {
     if (_cachedNativeLibDir != null) return _cachedNativeLibDir!;
     try {
       final value = await NativeChannel.getLibraryPath();
+      PandaLog.d('AlpineSetup', 'NativeChannel.getLibraryPath() => "$value"');
       if (value.isNotEmpty && Directory(value).existsSync()) {
         _cachedNativeLibDir = value;
+        PandaLog.d('AlpineSetup', 'Native lib dir resolved: $value');
         return value;
       }
-    } catch (_) {}
+      PandaLog.w('AlpineSetup', 'Native lib dir invalid or missing: "$value" (isDir=${value.isNotEmpty ? Directory(value).existsSync() : false})');
+    } catch (e) {
+      PandaLog.e('AlpineSetup', 'Failed to get native lib path: $e');
+    }
     return '';
   }
 
@@ -114,53 +119,128 @@ class AlpineSetup {
     }
   }
 
+  /// Last error message for display in terminal UI.
+  static String lastError = '';
+
   static Future<bool> ensureAlpineRootfs({bool force = false}) async {
     final destination = Directory(alpineDir);
     final marker = File('${destination.path}/.panda-rootfs-version');
     final current = marker.existsSync() ? marker.readAsStringSync().trim() : '';
     if (!force && current == rootfsVersion && isRootfsComplete()) {
+      PandaLog.d('AlpineSetup', 'Rootfs already complete v$rootfsVersion');
       await ensureAlpineRuntimeFiles();
       return true;
     }
 
+    PandaLog.i('AlpineSetup', 'Starting rootfs extraction (current=$current, force=$force)');
+    lastError = '';
+
     try {
+      // Step 1: Clean destination
+      PandaLog.d('AlpineSetup', '[1/6] Cleaning destination: ${destination.path}');
       if (destination.existsSync()) {
         await destination.delete(recursive: true);
+        PandaLog.d('AlpineSetup', '[1/6] Old rootfs deleted');
       }
       await destination.create(recursive: true);
+
+      // Step 2: Extract archive from assets
+      PandaLog.d('AlpineSetup', '[2/6] Loading alpine-rootfs.tar.gz from assets');
       final archive = File('$tempDir/alpine-rootfs.tar.gz');
       await Directory(tempDir).create(recursive: true);
       final bytes = await rootBundle.load('assets/runtimes/alpine-rootfs.tar.gz');
+      PandaLog.d('AlpineSetup', '[2/6] Asset loaded: ${bytes.length} bytes');
       await archive.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
+      PandaLog.d('AlpineSetup', '[2/6] Archive written to ${archive.path} (${await archive.length()} bytes)');
 
-      final busybox = '${await nativeLibDir()}/libbusybox.so';
-      if (!File(busybox).existsSync()) {
-        throw StateError('libbusybox.so absent des bibliothèques natives');
+      // Step 3: Locate BusyBox
+      final nativeLibPath = await nativeLibDir();
+      PandaLog.d('AlpineSetup', '[3/6] Native lib dir: $nativeLibPath');
+      final busybox = '$nativeLibPath/libbusybox.so';
+      final busyboxExists = File(busybox).existsSync();
+      PandaLog.d('AlpineSetup', '[3/6] libbusybox.so exists: $busyboxExists');
+      if (!busyboxExists) {
+        lastError = 'libbusybox.so introuvable dans $nativeLibPath';
+        throw StateError(lastError);
       }
-      final result = await Process.run(
-        busybox,
-        ['tar', '-xzpf', archive.path, '-C', destination.path],
-        environment: await prootLinkEnvironment(),
-      ).timeout(const Duration(minutes: 2));
+
+      // Step 4: Extract with BusyBox
+      PandaLog.i('AlpineSetup', '[4/6] Running: $busybox tar -xzpf ${archive.path} -C ${destination.path}');
+      final linkEnv = await prootLinkEnvironment();
+      PandaLog.d('AlpineSetup', '[4/6] LD_LIBRARY_PATH: ${linkEnv['LD_LIBRARY_PATH'] ?? 'unset'}');
+      PandaLog.d('AlpineSetup', '[4/6] PROOT_LOADER: ${linkEnv['PROOT_LOADER'] ?? 'unset'}');
+
+      ProcessResult result;
+      try {
+        result = await Process.run(
+          busybox,
+          ['tar', '-xzpf', archive.path, '-C', destination.path],
+          environment: linkEnv,
+        ).timeout(const Duration(minutes: 2));
+      } catch (e) {
+        lastError = 'BusyBox execution failed: $e';
+        PandaLog.e('AlpineSetup', '[4/6] BusyBox process error: $e');
+        throw StateError(lastError);
+      }
+
+      PandaLog.d('AlpineSetup', '[4/6] Exit code: ${result.exitCode}');
+      if (result.stdout.toString().isNotEmpty) {
+        PandaLog.d('AlpineSetup', '[4/6] stdout: ${result.stdout.toString().substring(0, result.stdout.toString().length.clamp(0, 500))}');
+      }
+      if (result.stderr.toString().isNotEmpty) {
+        PandaLog.w('AlpineSetup', '[4/6] stderr: ${result.stderr.toString().substring(0, result.stderr.toString().length.clamp(0, 500))}');
+      }
+
       if (result.exitCode != 0) {
-        throw StateError('désarchivage BusyBox échoué: ${result.stderr}');
+        lastError = 'BusyBox tar failed (exit ${result.exitCode}): ${result.stderr}';
+        throw StateError(lastError);
       }
-      await archive.delete();
 
-      // Validate the extracted tree only after the version marker exists:
-      // isRootfsComplete() intentionally includes that marker in its
-      // readiness check, so checking before writing it always failed on the
-      // first terminal launch.
-      await marker.writeAsString(rootfsVersion, flush: true);
-      if (!isRootfsComplete()) {
-        try {
-          await marker.delete();
-        } catch (_) {}
-        throw StateError('rootfs Alpine invalide après extraction');
+      // Step 5: Cleanup archive
+      PandaLog.d('AlpineSetup', '[5/6] Removing archive');
+      try {
+        await archive.delete();
+      } catch (e) {
+        PandaLog.w('AlpineSetup', '[5/6] Failed to delete archive: $e');
       }
+
+      // Step 6: Validate extracted rootfs
+      PandaLog.d('AlpineSetup', '[6/6] Validating extracted rootfs...');
+      await marker.writeAsString(rootfsVersion, flush: true);
+
+      // Detailed validation
+      final checks = {
+        'version marker': File('${destination.path}/.panda-rootfs-version').existsSync(),
+        'bin/busybox': File('${destination.path}/bin/busybox').existsSync(),
+        'bin/sh symlink': _isSymlink('${destination.path}/bin/sh'),
+        'sbin/apk': File('${destination.path}/sbin/apk').existsSync(),
+        'lib/ld-musl': File('${destination.path}/lib/ld-musl-aarch64.so.1').existsSync(),
+        'etc/apk/keys': Directory('${destination.path}/etc/apk/keys').existsSync(),
+        'root dir': Directory('${destination.path}/root').existsSync(),
+      };
+      for (final entry in checks.entries) {
+        PandaLog.d('AlpineSetup', '[6/6] ${entry.key}: ${entry.value ? "OK" : "MISSING"}');
+      }
+
+      if (!isRootfsComplete()) {
+        final missing = checks.entries.where((e) => !e.value).map((e) => e.key).toList();
+        lastError = 'Rootfs invalide: ${missing.join(', ')}';
+        try { await marker.delete(); } catch (_) {}
+        throw StateError(lastError);
+      }
+
+      PandaLog.i('AlpineSetup', 'Rootfs extraction complete, setting up runtime files');
       await ensureAlpineRuntimeFiles();
-      return isRootfsComplete();
+      final ok = isRootfsComplete();
+      if (ok) {
+        PandaLog.i('AlpineSetup', 'Alpine rootfs ready');
+      } else {
+        lastError = 'Rootfs validation failed after runtime file setup';
+        PandaLog.e('AlpineSetup', lastError);
+      }
+      return ok;
     } catch (e) {
+      if (lastError.isEmpty) lastError = e.toString();
       PandaLog.e('AlpineSetup', 'Échec rootfs Alpine: $e');
       return false;
     }
