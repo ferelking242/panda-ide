@@ -62,6 +62,7 @@ import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
 import 'notifications.dart';
 import 'widgets/panda_theme_switch.dart';
+import 'logs_ui/logs_explorer_page.dart';
 
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
   final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
@@ -1476,6 +1477,23 @@ class _SelectTypeState extends State<SelectType>
           id: 'terminal',
           title: 'Terminal',
           icon: Broken.command_square,
+        ));
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = existing;
+      }
+      _bottomPanelOpen = false;
+    });
+  }
+
+  void _openLogsTab() {
+    setState(() {
+      final existing = _openTabs.indexWhere((t) => t.id == 'logs');
+      if (existing == -1) {
+        _openTabs.add(const _TabDef(
+          id: 'logs',
+          title: 'Logs Explorer',
+          icon: Broken.document_text,
         ));
         _activeTabIdx = _openTabs.length - 1;
       } else {
@@ -4123,6 +4141,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'terminal') {
       return _buildTerminalTabPage(appTheme);
+    }
+    if (tab.id == 'logs') {
+      return const LogsExplorerPage();
     }
     if (tab.id == 'update') {
       return _buildUpdatePage(appTheme);

@@ -16,7 +16,7 @@ import 'ui/start_screen.dart';
 import 'ui/widgets/panda_theme_switch.dart';
 import 'utils/functions.dart';
 import 'utils/themes.dart';
-import 'utils/panda_log.dart';
+import 'logging/logging.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,9 +29,10 @@ Future<void> main() async {
   final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   if (isAndroid) {
     await configureStorageRoots();
-    // Initialize file logging AFTER storage roots are configured
-    await PandaLog.initFileLogging();
-    PandaLog.i('Main', 'Panda IDE started', body: 'Android=$isAndroid');
+    // Initialize logging system
+    await PandaLogger.init();
+    PandaCrashHandler.install();
+    PandaLogger.i(PandaLogCategory.app, 'Panda IDE started', metadata: {'android': isAndroid});
   }
 
   final recent = await getRecent();
