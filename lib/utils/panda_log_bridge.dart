@@ -4,8 +4,8 @@
 /// while the new logging system is active.
 library;
 
-import 'panda_logger.dart';
-import 'panda_log_level.dart';
+import '../logging/panda_logger.dart';
+import '../logging/panda_log_level.dart';
 
 /// Legacy-compatible static methods that delegate to PandaLogger.
 /// Existing code calling PandaLog.i() / PandaLog.e() etc. will

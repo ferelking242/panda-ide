@@ -15,14 +15,23 @@ class LogsExplorerPage extends StatefulWidget {
 
 
 /// Time formatting helpers (replaces intl dependency)
-String _fmtTime(DateTime dt) =>
-    '\${dt.hour.toString().padLeft(2, '0')}:\${dt.minute.toString().padLeft(2, '0')}:\${dt.second.toString().padLeft(2, '0')}.\${dt.millisecond.toString().padLeft(3, '0')}';
-String _fmtDateTime(DateTime dt) =>
-    '\${dt.year}-\${dt.month.toString().padLeft(2, '0')}-\${dt.day.toString().padLeft(2, '0')} \${_fmtTime(dt)}';
-String _fmtHM(DateTime dt) =>
-    '\${dt.hour.toString().padLeft(2, '0')}:\${dt.minute.toString().padLeft(2, '0')}';
-String _fmtTimeShort(DateTime dt) =>
-    '\${dt.hour.toString().padLeft(2, '0')}:\${dt.minute.toString().padLeft(2, '0')}:\${dt.second.toString().padLeft(2, '0')}';
+String _fmtTime(DateTime dt) {
+  String p2(int v) => v.toString().padLeft(2, '0');
+  String p3(int v) => v.toString().padLeft(3, '0');
+  return '\${p2(dt.hour)}:\${p2(dt.minute)}:\${p2(dt.second)}.\${p3(dt.millisecond)}';
+}
+String _fmtDateTime(DateTime dt) {
+  String p2(int v) => v.toString().padLeft(2, '0');
+  return '\${dt.year}-\${p2(dt.month)}-\${p2(dt.day)} \${_fmtTime(dt)}';
+}
+String _fmtHM(DateTime dt) {
+  String p2(int v) => v.toString().padLeft(2, '0');
+  return '\${p2(dt.hour)}:\${p2(dt.minute)}';
+}
+String _fmtTimeShort(DateTime dt) {
+  String p2(int v) => v.toString().padLeft(2, '0');
+  return '\${p2(dt.hour)}:\${p2(dt.minute)}:\${p2(dt.second)}';
+}
 
 class _LogsExplorerPageState extends State<LogsExplorerPage>
     with SingleTickerProviderStateMixin {
