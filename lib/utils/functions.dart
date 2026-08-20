@@ -228,6 +228,22 @@ Future<bool> importPublicProjectsToPrivate() async {
 
 /// Ensures private roots and only probes shared storage for import/export.
 Future<bool> configureStorageRoots() async {
+  // Resolve the actual app data directory from path_provider.
+  // On most Android devices this returns <actual_app_data>/app_flutter,
+  // so we go one level up to get the true app root.
+  try {
+    final docsDir = await getApplicationDocumentsDirectory();
+    // docsDir.path is typically /data/data/<pkg>/app_flutter or
+    // /storage/emulated/0/Android/data/<pkg>/files/app_flutter
+    // Go up to the app root.
+    final parent = docsDir.parent;
+    final basePath = parent.path;
+    print('[StorageRoots] path_provider docs: ${docsDir.path}');
+    print('[StorageRoots] resolved basePath: $basePath');
+    resolveAppDir(basePath);
+  } catch (e) {
+    print('[StorageRoots] path_provider failed, using default appDir: $e');
+  }
   usePrivateStorageRoots();
   for (final root in [
     Directory(pandaRootDir),
