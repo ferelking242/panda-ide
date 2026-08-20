@@ -724,7 +724,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         process.resize(h, w);
       };
     } catch (e, stack) {
-      PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString(), stackTrace: stack);
+      PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString());
       runtime.terminal.write('\r\n\x1b[31m[Erreur PRoot / Alpine]\x1b[0m\r\n');
       runtime.terminal.write('\x1b[31m  $e\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
