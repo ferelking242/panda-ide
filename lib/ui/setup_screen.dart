@@ -5,14 +5,12 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/alpine_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import 'home.dart';
-import 'permission_screen.dart';
 import '../terminal/panda_bridge.dart';
 
 // ── Tool lists (shared with start_screen) ──────────────────────────────────────
@@ -321,9 +319,6 @@ class _SetupScreenState extends State<SetupScreen>
     // ── Git global config ──
     final gitCore = '$binDir/git-core';
     try {
-      for (final path in [binDir, libDir, gitCore, homeDir]) {
-        await Directory(path).create(recursive: true);
-      }
       await Process.run(
         '$binDir/git',
         ['config', '--global', '--add', 'safe.directory', '*'],
@@ -542,28 +537,14 @@ esac
 
   void _navigateToApp() {
     if (!mounted) return;
-    SharedPreferences.getInstance().then((prefs) {
-      final permShown = prefs.getBool('permissions_shown') ?? false;
-      if (!mounted) return;
-      if (permShown) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, _) => const SelectType(),
-            transitionsBuilder: (context, animation, _, child) =>
-                FadeTransition(opacity: animation, child: child),
-          ),
-        );
-      } else {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, _) => const PermissionScreen(),
-            transitionsBuilder: (context, animation, _, child) =>
-                FadeTransition(opacity: animation, child: child),
-            transitionDuration: const Duration(milliseconds: 300),
-          ),
-        );
-      }
-    });
+    // Permissions already handled by PermissionScreen — go straight home
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => const SelectType(),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
   }
 
   @override
