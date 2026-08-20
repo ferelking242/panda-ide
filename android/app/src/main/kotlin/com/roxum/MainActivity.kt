@@ -34,10 +34,11 @@ import com.google.android.play.core.splitcompat.SplitCompat
 
 class MainActivity : FlutterActivity() {
     private val TAG = "MainActivity"
-    private val CORE_CHANNEL = "com.roxum"
-    private val SAF_CHANNEL = "roxum/saf"
-    private val PFD_CHANNEL = "roxum/pfd"
-    private val PFD_EVENTS_CHANNEL = "roxum/pfd_events"
+    // Legacy duplicate kept source-compatible with the active Panda package.
+    private val CORE_CHANNEL = "com.panda.ide"
+    private val SAF_CHANNEL = "panda/saf"
+    private val PFD_CHANNEL = "panda/pfd"
+    private val PFD_EVENTS_CHANNEL = "panda/pfd_events"
     private val PICK_DIR_REQUEST = 9001
 
     private var pendingSafResult: MethodChannel.Result? = null

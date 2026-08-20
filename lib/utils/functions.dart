@@ -2369,12 +2369,11 @@ class Extractor {
 }
 
 class NativeChannel {
-  // Keep these names aligned with MainActivity.kt. A mismatch causes
-  // MissingPluginException and prevents the embedded PRoot terminal from
-  // resolving the native library directory.
-  static const MethodChannel _channel = MethodChannel('com.roxum');
-  static const MethodChannel _pfdMethodChannel = MethodChannel('roxum/pfd');
-  static const EventChannel _pfdEventChannel = EventChannel('roxum/pfd_events');
+  // Keep these names aligned with the active MainActivity in
+  // android/app/src/main/kotlin/com/panda/ide/MainActivity.kt.
+  static const MethodChannel _channel = MethodChannel('com.panda.ide');
+  static const MethodChannel _pfdMethodChannel = MethodChannel('panda/pfd');
+  static const EventChannel _pfdEventChannel = EventChannel('panda/pfd_events');
 
   static Future<String> getLibraryPath() async {
     try {
