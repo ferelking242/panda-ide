@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:panda/utils/themes.dart';
+import 'widgets/panda_theme_switch.dart';
 
 enum _SettingsSection {
   general,
@@ -311,13 +312,16 @@ class _SettingsState extends State<Settings> {
                 value: isDark,
                 onChanged: (val) async {
                   final prefs = await SharedPreferences.getInstance();
-                  if (val) {
-                    if (context.mounted) context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: DarkTheme()));
-                    await prefs.setString('savedAppTheme', 'dark');
-                  } else {
-                    if (context.mounted) context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: LightTheme()));
-                    await prefs.setString('savedAppTheme', 'light');
-                  }
+                  if (!context.mounted) return;
+                  // Bascule animee par propagation depuis l'interrupteur.
+                  await ThemeSwitchScope.propagateFrom(
+                    context: context,
+                    apply: () => context.read<AppThemeBloc>().add(
+                        AppThemeEvent(
+                            appTheme: val ? DarkTheme() : LightTheme())),
+                  );
+                  await prefs.setString(
+                      'savedAppTheme', val ? 'dark' : 'light');
                 },
               ),
             ),

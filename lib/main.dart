@@ -12,6 +12,7 @@ import 'extensions/extension_api_router.dart';
 import 'extensions/extension_host_setup.dart';
 import 'extensions/extension_registry.dart';
 import 'ui/start_screen.dart';
+import 'ui/widgets/panda_theme_switch.dart';
 import 'utils/functions.dart';
 import 'utils/themes.dart';
 
@@ -223,6 +224,10 @@ class MainApp extends StatelessWidget {
                 selectionHandleColor: _kAccent,
               ),
             ),
+            // Propagation animee du theme : englobe tout le navigateur pour
+            // que les routes/dialogues soient couverts par le reveal.
+            builder: (context, child) =>
+                ThemeSwitchScope(child: child ?? const SizedBox.shrink()),
             home: SafeArea(
               top: false,
               child: const StartScreen()

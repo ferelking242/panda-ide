@@ -59,6 +59,7 @@ import '../local_models/ui/local_models_page.dart'
     if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
 import 'panda_ai_ui/components.dart';
+import 'widgets/panda_theme_switch.dart';
 
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
   final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
@@ -262,8 +263,6 @@ class _SelectTypeState extends State<SelectType>
   late Animation<double>   _sendAnim;
 
   // ── Theme fade animation ──────────────────────────────────────────
-  late AnimationController _themeAnimCtrl;
-  late Animation<double>   _themeAnim;
 
   // ── Conversation history ──────────────────────────────────────────
   bool _showHistoryPanel = false;
@@ -327,11 +326,6 @@ class _SelectTypeState extends State<SelectType>
     _sendAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
         CurvedAnimation(parent: _sendAnimCtrl, curve: Curves.easeInOut));
     _sendAnimCtrl.stop();
-    // Theme fade animation
-    _themeAnimCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 250))
-      ..value = 1.0;
-    _themeAnim = CurvedAnimation(parent: _themeAnimCtrl, curve: Curves.easeInOut);
     // Rebuild send button colour when text changes
     _agentInputCtrl.addListener(() => setState(() {}));
     // Bridge: terminal → agent
@@ -404,7 +398,6 @@ class _SelectTypeState extends State<SelectType>
     _sidebarSearchCtrl.dispose();
     _splitViewController.dispose();
     _sendAnimCtrl.dispose();
-    _themeAnimCtrl.dispose();
     _problemsSearchCtrl.dispose();
     super.dispose();
   }
@@ -1050,14 +1043,13 @@ class _SelectTypeState extends State<SelectType>
   @override
   Widget build(BuildContext context) {
     context.read<GithubAuthCubit>().refresh();
-    return BlocConsumer<AppThemeBloc, AppThemeState>(
-      listenWhen: (prev, cur) => prev.appTheme != cur.appTheme,
-      listener: (context, state) => _themeAnimCtrl.forward(from: 0.0),
+    // Le changement de theme est desormais anime par ThemeSwitchScope
+    // (propagation circulaire depuis le bouton), plus de fondu global sec.
+    return BlocBuilder<AppThemeBloc, AppThemeState>(
       builder: (context, appThemestate) {
         final appTheme = appThemestate.appTheme;
-        return FadeTransition(
-          opacity: _themeAnim,
-          child: BlocListener<PackageCatalogCubit, PackageCatalogState>(
+        return Builder(
+          builder: (context) => BlocListener<PackageCatalogCubit, PackageCatalogState>(
           listenWhen: (prev, cur) =>
               !_didShowPackageUpdateToast &&
               !prev.hasUpdates &&
@@ -1711,27 +1703,35 @@ class _SelectTypeState extends State<SelectType>
             // ── Detached Bottom Section (Theme, Account, Settings) ─────────
             // 1. Theme toggle
             BlocBuilder<AppThemeBloc, AppThemeState>(
-              builder: (context, state) => _ActivityBtnEx(
-                item: _RailItem(
-                    icon:  state.appTheme.isDark ? Broken.sun_1 : Broken.moon,
-                    label: 'Basculer le theme',
-                    idx:   98),
-                selected:  false,
-                iconColor: iconColor,
-                selColor:  selColor,
-                onTap: () async {
-                  final prefs = await SharedPreferences.getInstance();
-                  final cur = prefs.getString('savedAppTheme');
-                  if (context.mounted) {
-                    if (cur == 'dark') {
-                      context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: LightTheme()));
-                      prefs.setString('savedAppTheme', 'light');
-                    } else {
-                      context.read<AppThemeBloc>().add(AppThemeEvent(appTheme: DarkTheme()));
-                      prefs.setString('savedAppTheme', 'dark');
-                    }
-                  }
-                },
+              builder: (context, state) => Builder(
+                builder: (btnCtx) => _ActivityBtnEx(
+                  item: _RailItem(
+                      icon:  state.appTheme.isDark ? Broken.sun_1 : Broken.moon,
+                      label: state.appTheme.isDark
+                          ? 'Thème clair'
+                          : 'Thème sombre',
+                      idx:   98),
+                  selected:  false,
+                  iconColor: iconColor,
+                  selColor:  selColor,
+                  onTap: () async {
+                    final prefs = await SharedPreferences.getInstance();
+                    final cur = prefs.getString('savedAppTheme');
+                    if (!btnCtx.mounted) return;
+                    final bool toLight = cur == 'dark';
+                    // Propagation depuis le bouton : capture de la frame
+                    // courante puis reveal circulaire du nouveau thème.
+                    await ThemeSwitchScope.propagateFrom(
+                      context: btnCtx,
+                      apply: () {
+                        btnCtx.read<AppThemeBloc>().add(AppThemeEvent(
+                            appTheme: toLight ? LightTheme() : DarkTheme()));
+                      },
+                    );
+                    await prefs.setString(
+                        'savedAppTheme', toLight ? 'light' : 'dark');
+                  },
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -5031,15 +5031,27 @@ class _SelectTypeState extends State<SelectType>
                               (label: 'Dark',  icon: Broken.moon),
                               (label: 'System', icon: Broken.monitor),
                             ]) ...[
-                              GestureDetector(
+                              Builder(builder: (optCtx) => GestureDetector(
                                 onTap: () {
-                                  final bloc = context.read<AppThemeBloc>();
-                                  if (opt.label == 'Light') bloc.add(AppThemeEvent(appTheme: LightTheme()));
-                                  else if (opt.label == 'Dark') bloc.add(AppThemeEvent(appTheme: DarkTheme()));
-                                  else {
-                                    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
-                                    bloc.add(AppThemeEvent(appTheme: brightness == Brightness.dark ? DarkTheme() : LightTheme()));
+                                  final bloc = optCtx.read<AppThemeBloc>();
+                                  AppTheme target;
+                                  if (opt.label == 'Light') {
+                                    target = LightTheme();
+                                  } else if (opt.label == 'Dark') {
+                                    target = DarkTheme();
+                                  } else {
+                                    final brightness = WidgetsBinding
+                                        .instance.platformDispatcher
+                                        .platformBrightness;
+                                    target = brightness == Brightness.dark
+                                        ? DarkTheme()
+                                        : LightTheme();
                                   }
+                                  ThemeSwitchScope.propagateFrom(
+                                    context: optCtx,
+                                    apply: () => bloc
+                                        .add(AppThemeEvent(appTheme: target)),
+                                  );
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -5057,7 +5069,7 @@ class _SelectTypeState extends State<SelectType>
                                         style: TextStyle(fontSize: 12, color: fg)),
                                   ]),
                                 ),
-                              ),
+                              )),
                             ],
                           ]),
                         ),
