@@ -7,12 +7,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:panda/utils/themes.dart';
 import 'widgets/panda_theme_switch.dart';
+import '../logging/logging.dart';
 
 enum _SettingsSection {
   general,
   editor,
   terminal,
   performance,
+  logging,
   aiAndApi,
   about,
 }
@@ -49,6 +51,10 @@ class _SettingsPillNav extends StatelessWidget {
             case _SettingsSection.performance:
               label = 'Performance';
               icon = Icons.speed;
+              break;
+            case _SettingsSection.logging:
+              label = 'Logs';
+              icon = Icons.terminal;
               break;
             case _SettingsSection.aiAndApi:
               label = 'IA & API';
@@ -164,6 +170,8 @@ class _SettingsState extends State<Settings> {
         return _buildTerminalSection(context, configState, appThemeState, cs, isDark);
       case _SettingsSection.performance:
         return _buildPerformanceSection(context, configState, appThemeState, cs, isDark);
+      case _SettingsSection.logging:
+        return _buildLoggingSection(context, isDark);
       case _SettingsSection.aiAndApi:
         return _buildAiAndApiSection(context, configState, appThemeState, cs, isDark);
       case _SettingsSection.about:
@@ -590,6 +598,225 @@ class _SettingsState extends State<Settings> {
           ],
         ),
       ],
+    );
+  }
+
+
+  // ── Logging Section ──────────────────────────────────────────────────────
+  Widget _buildLoggingSection(BuildContext context, bool isDark) {
+    final cs = Theme.of(context).colorScheme;
+    
+    return Column(
+      children: [
+        _buildCardGroup(
+          title: 'Configuration du Logging',
+          subtitle: 'Niveau, retention et stockage des journaux',
+          icon: Icons.terminal,
+          isDark: isDark,
+          cs: cs,
+          children: [
+            // Logging Level
+            _buildLoggingLevelTile(isDark, cs),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            // Retention
+            _buildRetentionTile(isDark, cs),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            // Diagnostic mode
+            _buildDiagnosticModeTile(isDark, cs),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            // Storage size
+            _buildStorageSizeTile(isDark, cs),
+          ],
+        ),
+        _buildCardGroup(
+          title: 'Actions',
+          subtitle: 'Nettoyage et export des journaux',
+          icon: Icons.cleaning_services,
+          isDark: isDark,
+          cs: cs,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.delete_sweep, size: 20),
+              title: const Text('Effacer tous les logs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              subtitle: const Text('Supprimer tous les fichiers de logs', style: TextStyle(fontSize: 11)),
+              onTap: () => _confirmClearLogs(context),
+            ),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            ListTile(
+              leading: const Icon(Icons.bug_report, size: 20),
+              title: const Text('Effacer les crash reports', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              subtitle: const Text('Supprimer les rapports de crash', style: TextStyle(fontSize: 11)),
+              onTap: () => _confirmClearCrashReports(context),
+            ),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            ListTile(
+              leading: const Icon(Icons.open_in_new, size: 20),
+              title: const Text('Ouvrir le dossier des logs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              subtitle: const Text('Afficher les fichiers dans le gestionnaire', style: TextStyle(fontSize: 11)),
+              onTap: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Chemin: /data/data/com.panda.ide/UserFiles/Logs/')),
+                );
+              },
+            ),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+            ListTile(
+              leading: const Icon(Icons.file_download, size: 20),
+              title: const Text('Exporter le rapport diagnostique', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              subtitle: const Text('Générer un rapport complet pour le debug', style: TextStyle(fontSize: 11)),
+              onTap: () async {
+                try {
+                  final file = await PandaLogger.exportDiagnostics();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Rapport exporté: \${file.path}')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Erreur export: $e')),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoggingLevelTile(bool isDark, ColorScheme cs) {
+    return ListTile(
+      title: const Text('Niveau de logging', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      subtitle: const Text('Niveau minimum écrit dans les fichiers log', style: TextStyle(fontSize: 11)),
+      trailing: DropdownButton<String>(
+        value: PandaLogger.diagnosticMode ? 'debug' : 'info',
+        underline: const SizedBox(),
+        items: const [
+          DropdownMenuItem(value: 'debug', child: Text('Debug')),
+          DropdownMenuItem(value: 'info', child: Text('Info')),
+          DropdownMenuItem(value: 'warning', child: Text('Warning')),
+          DropdownMenuItem(value: 'error', child: Text('Error')),
+        ],
+        onChanged: (val) async {
+          if (val == null) return;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('logging_level', val);
+          // Apply to PandaLogger
+          if (val == 'debug') {
+            PandaLogger.diagnosticMode = true;
+          } else {
+            PandaLogger.diagnosticMode = false;
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildRetentionTile(bool isDark, ColorScheme cs) {
+    return ListTile(
+      title: const Text('Rétention des logs', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      subtitle: const Text('Durée de conservation des fichiers log', style: TextStyle(fontSize: 11)),
+      trailing: DropdownButton<int>(
+        value: 30,
+        underline: const SizedBox(),
+        items: const [
+          DropdownMenuItem(value: 7, child: Text('7 jours')),
+          DropdownMenuItem(value: 30, child: Text('30 jours')),
+          DropdownMenuItem(value: 90, child: Text('90 jours')),
+        ],
+        onChanged: (val) async {
+          if (val == null) return;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setInt('log_retention_days', val);
+        },
+      ),
+    );
+  }
+
+  Widget _buildDiagnosticModeTile(bool isDark, ColorScheme cs) {
+    return SwitchListTile(
+      title: const Text('Mode diagnostique', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      subtitle: const Text(
+        'Logs détaillés pour le debug (plus de traces)',
+        style: TextStyle(fontSize: 11),
+      ),
+      value: PandaLogger.diagnosticMode,
+      onChanged: (val) {
+        setState(() {});
+        PandaLogger.diagnosticMode = val;
+      },
+    );
+  }
+
+  Widget _buildStorageSizeTile(bool isDark, ColorScheme cs) {
+    return FutureBuilder<int>(
+      future: PandaLogger.getStorageSize(),
+      builder: (context, snapshot) {
+        final size = snapshot.data ?? 0;
+        final sizeStr = size > 1024 * 1024
+            ? '\${(size / 1024 / 1024).toStringAsFixed(1)} MB'
+            : size > 1024
+                ? '\${(size / 1024).toStringAsFixed(1)} KB'
+                : '$size B';
+        return ListTile(
+          title: const Text('Taille du stockage', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          subtitle: Text('Espace utilisé par les logs: $sizeStr', style: const TextStyle(fontSize: 11)),
+          trailing: const Icon(Icons.storage, size: 20),
+        );
+      },
+    );
+  }
+
+  void _confirmClearLogs(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Effacer tous les logs ?'),
+        content: const Text('Cette action est irréversible. Tous les fichiers de logs seront supprimés.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () async {
+              await PandaLogger.clearAll();
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Logs effacés')),
+                );
+              }
+            },
+            child: const Text('Effacer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmClearCrashReports(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Effacer les crash reports ?'),
+        content: const Text('Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () async {
+              await PandaLogger.clearCrashReports();
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Crash reports effacés')),
+                );
+              }
+            },
+            child: const Text('Effacer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 
