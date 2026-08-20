@@ -37,7 +37,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import 'package:markdown_widget/config/configs.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-const _kAccent  = Color(0xff5090c8);
+const _kAccent  = Color(0xff6366f1);
 const _kDanger  = Color(0xffe05252);
 const _kSuccess = Color(0xff4caf7d);
 const _kChatBg  = Color(0xff0f0f1a);
@@ -89,7 +89,7 @@ const _providers = <_ProviderDef>[
   _ProviderDef(
     id: 'gemini',
     name: 'Google Gemini',
-    description: 'Gemini 2.0 Flash, 1.5 Pro',
+    description: 'Gemini 2.5 Flash, 2.5 Pro',
     icon: Broken.global_search,
     color: Color(0xff4285f4),
     docsUrl: 'https://aistudio.google.com/app/apikey',
@@ -996,7 +996,7 @@ class _AgentSettingsState extends State<AgentSettings>
         if (item is Map) {
           final m = Map<String, dynamic>.from(item);
           final rawId = (m['id'] ?? m['name'] ?? '').toString();
-          final id = _selectedProviderId == 'gemini' && rawId.startsWith('models/')
+          final id = rawId.startsWith('models/')
               ? rawId.substring('models/'.length)
               : rawId;
           models.add({
@@ -1022,13 +1022,8 @@ class _AgentSettingsState extends State<AgentSettings>
     final id = modelId.toLowerCase();
 
     if (p == 'gemini') {
-      return id == 'gemini-2.5-flash' ||
-             id == 'gemini-2.5-pro' ||
-             id == 'gemini-2.0-flash' ||
-             id == 'gemini-2.0-flash-lite' ||
-             id == 'gemini-1.5-flash' ||
-             id == 'gemini-1.5-pro' ||
-             id == 'gemini-1.5-flash-8b';
+      // Show all Gemini models returned by the API
+      return true;
     }
     if (p == 'deepseek') {
       return id == 'deepseek-chat' || id == 'deepseek-reasoner';

@@ -13,7 +13,7 @@ class PandaNotifications {
 
     entry = OverlayEntry(
       builder: (context) => Positioned(
-        top: MediaQuery.of(context).padding.top + 20,
+        bottom: MediaQuery.of(context).padding.bottom + 20,
         right: 20,
         child: Material(
           color: Colors.transparent,

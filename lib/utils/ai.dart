@@ -910,7 +910,7 @@ class Gemini extends Models {
 
   Gemini({
     required this.apiKey,
-    String model = 'gemini-2.0-flash',
+    String model = 'gemini-2.5-flash',
     this.temperature,
     this.maxOutputTokens,
     this.topP,
@@ -924,10 +924,10 @@ class Gemini extends Models {
     if (trimmed.startsWith('models/')) {
       trimmed = trimmed.substring('models/'.length);
     }
-    if (trimmed.isEmpty) return 'gemini-2.0-flash';
-    // Replace non-existent 2.5 aliases with 2.0
-    if (trimmed == 'gemini-2.5-flash-lite') return 'gemini-2.0-flash-lite';
-    if (trimmed == 'gemini-2.5-flash' || trimmed == 'gemini-2.5-pro') return 'gemini-2.0-flash';
+    if (trimmed.isEmpty) return 'gemini-2.5-flash';
+    // Map deprecated aliases to current models
+    if (trimmed == 'gemini-2.0-flash') return 'gemini-2.5-flash';
+    if (trimmed == 'gemini-2.0-flash-lite') return 'gemini-2.5-flash-lite';
     return trimmed;
   }
 

@@ -91,7 +91,7 @@ const _kTabBarDark     = Color(0xff252526);
 const _kTabBarLight    = Color(0xffececec);
 const _kTabActiveDark  = Color(0xff1e1e1e);
 const _kTabActiveLight = Color(0xffffffff);
-const _kAccent         = Color(0xff5090c8);
+const _kAccent         = Color(0xff6366f1);
 const _kSidebarBgDark  = Color(0xff252526);
 const _kSidebarBgLight = Color(0xfff3f3f3);
 const _kSidebarWidth   = 240.0;
@@ -155,6 +155,12 @@ class _SelectTypeState extends State<SelectType>
   final _agentInputCtrl  = TextEditingController();
   final _agentScrollCtrl = ScrollController();
   final List<Map<String,dynamic>> _agentMessages = [];
+
+  // ── Full screen mode ─────────────────────────────────────
+  bool _fullScreen = false;
+
+  // ── Resizable sidebar ─────────────────────────────────────
+  double _sidebarWidth = _kSidebarWidth;
 
   // ── Agent AI state ────────────────────────────────────────────────
   AgentPhase _agentPhase        = AgentPhase.idle;
@@ -321,9 +327,9 @@ class _SelectTypeState extends State<SelectType>
     _splitViewController = MultiSplitViewController(areas: [Area(), Area()]);
     // Send button pulse animation
     _sendAnimCtrl = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 800))
+      vsync: this, duration: const Duration(milliseconds: 1200))
       ..repeat();
-    _sendAnim = Tween<double>(begin: 0.85, end: 1.0).animate(
+    _sendAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
         CurvedAnimation(parent: _sendAnimCtrl, curve: Curves.easeInOut));
     _sendAnimCtrl.stop();
     // Rebuild send button colour when text changes
@@ -1549,10 +1555,9 @@ class _SelectTypeState extends State<SelectType>
       final iconColor = isDark ? _kActivityIconDark  : _kActivityIconLight;
       final selColor  = isDark ? _kActivitySelDark   : _kActivitySelLight;
 
-      // Ordre demandé : Panda Agent (icône panda) puis Marketplace tout en haut,
+      // Ordre : Marketplace puis Panda Agent tout en haut,
       // ensuite les panneaux classiques de l'éditeur.
       final topItems = <_RailItem>[
-        _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
         _RailItem(icon: Broken.element_3,          label: 'Explorateur',      idx: 1),
         _RailItem(icon: Broken.search_normal,       label: 'Rechercher',       idx: 2),
         _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',     idx: 3),
@@ -1565,13 +1570,35 @@ class _SelectTypeState extends State<SelectType>
       ];
 
       return Container(
-        width: 48,
+        width: _fullScreen ? 0.0 : 48,
         color: railBg,
         child: Column(
           children: [
             const SizedBox(height: 6),
 
-            // ── Panda Agent — premier élément du rail ────────────────────
+            // ── Marketplace — premier élément ──────────────────────────
+            _ActivityBtnEx(
+              item:      _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
+              selected:  false,
+              iconColor: iconColor,
+              selColor:  selColor,
+              onTap:     () {
+                setState(() {
+                  if (!_openTabs.any((t) => t.id == 'marketplace')) {
+                    _openTabs.add(const _TabDef(
+                        id:    'marketplace',
+                        title: 'Extensions',
+                        icon:  Broken.shop));
+                    _activeTabIdx = _openTabs.length - 1;
+                  } else {
+                    _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'marketplace');
+                  }
+                });
+              },
+            ),
+            _RailSeparator(isDark: isDark),
+
+            // ── Panda Agent ────────────────────────────────────────────
             _RailPandaBtn(
               iconColor: iconColor,
               selColor:  selColor,
@@ -3063,7 +3090,7 @@ class _SelectTypeState extends State<SelectType>
                       onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
                       child: Container(
                         constraints: const BoxConstraints(
-                            minWidth: 140, maxWidth: 260),
+                            minWidth: 200, maxWidth: 400),
                         height: 24,
                         padding:
                             const EdgeInsets.symmetric(horizontal: 8),
@@ -3138,6 +3165,20 @@ class _SelectTypeState extends State<SelectType>
               'Terminal',
               _bottomPanelOpen ? _kAccent : fg,
               () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
+            ),
+            // 4 — full screen mode
+            _hdrBtn(
+              _fullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+              _fullScreen ? 'Quitter le plein écran' : 'Plein écran',
+              _fullScreen ? _kAccent : fg,
+              () => setState(() {
+                _fullScreen = !_fullScreen;
+                if (_fullScreen) {
+                  _sidebarState = 0;
+                  _rightPanelOpen = false;
+                  _bottomPanelOpen = false;
+                }
+              }),
             ),
           ],
         ),
@@ -3579,7 +3620,7 @@ class _SelectTypeState extends State<SelectType>
                               prefixIcon: Icon(Icons.search, size: 12, color: fg),
                               prefixIconConstraints: const BoxConstraints(minWidth: 24, minHeight: 20),
                               filled: true,
-                              fillColor: isDark ? const Color(0xff3c3c3c) : const Color(0xffe8e8e8),
+                              fillColor: isDark ? const Color(0xff3c3c3c) : const Color(0xff1e293b),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(2),
                                 borderSide: BorderSide.none,
@@ -4285,28 +4326,7 @@ class _SelectTypeState extends State<SelectType>
         // ── Integrated PromptBar with Docked layout ────────────────────
         Builder(builder: (context) {
           final List<(String, String)> suggestions;
-          if (_agentChatMode == 'plan') {
-            suggestions = const [
-              ('📋 Proposer un plan', 'Peux-tu me proposer un plan d\'action complet et structuré pour ce projet ?'),
-              ('🔍 Analyser l\'architecture', 'Analyse la structure et l\'architecture de ce projet et résume les besoins.'),
-              ('🛠️ Plan de refactorisation', 'Propose un plan de refactorisation étape par étape pour le code existant.'),
-              ('🧪 Stratégie de tests', 'Établis un plan pour ajouter une couverture de tests unitaires et d\'intégration.'),
-            ];
-          } else if (_agentChatMode == 'ask') {
-            suggestions = const [
-              ('❓ Expliquer l\'architecture', "Peux-tu m'expliquer l'architecture globale de ce projet ?"),
-              ('⚡ Optimiser les performances', 'Quelles sont les opportunités d\'optimisation de performance dans ce projet ?'),
-              ('🐛 Détecter les bugs', 'Analyse le code pour identifier d\'éventuels bugs ou failles de sécurité.'),
-              ('📁 Points d\'entrée', 'Où se trouve le point d\'entrée principal et comment fonctionne le flux de données ?'),
-            ];
-          } else {
-            suggestions = const [
-              ('🚀 Flutter analyze / build', 'Exécute la commande de vérification du code et analyse les erreurs éventuelles.'),
-              ('📝 Générer le README', "Génère un fichier README.md complet documentant l'installation et l'utilisation."),
-              ('🧪 Créer les tests', 'Crée des tests unitaires pour les composants principaux du projet.'),
-              ('🧹 Nettoyer le code', 'Vérifie et nettoie le code pour respecter les meilleures pratiques.'),
-            ];
-          }
+          suggestions = [];
 
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -4323,8 +4343,9 @@ class _SelectTypeState extends State<SelectType>
                   contextCards: _agentAttachments.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final att = entry.value;
-                    return ContextCard(
+                    return AttachmentPreviewCard(
                       fileName: att['name'] ?? '',
+                      filePath: att['path'] ?? '',
                       onRemove: () => setState(() => _agentAttachments.removeAt(idx)),
                     );
                   }).toList(),
@@ -4466,18 +4487,56 @@ class _SelectTypeState extends State<SelectType>
                       ),
                       const Spacer(),
 
-                      // Send / Stop
+                      // Send / Stop — animated square runner while agent works
                       if (_agentGenerating)
                         GestureDetector(
-                          onTap: _agentStop,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
+                          onTap: () async {
+                            final action = await showDialog<String>(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                backgroundColor: isDark ? const Color(0xff1e1e2e) : Colors.white,
+                                title: const Text("L'agent est en cours...",
+                                    style: TextStyle(fontSize: 15)),
+                                content: const Text(
+                                    "Que voulez-vous faire ?",
+                                    style: TextStyle(fontSize: 13)),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, 'queue'),
+                                    child: const Text('Ajouter à la file'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, 'stop'),
+                                    child: const Text('Arrêter et envoyer',
+                                        style: TextStyle(color: Colors.red)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (action == 'stop') {
+                              _agentStop();
+                              await Future.delayed(const Duration(milliseconds: 300));
+                              _agentSend();
+                            } else if (action == 'queue') {
+                              final text = _agentInputCtrl.text.trim();
+                              if (text.isNotEmpty) {
+                                setState(() => _promptQueue.add(text));
+                                _agentInputCtrl.clear();
+                              }
+                            }
+                          },
+                          child: AnimatedBuilder(
+                            animation: _sendAnim,
+                            builder: (_, __) => Container(
+                              width: 30 + _sendAnim.value * 4,
+                              height: 30 + _sendAnim.value * 4,
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.15 + _sendAnim.value * 0.1),
+                                borderRadius: BorderRadius.circular(6 + _sendAnim.value * 2),
+                              ),
+                              child: const Icon(Icons.stop_rounded,
+                                  size: 18, color: Colors.redAccent),
                             ),
-                            child: Icon(Broken.stop_circle,
-                                size: 18, color: Colors.red[400]),
                           ),
                         )
                       else
@@ -4585,7 +4644,7 @@ class _SelectTypeState extends State<SelectType>
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xff2a2a2a) : const Color(0xffe8e8e8),
+                color: isDark ? const Color(0xff2a2a2a) : const Color(0xff1e293b),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -4601,7 +4660,7 @@ class _SelectTypeState extends State<SelectType>
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xff2a2a2a) : const Color(0xffe8e8e8),
+                  color: isDark ? const Color(0xff2a2a2a) : const Color(0xff1e293b),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -5439,7 +5498,7 @@ class _SelectTypeState extends State<SelectType>
               child: Container(
                 height: 40,
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xff2a2a2a) : const Color(0xffe8e8e8),
+                  color: isDark ? const Color(0xff2a2a2a) : const Color(0xff1e293b),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -6348,12 +6407,7 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Widget _buildAgentEmptyState(bool isDark, Color muted, Color fg) {
-    const suggestions = [
-      'Explique ce code',
-      'Crée un fichier Flutter',
-      'Optimise cette fonction',
-      'Écris des tests unitaires',
-    ];
+    // Suggestions are generated dynamically by the agent
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
@@ -6449,7 +6503,7 @@ class _SelectTypeState extends State<SelectType>
               decoration: BoxDecoration(
                 color: isDark
                     ? const Color(0xff2d2d2d)
-                    : const Color(0xffe8e8e8),
+                    : const Color(0xff1e293b),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                     color: isDark
@@ -6580,61 +6634,8 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Widget _buildPromptSuggestionsBar(bool isDark, Color fg, Color muted) {
-    final List<(String, String)> suggestions;
-    if (_agentChatMode == 'plan') {
-      suggestions = const [
-        ('📋 Proposer un plan', 'Peux-tu me proposer un plan d\'action complet et structuré pour ce projet ?'),
-        ('🔍 Analyser l\'architecture', 'Analyse la structure et l\'architecture de ce projet et résume les besoins.'),
-        ('🛠️ Plan de refactorisation', 'Propose un plan de refactorisation étape par étape pour le code existant.'),
-        ('🧪 Stratégie de tests', 'Établis un plan pour ajouter une couverture de tests unitaires et d\'intégration.'),
-      ];
-    } else if (_agentChatMode == 'ask') {
-      suggestions = const [
-        ('❓ Expliquer l\'architecture', "Peux-tu m'expliquer l'architecture globale de ce projet ?"),
-        ('⚡ Optimiser les performances', 'Quelles sont les opportunités d\'optimisation de performance dans ce projet ?'),
-        ('🐛 Détecter les bugs', 'Analyse le code pour identifier d\'éventuels bugs ou failles de sécurité.'),
-        ('📁 Points d\'entrée', 'Où se trouve le point d\'entrée principal et comment fonctionne le flux de données ?'),
-      ];
-    } else {
-      suggestions = const [
-        ('🚀 Flutter analyze / build', 'Exécute la commande de vérification du code et analyse les erreurs éventuelles.'),
-        ('📝 Générer le README', "Génère un fichier README.md complet documentant l'installation et l'utilisation."),
-        ('🧪 Créer les tests', 'Crée des tests unitaires pour les composants principaux du projet.'),
-        ('🧹 Nettoyer le code', 'Vérifie et nettoie le code pour respecter les meilleures pratiques.'),
-      ];
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      height: 32,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: suggestions.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 6),
-        itemBuilder: (_, idx) {
-          final s = suggestions[idx];
-          return ActionChip(
-            elevation: 0,
-            pressElevation: 0,
-            padding: EdgeInsets.zero,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 8),
-            backgroundColor: isDark ? const Color(0xff2d2d2d) : const Color(0xffe8e8e8),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: BorderSide(color: isDark ? Colors.white10 : Colors.black12),
-            ),
-            label: Text(s.$1, style: TextStyle(fontSize: 11, color: fg)),
-            onPressed: () {
-              setState(() {
-                _agentInputCtrl.text = s.$2;
-                _agentInputCtrl.selection = TextSelection.fromPosition(
-                    TextPosition(offset: _agentInputCtrl.text.length));
-              });
-            },
-          );
-        },
-      ),
-    );
+    // No hardcoded suggestions — agent generates them dynamically
+    return const SizedBox.shrink();
   }
 
   Widget _buildPromptQueueBar(bool isDark, Color fg, Color muted) {
@@ -7130,6 +7131,7 @@ class _SelectTypeState extends State<SelectType>
     _agentRequestSerial++;
     _agentRunner.cancel();
     _sendAnimCtrl.stop();
+    _sendAnimCtrl.value = 0;  // Reset animation for clean state
     if (!mounted) return;
     setState(() {
       _agentGenerating = false;
@@ -8036,17 +8038,7 @@ class _SelectTypeState extends State<SelectType>
     final text = _agentInputCtrl.text.trim();
     if (text.isEmpty) return;
     if (_agentGenerating) {
-      setState(() {
-        _promptQueue.add(text);
-        _agentInputCtrl.clear();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Prompt ajouté à la file d\'attente (${_promptQueue.length} en attente)',
-              style: const TextStyle(fontSize: 12)),
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      // Auto-queue if text is non-empty (dialog handled by send button above)
       return;
     }
     final requestId = ++_agentRequestSerial;
@@ -8932,13 +8924,10 @@ class _EditorTabConfig {
                           child: Center(child: child),
                         );
                       },
-                      child: SvgPicture.asset(
-                        'assets/icons/panda_agent.svg',
-                        width: 21,
-                        height: 21,
-                        colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
-                        placeholderBuilder: (_) =>
-                            Icon(Broken.cpu_setting, size: 20, color: c),
+                      child: Icon(
+                        Broken.cpu,
+                        size: 20,
+                        color: c,
                       ),
                     ),
                   ),
@@ -11088,6 +11077,141 @@ class _ModelFeatureChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Attachment Preview Card ─────────────────────────────────────────────────
+class AttachmentPreviewCard extends StatelessWidget {
+  final String fileName;
+  final String filePath;
+  final VoidCallback onRemove;
+
+  const AttachmentPreviewCard({
+    super.key,
+    required this.fileName,
+    required this.filePath,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ext = fileName.split('.').last.toLowerCase();
+    final isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].contains(ext);
+    final isAudio = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac'].contains(ext);
+    final isVideo = ['mp4', 'mov', 'avi', 'mkv', 'webm'].contains(ext);
+    final accent = BeautifulUITheme.accentColor;
+
+    return MarginWidget(
+      margin: const EdgeInsets.only(right: 6),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: isImage || isVideo ? 56 : null,
+            constraints: isImage || isVideo ? null : const BoxConstraints(maxWidth: 180),
+            padding: EdgeInsets.symmetric(
+              horizontal: isImage || isVideo ? 4 : 8,
+              vertical: isImage || isVideo ? 4 : 5,
+            ),
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: accent.withValues(alpha: 0.2), width: 0.5),
+            ),
+            child: isImage
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: filePath.isNotEmpty
+                            ? Image.file(File(filePath),
+                                width: 48, height: 48, fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _iconPlaceholder(ext, accent))
+                            : _iconPlaceholder(ext, accent),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(fileName, style: TextStyle(fontSize: 8, color: accent),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  )
+                : isVideo
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 48, height: 48,
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Icon(Icons.play_circle_fill_rounded,
+                                size: 24, color: accent),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(fileName, style: TextStyle(fontSize: 8, color: accent),
+                              maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                      )
+                    : isAudio
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.audiotrack_rounded, size: 14, color: accent),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(fileName,
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: accent),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Broken.document, size: 11, color: accent),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(fileName,
+                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: accent),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ),
+                            ],
+                          ),
+          ),
+          // Remove button
+          Positioned(
+            top: -4, right: -4,
+            child: GestureDetector(
+              onTap: onRemove,
+              child: Container(
+                width: 16, height: 16,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.close, size: 10, color: Colors.white),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconPlaceholder(String ext, Color accent) {
+    return Container(
+      width: 48, height: 48,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Icon(
+        ext.isEmpty ? Broken.folder : Broken.document,
+        size: 20, color: accent,
       ),
     );
   }
