@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -12,6 +14,18 @@ import '../utils/panda_log.dart';
 import 'home.dart';
 import 'permission_screen.dart';
 import '../terminal/panda_bridge.dart';
+
+// ── Tool lists (shared with start_screen) ──────────────────────────────────────
+const List<String> _javaTools = [
+  'jar', 'jarsigner', 'java', 'javac', 'javadoc', 'javap', 'jcmd',
+  'jconsole', 'jdb', 'jdeprscan', 'jdeps', 'jfr', 'jhsdb', 'jinfo',
+  'jlink', 'jmap', 'jmod', 'jpackage', 'jps', 'jrunscript', 'jstack',
+  'jstat', 'jstatd', 'jwebserver', 'keytool', 'rmiregistry', 'serialver'
+];
+
+const List<String> _goToolBinaries = [
+  'asm', 'cgo', 'compile', 'cover', 'fix', 'link', 'preprofile', 'vet',
+];
 
 /// A step in the setup process.
 class _SetupStep {
@@ -32,10 +46,10 @@ class _SetupStep {
   });
 }
 
-/// SetupScreen — First-time setup screen for Panda IDE.
+/// SetupScreen — First-time AND subsequent setup screen for Panda IDE.
 ///
-/// Shows real-time progress of Alpine rootfs extraction and environment
-/// initialization, with a live log view for debugging.
+/// Shows real-time progress of environment initialization with a linear
+/// progress bar, step list, and live log view.
 class SetupScreen extends StatefulWidget {
   const SetupScreen({super.key});
 
@@ -52,8 +66,8 @@ class _SetupScreenState extends State<SetupScreen>
   late Animation<double> _pulseAnim;
   bool _setupComplete = false;
   bool _setupError = false;
-  String _currentStepLabel = '';
   int _currentStepIndex = 0;
+  bool _isFirstInstall = false;
 
   @override
   void initState() {
@@ -66,6 +80,7 @@ class _SetupScreenState extends State<SetupScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
+    _isFirstInstall = !AlpineSetup.isRootfsComplete();
     _initSteps();
     _startSetup();
   }
@@ -74,19 +89,28 @@ class _SetupScreenState extends State<SetupScreen>
     _steps.addAll([
       _SetupStep(label: 'Storage', description: 'Creating directories'),
       _SetupStep(label: 'Certificates', description: 'Installing CA certificates'),
-      _SetupStep(label: 'Alpine Linux', description: 'Extracting rootfs (first install only)'),
-      _SetupStep(label: 'Runtime', description: 'Configuring runtime environment'),
-      _SetupStep(label: 'Tools', description: 'Injecting Panda tools'),
-      _SetupStep(label: 'Services', description: 'Starting Panda services'),
+      if (_isFirstInstall)
+        _SetupStep(label: 'Alpine Linux', description: 'Extracting rootfs (first install only)'),
+      _SetupStep(label: 'Runtime', description: 'Setting up symlinks & runtime'),
+      _SetupStep(label: 'Tools', description: 'Injecting Panda tools into Alpine'),
+      _SetupStep(label: 'Services', description: 'Starting PandaBridge'),
     ]);
+  }
+
+  /// Overall progress [0..1]
+  double get _progress {
+    if (_steps.isEmpty) return 0.0;
+    int done = 0;
+    for (final s in _steps) {
+      if (s.completed) done++;
+    }
+    return done / _steps.length;
   }
 
   void _addLog(String message) {
     final ts = DateTime.now().toString().substring(11, 19);
     setState(() => _logs.add('[$ts] $message'));
-    // Write to PandaLogger for persistence
     PandaLog.i('SetupScreen', message);
-    // Auto-scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_logScrollController.hasClients) {
         _logScrollController.animateTo(
@@ -98,7 +122,11 @@ class _SetupScreenState extends State<SetupScreen>
     });
   }
 
-  void _setStepState(int index, {bool active = false, bool completed = false, bool failed = false, String? error}) {
+  void _setStepState(int index,
+      {bool active = false,
+      bool completed = false,
+      bool failed = false,
+      String? error}) {
     if (index < 0 || index >= _steps.length) return;
     setState(() {
       _steps[index].active = active;
@@ -109,57 +137,71 @@ class _SetupScreenState extends State<SetupScreen>
     });
   }
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // Main setup orchestrator
+  // ────────────────────────────────────────────────────────────────────────────
+
   Future<void> _startSetup() async {
     final sw = Stopwatch()..start();
-    _addLog('Panda IDE setup started');
+    _addLog(_isFirstInstall
+        ? 'Panda IDE first-install setup started'
+        : 'Panda IDE runtime initialisation started');
 
     try {
-      // Step 0: Create directories
-      _setStepState(0, active: true);
+      int si = 0;
+
+      // Step: Storage
+      _setStepState(si, active: true);
       _addLog('Creating storage directories...');
       await _createDirectories();
-      _setStepState(0, completed: true);
-      _addLog('Directories created (${sw.elapsedMilliseconds}ms)');
+      _setStepState(si, completed: true);
+      _addLog('Directories ready (${sw.elapsedMilliseconds}ms)');
+      si++;
 
-      // Step 1: Install certificates
-      _setStepState(1, active: true);
+      // Step: Certificates
+      _setStepState(si, active: true);
       _addLog('Installing CA certificates...');
       await _installCertificates();
-      _setStepState(1, completed: true);
+      _setStepState(si, completed: true);
       _addLog('Certificates installed (${sw.elapsedMilliseconds}ms)');
+      si++;
 
-      // Step 2: Alpine rootfs
-      _setStepState(2, active: true);
-      _addLog('Setting up Alpine Linux...');
-      await _setupAlpine(sw);
-      _setStepState(2, completed: true);
-      _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
+      // Step: Alpine rootfs (first install only)
+      if (_isFirstInstall) {
+        _setStepState(si, active: true);
+        _addLog('Setting up Alpine Linux...');
+        await _setupAlpine(sw);
+        _setStepState(si, completed: true);
+        _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
+        si++;
+      }
 
-      // Step 3: Runtime files
-      _setStepState(3, active: true);
+      // Step: Runtime (symlinks + runtime files)
+      _setStepState(si, active: true);
       _addLog('Configuring runtime environment...');
-      await _setupRuntime();
-      _setStepState(3, completed: true);
+      await _setupRuntime(sw);
+      _setStepState(si, completed: true);
       _addLog('Runtime configured (${sw.elapsedMilliseconds}ms)');
+      si++;
 
-      // Step 4: Panda tools
-      _setStepState(4, active: true);
+      // Step: Tools
+      _setStepState(si, active: true);
       _addLog('Injecting Panda tools...');
       await _injectTools();
-      _setStepState(4, completed: true);
+      _setStepState(si, completed: true);
       _addLog('Tools injected (${sw.elapsedMilliseconds}ms)');
+      si++;
 
-      // Step 5: Services
-      _setStepState(5, active: true);
+      // Step: Services
+      _setStepState(si, active: true);
       _addLog('Starting Panda services...');
       await _startServices();
-      _setStepState(5, completed: true);
+      _setStepState(si, completed: true);
       _addLog('Services started (${sw.elapsedMilliseconds}ms)');
 
       _addLog('✅ Setup complete in ${sw.elapsedMilliseconds}ms');
       setState(() => _setupComplete = true);
 
-      // Wait a moment then navigate
       await Future.delayed(const Duration(milliseconds: 800));
       _navigateToApp();
     } catch (e, stack) {
@@ -171,8 +213,15 @@ class _SetupScreenState extends State<SetupScreen>
     }
   }
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // Individual setup steps
+  // ────────────────────────────────────────────────────────────────────────────
+
   Future<void> _createDirectories() async {
-    for (final path in [binDir, libDir, homeDir, '$binDir/git-core', '$appDir/Templates', '$appDir/Logs']) {
+    for (final path in [
+      binDir, libDir, homeDir, '$binDir/git-core',
+      '$appDir/Templates', '$appDir/Logs'
+    ]) {
       await Directory(path).create(recursive: true).catchError((_) {});
     }
     _addLog('Created: bin, lib, Home, git-core, Templates, Logs');
@@ -200,9 +249,8 @@ class _SetupScreenState extends State<SetupScreen>
 
     _addLog('Extracting alpine-rootfs.tar.gz...');
     _addLog('This may take a moment on first install...');
-    _addLog('Archive size: checking...');
 
-    // Check if the asset exists before extraction
+    // Check archive size
     try {
       final asset = await rootBundle.load('assets/runtimes/alpine-rootfs.tar.gz');
       final sizeMB = (asset.lengthInBytes / (1024 * 1024)).toStringAsFixed(1);
@@ -215,11 +263,8 @@ class _SetupScreenState extends State<SetupScreen>
     // Retry logic: try up to 2 times
     bool result = false;
     for (int attempt = 1; attempt <= 2; attempt++) {
-      if (attempt > 1) {
-        _addLog('Retry attempt $attempt/2...');
-      }
+      if (attempt > 1) _addLog('Retry attempt $attempt/2...');
 
-      // Use AlpineSetup with progress logging
       result = await AlpineSetup.ensureAlpineRootfs(
         force: !marker.existsSync() && attempt == 1,
       ).timeout(
@@ -234,8 +279,6 @@ class _SetupScreenState extends State<SetupScreen>
       if (result) break;
 
       _addLog('⚠️ Attempt $attempt failed: ${AlpineSetup.lastError}');
-      PandaLog.e('SetupScreen', 'Alpine extraction attempt $attempt failed: ${AlpineSetup.lastError}');
-
       if (attempt < 2) {
         _addLog('Waiting 2s before retry...');
         await Future.delayed(const Duration(seconds: 2));
@@ -243,18 +286,14 @@ class _SetupScreenState extends State<SetupScreen>
     }
 
     if (!result) {
-      _addLog('❌ Alpine extraction failed after all attempts');
-      _addLog('Last error: ${AlpineSetup.lastError}');
-      _addLog('The terminal may not work correctly without Alpine');
-      _addLog('You can retry from the terminal or reinstall the app');
-      // Don't throw — let setup continue, terminal will be degraded
+      _addLog('❌ Alpine extraction failed: ${AlpineSetup.lastError}');
+      _addLog('Terminal may be degraded without Alpine');
     } else {
       _addLog('Alpine rootfs extracted and validated');
-      PandaLog.i('SetupScreen', 'Alpine rootfs extraction successful');
     }
   }
 
-  Future<void> _setupRuntime() async {
+  Future<void> _setupRuntime(Stopwatch sw) async {
     String sharedPath = '';
     try {
       sharedPath = await NativeChannel.getLibraryPath().timeout(
@@ -264,70 +303,245 @@ class _SetupScreenState extends State<SetupScreen>
     } catch (_) {}
     _addLog('Native lib path: ${sharedPath.isNotEmpty ? sharedPath : "(unavailable)"}');
 
-    if (sharedPath.isNotEmpty) {
-      // Create symlinks for critical binaries
-      final criticalLinks = [
-        (src: '$sharedPath/libbash.so', dst: '$binDir/bash'),
-        (src: '$sharedPath/libbash.so', dst: '$binDir/sh'),
-        (src: '$sharedPath/libccls.so', dst: '$binDir/ccls'),
-      ];
-      int created = 0;
-      for (final link in criticalLinks) {
-        final linkFile = Link(link.dst);
-        if (!linkFile.existsSync() || (await linkFile.target() != link.src)) {
-          try {
-            await linkFile.create(link.src, recursive: true);
-            created++;
-          } catch (_) {}
+    if (sharedPath.isEmpty) {
+      _addLog('⚠️ No native lib path — skipping symlinks');
+      return;
+    }
+
+    // ── Clean up leftover zip files ──
+    final downdir = Directory(downloadsDir);
+    if (await downdir.exists()) {
+      for (final file in downdir.listSync()) {
+        if (file is File && file.path.endsWith('.zip')) {
+          await file.delete();
         }
       }
-      _addLog('Created $created critical symlinks');
+    }
+
+    // ── Git global config ──
+    try {
+      final gitCore = '$binDir/git-core';
+      for (final path in [binDir, libDir, gitCore, homeDir]) {
+        await Directory(path).create(recursive: true);
+      }
+      await Process.run(
+        '$binDir/git',
+        ['config', '--global', '--add', 'safe.directory', '*'],
+        environment: gitEnvs(sharedPath),
+      ).timeout(const Duration(seconds: 3));
+    } catch (e) {
+      PandaLog.w('SetupScreen', 'Git global config failed (ignored): $e');
+    }
+
+    // ── Full symlink creation ──
+    _addLog('Creating symlinks...');
+    PandaLog.i('SetupScreen', '[${sw.elapsedMilliseconds}ms] Creating symlinks');
+
+    Map<String, dynamic> loader(String name,
+            {String? loaderBin, Map<String, String>? env}) =>
+        {
+          'src': '$sharedPath/${loaderBin ?? "libloader.so"}',
+          'dst': '$binDir/$name',
+          'env': env,
+        };
+
+    final symlinks = [
+      {'src': '$sharedPath/libreadline.so',   'dst': '$libDir/libreadline.so.8'},
+      {'src': '$sharedPath/libz.so',          'dst': '$libDir/libz.so.1'},
+      {'src': '$sharedPath/libncursesw.so',   'dst': '$libDir/libncursesw.so.6'},
+      {'src': '$sharedPath/libcrypto.so',     'dst': '$libDir/libcrypto.so.3'},
+      {'src': '$sharedPath/libssl.so',        'dst': '$libDir/libssl.so.3'},
+      {'src': '$sharedPath/libzstd.so',       'dst': '$libDir/libzstd.so.1'},
+      {'src': '$sharedPath/libxml2.so',       'dst': '$libDir/libxml2.so.16'},
+      {'src': '$sharedPath/libicuuc.so',      'dst': '$libDir/libicuuc.so.78'},
+      {'src': '$sharedPath/libicudata.so',    'dst': '$libDir/libicudata.so.78'},
+      {'src': '$sharedPath/libbash.so',       'dst': '$binDir/bash'},
+      {'src': '$sharedPath/libbash.so',       'dst': '$binDir/sh'},
+      {'src': '$sharedPath/libgit-remote-https.so', 'dst': '$gitCore/git-remote-https'},
+      {'src': '$sharedPath/libgit-remote-https.so', 'dst': '$gitCore/git-remote-http'},
+      {'src': '$sharedPath/libccls.so',       'dst': '$binDir/ccls'},
+      {'src': '$sharedPath/libless.so',       'dst': '$binDir/less',  'env': <String, String>{'LD_LIBRARY_PATH': libDir}},
+      {'src': '$sharedPath/libless.so',       'dst': '$binDir/pager', 'env': <String, String>{'LD_LIBRARY_PATH': libDir}},
+      ...[
+        'clang', 'clang++', 'clangloader', 'node', 'python', 'python3',
+        'npm', 'npx', 'pip', 'pip3', 'tsc', 'kotlinc', 'git', 'ruby', 'lua',
+      ].map((t) => loader(t, env: {'ROXUM_SHARED_PATH': sharedPath})),
+      ..._javaTools.map((t) => loader(t, env: {'ROXUM_SHARED_PATH': sharedPath})),
+      {'src': '$binDir/clang',  'dst': '$binDir/aarch64-linux-android-clang'},
+      {'src': '$binDir/clang++','dst': '$binDir/aarch64-linux-android-clang++'},
+    ];
+
+    int created = 0;
+    for (final link in symlinks) {
+      final dst = link['dst'] as String;
+      final src = link['src'] as String;
+      final linkFile = Link(dst);
+      bool needsCreation = true;
+      if (linkFile.existsSync()) {
+        try {
+          if (linkFile.targetSync() == src) needsCreation = false;
+        } catch (_) {}
+      }
+      if (needsCreation) {
+        try {
+          await Process.run(
+            'ln', ['-sf', src, dst],
+            environment: link['env'] as Map<String, String>?,
+          ).timeout(const Duration(seconds: 2));
+          created++;
+        } catch (_) {}
+      }
+    }
+    _addLog('Created/verified $created symlinks (${sw.elapsedMilliseconds}ms)');
+
+    // ── Rust / Go / Dart runtime symlinks ──
+    await _refreshRustGoRuntimeSymlinks(sharedPath);
+    await _refreshDartRuntimeSymlinks(sharedPath);
+
+    // ── Alpine runtime files ──
+    final alpineDir = '${runtimesDir}/alpine-linux';
+    if (Directory(alpineDir).existsSync()) {
+      try {
+        await AlpineSetup.ensureAlpineRuntimeFiles();
+        _addLog('Alpine runtime files ready');
+      } catch (e) {
+        PandaLog.e('SetupScreen', 'Alpine runtime files error: $e');
+      }
+
+      // Inject Panda tools into Alpine local bin
+      _addLog('Injecting Panda tools into Alpine...');
+      final localBinDir = Directory('$alpineDir/usr/local/bin');
+      if (!localBinDir.existsSync()) localBinDir.createSync(recursive: true);
+
+      // Panda CLI bridge
+      final pandaCli = File('${localBinDir.path}/panda');
+      pandaCli.writeAsStringSync('#!/bin/sh\necho "\$@" | nc 127.0.0.1 ${PandaBridge.port}\n');
+      Process.runSync('chmod', ['+x', pandaCli.path]);
+
+      // Native fast-path shims
+      final nativeBinaries = [
+        'node', 'npm', 'npx', 'git', 'python', 'python3', 'pip', 'pip3',
+        'clang', 'clang++', 'rustc', 'cargo',
+      ];
+      int shims = 0;
+      for (final bin in nativeBinaries) {
+        final shim = File('${localBinDir.path}/$bin');
+        final native = File('$binDir/$bin');
+        if (native.existsSync()) {
+          if (!shim.existsSync()) {
+            shim.writeAsStringSync('#!/bin/sh\nexec $binDir/$bin "\$@"\n');
+            Process.runSync('chmod', ['+x', shim.path]);
+            shims++;
+          }
+        } else if (shim.existsSync()) {
+          await shim.delete();
+        }
+      }
+      _addLog('Panda tools: CLI bridge + $shims shims injected');
+
+      // Panda service supervisor
+      final pandaService = File('${localBinDir.path}/panda-service');
+      pandaService.writeAsStringSync('''#!/bin/sh
+case "\$1" in
+  start)
+    echo "[Panda Services] Starting \$2..."
+    nohup "\$2" > /tmp/"\$2".log 2>&1 &
+    echo \$! > /tmp/"\$2".pid
+    ;;
+  stop)
+    echo "[Panda Services] Stopping \$2..."
+    kill \$(cat /tmp/"\$2".pid) 2>/dev/null
+    rm -f /tmp/"\$2".pid
+    ;;
+  status)
+    if [ -f /tmp/"\$2".pid ]; then
+      echo "[Panda Services] \$2 is RUNNING (PID \$(cat /tmp/"\$2".pid))"
+    else
+      echo "[Panda Services] \$2 is STOPPED"
+    fi
+    ;;
+  *) echo "Usage: panda-service [start|stop|status] <command>" ;;
+esac
+''');
+      Process.runSync('chmod', ['+x', pandaService.path]);
     }
   }
 
   Future<void> _injectTools() async {
-    final alpineDir = '${runtimesDir}/alpine-linux';
-    if (!Directory(alpineDir).existsSync()) {
-      _addLog('Alpine not available, skipping tool injection');
-      return;
-    }
-
-    final localBinDir = Directory('$alpineDir/usr/local/bin');
-    if (!localBinDir.existsSync()) localBinDir.createSync(recursive: true);
-
-    // Phase 1: Panda CLI
-    final pandaCli = File('${localBinDir.path}/panda');
-    pandaCli.writeAsStringSync('#!/bin/sh\necho "\$@" | nc 127.0.0.1 ${PandaBridge.port}\n');
-    Process.runSync('chmod', ['+x', pandaCli.path]);
-    _addLog('Panda CLI bridge installed');
-
-    // Phase 2: Native shims
-    final nativeBinaries = ['node', 'npm', 'npx', 'git', 'python', 'python3', 'pip', 'pip3', 'clang', 'clang++'];
-    int shimsInstalled = 0;
-    for (final bin in nativeBinaries) {
-      final shim = File('${localBinDir.path}/$bin');
-      final native = File('$binDir/$bin');
-      if (native.existsSync() && !shim.existsSync()) {
-        shim.writeAsStringSync('#!/bin/sh\nexec $binDir/$bin "\$@"\n');
-        Process.runSync('chmod', ['+x', shim.path]);
-        shimsInstalled++;
-      }
-    }
-    _addLog('Native shims: $shimsInstalled installed');
+    // Tool injection is handled in _setupRuntime for Alpine local bin.
+    // This step is a no-op placeholder so the step count stays consistent.
+    _addLog('Tool injection complete');
   }
 
   Future<void> _startServices() async {
-    // Start PandaBridge
     _addLog('Starting PandaBridge on port ${PandaBridge.port}');
-    PandaBridge.start().timeout(
+    await PandaBridge.start().timeout(
       const Duration(seconds: 10),
       onTimeout: () => _addLog('⚠️ PandaBridge start timed out'),
     ).catchError((e) => _addLog('⚠️ PandaBridge error: $e'));
   }
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // Runtime symlink helpers
+  // ────────────────────────────────────────────────────────────────────────────
+
+  Future<void> _refreshRustGoRuntimeSymlinks(String sharedPath) async {
+    if (await Directory('$runtimesDir/rust').exists()) {
+      await _ensureSymlink(linkPath: '$binDir/rustc',      targetPath: '$sharedPath/librustc.so');
+      await _ensureSymlink(linkPath: '$binDir/rustloader', targetPath: '$sharedPath/librstloader.so');
+      await _ensureSymlink(linkPath: '$binDir/cargo',      targetPath: '$sharedPath/libcargo.so');
+    }
+
+    if (await Directory('$runtimesDir/go').exists()) {
+      await _ensureSymlink(linkPath: '$binDir/go',    targetPath: '$sharedPath/libgo.so');
+      await _ensureSymlink(linkPath: '$binDir/gofmt', targetPath: '$sharedPath/libgofmt.so');
+      final goToolDir = Directory('$runtimesDir/go/pkg/tool/android_arm64');
+      if (await goToolDir.exists()) {
+        for (final tool in _goToolBinaries) {
+          await _ensureSymlink(
+            linkPath: '${goToolDir.path}/$tool',
+            targetPath: '$sharedPath/lib$tool.so',
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _refreshDartRuntimeSymlinks(String sharedPath) async {
+    final dartBinDir = Directory('$runtimesDir/dart/bin');
+    if (!await dartBinDir.exists()) return;
+
+    await _ensureSymlink(linkPath: '${dartBinDir.path}/dart',             targetPath: '$sharedPath/libdart.so');
+    await _ensureSymlink(linkPath: '${dartBinDir.path}/dartvm',           targetPath: '$sharedPath/libdartvm.so');
+    final aotIntermediate = '${dartBinDir.path}/libdart.so';
+    await _ensureSymlink(linkPath: aotIntermediate,                       targetPath: '$sharedPath/libdartaotruntime.so');
+    await _ensureSymlink(linkPath: '${dartBinDir.path}/dartaotruntime',   targetPath: aotIntermediate);
+  }
+
+  Future<void> _ensureSymlink({
+    required String linkPath,
+    required String targetPath,
+  }) async {
+    try {
+      final existingType =
+          await FileSystemEntity.type(linkPath, followLinks: false);
+      if (existingType == FileSystemEntityType.file) {
+        await File(linkPath).delete();
+      } else if (existingType == FileSystemEntityType.link) {
+        await Link(linkPath).delete();
+      } else if (existingType == FileSystemEntityType.directory) {
+        await Directory(linkPath).delete(recursive: true);
+      }
+      await Link(linkPath).create(targetPath, recursive: true);
+    } catch (_) {}
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Navigation
+  // ────────────────────────────────────────────────────────────────────────────
+
   void _navigateToApp() {
     if (!mounted) return;
-    // Check permissions then proceed to main app
     SharedPreferences.getInstance().then((prefs) {
       final permShown = prefs.getBool('permissions_shown') ?? false;
       if (!mounted) return;
@@ -359,6 +573,10 @@ class _SetupScreenState extends State<SetupScreen>
     super.dispose();
   }
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // UI
+  // ────────────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -367,6 +585,7 @@ class _SetupScreenState extends State<SetupScreen>
         child: Column(
           children: [
             _buildHeader(),
+            _buildProgressBar(),
             Expanded(child: _buildStepsList()),
             _buildLogView(),
             _buildFooter(),
@@ -378,10 +597,10 @@ class _SetupScreenState extends State<SetupScreen>
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 12),
       child: Row(
         children: [
-          // Panda logo
+          // Panda logo with glow
           AnimatedBuilder(
             animation: _pulseAnim,
             builder: (context, _) {
@@ -450,6 +669,56 @@ class _SetupScreenState extends State<SetupScreen>
             const Icon(Icons.check_circle, color: Color(0xff5090c8), size: 32),
           if (_setupError)
             const Icon(Icons.error_outline, color: Color(0xffcf6679), size: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _setupComplete
+                    ? 'Complete'
+                    : 'Step ${_currentStepIndex + 1} of ${_steps.length}',
+                style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                '${(_progress * 100).round()}%',
+                style: const TextStyle(
+                  color: Color(0xff5090c8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _progress,
+              minHeight: 6,
+              backgroundColor: const Color(0xff1a1a1a),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                _setupComplete
+                    ? const Color(0xff81c784)
+                    : _setupError
+                        ? const Color(0xffcf6679)
+                        : const Color(0xff5090c8),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -575,7 +844,6 @@ class _SetupScreenState extends State<SetupScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Log header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: const BoxDecoration(
@@ -603,7 +871,6 @@ class _SetupScreenState extends State<SetupScreen>
                 ],
               ),
             ),
-            // Log content
             Expanded(
               child: ListView.builder(
                 controller: _logScrollController,
@@ -611,15 +878,15 @@ class _SetupScreenState extends State<SetupScreen>
                 itemCount: _logs.length,
                 itemBuilder: (context, index) {
                   final line = _logs[index];
-                  final isError = line.contains('❌') || line.contains('error');
-                  final isWarning = line.contains('⚠️');
-                  final isSuccess = line.contains('✅');
+                  final isError = line.contains('\u274c') || line.toLowerCase().contains('error');
+                  final isWarning = line.contains('\u26a0\ufe0f');
+                  final isSuccess = line.contains('\u2705');
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 2),
                     child: Text(
                       line,
                       style: TextStyle(
-                        fontFamily: 'hack',
+                        fontFamily: 'monospace',
                         fontSize: 11,
                         height: 1.5,
                         color: isError
@@ -646,14 +913,12 @@ class _SetupScreenState extends State<SetupScreen>
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
       child: Row(
         children: [
-          // Copy logs button
           Expanded(
             child: OutlinedButton.icon(
               onPressed: _logs.isEmpty
                   ? null
                   : () {
-                      final logText = _logs.join('\n');
-                      Clipboard.setData(ClipboardData(text: logText));
+                      Clipboard.setData(ClipboardData(text: _logs.join('\n')));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Logs copied to clipboard'),
@@ -674,7 +939,6 @@ class _SetupScreenState extends State<SetupScreen>
             ),
           ),
           const SizedBox(width: 12),
-          // Save logs to file button
           Expanded(
             child: OutlinedButton.icon(
               onPressed: _logs.isEmpty
