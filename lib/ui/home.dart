@@ -172,9 +172,6 @@ class _SelectTypeState extends State<SelectType>
   double _sidebarWidth = _kSidebarWidth;
 
   // ── Full screen mode
-  bool _fullScreen = false;
-  double _bottomPanelHeight = 220;
-
   // ── Agent AI state ────────────────────────────────────────────────
   AgentPhase _agentPhase        = AgentPhase.idle;
   bool       _agentGenerating   = false;
@@ -1964,7 +1961,6 @@ class _SelectTypeState extends State<SelectType>
         ),
       );
     }
-  }
 
     // ── Sidebar panel content ─────────────────────────────────────────────────
   Widget _buildSidebarPanel(BuildContext context, AppTheme appTheme) {
