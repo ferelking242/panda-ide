@@ -148,26 +148,32 @@ class _SetupScreenState extends State<SetupScreen>
     try {
       int si = 0;
 
-      // Step: Storage
+      // Step: Storage — log FIRST so user always sees progress
+      _addLog('Step 1/${_steps.length}: Creating directories...');
       _setStepState(si, active: true);
-      _addLog('Creating storage directories...');
-      await _createDirectories();
+      await _createDirectories().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => _addLog('⚠️ Directory creation timed out (continuing)'),
+      );
       _setStepState(si, completed: true);
       _addLog('Directories ready (${sw.elapsedMilliseconds}ms)');
       si++;
 
       // Step: Certificates
+      _addLog('Step ${si + 1}/${_steps.length}: Installing certificates...');
       _setStepState(si, active: true);
-      _addLog('Installing CA certificates...');
-      await _installCertificates();
+      await _installCertificates().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => _addLog('⚠️ Certificate install timed out'),
+      );
       _setStepState(si, completed: true);
       _addLog('Certificates installed (${sw.elapsedMilliseconds}ms)');
       si++;
 
       // Step: Alpine rootfs (first install only)
       if (_isFirstInstall) {
+        _addLog('Step ${si + 1}/${_steps.length}: Setting up Alpine Linux...');
         _setStepState(si, active: true);
-        _addLog('Setting up Alpine Linux...');
         await _setupAlpine(sw);
         _setStepState(si, completed: true);
         _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
@@ -175,24 +181,27 @@ class _SetupScreenState extends State<SetupScreen>
       }
 
       // Step: Runtime (symlinks + runtime files)
+      _addLog('Step ${si + 1}/${_steps.length}: Configuring runtime...');
       _setStepState(si, active: true);
-      _addLog('Configuring runtime environment...');
-      await _setupRuntime(sw);
+      await _setupRuntime(sw).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => _addLog('⚠️ Runtime setup timed out (continuing)'),
+      );
       _setStepState(si, completed: true);
       _addLog('Runtime configured (${sw.elapsedMilliseconds}ms)');
       si++;
 
       // Step: Tools
+      _addLog('Step ${si + 1}/${_steps.length}: Injecting tools...');
       _setStepState(si, active: true);
-      _addLog('Injecting Panda tools...');
       await _injectTools();
       _setStepState(si, completed: true);
       _addLog('Tools injected (${sw.elapsedMilliseconds}ms)');
       si++;
 
       // Step: Services
+      _addLog('Step ${si + 1}/${_steps.length}: Starting services...');
       _setStepState(si, active: true);
-      _addLog('Starting Panda services...');
       await _startServices();
       _setStepState(si, completed: true);
       _addLog('Services started (${sw.elapsedMilliseconds}ms)');
@@ -216,11 +225,16 @@ class _SetupScreenState extends State<SetupScreen>
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> _createDirectories() async {
-    for (final path in [
-      binDir, libDir, homeDir, '$binDir/git-core',
-      '$appDir/Templates', '$appDir/Logs'
-    ]) {
-      await Directory(path).create(recursive: true).catchError((_) {});
+    final dirs = [binDir, libDir, homeDir, '$binDir/git-core', '$appDir/Templates', '$appDir/Logs'];
+    for (final p in dirs) {
+      try {
+        final d = Directory(p);
+        if (!d.existsSync()) {
+          await d.create(recursive: true).timeout(const Duration(seconds: 5));
+        }
+      } catch (e) {
+        PandaLog.w('SetupScreen', 'Dir create failed for $p: $e');
+      }
     }
     _addLog('Created: bin, lib, Home, git-core, Templates, Logs');
   }
