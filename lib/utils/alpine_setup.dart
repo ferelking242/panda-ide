@@ -149,7 +149,7 @@ class AlpineSetup {
       final archive = File('$tempDir/alpine-rootfs.tar.gz');
       await Directory(tempDir).create(recursive: true);
       final bytes = await rootBundle.load('assets/runtimes/alpine-rootfs.tar.gz');
-      PandaLog.d('AlpineSetup', '[2/6] Asset loaded: ${bytes.length} bytes');
+      PandaLog.d('AlpineSetup', '[2/6] Asset loaded: ${bytes.lengthInBytes} bytes');
       await archive.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
       PandaLog.d('AlpineSetup', '[2/6] Archive written to ${archive.path} (${await archive.length()} bytes)');
 

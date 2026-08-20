@@ -119,28 +119,30 @@ abstract final class PandaLogger {
 
   // ── Convenience methods ─────────────────────────────────────────────────
 
-  static void v(PandaLogCategory cat, String msg, {String? source}) =>
-      _log(PandaLogLevel.debug, cat, msg, source: source);
+  static void v(PandaLogCategory cat, String msg, {String? source, String? agentRunId, Map<String, dynamic>? metadata}) =>
+      _log(PandaLogLevel.debug, cat, msg, source: source, agentRunId: agentRunId, metadata: metadata);
 
-  static void d(PandaLogCategory cat, String msg, {String? source}) =>
-      _log(PandaLogLevel.debug, cat, msg, source: source);
+  static void d(PandaLogCategory cat, String msg, {String? source, String? agentRunId, Map<String, dynamic>? metadata}) =>
+      _log(PandaLogLevel.debug, cat, msg, source: source, agentRunId: agentRunId, metadata: metadata);
 
-  static void i(PandaLogCategory cat, String msg, {String? source}) =>
-      _log(PandaLogLevel.info, cat, msg, source: source);
+  static void i(PandaLogCategory cat, String msg, {String? source, String? agentRunId, Map<String, dynamic>? metadata, int? durationMs, String? filePath, String? command, int? exitCode}) =>
+      _log(PandaLogLevel.info, cat, msg, source: source, agentRunId: agentRunId, metadata: metadata, durationMs: durationMs, filePath: filePath, command: command, exitCode: exitCode);
 
-  static void s(PandaLogCategory cat, String msg, {String? source}) =>
-      _log(PandaLogLevel.success, cat, msg, source: source);
+  static void s(PandaLogCategory cat, String msg, {String? source, String? agentRunId, Map<String, dynamic>? metadata, int? durationMs}) =>
+      _log(PandaLogLevel.success, cat, msg, source: source, agentRunId: agentRunId, metadata: metadata, durationMs: durationMs);
 
-  static void w(PandaLogCategory cat, String msg, {String? source}) =>
-      _log(PandaLogLevel.warning, cat, msg, source: source);
+  static void w(PandaLogCategory cat, String msg, {String? source, String? agentRunId, Map<String, dynamic>? metadata}) =>
+      _log(PandaLogLevel.warning, cat, msg, source: source, agentRunId: agentRunId, metadata: metadata);
 
   static void e(
     PandaLogCategory cat,
     String msg, {
     String? error,
     StackTrace? stackTrace,
+    String? agentRunId,
+    int? durationMs,
   }) =>
-      _log(PandaLogLevel.error, cat, msg, error: error, stackTrace: stackTrace);
+      _log(PandaLogLevel.error, cat, msg, error: error, stackTrace: stackTrace, agentRunId: agentRunId, durationMs: durationMs);
 
   static void f(
     PandaLogCategory cat,

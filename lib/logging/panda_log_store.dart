@@ -42,16 +42,13 @@ class PandaLogConfig {
 
   /// Diagnostic mode config with more verbose logging.
   static const diagnosticConfig = PandaLogConfig(
-    fileMinLevel: PandaLevel.verbose,
+    fileMinLevel: PandaLogLevel.debug,
     flushInterval: Duration(seconds: 1),
     maxBufferSize: 500,
   );
 }
 
-// Compatibility: PandaLevel.verbose maps to debug
-extension on PandaLogLevel {
-  static const verbose = PandaLogLevel.debug;
-}
+
 
 /// Background log writer that batches events and writes to disk.
 class PandaLogStore {
