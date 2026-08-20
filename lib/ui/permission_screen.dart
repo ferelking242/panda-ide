@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import 'home.dart';
+import 'setup_screen.dart';
 
 const _kAccent = Color(0xff5090c8);
 const _kBg = Color(0xff181c24);
@@ -101,8 +102,9 @@ class _PermissionScreenState extends State<PermissionScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('permissions_shown', true);
     if (!mounted) return;
+    // After permissions, go to SetupScreen which handles Alpine + symlinks + services
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const SelectType()),
+      MaterialPageRoute(builder: (_) => const SetupScreen()),
     );
   }
 
