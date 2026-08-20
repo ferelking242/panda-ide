@@ -38,28 +38,64 @@ class _StartScreenState extends State<StartScreen> {
   bool _animationDone = false;
   bool _initDone = false;
   bool _initError = false;
+  DateTime? _initStartTime;
+
+  /// Maximum time we wait for initialization before forcing navigation.
+  static const Duration _maxInitDuration = Duration(seconds: 30);
 
   @override
   void initState() {
     super.initState();
+    _initStartTime = DateTime.now();
     _safeInitialize();
+    // Safety fallback: force navigation even if init hangs.
+    Future.delayed(_maxInitDuration, _forceNavigateIfStuck);
+  }
+
+  /// If we're still on the splash after [_maxInitDuration], force navigation
+  /// so the user is never permanently stuck.
+  void _forceNavigateIfStuck() {
+    if (!mounted) return;
+    if (!_initDone || !_animationDone) {
+      PandaLog.w('StartScreen',
+          'Safety fallback: forcing navigation after $_maxInitDuration (initDone=$_initDone, animDone=$_animationDone)');
+      _animationDone = true;
+      if (!_initDone) {
+        setState(() => _initError = true);
+      }
+      setState(() => _initDone = true);
+      _maybeNavigate();
+    }
   }
 
   Future<void> _safeInitialize() async {
+    PandaLog.i('StartScreen', '_safeInitialize started');
     try {
-      await _initializeApp();
+      // Global timeout: _initializeApp() must complete within 25s.
+      await _initializeApp().timeout(
+        const Duration(seconds: 25),
+        onTimeout: () {
+          PandaLog.w('StartScreen', '_initializeApp() GLOBAL TIMEOUT after 25s');
+        },
+      );
     } catch (e, stack) {
       PandaLog.e('StartScreen', 'Startup failed: $e', error: e);
       debugPrint("Startup error: $e\n$stack");
       if (!mounted) return;
       setState(() => _initError = true);
-      PandaNotifications.show(
-        context: context,
-        title: 'Erreur de Démarrage',
-        message: e.toString(),
-        isError: true,
-      );
+      try {
+        PandaNotifications.show(
+          context: context,
+          title: 'Erreur de Démarrage',
+          message: e.toString(),
+          isError: true,
+        );
+      } catch (_) {}
     }
+    final elapsed = _initStartTime != null
+        ? DateTime.now().difference(_initStartTime!)
+        : Duration.zero;
+    PandaLog.i('StartScreen', '_safeInitialize done in ${elapsed.inMilliseconds}ms (error=$_initError)');
     if (mounted) setState(() => _initDone = true);
     _maybeNavigate();
   }
@@ -108,6 +144,7 @@ class _StartScreenState extends State<StartScreen> {
 
   Future<void> _initializeApp() async {
     PandaLog.i('StartScreen', 'Initialization started');
+    final sw = Stopwatch()..start();
 
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       await ensureCopilotEnabledPrefInitialized();
@@ -115,7 +152,17 @@ class _StartScreenState extends State<StartScreen> {
       return;
     }
 
-    await NativeChannel.getExternalMediaDir();
+    try {
+      await NativeChannel.getExternalMediaDir().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          PandaLog.w('StartScreen', 'getExternalMediaDir timed out after 5s');
+          return null;
+        },
+      );
+    } catch (e) {
+      PandaLog.w('StartScreen', 'getExternalMediaDir failed: $e');
+    }
     final downdir = Directory(downloadsDir);
     final gitCore = "$binDir/git-core";
 
@@ -144,10 +191,28 @@ class _StartScreenState extends State<StartScreen> {
     await PandaLog.initFileLogging();
     await ensureCopilotEnabledPrefInitialized();
     await ensureCopilotSignedPrefInitialized();
-    if (mounted) await context.read<PackageCatalogCubit>().syncOnStartup();
+    if (mounted) {
+      try {
+        await context.read<PackageCatalogCubit>().syncOnStartup().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            PandaLog.w('StartScreen', 'PackageCatalogCubit.syncOnStartup timed out');
+          },
+        );
+      } catch (e) {
+        PandaLog.w('StartScreen', 'syncOnStartup failed: $e');
+      }
+    }
 
-    final String sharedPath = await NativeChannel.getLibraryPath();
-    PandaLog.i('StartScreen', 'sharedPath=$sharedPath');
+    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Getting shared path');
+    final String sharedPath = await NativeChannel.getLibraryPath().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () {
+        PandaLog.w('StartScreen', 'getLibraryPath timed out after 5s');
+        return '';
+      },
+    );
+    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] sharedPath=$sharedPath');
 
     Map<String, dynamic> loader(String name,
         {String? loaderBin, Map<String, String>? env}) => {
@@ -184,7 +249,7 @@ class _StartScreenState extends State<StartScreen> {
       {'src': '$binDir/clang++','dst': '$binDir/aarch64-linux-android-clang++'},
     ];
 
-    PandaLog.i('StartScreen', 'Creating ${symlinks.length} symlinks');
+    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Creating ${symlinks.length} symlinks');
     for (final link in symlinks) {
       final dst = link['dst'] as String;
       final src = link['src'] as String;
@@ -199,7 +264,10 @@ class _StartScreenState extends State<StartScreen> {
         await Process.run(
           "ln", ["-sf", src, dst],
           environment: link['env'] as Map<String, String>?,
-        );
+        ).timeout(const Duration(seconds: 2), onTimeout: () {
+          PandaLog.w('StartScreen', 'Symlink timed out: $src -> $dst');
+          return ProcessResult(0, -1, '', '');
+        });
       }
     }
 
@@ -217,23 +285,31 @@ class _StartScreenState extends State<StartScreen> {
         "$binDir/git",
         ["config", "--global", "--add", "safe.directory", "*"],
         environment: gitEnvs(sharedPath),
-      );
+      ).timeout(const Duration(seconds: 3));
     } catch (e) {
       PandaLog.w('StartScreen', 'Git global config failed (ignored): $e');
     }
 
     // Alpine native integration (idempotent setup & runtime files)
     final alpineDir = '$runtimesDir/alpine-linux';
+    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Alpine setup starting');
     try {
-      await AlpineSetup.ensureAlpineRootfs();
+      await AlpineSetup.ensureAlpineRootfs().timeout(
+        const Duration(seconds: 20),
+        onTimeout: () {
+          PandaLog.w('StartScreen', 'Alpine rootfs extraction timed out after 20s');
+          return false;
+        },
+      );
       await AlpineSetup.ensureAlpineRuntimeFiles();
-      PandaLog.i('StartScreen', 'Alpine Linux environment ready.');
+      PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Alpine Linux environment ready.');
     } catch (e) {
       PandaLog.e('StartScreen', 'Error setting up Alpine: $e');
     }
 
     if (Directory(alpineDir).existsSync()) {
       try {
+        PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Injecting Panda tools into Alpine');
         final localBinDir = Directory('$alpineDir/usr/local/bin');
         if (!localBinDir.existsSync()) {
           localBinDir.createSync(recursive: true);
@@ -297,9 +373,19 @@ esac
       }
     }
 
-    await PandaBridge.start();
+    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Starting PandaBridge (non-blocking)');
+    // PandaBridge.start() must NOT block startup — it initializes notification
+    // plugin and binds a server socket, both of which can hang on some devices.
+    PandaBridge.start().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        PandaLog.w('StartScreen', 'PandaBridge.start() timed out after 10s');
+      },
+    ).catchError((e) {
+      PandaLog.e('StartScreen', 'PandaBridge.start() failed: $e');
+    });
 
-    PandaLog.i('StartScreen', 'Initialization complete');
+    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Initialization complete');
   }
 
   Future<void> _refreshDartRuntimeSymlinks(String sharedPath) async {
