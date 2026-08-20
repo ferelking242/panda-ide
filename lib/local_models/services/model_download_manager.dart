@@ -20,7 +20,7 @@ import '../models/device_profile.dart';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const _kModelsDir = '$appDir/models';
+final _kModelsDir = '$appDir/models';
 const _kChunkSize = 8 * 1024 * 1024; // 8 MB
 const _kInstalledKey = 'panda_installed_models_v1';
 
