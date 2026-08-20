@@ -60,6 +60,7 @@ import '../local_models/ui/local_models_page.dart'
 import 'widgets.dart';
 import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
+import 'notifications.dart';
 import 'widgets/panda_theme_switch.dart';
 
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
@@ -169,6 +170,10 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Resizable sidebar ─────────────────────────────────────
   double _sidebarWidth = _kSidebarWidth;
+
+  // ── Full screen mode
+  bool _fullScreen = false;
+  double _bottomPanelHeight = 220;
 
   // ── Agent AI state ────────────────────────────────────────────────
   AgentPhase _agentPhase        = AgentPhase.idle;
