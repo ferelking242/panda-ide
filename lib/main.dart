@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:code_forge/code_forge.dart';
 import 'package:flutter/foundation.dart'
@@ -27,31 +28,8 @@ Future<void> main() async {
   final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   if (isAndroid) {
     await configureStorageRoots();
-    await importPublicProjectsToPrivate();
   }
 
-  // Initialise ExtensionRegistry root path so that installs have a real target.
-  if (isAndroid) {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      ExtensionRegistry.setRoot(dir.path);
-    } catch (_) {
-      // Non-fatal: fallback handled inside installPathFor.
-    }
-  }
-
-  // Extension Host — extraction JS + configuration + contributes statiques.
-  // Uniquement sur Android (nécessite le filesystem Android + node binary).
-  if (isAndroid) {
-    try {
-      final sharedPath = await NativeChannel.getLibraryPath();
-      await ExtensionHostSetup.init(sharedPath: sharedPath);
-    } catch (e) {
-      // Non-fatal : l'app fonctionne sans extensions si node n'est pas encore installé.
-      // ignore: avoid_print
-      print('[ExtensionHost] init skipped: $e');
-    }
-  }
   final recent = await getRecent();
   final appTheme = await getAppTheme();
   final codeForgeConfig = await getCodeForgeConfig();
@@ -71,6 +49,35 @@ Future<void> main() async {
       termuxInfo: termuxInfo,
     )
   );
+
+  // Never hold Android's native splash screen while copying legacy storage
+  // or extracting extension assets. Those operations are non-critical for
+  // the first frame and may be slow or blocked by a storage provider.
+  if (isAndroid) {
+    unawaited(_finishAndroidStartup());
+  }
+}
+
+Future<void> _finishAndroidStartup() async {
+  try {
+    await importPublicProjectsToPrivate().timeout(const Duration(seconds: 15));
+  } catch (e) {
+    // The migration can be retried by the explicit storage flow later.
+    // ignore: avoid_print
+    print('[StorageMigration] deferred: $e');
+  }
+
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    ExtensionRegistry.setRoot(dir.path);
+    final sharedPath = await NativeChannel.getLibraryPath();
+    await ExtensionHostSetup.init(sharedPath: sharedPath)
+        .timeout(const Duration(seconds: 20));
+  } catch (e) {
+    // Extensions are optional; the editor must remain usable without them.
+    // ignore: avoid_print
+    print('[ExtensionHost] deferred: $e');
+  }
 }
 
 // ── Palette ────────────────────────────────────────────────────────────────────
