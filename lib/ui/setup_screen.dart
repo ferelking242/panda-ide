@@ -83,6 +83,8 @@ class _SetupScreenState extends State<SetupScreen>
   void _addLog(String message) {
     final ts = DateTime.now().toString().substring(11, 19);
     setState(() => _logs.add('[$ts] $message'));
+    // Write to PandaLogger for persistence
+    PandaLog.i('SetupScreen', message);
     // Auto-scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_logScrollController.hasClients) {
@@ -197,24 +199,57 @@ class _SetupScreenState extends State<SetupScreen>
 
     _addLog('Extracting alpine-rootfs.tar.gz...');
     _addLog('This may take a moment on first install...');
+    _addLog('Archive size: checking...');
 
-    // Use AlpineSetup with progress logging
-    final result = await AlpineSetup.ensureAlpineRootfs(
-      force: !marker.existsSync(),
-    ).timeout(
-      const Duration(seconds: 60),
-      onTimeout: () {
-        _addLog('⚠️ Alpine extraction timed out after 60s');
-        return false;
-      },
-    );
+    // Check if the asset exists before extraction
+    try {
+      final asset = await rootBundle.load('assets/runtimes/alpine-rootfs.tar.gz');
+      final sizeMB = (asset.lengthInBytes / (1024 * 1024)).toStringAsFixed(1);
+      _addLog('Archive size: ${sizeMB}MB');
+    } catch (e) {
+      _addLog('⚠️ Failed to read rootfs asset: $e');
+      PandaLog.e('SetupScreen', 'Rootfs asset read failed: $e');
+    }
+
+    // Retry logic: try up to 2 times
+    bool result = false;
+    for (int attempt = 1; attempt <= 2; attempt++) {
+      if (attempt > 1) {
+        _addLog('Retry attempt $attempt/2...');
+      }
+
+      // Use AlpineSetup with progress logging
+      result = await AlpineSetup.ensureAlpineRootfs(
+        force: !marker.existsSync() && attempt == 1,
+      ).timeout(
+        const Duration(seconds: 90),
+        onTimeout: () {
+          _addLog('⚠️ Alpine extraction timed out after 90s');
+          PandaLog.e('SetupScreen', 'Alpine extraction timeout');
+          return false;
+        },
+      );
+
+      if (result) break;
+
+      _addLog('⚠️ Attempt $attempt failed: ${AlpineSetup.lastError}');
+      PandaLog.e('SetupScreen', 'Alpine extraction attempt $attempt failed: ${AlpineSetup.lastError}');
+
+      if (attempt < 2) {
+        _addLog('Waiting 2s before retry...');
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
 
     if (!result) {
-      _addLog('⚠️ Alpine extraction failed: ${AlpineSetup.lastError}');
+      _addLog('❌ Alpine extraction failed after all attempts');
+      _addLog('Last error: ${AlpineSetup.lastError}');
       _addLog('The terminal may not work correctly without Alpine');
+      _addLog('You can retry from the terminal or reinstall the app');
       // Don't throw — let setup continue, terminal will be degraded
     } else {
       _addLog('Alpine rootfs extracted and validated');
+      PandaLog.s('SetupScreen', 'Alpine rootfs extraction successful');
     }
   }
 

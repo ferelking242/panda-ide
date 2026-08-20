@@ -134,15 +134,28 @@ class AlpineSetup {
 
     PandaLog.i('AlpineSetup', 'Starting rootfs extraction (current=$current, force=$force)');
     lastError = '';
+    final extractionSw = Stopwatch()..start();
 
     try {
       // Step 1: Clean destination
       PandaLog.d('AlpineSetup', '[1/6] Cleaning destination: ${destination.path}');
       if (destination.existsSync()) {
-        await destination.delete(recursive: true);
-        PandaLog.d('AlpineSetup', '[1/6] Old rootfs deleted');
+        try {
+          await destination.delete(recursive: true);
+          PandaLog.d('AlpineSetup', '[1/6] Old rootfs deleted');
+        } catch (e) {
+          PandaLog.w('AlpineSetup', '[1/6] Failed to delete old rootfs: $e');
+          // Try to continue anyway
+        }
       }
       await destination.create(recursive: true);
+      // Log disk space
+      try {
+        final parentDir = destination.parent;
+        final stat = await parentDir.stat();
+        PandaLog.d('AlpineSetup', '[1/6] Parent dir exists: ${stat.type}, totalSize: ${stat.size}');
+      } catch (_) {}
+
 
       // Step 2: Extract archive from assets
       PandaLog.d('AlpineSetup', '[2/6] Loading alpine-rootfs.tar.gz from assets');
@@ -233,9 +246,9 @@ class AlpineSetup {
       await ensureAlpineRuntimeFiles();
       final ok = isRootfsComplete();
       if (ok) {
-        PandaLog.i('AlpineSetup', 'Alpine rootfs ready');
-      } else {
-        lastError = 'Rootfs validation failed after runtime file setup';
+      PandaLog.i('AlpineSetup', 'Alpine rootfs ready (total: ${extractionSw.elapsedMilliseconds}ms)');
+    } else {
+      lastError = 'Rootfs validation failed after runtime file setup';
         PandaLog.e('AlpineSetup', lastError);
       }
       return ok;

@@ -543,23 +543,48 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
     final rootfsDir = AlpineSetup.alpineDir;
+    final sw = Stopwatch()..start();
 
     if (!AlpineSetup.isRootfsComplete()) {
       runtime.terminal.write('\r\n\x1b[33m[Configuration du runtime Alpine Linux en cours...]\x1b[0m\r\n');
-      PandaLog.i('Terminal', 'Alpine rootfs incomplete, starting extraction');
-      final repaired = await AlpineSetup.ensureAlpineRootfs();
+      runtime.terminal.write('\x1b[90m  Ceci ne prend que quelques secondes...\x1b[0m\r\n');
+      PandaLog.i('Terminal', 'Alpine rootfs incomplete, starting extraction (attempt 1)');
+
+      bool repaired = false;
+      for (int attempt = 1; attempt <= 2; attempt++) {
+        if (attempt > 1) {
+          runtime.terminal.write('\x1b[33m  Nouvelle tentative ($attempt/2)...\x1b[0m\r\n');
+          PandaLog.i('Terminal', 'Alpine extraction retry attempt $attempt');
+        }
+        repaired = await AlpineSetup.ensureAlpineRootfs().timeout(
+          const Duration(seconds: 90),
+          onTimeout: () {
+            PandaLog.e('Terminal', 'Alpine extraction timed out after 90s on attempt $attempt');
+            return false;
+          },
+        );
+        if (repaired) break;
+      }
+
       if (!repaired) {
         final errDetail = AlpineSetup.lastError.isNotEmpty
             ? AlpineSetup.lastError
             : 'Erreur inconnue';
+        PandaLog.e('Terminal', 'Alpine extraction failed: $errDetail (elapsed: ${sw.elapsedMilliseconds}ms)');
         runtime.terminal.write('\r\n\x1b[31m[\u00c9chec Alpine Linux]\x1b[0m\r\n');
         runtime.terminal.write('\x1b[31m  $errDetail\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[33m  Logs: /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[36m  Essayez de relancer ou vider le cache Alpine\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[33m    /panda-ide/Logs/agent/\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[36m  Essayez:\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[36m    1. Fermer et relancer Panda IDE\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[36m    2. Aller dans Paramètres > Alpine > Réinitialiser\x1b[0m\r\n');
+        runtime.terminal.write('\x1b[36m    3. Réinstaller l'application\x1b[0m\r\n');
         _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
         return;
       }
-      PandaLog.i('Terminal', 'Alpine rootfs extraction succeeded');
+      PandaLog.i('Terminal', 'Alpine rootfs extraction succeeded in ${sw.elapsedMilliseconds}ms');
+      runtime.terminal.write('\x1b[32m  ✓ Alpine Linux configuré (${sw.elapsedMilliseconds}ms)\x1b[0m\r\n');
     } else {
       PandaLog.d('Terminal', 'Alpine rootfs already complete');
       await AlpineSetup.ensureAlpineRuntimeFiles();
@@ -568,10 +593,15 @@ class _SetupTerminalState extends State<SetupTerminal> {
     PandaLog.i('Terminal', 'Locating PRoot binary in rootfs=$rootfsDir');
     final prootBin = await AlpineSetup.locateProotBinary(rootfsDir);
     if (prootBin == null) {
-      PandaLog.e('Terminal', 'PRoot binary not found or incompatible');
+      PandaLog.e('Terminal', 'PRoot binary not found or incompatible (nativeLibDir checked)');
+      final nativeLib = await AlpineSetup.nativeLibDir();
+      PandaLog.e('Terminal', 'nativeLibDir=$nativeLib, prootExists=${File("$nativeLib/libproot.so").existsSync()}');
       runtime.terminal.write('\r\n\x1b[31m[PRoot introuvable ou incompatible]\x1b[0m\r\n');
       runtime.terminal.write('\x1b[31m  Le binaire libproot.so est introuvable ou ne fonctionne pas.\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m  Logs: /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m  Dossier libs natives: $nativeLib\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[36m  Essayez de réinstaller ou de vider le cache Alpine\x1b[0m\r\n');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
       return;
     }
@@ -664,7 +694,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       );
 
       runtime.pty = process;
-      PandaLog.i('Terminal', 'PRoot PTY started successfully, session=${runtime.sessionId}');
+      PandaLog.i('Terminal', 'PRoot PTY started successfully in ${sw.elapsedMilliseconds}ms, session=${runtime.sessionId}');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
 
       process.output
@@ -693,11 +723,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
       runtime.terminal.onResize = (w, h, pw, ph) {
         process.resize(h, w);
       };
-    } catch (e) {
-      PandaLog.e('Terminal', 'PRoot execution failed: $e');
+    } catch (e, stack) {
+      PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString(), stackTrace: stack);
       runtime.terminal.write('\r\n\x1b[31m[Erreur PRoot / Alpine]\x1b[0m\r\n');
       runtime.terminal.write('\x1b[31m  $e\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m  Logs: /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m    /panda-ide/Logs/crash/\x1b[0m\r\n');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
     }
   }
