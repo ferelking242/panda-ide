@@ -108,20 +108,26 @@ class _SetupScreenState extends State<SetupScreen>
     return done / _steps.length;
   }
 
+  /// Bulletproof logging - can never throw and kill setup.
   void _addLog(String message) {
-    final ts = DateTime.now().toString().substring(11, 19);
-    _logs.add('[$ts] $message');
-    if (mounted) setState(() {});
-    PandaLog.i('SetupScreen', message);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_logScrollController.hasClients) {
-        _logScrollController.animateTo(
-          _logScrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    try {
+      final ts = DateTime.now().toString().substring(11, 19);
+      _logs.add('[$ts] $message');
+      if (mounted) setState(() {});
+      print('[SetupScreen] $message');
+      try { PandaLog.i('SetupScreen', message); } catch (_) {}
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          if (_logScrollController.hasClients) {
+            _logScrollController.animateTo(
+              _logScrollController.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 100),
+              curve: Curves.easeOut,
+            );
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   void _setStepState(int index,
@@ -130,13 +136,15 @@ class _SetupScreenState extends State<SetupScreen>
       bool failed = false,
       String? error}) {
     if (index < 0 || index >= _steps.length) return;
-    setState(() {
-      _steps[index].active = active;
-      _steps[index].completed = completed;
-      _steps[index].failed = failed;
-      _steps[index].error = error;
-      if (active) _currentStepIndex = index;
-    });
+    try {
+      setState(() {
+        _steps[index].active = active;
+        _steps[index].completed = completed;
+        _steps[index].failed = failed;
+        _steps[index].error = error;
+        if (active) _currentStepIndex = index;
+      });
+    } catch (_) {}
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -144,22 +152,32 @@ class _SetupScreenState extends State<SetupScreen>
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> _startSetup() async {
-    print('[SetupScreen] _startSetup called, mounted=$mounted');
+    print('[SetupScreen] _startSetup called, mounted=$mounted, steps=\${_steps.length}');
     final sw = Stopwatch()..start();
-    _addLog(_isFirstInstall
-        ? 'Panda IDE first-install setup started'
-        : 'Panda IDE runtime initialisation started');
 
     try {
+      // ALL logging INSIDE try-catch so nothing can kill the setup
+      _addLog(_isFirstInstall
+          ? 'Panda IDE first-install setup started'
+          : 'Panda IDE runtime initialisation started');
+      _addLog('Steps: \${_steps.length}, isFirstInstall=\$_isFirstInstall');
+      _addLog('appDir=\$appDir, binDir=\$binDir');
+      print('[SetupScreen] entering step loop');
       int si = 0;
 
       // Step: Storage — log FIRST so user always sees progress
       _addLog('Step 1/${_steps.length}: Creating directories...');
       _setStepState(si, active: true);
-      await _createDirectories().timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => _addLog('⚠️ Directory creation timed out (continuing)'),
-      );
+      print('[SetupScreen] calling _createDirectories...');
+      try {
+        await _createDirectories().timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => _addLog('⚠️ Directory creation timed out (continuing)'),
+        );
+      } catch (e) {
+        _addLog('⚠️ _createDirectories error: \$e');
+      }
+      print('[SetupScreen] _createDirectories done');
       _setStepState(si, completed: true);
       _addLog('Directories ready (${sw.elapsedMilliseconds}ms)');
       si++;
@@ -167,10 +185,16 @@ class _SetupScreenState extends State<SetupScreen>
       // Step: Certificates
       _addLog('Step ${si + 1}/${_steps.length}: Installing certificates...');
       _setStepState(si, active: true);
-      await _installCertificates().timeout(
-        const Duration(seconds: 5),
-        onTimeout: () => _addLog('⚠️ Certificate install timed out'),
-      );
+      print('[SetupScreen] calling _installCertificates...');
+      try {
+        await _installCertificates().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => _addLog('⚠️ Certificate install timed out'),
+        );
+      } catch (e) {
+        _addLog('⚠️ Certificate install error: \$e');
+      }
+      print('[SetupScreen] _installCertificates done');
       _setStepState(si, completed: true);
       _addLog('Certificates installed (${sw.elapsedMilliseconds}ms)');
       si++;
@@ -179,7 +203,11 @@ class _SetupScreenState extends State<SetupScreen>
       if (_isFirstInstall) {
         _addLog('Step ${si + 1}/${_steps.length}: Setting up Alpine Linux...');
         _setStepState(si, active: true);
-        await _setupAlpine(sw);
+        try {
+          await _setupAlpine(sw);
+        } catch (e) {
+          _addLog('⚠️ Alpine setup error: \$e');
+        }
         _setStepState(si, completed: true);
         _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
         si++;
@@ -188,10 +216,14 @@ class _SetupScreenState extends State<SetupScreen>
       // Step: Runtime (symlinks + runtime files)
       _addLog('Step ${si + 1}/${_steps.length}: Configuring runtime...');
       _setStepState(si, active: true);
-      await _setupRuntime(sw).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () => _addLog('⚠️ Runtime setup timed out (continuing)'),
-      );
+      try {
+        await _setupRuntime(sw).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => _addLog('⚠️ Runtime setup timed out (continuing)'),
+        );
+      } catch (e) {
+        _addLog('⚠️ Runtime setup error: \$e');
+      }
       _setStepState(si, completed: true);
       _addLog('Runtime configured (${sw.elapsedMilliseconds}ms)');
       si++;
@@ -234,18 +266,19 @@ class _SetupScreenState extends State<SetupScreen>
     for (final p in dirs) {
       try {
         final d = Directory(p);
-        if (!d.existsSync()) {
+        if (!await d.exists()) {
           await d.create(recursive: true).timeout(const Duration(seconds: 5));
         }
+        print('[SetupScreen] dir OK: $p');
       } catch (e) {
-        PandaLog.w('SetupScreen', 'Dir create failed for $p: $e');
+        print('[SetupScreen] Dir create failed for $p: $e');
       }
     }
     _addLog('Created: bin, lib, Home, git-core, Templates, Logs');
   }
 
   Future<void> _installCertificates() async {
-    if (!File('$certDir/cacert.pem').existsSync()) {
+    if (!await File('$certDir/cacert.pem').exists()) {
       Directory(certDir).createSync(recursive: true);
       final certBytes = await rootBundle.load('assets/certificates/cacert.pem');
       File('$certDir/cacert.pem').writeAsBytesSync(certBytes.buffer.asUint8List());
@@ -259,7 +292,7 @@ class _SetupScreenState extends State<SetupScreen>
     final alpineDir = Directory('${runtimesDir}/alpine-linux');
     final marker = File('${alpineDir.path}/.panda-rootfs-version');
 
-    if (AlpineSetup.isRootfsComplete() && marker.existsSync()) {
+    if (AlpineSetup.isRootfsComplete() && await marker.exists()) {
       _addLog('Alpine rootfs already extracted, skipping');
       return;
     }
@@ -283,7 +316,7 @@ class _SetupScreenState extends State<SetupScreen>
       if (attempt > 1) _addLog('Retry attempt $attempt/2...');
 
       result = await AlpineSetup.ensureAlpineRootfs(
-        force: !marker.existsSync() && attempt == 1,
+        force: !await marker.exists() && attempt == 1,
       ).timeout(
         const Duration(seconds: 90),
         onTimeout: () {
@@ -389,13 +422,14 @@ class _SetupScreenState extends State<SetupScreen>
     for (final link in symlinks) {
       final dst = link['dst'] as String;
       final src = link['src'] as String;
-      final linkFile = Link(dst);
       bool needsCreation = true;
-      if (linkFile.existsSync()) {
-        try {
-          if (linkFile.targetSync() == src) needsCreation = false;
-        } catch (_) {}
-      }
+      try {
+        final linkType = await FileSystemEntity.type(dst, followLinks: false);
+        if (linkType == FileSystemEntityType.link) {
+          final target = await Link(dst).target();
+          if (target == src) needsCreation = false;
+        }
+      } catch (_) {}
       if (needsCreation) {
         try {
           await Process.run(
@@ -414,7 +448,7 @@ class _SetupScreenState extends State<SetupScreen>
 
     // ── Alpine runtime files ──
     final alpineDir = '${runtimesDir}/alpine-linux';
-    if (Directory(alpineDir).existsSync()) {
+    if (await Directory(alpineDir).exists()) {
       try {
         await AlpineSetup.ensureAlpineRuntimeFiles();
         _addLog('Alpine runtime files ready');
@@ -425,7 +459,7 @@ class _SetupScreenState extends State<SetupScreen>
       // Inject Panda tools into Alpine local bin
       _addLog('Injecting Panda tools into Alpine...');
       final localBinDir = Directory('$alpineDir/usr/local/bin');
-      if (!localBinDir.existsSync()) localBinDir.createSync(recursive: true);
+      if (!await localBinDir.exists()) localBinDir.createSync(recursive: true);
 
       // Panda CLI bridge
       final pandaCli = File('${localBinDir.path}/panda');
@@ -441,13 +475,13 @@ class _SetupScreenState extends State<SetupScreen>
       for (final bin in nativeBinaries) {
         final shim = File('${localBinDir.path}/$bin');
         final native = File('$binDir/$bin');
-        if (native.existsSync()) {
-          if (!shim.existsSync()) {
+        if (await native.exists()) {
+          if (!await shim.exists()) {
             shim.writeAsStringSync('#!/bin/sh\nexec $binDir/$bin "\$@"\n');
             Process.runSync('chmod', ['+x', shim.path]);
             shims++;
           }
-        } else if (shim.existsSync()) {
+        } else if (await shim.exists()) {
           await shim.delete();
         }
       }
@@ -946,7 +980,7 @@ esac
                   : () async {
                       try {
                         final logDir = Directory(pandaLogsDir);
-                        if (!logDir.existsSync()) await logDir.create(recursive: true);
+                        if (!await logDir.exists()) await logDir.create(recursive: true);
                         final logFile = File('${logDir.path}/setup-${DateTime.now().millisecondsSinceEpoch}.log');
                         await logFile.writeAsString(_logs.join('\n'));
                         if (mounted) {
