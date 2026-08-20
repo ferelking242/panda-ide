@@ -249,7 +249,7 @@ class _SetupScreenState extends State<SetupScreen>
       // Don't throw — let setup continue, terminal will be degraded
     } else {
       _addLog('Alpine rootfs extracted and validated');
-      PandaLog.s('SetupScreen', 'Alpine rootfs extraction successful');
+      PandaLog.i('SetupScreen', 'Alpine rootfs extraction successful');
     }
   }
 

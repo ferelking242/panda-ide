@@ -47,6 +47,8 @@ android {
 
     buildTypes {
         release {
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             } else {
@@ -66,7 +68,6 @@ android {
                 "lib/arm64-v8a/libc++_shared.so",
             )
             excludes += setOf("**/armeabi-v7a/**", "**/x86_64/**")
-            keepDebugSymbols += "**/*.so"
         }
     }
 
