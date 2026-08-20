@@ -58,11 +58,7 @@ class _LogsExplorerPageState extends State<LogsExplorerPage>
   }
 
   void _loadLogs() {
-    setState(() {
-      _displayEvents.clear();
-      _displayEvents.addAll(PandaLogger.recentEvents);
-      _applyFilters();
-    });
+    _applyFilters();
   }
 
   void _applyFilters() {
