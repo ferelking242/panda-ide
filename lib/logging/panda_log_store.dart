@@ -33,7 +33,7 @@ class PandaLogConfig {
     this.maxFileSizeBytes = 10 * 1024 * 1024,
     this.retentionDays = 30,
     this.crashRetentionDays = 90,
-    this.fileMinLevel = PandaLogLevel.verbose,
+    this.fileMinLevel = PandaLogLevel.debug,
     this.flushInterval = const Duration(seconds: 3),
     this.maxBufferSize = 200,
   });

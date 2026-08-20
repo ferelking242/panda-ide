@@ -226,7 +226,7 @@ abstract final class PandaLogger {
     int? line,
     int? column,
   }) {
-    i(PandaLogCategory.file, '$operation: $filePath',
+    _log(PandaLogLevel.info, PandaLogCategory.file, '$operation: $filePath',
         filePath: filePath, line: line, column: column);
   }
 
