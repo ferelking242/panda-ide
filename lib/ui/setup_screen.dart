@@ -80,7 +80,10 @@ class _SetupScreenState extends State<SetupScreen>
 
     _isFirstInstall = !AlpineSetup.isRootfsComplete();
     _initSteps();
-    _startSetup();
+    // Defer setup to after first frame so setState triggers rebuilds
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _startSetup();
+    });
   }
 
   void _initSteps() {
@@ -107,7 +110,8 @@ class _SetupScreenState extends State<SetupScreen>
 
   void _addLog(String message) {
     final ts = DateTime.now().toString().substring(11, 19);
-    setState(() => _logs.add('[$ts] $message'));
+    _logs.add('[$ts] $message');
+    if (mounted) setState(() {});
     PandaLog.i('SetupScreen', message);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_logScrollController.hasClients) {
@@ -140,6 +144,7 @@ class _SetupScreenState extends State<SetupScreen>
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> _startSetup() async {
+    print('[SetupScreen] _startSetup called, mounted=$mounted');
     final sw = Stopwatch()..start();
     _addLog(_isFirstInstall
         ? 'Panda IDE first-install setup started'
