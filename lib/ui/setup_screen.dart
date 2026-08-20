@@ -319,8 +319,8 @@ class _SetupScreenState extends State<SetupScreen>
     }
 
     // ── Git global config ──
+    final gitCore = '$binDir/git-core';
     try {
-      final gitCore = '$binDir/git-core';
       for (final path in [binDir, libDir, gitCore, homeDir]) {
         await Directory(path).create(recursive: true);
       }
