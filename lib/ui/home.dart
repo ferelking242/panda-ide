@@ -6915,49 +6915,22 @@ class _SelectTypeState extends State<SelectType>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Chronological Step-by-Step Boxes (Each action gets its own box!)
-              if (blocks.isNotEmpty)
-                ...blocks.map((b) {
-                  final type = b['type'] as String? ?? '';
-                  if (type == 'thinking') {
-                    final thinkText = b['thinking'] as String? ?? '';
-                    if (thinkText.trim().isEmpty) return const SizedBox.shrink();
-                    return _ReplitStepBar(
-                      think: thinkText,
-                      calls: const [],
-                      blocks: const [],
-                      isStreaming: false,
-                      toolName: '',
-                      isDark: isDark,
-                      fg: fg,
-                      muted: muted,
-                    );
-                  } else if (type == 'toolCall') {
-                    final status = b['status'] as String? ?? 'done';
-                    if (status == 'pending_approval' || status == 'pending') {
-                      return const SizedBox.shrink(); // Handled separately below
-                    }
-                    return _ReplitStepBar(
-                      think: '',
-                      calls: [b],
-                      blocks: const [],
-                      isStreaming: status == 'running',
-                      toolName: b['name'] as String? ?? '',
-                      isDark: isDark,
-                      fg: fg,
-                      muted: muted,
-                    );
-                  } else {
-                    return const SizedBox.shrink(); // Markdown text handled below
-                  }
-                })
-              else if (finalThinking.isNotEmpty || completedTools.isNotEmpty || (i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.thinking))
-                _ReplitStepBar(
-                  think: finalThinking,
-                  calls: completedTools,
-                  blocks: const [],
-                  isStreaming: i == _agentMessages.length - 1 && _agentGenerating && (_agentPhase == AgentPhase.thinking || _agentPhase == AgentPhase.toolRunning),
-                  toolName: i == _agentMessages.length - 1 && _agentGenerating ? _agentCurrentTool : '',
+              // 1. Grouped Agent Steps: Thinking (top) → Tool Calls (bottom) → Response
+              // All thinking blocks combined into one collapsible "Réflexion" box
+              if (finalThinking.isNotEmpty || (i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.thinking))
+                _ThinkingBlock(
+                  thinking: finalThinking.isEmpty ? 'Analyse en cours\u2026' : finalThinking,
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                ),
+
+              // All completed tool calls grouped in a single collapsible chevron box
+              if (completedTools.isNotEmpty)
+                _AgentToolCallsGroup(
+                  toolCalls: completedTools,
+                  isStreaming: i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.toolRunning,
+                  currentTool: i == _agentMessages.length - 1 && _agentGenerating ? _agentCurrentTool : '',
                   isDark: isDark,
                   fg: fg,
                   muted: muted,
@@ -11249,6 +11222,178 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                           muted: widget.muted,
                         )),
                   ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Agent Tool Calls Group — collapsible chevron box grouping all tool calls
+/// Shows a compact header with tool count and chevron to expand/collapse
+class _AgentToolCallsGroup extends StatefulWidget {
+  final List<Map<String, dynamic>> toolCalls;
+  final bool isStreaming;
+  final String currentTool;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  const _AgentToolCallsGroup({
+    required this.toolCalls,
+    required this.isStreaming,
+    required this.currentTool,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  State<_AgentToolCallsGroup> createState() => _AgentToolCallsGroupState();
+}
+
+class _AgentToolCallsGroupState extends State<_AgentToolCallsGroup> {
+  bool _expanded = false;
+
+  static IconData _iconForTool(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('read') || lower.contains('list') || lower.contains('file')) return Broken.document_text;
+    if (lower.contains('write') || lower.contains('edit') || lower.contains('create')) return Broken.edit;
+    if (lower.contains('shell') || lower.contains('command') || lower.contains('terminal') || lower.contains('exec')) return Broken.command_square;
+    if (lower.contains('web') || lower.contains('search') || lower.contains('link') || lower.contains('http')) return Broken.global;
+    if (lower.contains('git') || lower.contains('commit') || lower.contains('push')) return Broken.code_circle;
+    if (lower.contains('str_replace') || lower.contains('replace')) return Broken.edit;
+    if (lower.contains('grep') || lower.contains('glob') || lower.contains('search')) return Broken.search_normal;
+    return Broken.code_1;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = widget.isDark;
+    final bg = isDark ? const Color(0xff1e1e24) : const Color(0xfff4f4f8);
+    final border = isDark ? const Color(0xff333342) : const Color(0xffe0e0ea);
+
+    final count = widget.toolCalls.length;
+    final runningCount = widget.toolCalls.where((t) => t['status'] == 'running').length;
+    final doneCount = widget.toolCalls.where((t) => t['status'] == 'done').length;
+    final errorCount = widget.toolCalls.where((t) => (t['result']?.toString() ?? '').startsWith('Error')).length;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Compact Header with chevron ──
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => setState(() => _expanded = !_expanded),
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                child: Row(
+                  children: [
+                    Icon(Broken.command_square, size: 14, color: widget.fg.withValues(alpha: 0.8)),
+                    const SizedBox(width: 6),
+                    Text(
+                      _expanded ? 'Outils ex\u00e9cut\u00e9s' : '$count outil${count > 1 ? 's' : ''}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: widget.fg.withValues(alpha: 0.9),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Compact inline pill chips for each tool
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: widget.toolCalls.map((call) {
+                            final name = call['name'] as String? ?? '';
+                            final icon = _iconForTool(name);
+                            final status = call['status'] as String? ?? 'done';
+                            final isRunning = status == 'running';
+                            final isError = (call['result']?.toString() ?? '').startsWith('Error');
+                            Color chipBg = isDark ? const Color(0xff2a2a35) : const Color(0xffe8e8f0);
+                            if (isRunning) chipBg = widget.fg.withValues(alpha: 0.12);
+                            if (isError) chipBg = const Color(0xff3a1a1a);
+
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 4),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: chipBg,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isRunning)
+                                      SizedBox(
+                                        width: 8, height: 8,
+                                        child: CircularProgressIndicator(strokeWidth: 1.5, color: widget.fg.withValues(alpha: 0.7)),
+                                      )
+                                    else
+                                      Icon(icon, size: 10, color: widget.fg.withValues(alpha: 0.7)),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      name.length > 12 ? '${name.substring(0, 12)}\u2026' : name,
+                                      style: TextStyle(fontSize: 9, fontFamily: 'monospace', color: widget.fg.withValues(alpha: 0.8)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+
+                    if (widget.isStreaming) ...[
+                      const SizedBox(width: 4),
+                      SizedBox(
+                        width: 10, height: 10,
+                        child: CircularProgressIndicator(strokeWidth: 1.5, color: widget.fg),
+                      ),
+                    ],
+                    const SizedBox(width: 6),
+                    Icon(
+                      _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                      size: 12,
+                      color: widget.muted,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Expanded content: detailed tool call blocks ──
+          if (_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Divider(height: 8),
+                  ...widget.toolCalls.map((call) => _ToolCallBlock(
+                    toolName: call['name'] as String? ?? call['toolName'] as String? ?? '',
+                    args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
+                    result: call['result'] as String?,
+                    status: call['status'] as String? ?? 'done',
+                    isDark: isDark,
+                    fg: widget.fg,
+                    muted: widget.muted,
+                  )),
                 ],
               ),
             ),
