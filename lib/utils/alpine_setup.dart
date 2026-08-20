@@ -147,10 +147,17 @@ class AlpineSetup {
       }
       await archive.delete();
 
+      // Validate the extracted tree only after the version marker exists:
+      // isRootfsComplete() intentionally includes that marker in its
+      // readiness check, so checking before writing it always failed on the
+      // first terminal launch.
+      await marker.writeAsString(rootfsVersion, flush: true);
       if (!isRootfsComplete()) {
+        try {
+          await marker.delete();
+        } catch (_) {}
         throw StateError('rootfs Alpine invalide après extraction');
       }
-      await marker.writeAsString(rootfsVersion, flush: true);
       await ensureAlpineRuntimeFiles();
       return isRootfsComplete();
     } catch (e) {
