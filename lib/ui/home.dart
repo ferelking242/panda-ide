@@ -59,6 +59,7 @@ import '../local_models/ui/local_models_page.dart'
     if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
 import 'panda_ai_ui/components.dart';
+import 'notifications.dart';
 import 'widgets/panda_theme_switch.dart';
 
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
@@ -1958,9 +1959,9 @@ class _SelectTypeState extends State<SelectType>
         ),
       );
     }
+  }
 
     // ── Sidebar panel content ─────────────────────────────────────────────────
-      // ── Sidebar panel content ─────────────────────────────────────────────────
   Widget _buildSidebarPanel(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
     final bg = isDark ? _kSidebarBgDark : _kSidebarBgLight;
@@ -3683,10 +3684,14 @@ class _SelectTypeState extends State<SelectType>
             final selFg  = isDark ? Colors.grey[200]! : Colors.grey[900]!;
             final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
-            return Column(children: [
+            return Container(
+              height: _bottomPanelHeight,
+              decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: border))),
+              child: Column(children: [
                 // Resize handle at top of bottom panel
                 GestureDetector(
-                  onVerticalUpdate: (details) {
+                  onVerticalDragUpdate: (details) {
                     setState(() {
                       _bottomPanelHeight = (_bottomPanelHeight - details.delta.dy).clamp(100.0, 600.0);
                     });
@@ -4511,19 +4516,8 @@ class _SelectTypeState extends State<SelectType>
                       onRemove: () => setState(() => _agentAttachments.removeAt(idx)),
                     );
                   }).toList(),
-                  recommendationCards: suggestions.map((s) {
-                    return RecommendationCard(
-                      promptText: s.$1,
-                      icon: Broken.lamp_charge,
-                      onTap: () {
-                        setState(() {
-                          _agentInputCtrl.text = s.$2;
-                          _agentInputCtrl.selection = TextSelection.fromPosition(
-                              TextPosition(offset: _agentInputCtrl.text.length));
-                        });
-                      },
-                    );
-                  }).toList(),
+
+                  recommendationCards: const [],
                   footer: Row(
                     children: [
                       // Attachment button
@@ -6643,41 +6637,7 @@ class _SelectTypeState extends State<SelectType>
           ]),
         ),
         const SizedBox(height: 20),
-
-        // Suggestion chips
-        Text('SUGGESTIONS',
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 1.1,
-                color: muted)),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: suggestions.map((s) => GestureDetector(
-            onTap: () {
-              _agentInputCtrl.text = s;
-              _agentSend();
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xff2d2d2d)
-                    : const Color(0xff1e293b),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: isDark
-                        ? const Color(0xff3a3a3a)
-                        : const Color(0xffdddddd)),
-              ),
-              child: Text(s,
-                  style: TextStyle(fontSize: 12, color: fg)),
-            ),
-          )).toList(),
-        ),
-      ],
+],
     );
   }
 
