@@ -477,69 +477,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _pathBinaries = binaries.toList()..sort();
   }
 
-  Future<void> _ensureBashRc() async {
-    try {
-      final alpineRoot = '$runtimesDir/alpine-linux/root';
-      if (!Directory(alpineRoot).existsSync()) {
-        Directory(alpineRoot).createSync(recursive: true);
-      }
-      final bashrc = File('$alpineRoot/.profile');
-
-      // ── Feature 2 : prompt oh-my-zsh style ──────────────────────────────
-      const gitBranchFn = r'''# Git branch helper
-__git_branch() {
-  local branch
-  branch=$(git symbolic-ref --short HEAD 2>/dev/null) || return
-  echo " \033[38;5;214m🌿 ${branch}\033[0m"
-}
-pkg() {
-  apk "$@"
-}
-apt() {
-  apk "$@"
-}
-winget() {
-  echo -e "\033[38;5;208m[Panda Linux]\033[0m 'winget' est pour Windows. Utilisez \033[1m'apk add <paquet>'\033[0m."
-}''';
-      const richPS1 = r'''# Oh My Zsh / Starship Flash Prompt
-export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(__git_branch) \[\033[38;5;118m\]➜\[\033[0m\] ' ''';
-      final aliases = [
-        'alias ls="ls --color=auto"',
-        'alias ll="ls -la --color=auto"',
-        'alias la="ls -la"',
-        'alias grep="grep --color=auto"',
-        'alias cp="cp -i"',
-        'alias mv="mv -i"',
-        'alias ..="cd .."',
-        'alias ...="cd ../.."',
-      ];
-
-      final fullContent = '${gitBranchFn.trimRight()}\n${richPS1.trimRight()}\n${aliases.join('\n')}\n';
-
-      if (!await bashrc.exists()) {
-        await bashrc.create(recursive: true);
-        await bashrc.writeAsString(fullContent, flush: true);
-        return;
-      }
-
-      final existing = await bashrc.readAsString();
-      final needsGitFn  = !existing.contains('__git_branch');
-      final needsPS1    = !existing.contains('__git_branch') || !existing.contains("PS1=");
-      final missingAliases = aliases.where((a) => !existing.contains(a)).toList();
-
-      if (needsGitFn || needsPS1 || missingAliases.isNotEmpty) {
-        final extra = StringBuffer();
-        if (needsGitFn) extra.write('\n$gitBranchFn');
-        if (needsPS1)   extra.write('\n$richPS1');
-        if (missingAliases.isNotEmpty) extra.write('\n${missingAliases.join('\n')}\n');
-        await bashrc.writeAsString(
-          '${existing.trimRight()}\n${extra.toString().trimLeft()}\n',
-          flush: true,
-        );
-      }
-    } catch (_) {}
-  }
-
   // ── Feature 1: show exit code banner ────────────────────────────────────
   void _showExitBanner(String sessionId, int code) {
     if (!mounted) return;
@@ -619,7 +556,20 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
     if (loaderPath == null) {
       runtime.terminal.write('\r\n\x1b[33m[Avertissement: loader PRoot (libproot-loader.so) absent du dossier de libs natives.]\x1b[0m\r\n');
     }
-    await _ensureBashRc();
+
+    // Le dossier de projet vit souvent sur le stockage public Android
+    // (/storage/emulated/0/...). Sans la permission « acces a tous les
+    // fichiers », il existe mais reste illisible : `ls` renvoie alors
+    // "Permission denied". On teste la lisibilite reelle avant de choisir
+    // le repertoire de travail de la session.
+    final projectReadable = AlpineSetup.isDirAccessible(widget.projectDir);
+    if (!projectReadable) {
+      runtime.terminal.write(
+        '\r\n\x1b[33m[Le dossier du projet n\'est pas lisible (permission Android refusee).\r\n'
+        ' Autorisez "Acces a tous les fichiers" pour Panda IDE, puis relancez le terminal.\r\n'
+        ' Session demarree dans /root en attendant.]\x1b[0m\r\n',
+      );
+    }
 
     try {
       final prootArgs = <String>[
@@ -660,9 +610,16 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
         addConditionalBind(tempDir, '/tmp');
       }
       addConditionalBind(widget.projectDir);
+      // Point de montage stable du projet : evite les chemins Android
+      // exotiques et donne un cwd previsible dans l'invite.
+      if (projectReadable) {
+        addConditionalBind(widget.projectDir, AlpineSetup.workspaceMount);
+      }
+
+      final guestCwd = projectReadable ? AlpineSetup.workspaceMount : '/root';
 
       prootArgs.addAll([
-        '-w', widget.projectDir,
+        '-w', guestCwd,
         '/bin/sh',
         '-l',
         ...args,
@@ -676,7 +633,7 @@ export PS1='\['\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(_
       final process = Pty.start(
         prootBin,
         arguments: prootArgs,
-        workingDirectory: widget.projectDir,
+        workingDirectory: projectReadable ? widget.projectDir : appDir,
         environment: sessionEnv,
         rows: runtime.terminal.viewHeight,
         columns: runtime.terminal.viewWidth,

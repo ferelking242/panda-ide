@@ -375,114 +375,200 @@ class AlpineSetup {
     }
   }
 
+  /// Point de montage stable du projet courant dans l'invité Alpine.
+  static const String workspaceMount = '/root/workspace';
+
+  /// Version du profil shell généré. Incrémenter force la réécriture.
+  static const String profileVersion = 'panda-profile v2';
+
+  /// Vérifie qu'un dossier hôte est réellement lisible depuis le process Dart.
+  /// Sur Android, un dossier du stockage public peut exister sans être
+  /// listable faute de permission « accès à tous les fichiers ».
+  static bool isDirAccessible(String path) {
+    if (path.isEmpty) return false;
+    try {
+      final dir = Directory(path);
+      if (!dir.existsSync()) return false;
+      dir.listSync(followLinks: false).take(1).toList();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Écriture protégée : une erreur sur un fichier n'empêche jamais
+  /// l'écriture des suivants.
+  static void _writeFileSafe(
+    String path,
+    String content, {
+    bool overwrite = true,
+  }) {
+    try {
+      final file = File(path);
+      if (!overwrite && file.existsSync() && file.lengthSync() > 0) return;
+      file.parent.createSync(recursive: true);
+      file.writeAsStringSync(content, flush: true);
+    } catch (e) {
+      PandaLog.w('AlpineSetup', 'Écriture impossible ($path): $e');
+    }
+  }
+
+  /// Contenu du profil shell partagé (/etc/profile.d/panda.sh, /root/.profile).
+  static String pandaProfileScript() {
+    final buffer = StringBuffer();
+    buffer.writeln('# $profileVersion - genere par Panda IDE, ne pas editer.');
+    buffer.writeln(r"# Le LD_LIBRARY_PATH d'Android ne doit pas fuiter ici.");
+    buffer.writeln(r'unset LD_LIBRARY_PATH');
+    buffer.writeln(
+        r'export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"');
+    buffer.writeln(r'export HOME="${HOME:-/root}"');
+    buffer.writeln(r'export TERM="${TERM:-xterm-256color}"');
+    buffer.writeln();
+    buffer.writeln(r'# Garde-fou : si le repertoire courant est illisible');
+    buffer.writeln(r'# (permission Android refusee sur le stockage public),');
+    buffer.writeln(r'# on retombe sur un dossier accessible.');
+    buffer.writeln(r'if ! ls -A . >/dev/null 2>&1; then');
+    buffer.writeln(
+        r'  echo "[Panda] Dossier de projet illisible (permission Android refusee)."');
+    buffer.writeln(
+        r'  echo "[Panda] Autorisez l acces a tous les fichiers dans les parametres"');
+    buffer.writeln(
+        r'  echo "[Panda] de l application, puis relancez le terminal."');
+    buffer.writeln('  cd $workspaceMount 2>/dev/null || cd "\$HOME" '
+        '2>/dev/null || cd /');
+    buffer.writeln(r'fi');
+    buffer.writeln();
+    buffer.writeln(r'__git_branch() {');
+    buffer.writeln(r'  branch=$(git symbolic-ref --short HEAD 2>/dev/null) || return');
+    buffer.writeln(r'  printf " (%s)" "$branch"');
+    buffer.writeln(r'}');
+    buffer.writeln();
+    buffer.writeln(r'# Alpine utilise apk : on mappe les commandes habituelles.');
+    buffer.writeln(r'pkg() { apk "$@"; }');
+    buffer.writeln(r'apt() { apk "$@"; }');
+    buffer.writeln(r'winget() {');
+    buffer.writeln(
+        r'  echo "[Panda Linux] winget est un outil Windows. Utilisez: apk add <paquet>"');
+    buffer.writeln(r'}');
+    buffer.writeln();
+    for (final alias in const [
+      "alias ls='ls --color=auto'",
+      "alias ll='ls -la --color=auto'",
+      "alias la='ls -la'",
+      "alias l='ls -CF'",
+      "alias dir='ls -la'",
+      "alias cls='clear'",
+      "alias md='mkdir -p'",
+      "alias grep='grep --color=auto'",
+      "alias ..='cd ..'",
+      "alias ...='cd ../..'",
+      "alias apt-get='apk'",
+    ]) {
+      buffer.writeln(alias);
+    }
+    buffer.writeln();
+    buffer.writeln(r"PS1='panda:$PWD$(__git_branch) # '");
+    buffer.writeln(r'export PS1');
+    return buffer.toString();
+  }
+
+  /// Le profil existant est-il celui de la version courante ?
+  static bool _profileIsCurrent(String path) {
+    try {
+      final file = File(path);
+      if (!file.existsSync()) return false;
+      return file.readAsStringSync().contains(profileVersion);
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// (Ré)écrit les fichiers de configuration essentiels du rootfs.
-  /// Idempotent, exécuté à chaque lancement.
+  /// Idempotent, exécuté à chaque lancement. Chaque écriture est isolée :
+  /// un échec sur un fichier n'empêche pas les autres.
   static Future<void> ensureAlpineRuntimeFiles() async {
     final dir = alpineDir;
     if (!Directory(dir).existsSync()) return;
 
-    try {
-      // 1. etc/resolv.conf
-      final resolv = File('$dir/etc/resolv.conf');
-      resolv.parent.createSync(recursive: true);
-      String dnsServers =
-          'nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 1.0.0.1\n';
+    // 0. Dossiers indispensables (dont le point de montage du projet).
+    for (final sub in const [
+      'etc',
+      'etc/apk',
+      'etc/profile.d',
+      'root',
+      'root/workspace',
+      'tmp',
+      'var/tmp',
+    ]) {
       try {
-        final dns1 =
-            Process.runSync('getprop', ['net.dns1']).stdout.toString().trim();
-        final dns2 =
-            Process.runSync('getprop', ['net.dns2']).stdout.toString().trim();
-        if (dns1.isNotEmpty && dns1 != 'null') {
-          dnsServers = 'nameserver $dns1\n';
-          if (dns2.isNotEmpty && dns2 != 'null') {
-            dnsServers += 'nameserver $dns2\n';
-          }
-          dnsServers += 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n';
-        }
+        Directory('$dir/$sub').createSync(recursive: true);
       } catch (_) {}
-      resolv.writeAsStringSync(dnsServers, flush: true);
+    }
 
-      // 2. etc/hosts
-      final hosts = File('$dir/etc/hosts');
-      if (!hosts.existsSync() || hosts.lengthSync() == 0) {
-        hosts.writeAsStringSync(
-          '127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n',
-          flush: true,
-        );
+    // 1. etc/resolv.conf (DNS de l'appareil, sinon resolveurs publics)
+    String dnsServers =
+        'nameserver 1.1.1.1\nnameserver 8.8.8.8\nnameserver 1.0.0.1\n';
+    try {
+      final dns1 =
+          Process.runSync('getprop', ['net.dns1']).stdout.toString().trim();
+      final dns2 =
+          Process.runSync('getprop', ['net.dns2']).stdout.toString().trim();
+      if (dns1.isNotEmpty && dns1 != 'null') {
+        dnsServers = 'nameserver $dns1\n';
+        if (dns2.isNotEmpty && dns2 != 'null') {
+          dnsServers += 'nameserver $dns2\n';
+        }
+        dnsServers += 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n';
       }
+    } catch (_) {}
+    _writeFileSafe('$dir/etc/resolv.conf', dnsServers);
 
-      // 3. etc/passwd / etc/group / etc/shells
-      final passwd = File('$dir/etc/passwd');
-      if (!passwd.existsSync() || passwd.lengthSync() == 0) {
-        passwd.writeAsStringSync(
-          'root:x:0:0:root:/root:/bin/sh\n'
-          'nobody:x:65534:65534:nobody:/:/sbin/nologin\n',
-          flush: true,
-        );
-      }
-      final group = File('$dir/etc/group');
-      if (!group.existsSync() || group.lengthSync() == 0) {
-        group.writeAsStringSync('root:x:0:root\nnobody:x:65534:\n', flush: true);
-      }
-      final shells = File('$dir/etc/shells');
-      if (!shells.existsSync() || shells.lengthSync() == 0) {
-        shells.writeAsStringSync('/bin/sh\n/bin/ash\n/bin/bash\n', flush: true);
-      }
+    // 2. etc/hosts
+    _writeFileSafe(
+      '$dir/etc/hosts',
+      '127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n',
+      overwrite: false,
+    );
 
-      // 4. etc/apk/repositories (apk add fonctionnel)
-      final repos = File('$dir/etc/apk/repositories');
-      if (!repos.existsSync() || repos.lengthSync() == 0) {
-        repos.parent.createSync(recursive: true);
-        repos.writeAsStringSync(
-          'https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\n'
-          'https://dl-cdn.alpinelinux.org/alpine/latest-stable/community\n',
-          flush: true,
-        );
-      }
+    // 3. Comptes et shells
+    _writeFileSafe(
+      '$dir/etc/passwd',
+      'root:x:0:0:root:/root:/bin/sh\n'
+      'nobody:x:65534:65534:nobody:/:/sbin/nologin\n',
+      overwrite: false,
+    );
+    _writeFileSafe('$dir/etc/group', 'root:x:0:root\nnobody:x:65534:\n',
+        overwrite: false);
+    _writeFileSafe('$dir/etc/shells', '/bin/sh\n/bin/ash\n/bin/bash\n',
+        overwrite: false);
 
-      // 5. root/.profile & root/.bashrc
-      final rootDir = Directory('$dir/root');
-      if (!rootDir.existsSync()) rootDir.createSync(recursive: true);
+    // 4. etc/apk/repositories (apk add / pkg install fonctionnels)
+    _writeFileSafe(
+      '$dir/etc/apk/repositories',
+      'https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\n'
+      'https://dl-cdn.alpinelinux.org/alpine/latest-stable/community\n',
+      overwrite: false,
+    );
 
-      const gitBranchFn = r"""# LD_LIBRARY_PATH d'Android ne doit pas fuiter dans l'invité
-unset LD_LIBRARY_PATH
-# Git branch helper
-__git_branch() {
-  local branch
-  branch=$(git symbolic-ref --short HEAD 2>/dev/null) || return
-  echo " \033[38;5;214m🌿 ${branch}\033[0m"
-}
-pkg() {
-  apk "$@"
-}
-apt() {
-  apk "$@"
-}
-winget() {
-  echo -e "\033[38;5;208m[Panda Linux]\033[0m 'winget' est pour Windows. Utilisez \033[1m'apk add <paquet>'\033[0m."
-}
-""";
-      const richPS1 = r"""# Flash Prompt
-export PS1='\[\033[38;5;141m\]🐼 panda \[\033[38;5;75m\]📁 \w\[\033[0m\]$(__git_branch) \[\033[38;5;118m\]➜\[\033[0m\] '
-""";
-      final aliases = [
-        'alias ls="ls --color=auto"',
-        'alias ll="ls -la --color=auto"',
-        'alias la="ls -la"',
-        'alias grep="grep --color=auto"',
-        'alias cp="cp -i"',
-        'alias mv="mv -i"',
-        'alias ..="cd .."',
-        'alias ...="cd ../.."',
-      ];
-
-      final fullProfile =
-          '${gitBranchFn.trimRight()}\n${richPS1.trimRight()}\n${aliases.join("\n")}\n';
-
-      File('$dir/root/.profile').writeAsStringSync(fullProfile, flush: true);
-      File('$dir/root/.bashrc').writeAsStringSync(fullProfile, flush: true);
-    } catch (e) {
-      PandaLog.w('AlpineSetup', 'Erreur écriture fichiers runtime Alpine: $e');
+    // 5. Profil shell : /etc/profile, /etc/profile.d/panda.sh, /root/.profile
+    final profile = pandaProfileScript();
+    _writeFileSafe('$dir/etc/profile.d/panda.sh', profile);
+    _writeFileSafe(
+      '$dir/etc/profile',
+      '# Genere par Panda IDE\n'
+      'for __f in /etc/profile.d/*.sh; do\n'
+      '  [ -r "\$__f" ] && . "\$__f"\n'
+      'done\n'
+      'unset __f\n',
+    );
+    // ENV=/root/.profile : charge aussi en shell interactif non-login.
+    final rootProfile = '$dir/root/.profile';
+    if (!_profileIsCurrent(rootProfile)) {
+      _writeFileSafe(rootProfile, profile);
+    }
+    final bashrc = '$dir/root/.bashrc';
+    if (!_profileIsCurrent(bashrc)) {
+      _writeFileSafe(bashrc, profile);
     }
   }
 }

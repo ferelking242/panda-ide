@@ -1448,6 +1448,48 @@ class _SelectTypeState extends State<SelectType>
     return (cfg != null && cfg.isProject) ? cfg.rootDir : null;
   }
 
+  /// Ouvre le terminal comme onglet plein écran de l'éditeur (mode étendu).
+  /// Le panneau du bas est refermé pour éviter deux terminaux simultanés.
+  void _openTerminalTab() {
+    setState(() {
+      final existing = _openTabs.indexWhere((t) => t.id == 'terminal');
+      if (existing == -1) {
+        _openTabs.add(const _TabDef(
+          id: 'terminal',
+          title: 'Terminal',
+          icon: Broken.command_square,
+        ));
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = existing;
+      }
+      _bottomPanelOpen = false;
+    });
+  }
+
+  /// Contenu de l'onglet Terminal en mode étendu.
+  Widget _buildTerminalTabPage(AppTheme appTheme) {
+    if (kIsWeb) {
+      return Center(
+        child: Text(
+          'Le terminal n\'est pas disponible dans la version web.',
+          style: TextStyle(
+            fontSize: 12,
+            color: appTheme.isDark ? const Color(0xffcfcfcf) : const Color(0xff333333),
+          ),
+        ),
+      );
+    }
+    return Container(
+      color: appTheme.isDark ? const Color(0xff1e1e1e) : const Color(0xfffefefe),
+      child: EmbeddedTerminal(
+        key: const ValueKey('terminal-editor-tab'),
+        projectDir: _activeProjectDir() ?? _currentWorkspaceDir ?? '/',
+        showKeyboardMenu: true,
+      ),
+    );
+  }
+
   void _openGithubTab() {
     setState(() {
       if (!_openTabs.any((t) => t.id == 'github')) {
@@ -3525,6 +3567,22 @@ class _SelectTypeState extends State<SelectType>
                         child: Icon(Broken.close_circle, size: 14, color: fg),
                       ),
                     ),
+                    // Ouvre le terminal comme onglet plein écran de l'éditeur
+                    // (mode étendu). Placé à droite du bouton de fermeture.
+                    if (!kIsWeb)
+                      Tooltip(
+                        message: 'Ouvrir le terminal dans l\'éditeur (mode étendu)',
+                        child: InkWell(
+                          onTap: _openTerminalTab,
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 6),
+                            child: Icon(Icons.open_in_new_rounded,
+                                size: 14, color: fg),
+                          ),
+                        ),
+                      ),
                   ]),
                 ),
                 // ── Problems toolbar (search + filter + actions) ───────────
@@ -3888,6 +3946,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'local_models') {
       return const LocalModelsPage(embedded: true);
     }
+    if (tab.id == 'terminal') {
+      return _buildTerminalTabPage(appTheme);
+    }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];
     if (editorCfg != null) {
@@ -3975,6 +4036,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'local_models') {
       return const LocalModelsPage(embedded: true);
+    }
+    if (tab.id == 'terminal') {
+      return _buildTerminalTabPage(appTheme);
     }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];
