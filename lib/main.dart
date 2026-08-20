@@ -29,10 +29,13 @@ Future<void> main() async {
   final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   if (isAndroid) {
     await configureStorageRoots();
-    // Initialize logging system
-    await PandaLogger.init();
-    PandaCrashHandler.install();
-    PandaLogger.i(PandaLogCategory.app, 'Panda IDE started', metadata: {'android': isAndroid});
+    // Initialize logging system (non-blocking, wrapped for safety)
+    try {
+      await PandaLogger.init();
+    } catch (e) {
+      // Logging failure must never prevent app startup
+      debugPrint('[Main] Logger init failed: $e');
+    }
   }
 
   final recent = await getRecent();
@@ -54,6 +57,11 @@ Future<void> main() async {
       termuxInfo: termuxInfo,
     )
   );
+
+  // Install crash handler AFTER runApp (never before splash)
+  try {
+    PandaCrashHandler.install();
+  } catch (_) {}
 
   // Never hold Android's native splash screen while copying legacy storage
   // or extracting extension assets. Those operations are non-critical for
