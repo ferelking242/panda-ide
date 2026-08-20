@@ -1557,7 +1557,10 @@ class _SelectTypeState extends State<SelectType>
       final iconColor = isDark ? _kActivityIconDark  : _kActivityIconLight;
       final selColor  = isDark ? _kActivitySelDark   : _kActivitySelLight;
 
+      // Ordre demandé : Panda Agent (icône panda) puis Marketplace tout en haut,
+      // ensuite les panneaux classiques de l'éditeur.
       final topItems = <_RailItem>[
+        _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
         _RailItem(icon: Broken.element_3,          label: 'Explorateur',      idx: 1),
         _RailItem(icon: Broken.search_normal,       label: 'Rechercher',       idx: 2),
         _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',     idx: 3),
@@ -1567,7 +1570,6 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
-        _RailItem(icon: Broken.cpu_setting,         label: 'Panda Agent',       idx: 10),
       ];
 
       return Container(
@@ -1575,7 +1577,17 @@ class _SelectTypeState extends State<SelectType>
         color: railBg,
         child: Column(
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
+
+            // ── Panda Agent — premier élément du rail ────────────────────
+            _RailPandaBtn(
+              iconColor: iconColor,
+              selColor:  selColor,
+              selected:  _openTabs.isNotEmpty &&
+                  _openTabs[_activeTabIdx.clamp(0, _openTabs.length - 1)].id == 'agent',
+              onTap:     _openAgentTab,
+            ),
+            _RailSeparator(isDark: isDark),
 
 
             // ── Sidebar items (scrollable so they never overlap bottom) ───
@@ -1693,51 +1705,8 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
             const Spacer(),
-            _ActivityBtnEx(
-              item:      _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
-              selected:  _sidebarState == 2 && _activeRail == 6,
-              iconColor: iconColor,
-              selColor:  selColor,
-              onTap: () {
-                setState(() {
-                  if (!_openTabs.any((t) => t.id == 'marketplace')) {
-                    _openTabs.add(const _TabDef(
-                        id:    'marketplace',
-                        title: 'Extensions',
-                        icon:  Broken.shop));
-                    _activeTabIdx = _openTabs.length - 1;
-                  } else {
-                    _activeTabIdx =
-                        _openTabs.indexWhere((t) => t.id == 'marketplace');
-                  }
-                  _sidebarState = 1;
-                  _activeRail = 0;
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            Tooltip(
-              message: 'Panda IDE Agent',
-              child: InkWell(
-                onTap: _openAgentTab,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: ClipOval(
-                    child: Image.asset(
-                      'assets/icons/app-icon.png',
-                      width: 24, height: 24, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Text('🐼', style: TextStyle(fontSize: 18)),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
+            _RailSeparator(isDark: isDark),
+            const SizedBox(height: 6),
 
             // ── Detached Bottom Section (Theme, Account, Settings) ─────────
             // 1. Theme toggle
@@ -8803,22 +8772,170 @@ class _EditorTabConfig {
         preferBelow: false,
         child: InkWell(
           onTap: onTap,
-          child: Container(
+          hoverColor: selColor.withValues(alpha: 0.06),
+          splashColor: selColor.withValues(alpha: 0.10),
+          child: SizedBox(
             width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              border: selected
-                  ? Border(left: BorderSide(color: selColor, width: 2))
-                  : null,
-            ),
-            child: Center(
-              child: Icon(item.icon, size: 22,
-                  color: selected ? selColor : iconColor),
+            height: 44,
+            child: Stack(
+              children: [
+                // Indicateur de sélection (barre gauche arrondie)
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
+                  left: 0,
+                  top: selected ? 8 : 22,
+                  bottom: selected ? 8 : 22,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 180),
+                    opacity: selected ? 1 : 0,
+                    child: Container(
+                      width: 2.5,
+                      decoration: BoxDecoration(
+                        color: selColor,
+                        borderRadius: const BorderRadius.horizontal(
+                            right: Radius.circular(2)),
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: AnimatedScale(
+                    duration: const Duration(milliseconds: 160),
+                    scale: selected ? 1.06 : 1.0,
+                    child: Icon(item.icon,
+                        size: 21, color: selected ? selColor : iconColor),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       );
     }
+    }
+
+    // ── _RailSeparator — fine ligne de séparation du rail ─────────────────────
+    class _RailSeparator extends StatelessWidget {
+      final bool isDark;
+      const _RailSeparator({required this.isDark});
+
+      @override
+      Widget build(BuildContext context) => Container(
+            width: 24,
+            height: 1,
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.10)
+                : Colors.black.withValues(alpha: 0.10),
+          );
+    }
+
+    // ── _RailPandaBtn — entrée Panda Agent (icône SVG panda) ─────────────────
+    class _RailPandaBtn extends StatefulWidget {
+      final Color        iconColor;
+      final Color        selColor;
+      final bool         selected;
+      final VoidCallback onTap;
+      const _RailPandaBtn({
+        required this.iconColor,
+        required this.selColor,
+        required this.selected,
+        required this.onTap,
+      });
+
+      @override
+      State<_RailPandaBtn> createState() => _RailPandaBtnState();
+    }
+
+    class _RailPandaBtnState extends State<_RailPandaBtn>
+        with SingleTickerProviderStateMixin {
+      late final AnimationController _ctrl = AnimationController(
+        vsync: this,
+        duration: const Duration(milliseconds: 2600),
+      );
+
+      @override
+      void initState() {
+        super.initState();
+        _ctrl.repeat(reverse: true);
+      }
+
+      @override
+      void dispose() {
+        _ctrl.dispose();
+        super.dispose();
+      }
+
+      @override
+      Widget build(BuildContext context) {
+        final Color c = widget.selected ? widget.selColor : widget.iconColor;
+        return Tooltip(
+          message: 'Panda Agent',
+          preferBelow: false,
+          child: InkWell(
+            onTap: widget.onTap,
+            hoverColor: widget.selColor.withValues(alpha: 0.06),
+            child: SizedBox(
+              width: 48,
+              height: 46,
+              child: Stack(
+                children: [
+                  AnimatedPositioned(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
+                    left: 0,
+                    top: widget.selected ? 9 : 23,
+                    bottom: widget.selected ? 9 : 23,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: widget.selected ? 1 : 0,
+                      child: Container(
+                        width: 2.5,
+                        decoration: BoxDecoration(
+                          color: widget.selColor,
+                          borderRadius: const BorderRadius.horizontal(
+                              right: Radius.circular(2)),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: AnimatedBuilder(
+                      animation: _ctrl,
+                      builder: (context, child) {
+                        // Respiration très légère : signale un agent « vivant »
+                        final double t =
+                            Curves.easeInOut.transform(_ctrl.value);
+                        return Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _kAccent.withValues(
+                                alpha: widget.selected
+                                    ? 0.18
+                                    : 0.05 + 0.05 * t),
+                          ),
+                          child: Center(child: child),
+                        );
+                      },
+                      child: SvgPicture.asset(
+                        'assets/icons/panda_agent.svg',
+                        width: 21,
+                        height: 21,
+                        colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
+                        placeholderBuilder: (_) =>
+                            Icon(Broken.cpu_setting, size: 20, color: c),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
     }
 
     // ── _ActivityBtn (legacy alias) ───────────────────────────────────────────────
