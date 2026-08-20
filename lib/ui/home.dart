@@ -156,8 +156,15 @@ class _SelectTypeState extends State<SelectType>
   final _agentScrollCtrl = ScrollController();
   final List<Map<String,dynamic>> _agentMessages = [];
 
+  // ── Notifications ──────────────────────────────────────────
+  int _unreadNotifications = 0;
+  final List<Map<String, dynamic>> _notificationsList = [];
+  
   // ── Full screen mode ─────────────────────────────────────
   bool _fullScreen = false;
+
+  // ── Resizable panels ──────────────────────────────────────
+  double _bottomPanelHeight = 220;
 
   // ── Resizable sidebar ─────────────────────────────────────
   double _sidebarWidth = _kSidebarWidth;
@@ -1360,11 +1367,39 @@ class _SelectTypeState extends State<SelectType>
               const Spacer(),
 
               // ── Right: notifications ────────────────────────────────
-              _StatusBarItem(
-                icon: Icons.notifications_none,
-                label: '',
-                fg: fg,
-                onTap: () {},
+              GestureDetector(
+                onTap: () => _showNotificationInbox(context),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(Icons.notifications_none, size: 14, color: fg),
+                    if (PandaNotifications.unreadCount > 0)
+                      Positioned(
+                        right: -3,
+                        top: -3,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: const BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 10,
+                            minHeight: 10,
+                          ),
+                          child: Text(
+                            '\${PandaNotifications.unreadCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 7,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ]),
           ),
@@ -3199,6 +3234,140 @@ class _SelectTypeState extends State<SelectType>
           ),
         );
 
+    void _showNotificationInbox(BuildContext context) {
+      // Sync from PandaNotifications
+      _notificationsList.clear();
+      _notificationsList.addAll(PandaNotifications.inbox);
+      _unreadNotifications = PandaNotifications.unreadCount;
+      
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          final bg = isDark ? const Color(0xff1e1e1e) : Colors.white;
+          final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+          final muted = isDark ? Colors.grey[600]! : Colors.grey[500]!;
+          
+          return DraggableScrollableSheet(
+            initialChildSize: 0.7,
+            maxChildSize: 0.9,
+            minChildSize: 0.3,
+            builder: (ctx, scrollCtrl) => Container(
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -4))],
+              ),
+              child: Column(
+                children: [
+                  // Drag handle
+                  Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: muted,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: [
+                        Icon(Icons.notifications, size: 18, color: _kAccent),
+                        const SizedBox(width: 8),
+                        Text('Notifications', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg)),
+                        const Spacer(),
+                        if (_unreadNotifications > 0)
+                          TextButton(
+                            onPressed: () => setState(() {
+                              _unreadNotifications = 0;
+                              for (final n in _notificationsList) {
+                                n['read'] = true;
+                              }
+                            }),
+                            child: Text('Tout marquer lu', style: TextStyle(fontSize: 12, color: _kAccent)),
+                          ),
+                        IconButton(
+                          icon: Icon(Icons.close, size: 18, color: muted),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Divider(height: 1, color: muted.withValues(alpha: 0.2)),
+                  // Notification list
+                  Expanded(
+                    child: _notificationsList.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.notifications_none, size: 48, color: muted.withValues(alpha: 0.3)),
+                                const SizedBox(height: 12),
+                                Text('Aucune notification', style: TextStyle(color: muted, fontSize: 13)),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            controller: scrollCtrl,
+                            itemCount: _notificationsList.length,
+                            itemBuilder: (ctx, i) {
+                              final n = _notificationsList[i];
+                              final isRead = n['read'] == true;
+                              final isError = n['isError'] == true;
+                              return ListTile(
+                                leading: Icon(
+                                  isError ? Icons.error_outline : Icons.info_outline,
+                                  size: 18,
+                                  color: isError ? Colors.redAccent : _kAccent,
+                                ),
+                                title: Text(n['title'] ?? '',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: isRead ? FontWeight.normal : FontWeight.w600,
+                                        color: fg)),
+                                subtitle: Text(n['message'] ?? '',
+                                    style: TextStyle(fontSize: 11, color: muted),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis),
+                                trailing: Text(
+                                    _formatNotificationTime(n['time']),
+                                    style: TextStyle(fontSize: 10, color: muted)),
+                                onTap: () {
+                                  if (!isRead) {
+                                    setState(() {
+                                      n['read'] = true;
+                                      _unreadNotifications = (_unreadNotifications - 1).clamp(0, 999);
+                                    });
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    String _formatNotificationTime(dynamic time) {
+      if (time == null) return '';
+      if (time is DateTime) {
+        final diff = DateTime.now().difference(time);
+        if (diff.inMinutes < 1) return 'maintenant';
+        if (diff.inMinutes < 60) return '${diff.inMinutes}m';
+        if (diff.inHours < 24) return '${diff.inHours}h';
+        return '${diff.inDays}j';
+      }
+      return time.toString();
+    }
+
     void _showLayoutMenu(BuildContext ctx, bool isDark) {
       final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
       final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
@@ -3532,11 +3701,22 @@ class _SelectTypeState extends State<SelectType>
             final selFg  = isDark ? Colors.grey[200]! : Colors.grey[900]!;
             final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
-            return Container(
-              height: 220,
-              decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: border))),
-              child: Column(children: [
+            return Column(children: [
+                // Resize handle at top of bottom panel
+                GestureDetector(
+                  onVerticalUpdate: (details) {
+                    setState(() {
+                      _bottomPanelHeight = (_bottomPanelHeight - details.delta.dy).clamp(100.0, 600.0);
+                    });
+                  },
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.resizeRow,
+                    child: Container(
+                      height: 4,
+                      color: border,
+                    ),
+                  ),
+                ),
                 // Tab strip
                 Container(
                   height: 30,
@@ -3680,10 +3860,7 @@ class _SelectTypeState extends State<SelectType>
                     ]),
                   ),
                 Expanded(
-                  child: Container(
-                    color: bg,
-                    child: _buildBottomPanelContent(context, ts.appTheme, isDark),
-                  ),
+                  child: _buildBottomPanelContent(context, ts.appTheme, isDark),
                 ),
               ]),
             );

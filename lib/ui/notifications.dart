@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class PandaNotifications {
+  static final List<Map<String, dynamic>> inbox = [];
+  static int unreadCount = 0;
+  
   static void show({
     required BuildContext context,
     required String title,
@@ -143,6 +146,20 @@ class PandaNotifications {
         ),
       ),
     );
+
+    // Add to inbox
+    inbox.insert(0, {
+      'title': title,
+      'message': message,
+      'isError': isError,
+      'time': DateTime.now(),
+      'read': false,
+    });
+    unreadCount++;
+    // Keep max 100 notifications
+    if (inbox.length > 100) {
+      inbox.removeLast();
+    }
 
     overlay.insert(entry);
 
