@@ -15,6 +15,7 @@ import '../utils/alpine_setup.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import '../terminal/panda_bridge.dart';
+import 'setup_screen.dart';
 
 const List<String> javaTools = [
   'jar', 'jarsigner', 'java', 'javac', 'javadoc', 'javap', 'jcmd',
@@ -116,7 +117,26 @@ class _StartScreenState extends State<StartScreen> {
       _pushSelectType();
       return;
     }
-    // Check if permission screen has been shown before
+
+    // Check if Alpine rootfs is already extracted (first-time install detection)
+    final alpineComplete = AlpineSetup.isRootfsComplete();
+    PandaLog.i('StartScreen', 'Alpine rootfs complete: $alpineComplete');
+
+    if (!alpineComplete) {
+      // First install — show the setup screen
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, _) => const SetupScreen(),
+          transitionsBuilder: (context, animation, _, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 400),
+        ),
+      );
+      return;
+    }
+
+    // Already set up — check permissions then proceed
     final prefs = await SharedPreferences.getInstance();
     final permShown = prefs.getBool('permissions_shown') ?? false;
     if (!mounted) return;
@@ -291,20 +311,20 @@ class _StartScreenState extends State<StartScreen> {
     }
 
     // Alpine native integration (idempotent setup & runtime files)
+    // On first install, rootfs is not complete — skip extraction here,
+    // SetupScreen will handle the full extraction with progress UI.
     final alpineDir = '$runtimesDir/alpine-linux';
-    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Alpine setup starting');
-    try {
-      await AlpineSetup.ensureAlpineRootfs().timeout(
-        const Duration(seconds: 20),
-        onTimeout: () {
-          PandaLog.w('StartScreen', 'Alpine rootfs extraction timed out after 20s');
-          return false;
-        },
-      );
-      await AlpineSetup.ensureAlpineRuntimeFiles();
-      PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Alpine Linux environment ready.');
-    } catch (e) {
-      PandaLog.e('StartScreen', 'Error setting up Alpine: $e');
+    final alpineReady = AlpineSetup.isRootfsComplete();
+    PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Alpine setup (rootfsComplete=$alpineReady)');
+    if (alpineReady) {
+      try {
+        await AlpineSetup.ensureAlpineRuntimeFiles();
+        PandaLog.i('StartScreen', '[${sw.elapsedMilliseconds}ms] Alpine Linux runtime files ready.');
+      } catch (e) {
+        PandaLog.e('StartScreen', 'Error setting up Alpine runtime: $e');
+      }
+    } else {
+      PandaLog.i('StartScreen', 'Alpine rootfs not ready — SetupScreen will handle extraction');
     }
 
     if (Directory(alpineDir).existsSync()) {
