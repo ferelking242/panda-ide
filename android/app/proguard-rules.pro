@@ -16,6 +16,13 @@
 
 # Keep Play Core / Feature delivery
 -keep class com.google.android.play.** { *; }
+-keep class com.google.android.play.core.** { *; }
+-keep class com.google.android.play.core.tasks.** { *; }
+-dontwarn com.google.android.play.core.**
+-dontwarn com.google.android.play.core.tasks.**
+-dontwarn com.google.android.play.core.splitcompat.**
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.appupdate.**
 
 # Keep MethodChannel-bridged classes (all plugins use them)
 -keepclassmembers class * {
