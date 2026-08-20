@@ -546,25 +546,39 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final sw = Stopwatch()..start();
 
     if (!AlpineSetup.isRootfsComplete()) {
-      runtime.terminal.write('\r\n\x1b[33m[Configuration du runtime Alpine Linux en cours...]\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[90m  Ceci ne prend que quelques secondes...\x1b[0m\r\n');
-      PandaLog.i('Terminal', 'Alpine rootfs incomplete, starting extraction (attempt 1)');
+      runtime.terminal.write('\r\n\x1b[33m╔═══════════════════════════════════════════╗\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m║  ⚙  Configuration Alpine Linux            ║\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m╚═══════════════════════════════════════════╝\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[90m  Extraction du rootfs (première installation)\x1b[0m\r\n\r\n');
+      PandaLog.i('Terminal', 'Alpine rootfs incomplete, starting extraction');
+
+      // Live elapsed timer — shows progress so user knows it's not stuck
+      final elapsedTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        final secs = sw.elapsed.inSeconds;
+        runtime.terminal.write('\x1b[90m  ⏳ En cours... ${secs}s\x1b[0m\r\n');
+      });
 
       bool repaired = false;
       for (int attempt = 1; attempt <= 2; attempt++) {
         if (attempt > 1) {
-          runtime.terminal.write('\x1b[33m  Nouvelle tentative ($attempt/2)...\x1b[0m\r\n');
+          runtime.terminal.write('\x1b[33m  ↻ Nouvelle tentative ($attempt/2)...\x1b[0m\r\n');
           PandaLog.i('Terminal', 'Alpine extraction retry attempt $attempt');
         }
-        repaired = await AlpineSetup.ensureAlpineRootfs().timeout(
-          const Duration(seconds: 90),
-          onTimeout: () {
-            PandaLog.e('Terminal', 'Alpine extraction timed out after 90s on attempt $attempt');
-            return false;
-          },
-        );
+        try {
+          repaired = await AlpineSetup.ensureAlpineRootfs().timeout(
+            const Duration(seconds: 90),
+            onTimeout: () {
+              PandaLog.e('Terminal', 'Alpine extraction timed out after 90s');
+              return false;
+            },
+          );
+        } catch (e) {
+          PandaLog.e('Terminal', 'Alpine extraction error: $e');
+          repaired = false;
+        }
         if (repaired) break;
       }
+      elapsedTimer.cancel();
 
       if (!repaired) {
         final errDetail = AlpineSetup.lastError.isNotEmpty
