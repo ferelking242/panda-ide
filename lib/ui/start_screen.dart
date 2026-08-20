@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import '../ui/splash_screen.dart';
+import '../ui/permission_screen.dart';
 import 'setup_screen.dart';
 
 class StartScreen extends StatefulWidget {
@@ -23,6 +25,7 @@ class _StartScreenState extends State<StartScreen> {
   @override
   void initState() {
     super.initState();
+    // Fire-and-forget: logger + prefs only. Never blocks navigation.
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       _backgroundInit();
     }
@@ -53,6 +56,7 @@ class _StartScreenState extends State<StartScreen> {
     }
   }
 
+  /// Called the instant the splash animation finishes.
   void _onAnimationComplete() {
     if (!mounted || _navigated) return;
     _navigated = true;
@@ -68,14 +72,33 @@ class _StartScreenState extends State<StartScreen> {
       return;
     }
 
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const SetupScreen(),
-        transitionsBuilder: (_, __, ___, child) =>
-            FadeTransition(opacity: __, child: child),
-        transitionDuration: const Duration(milliseconds: 400),
-      ),
-    );
+    // Android: check if permissions were already shown
+    SharedPreferences.getInstance().then((prefs) {
+      if (!mounted) return;
+      final permShown = prefs.getBool('permissions_shown') ?? false;
+
+      if (!permShown) {
+        // First time: PermissionScreen → then SetupScreen handles everything
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const PermissionScreen(),
+            transitionsBuilder: (_, __, ___, child) =>
+                FadeTransition(opacity: __, child: child),
+            transitionDuration: const Duration(milliseconds: 300),
+          ),
+        );
+      } else {
+        // Permissions already done: straight to SetupScreen
+        Navigator.of(context).pushReplacement(
+          PageRouteBuilder(
+            pageBuilder: (_, __, ___) => const SetupScreen(),
+            transitionsBuilder: (_, __, ___, child) =>
+                FadeTransition(opacity: __, child: child),
+            transitionDuration: const Duration(milliseconds: 400),
+          ),
+        );
+      }
+    });
   }
 
   @override
