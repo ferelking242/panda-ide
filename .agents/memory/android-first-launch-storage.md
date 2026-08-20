@@ -3,8 +3,8 @@ name: Android first-launch storage
 description: Storage-root ordering required to keep Android startup usable before MANAGE_EXTERNAL_STORAGE is granted.
 ---
 
-Panda IDE must start with app-private storage roots and probe public storage only when Android permits it. The permission screen can migrate the private roots to the public Panda IDE directory after permission is granted.
+Panda IDE must keep app-private storage as the active root for the entire app lifetime and probe shared storage only for explicit import/export. Public projects are copied into private storage without deleting the originals.
 
-**Why:** Android rejects writes to `/storage/emulated/0` during the first launch before the permission flow, so creating `.current_files.json` there aborts startup.
+**Why:** Android shared storage is FUSE-backed and does not reliably preserve the POSIX permissions, links and executable bits required by an IDE terminal, even when a write probe succeeds.
 
-**How to apply:** Keep root selection before any startup filesystem setup, make all setup helpers use the active roots, and never make public-storage failure fatal.
+**How to apply:** Initialize private roots before startup filesystem setup; MANAGE_EXTERNAL_STORAGE must never block the permission screen or terminal; treat shared storage as an import/export source and destination only.

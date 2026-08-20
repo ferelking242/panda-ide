@@ -71,7 +71,6 @@ class _PermissionScreenState extends State<PermissionScreen> {
   }
 
   bool get _allGranted =>
-      _storageStatus == PermissionStatus.granted &&
       (_notifStatus == PermissionStatus.granted ||
           _notifStatus == PermissionStatus.limited);
 
@@ -79,17 +78,7 @@ class _PermissionScreenState extends State<PermissionScreen> {
     final result = await _storagePermission().request();
     setState(() => _storageStatus = result);
     if (result == PermissionStatus.granted) {
-      await migratePrivateStorageRootsToPublic();
-      usePublicStorageRoots();
-      // Create "Panda IDE" public folder structure now that we have permission
-      for (final path in [pandaRootDir, projectDir, templateDir, filesDir, pandaLogsDir]) {
-        final dir = Directory(path);
-        if (!dir.existsSync()) {
-          try {
-            await dir.create(recursive: true);
-          } catch (_) {}
-        }
-      }
+      await importPublicProjectsToPrivate();
     } else if (result == PermissionStatus.permanentlyDenied) {
       openAppSettings();
     }
@@ -177,9 +166,10 @@ class _PermissionScreenState extends State<PermissionScreen> {
                         _PermissionCard(
                           icon: Icons.folder_open_rounded,
                           iconColor: const Color(0xfff5a623),
-                          title: 'Accès au stockage complet',
+                           title: 'Mémoire partagée (optionnelle)',
                           description:
-                              'Nécessaire pour lire et écrire vos projets, télécharger des runtimes et accéder au dossier Panda IDE sur votre appareil.',
+                               'Utilisée uniquement pour importer ou exporter des projets dans le dossier Panda IDE. '
+                               'Le terminal et les projets privés fonctionnent sans cet accès.',
                           status: _storageStatus,
                           onRequest: _requestStorage,
                         ),

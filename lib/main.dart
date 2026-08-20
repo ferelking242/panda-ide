@@ -27,7 +27,7 @@ Future<void> main() async {
   final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   if (isAndroid) {
     await configureStorageRoots();
-    await migrateSharedStorageRoots();
+    await importPublicProjectsToPrivate();
   }
 
   // Initialise ExtensionRegistry root path so that installs have a real target.

@@ -15,6 +15,7 @@ final fonts = [
   'dejaVuSansMono',
   'inconsolata',
   'jetBrainsMono',
+  'jetBrainsMonoNF',
   'proggy',
   'sourceCodePro'
   ];

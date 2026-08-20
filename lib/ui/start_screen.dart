@@ -1,4 +1,3 @@
-import 'package:flutter_archive/flutter_archive.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
@@ -247,15 +246,20 @@ echo "\$@" | nc 127.0.0.1 ${PandaBridge.port}
 ''');
         Process.runSync('chmod', ['+x', pandaCli.path]);
 
-        // Phase 2: Native FastPath Shims
+        // Phase 2: Native FastPath Shims, only for binaries that exist.
         final nativeBinaries = ['node', 'npm', 'npx', 'git', 'python', 'python3', 'pip', 'pip3', 'clang', 'clang++', 'rustc', 'cargo'];
         for (final bin in nativeBinaries) {
           final shim = File('${localBinDir.path}/$bin');
-          if (!shim.existsSync()) {
+          final native = File('$binDir/$bin');
+          if (native.existsSync()) {
+            if (!shim.existsSync()) {
             shim.writeAsStringSync('''#!/bin/sh
 exec $binDir/$bin "\$@"
 ''');
             Process.runSync('chmod', ['+x', shim.path]);
+            }
+          } else if (shim.existsSync()) {
+            await shim.delete();
           }
         }
 

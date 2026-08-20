@@ -111,7 +111,7 @@ jobs:
         run: |
           set -euo pipefail
           dir=android/app/src/main/jniLibs/arm64-v8a
-          for lib in libproot.so libtalloc.so libandroid-shmem.so libproot-loader.so; do
+          for lib in libproot.so libtalloc.so libandroid-shmem.so libproot-loader.so libbusybox.so; do
             path="$dir/$lib"
             if [ ! -f "$path" ]; then
               echo "::error::$path manquant"; exit 1
@@ -124,6 +124,11 @@ jobs:
           done
           echo "--- dependances ELF ---"
           readelf -d "$dir/libproot.so" | grep NEEDED
+          archive=assets/runtimes/alpine-rootfs.tar.gz
+          [ -f "$archive" ] || { echo "::error::$archive manquant"; exit 1; }
+          gzip -t "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "OK  $archive"
 
       - name: Set up Java JDK
         uses: actions/setup-java@v4

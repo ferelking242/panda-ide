@@ -508,6 +508,18 @@ class _SetupTerminalState extends State<SetupTerminal> {
     return 14.0;
   }
 
+  String _terminalFontFamilyFromConfig() {
+    try {
+      final raw = context.read<ConfigBloc>().state.codeForgeConfig['fontFamily'];
+      if (raw is String && raw.trim().isNotEmpty) {
+        final value = raw.trim();
+        if (value.toLowerCase().contains('jetbrains')) return 'jetBrainsMonoNF';
+        if (fonts.contains(value)) return value;
+      }
+    } catch (_) {}
+    return 'jetBrainsMonoNF';
+  }
+
   Future<void> _saveTerminalFontSize(double fontSize) async {
     final configState = context.read<ConfigBloc>().state;
     final currentConfig = Map<String, dynamic>.from(configState.codeForgeConfig);
@@ -531,8 +543,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
     final rootfsDir = AlpineSetup.alpineDir;
 
-    // Provisioning idempotent a chaque lancement : rootfs, applets busybox,
-    // fichiers de configuration.
     if (!AlpineSetup.isRootfsComplete()) {
       runtime.terminal.write('\r\n\x1b[33m[Configuration du runtime Alpine Linux en cours...]\x1b[0m\r\n');
       final repaired = await AlpineSetup.ensureAlpineRootfs();
@@ -542,7 +552,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
         return;
       }
     } else {
-      await AlpineSetup.ensureBusyboxApplets();
       await AlpineSetup.ensureAlpineRuntimeFiles();
     }
 
@@ -562,12 +571,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
     // fichiers », il existe mais reste illisible : `ls` renvoie alors
     // "Permission denied". On teste la lisibilite reelle avant de choisir
     // le repertoire de travail de la session.
-    final projectReadable = AlpineSetup.isDirAccessible(widget.projectDir);
+    final projectReadable = widget.projectDir.trim().isNotEmpty &&
+        AlpineSetup.isDirAccessible(widget.projectDir);
     if (!projectReadable) {
       runtime.terminal.write(
-        '\r\n\x1b[33m[Le dossier du projet n\'est pas lisible (permission Android refusee).\r\n'
-        ' Autorisez "Acces a tous les fichiers" pour Panda IDE, puis relancez le terminal.\r\n'
-        ' Session demarree dans /root en attendant.]\x1b[0m\r\n',
+        '\r\n\x1b[36m[Aucun projet ouvert — session dans /root. '
+        'Le projet apparaîtra dans ~/workspace.]\x1b[0m\r\n',
       );
     }
 
@@ -616,10 +625,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
         addConditionalBind(widget.projectDir, AlpineSetup.workspaceMount);
       }
 
-      final guestCwd = projectReadable ? AlpineSetup.workspaceMount : '/root';
-
       prootArgs.addAll([
-        '-w', guestCwd,
+        '-w', '/root',
         '/bin/sh',
         '-l',
         ...args,
@@ -633,7 +640,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       final process = Pty.start(
         prootBin,
         arguments: prootArgs,
-        workingDirectory: projectReadable ? widget.projectDir : appDir,
+        workingDirectory: appDir,
         environment: sessionEnv,
         rows: runtime.terminal.viewHeight,
         columns: runtime.terminal.viewWidth,
@@ -1139,7 +1146,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
           autofocus: session.id == state.activeSessionId,
           keyboardType: TextInputType.multiline,
           theme: activeTheme.theme,
-          textStyle: TerminalStyle(fontSize: state.fontSize),
+          textStyle: TerminalStyle(
+            fontSize: state.fontSize,
+            fontFamily: _terminalFontFamilyFromConfig(),
+            height: 1.25,
+          ),
         );
       },
     );
@@ -1160,8 +1171,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
         child: Container(
           decoration: BoxDecoration(
             border: isActive
-                ? Border.all(color: const Color(0xff5090c8), width: 1.5)
-                : Border.all(color: const Color(0xff3c3c3c), width: 0.5),
+                ? Border.all(color: activeTheme.theme.cursor, width: 1.5)
+                : Border.all(color: activeTheme.theme.selection, width: 0.5),
             borderRadius: BorderRadius.circular(6),
           ),
           child: ClipRRect(
@@ -1174,7 +1185,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
               autofocus: isActive,
               keyboardType: TextInputType.multiline,
               theme: activeTheme.theme,
-              textStyle: TerminalStyle(fontSize: state.fontSize),
+               textStyle: TerminalStyle(
+                 fontSize: state.fontSize,
+                 fontFamily: _terminalFontFamilyFromConfig(),
+                 height: 1.25,
+               ),
             ),
           ),
         ),
@@ -1307,7 +1322,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.9),
                                     fontSize: 14,
-                                    fontFamily: 'monospace',
+                                     fontFamily: _terminalFontFamilyFromConfig(),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1524,13 +1539,18 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   // ── Feature 5 + Session tab bar (replaces drawer as primary navigation) ──
 
-  Widget _buildSessionTabBar(TerminalSessionState state, AppTheme appTheme) {
+  Widget _buildSessionTabBar(
+    TerminalSessionState state,
+    AppTheme appTheme,
+    TerminalThemePreset terminalPreset,
+  ) {
     final isDark = appTheme.isDark;
-    final bgColor = isDark ? const Color(0xff1a1a1a) : const Color(0xffe4e4e4);
-    final activeTabColor = isDark ? const Color(0xff2d2d2d) : Colors.white;
-    final inactiveTextColor = isDark ? Colors.grey.shade500 : Colors.grey.shade600;
-    final activeTextColor = isDark ? Colors.white : const Color(0xff1a1a1a);
-    const accentColor = Color(0xff5090c8);
+    final bgColor = terminalPreset.theme.background;
+    final activeTabColor = terminalPreset.theme.background.withValues(alpha: 0.78);
+    final inactiveTextColor = terminalPreset.theme.foreground.withValues(alpha: 0.55);
+    final activeTextColor = terminalPreset.theme.foreground;
+    final accentColor = terminalPreset.theme.cursor;
+    final terminalBorder = terminalPreset.theme.selection;
 
     return Container(
       height: 38,
@@ -1538,7 +1558,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         color: bgColor,
         border: Border(
           bottom: BorderSide(
-            color: isDark ? const Color(0xff2e2e2e) : const Color(0xffcccccc),
+            color: terminalBorder,
             width: 1,
           ),
         ),
@@ -1577,7 +1597,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                           width: 2,
                         ),
                         right: BorderSide(
-                          color: isDark ? const Color(0xff383838) : const Color(0xffcccccc),
+                           color: terminalBorder,
                           width: 0.5,
                         ),
                       ),
@@ -1641,11 +1661,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
             tooltip: 'Options du terminal',
-            color: isDark ? const Color(0xff252526) : Colors.white,
+            color: terminalPreset.theme.background,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
               side: BorderSide(
-                color: isDark ? const Color(0xff3c3c3c) : const Color(0xffcccccc),
+                color: terminalBorder,
                 width: 0.5,
               ),
             ),
@@ -1885,7 +1905,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                             side: BorderSide(
-                              color: isDark ? const Color(0xff3c3c3c) : const Color(0xffcccccc),
+                color: terminalBorder,
                               width: 0.5,
                             ),
                           ),
@@ -1944,7 +1964,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                       topLeft: Radius.circular(0),
                       topRight: Radius.circular(0),
                     ),
-                    child: _buildSessionTabBar(state, appTheme),
+                    child: _buildSessionTabBar(state, appTheme, activeTerminalTheme),
                   ),
                   Expanded(
                     child: ClipRRect(
@@ -1996,7 +2016,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                                   ],
                                 ),
                               ),
-                              _buildSessionTabBar(state, appTheme),
+                              _buildSessionTabBar(state, appTheme, activeTerminalTheme),
                               Expanded(child: terminalContent),
                             ],
                           ),

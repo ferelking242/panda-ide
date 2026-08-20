@@ -9,9 +9,9 @@ const extensionDir = "$appDir/extensions";
 const homeDir = "$appDir/Home";
 
 // ── Panda IDE storage roots ──────────────────────────────────────────────────
-// Public storage is used when MANAGE_EXTERNAL_STORAGE is granted. Until then
-// the mutable active roots point to app-private storage, which is available
-// during the very first launch.
+// The active workspace is always app-private. Shared storage is an explicit
+// import/export location because FUSE-backed public storage does not preserve
+// the POSIX semantics required by git, npm and APK tooling.
 const publicPandaRootDir = "/storage/emulated/0/Panda IDE";
 const publicProjectDir = "$publicPandaRootDir/Projects";
 const publicTemplateDir = "$publicPandaRootDir/Templates";
@@ -30,14 +30,6 @@ void usePrivateStorageRoots() {
   templateDir = "$pandaRootDir/Templates";
   filesDir = "$pandaRootDir/Files";
   pandaLogsDir = "$pandaRootDir/Logs";
-}
-
-void usePublicStorageRoots() {
-  pandaRootDir = publicPandaRootDir;
-  projectDir = publicProjectDir;
-  templateDir = publicTemplateDir;
-  filesDir = publicFilesDir;
-  pandaLogsDir = publicPandaLogsDir;
 }
 
 // Legacy download cache (app-private, no permission needed)

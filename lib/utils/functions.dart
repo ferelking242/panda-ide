@@ -12,7 +12,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_archive/flutter_archive.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:path_provider/path_provider.dart';
@@ -74,7 +73,7 @@ const String _legacyProjectDir = '/data/data/com.panda.ide/Roxum/Projects';
 const String _legacyTemplateDir = '/data/data/com.panda.ide/Roxum/Templates';
 const String _legacyFilesDir = '/data/data/com.panda.ide/Roxum/Files';
 const String sharedStorageMigrationNoticeKey = 'panda_shared_storage_migration_notice';
-const String sharedStorageMigrationDoneKey = 'panda_shared_storage_migration_done_v1';
+const String sharedStorageMigrationDoneKey = 'panda_shared_storage_import_done_v1';
 
 Future<void> _copyEntityRecursive(FileSystemEntity source, Directory targetRoot) async {
   if (source is Directory) {
@@ -95,7 +94,7 @@ Future<void> _copyEntityRecursive(FileSystemEntity source, Directory targetRoot)
   }
 }
 
-Future<bool> _migrateDirectoryRoot(String sourcePath, String targetPath) async {
+Future<bool> _copyDirectoryRoot(String sourcePath, String targetPath) async {
   final source = Directory(sourcePath);
   if (!await source.exists()) {
     return false;
@@ -120,7 +119,6 @@ Future<bool> _migrateDirectoryRoot(String sourcePath, String targetPath) async {
     }
   }
 
-  await source.delete(recursive: true);
   return true;
 }
 
@@ -156,7 +154,7 @@ String _remapLegacyPath(String value) {
   return value;
 }
 
-Future<void> _remapRecentEntriesToSharedStorage() async {
+Future<void> _remapRecentEntriesToPrivateStorage() async {
   final prefs = await SharedPreferences.getInstance();
   final rawRecent = prefs.getString('recent');
   if (rawRecent == null || rawRecent.trim().isEmpty) {
@@ -195,66 +193,59 @@ Future<void> _remapRecentEntriesToSharedStorage() async {
   } catch (_) {}
 }
 
-Future<bool> migrateSharedStorageRoots() async {
+Future<bool> importPublicProjectsToPrivate() async {
   var migrated = false;
-  // Migration is best-effort. On a fresh Android install the public root may
-  // still be protected until PermissionScreen grants MANAGE_EXTERNAL_STORAGE.
+  final prefs = await SharedPreferences.getInstance();
+  if (prefs.getBool(sharedStorageMigrationDoneKey) ?? false) return false;
   for (final pair in [
-    (_legacyProjectDir, projectDir),
-    (_legacyTemplateDir, templateDir),
-    (_legacyFilesDir, filesDir),
+    (publicProjectDir, projectDir),
+    (publicTemplateDir, templateDir),
+    (publicFilesDir, filesDir),
   ]) {
     try {
-      migrated = await _migrateDirectoryRoot(pair.$1, pair.$2) || migrated;
+      migrated = await _copyDirectoryRoot(pair.$1, pair.$2) || migrated;
     } on FileSystemException {
       continue;
     }
   }
 
-  await _remapRecentEntriesToSharedStorage();
-
-  if (migrated) {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(sharedStorageMigrationNoticeKey, true);
+  await _remapRecentEntriesToPrivateStorage();
+  final publicHasContent = [
+    Directory(publicProjectDir),
+    Directory(publicTemplateDir),
+    Directory(publicFilesDir),
+  ].any((directory) => directory.existsSync());
+  // Do not consume the one-time import marker while shared storage is still
+  // inaccessible on a first launch; the permission screen can retry later.
+  if (migrated || publicHasContent) {
     await prefs.setBool(sharedStorageMigrationDoneKey, true);
+    if (migrated) await prefs.setBool(sharedStorageMigrationNoticeKey, true);
   }
 
   return migrated;
 }
 
-/// Selects public storage only when Android allows writing to it. This runs
-/// before the permission screen, so a fresh install never crashes on a
-/// permission-protected `/storage/emulated/0` path.
+/// Ensures private roots and only probes shared storage for import/export.
 Future<bool> configureStorageRoots() async {
+  usePrivateStorageRoots();
+  for (final root in [
+    Directory(pandaRootDir),
+    Directory(projectDir),
+    Directory(templateDir),
+    Directory(filesDir),
+    Directory(pandaLogsDir),
+  ]) {
+    await root.create(recursive: true);
+  }
   final publicRoot = Directory(publicPandaRootDir);
   try {
-    await publicRoot.create(recursive: true);
+    if (!await publicRoot.exists()) return false;
     final probe = File(path.join(publicRoot.path, '.panda_write_probe'));
     await probe.writeAsString('ok', flush: true);
     await probe.delete();
-    usePublicStorageRoots();
     return true;
   } on FileSystemException {
-    usePrivateStorageRoots();
     return false;
-  }
-}
-
-Future<void> migratePrivateStorageRootsToPublic() async {
-  final privateRoots = <(String, String)>[
-    ('$appDir/UserFiles/Projects', publicProjectDir),
-    ('$appDir/UserFiles/Templates', publicTemplateDir),
-    ('$appDir/UserFiles/Files', publicFilesDir),
-    ('$appDir/UserFiles/Logs', publicPandaLogsDir),
-  ];
-  for (final pair in privateRoots) {
-    try {
-      await _migrateDirectoryRoot(pair.$1, pair.$2);
-    } on FileSystemException {
-      // Public storage may be unavailable despite the permission result.
-      // The private copy remains valid and startup must continue.
-      continue;
-    }
   }
 }
 
@@ -293,9 +284,8 @@ Future<Directory> setupFilesDir() async {
     return webFilesDir;
   }
 
-  // The active root is private during first launch and switches to public
-  // storage only after a successful write probe or explicit permission grant.
-  // Never let a permission-protected public path abort startup.
+  // The active root is always private. Shared storage is never a startup
+  // dependency and is only used by explicit import/export flows.
   final candidates = <Directory>[Directory(filesDir)];
   Directory? target;
   for (final candidate in candidates) {

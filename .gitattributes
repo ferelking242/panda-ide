@@ -14,6 +14,8 @@ android/app/src/main/jniLibs/arm64-v8a/libproot.so -filter -diff -merge binary
 android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so -filter -diff -merge binary
 android/app/src/main/jniLibs/arm64-v8a/libtalloc.so -filter -diff -merge binary
 android/app/src/main/jniLibs/arm64-v8a/libandroid-shmem.so -filter -diff -merge binary
+android/app/src/main/jniLibs/arm64-v8a/libbusybox.so -filter -diff -merge binary
+assets/runtimes/alpine-rootfs.tar.gz -filter -diff -merge binary
 *.png binary
 *.jpg binary
 *.jpeg binary
