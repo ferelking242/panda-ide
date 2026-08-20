@@ -20,8 +20,6 @@ enum PandaLogLevel {
     }
   }
 
-  int get index;
-
   /// Short prefix for JSON format.
   String get prefix {
     switch (this) {
