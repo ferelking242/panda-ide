@@ -1905,7 +1905,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                             side: BorderSide(
-                color: terminalBorder,
+                              color: activeTerminalTheme.theme.selection,
                               width: 0.5,
                             ),
                           ),

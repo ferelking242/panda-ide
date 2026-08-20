@@ -225,7 +225,7 @@ __panda_prompt
     final profile = pandaProfileScript();
     _write('$dir/etc/profile.d/panda.sh', profile);
     _write('$dir/etc/profile',
-        'for f in /etc/profile.d/*.sh; do [ -r "$f" ] && . "$f"; done\n');
+        'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n');
     _write('$dir/root/.profile', profile);
     _write('$dir/root/.bashrc', profile);
   }
