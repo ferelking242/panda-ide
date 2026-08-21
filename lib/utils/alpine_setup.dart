@@ -12,7 +12,7 @@ class AlpineSetup {
   static const String _alpineDirName = 'alpine-linux';
   static const String rootfsVersion = 'alpine-3.22.5';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-profile v3';
+  static const String profileVersion = 'panda-profile v4';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -392,33 +392,43 @@ unset LD_LIBRARY_PATH
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export HOME="\${HOME:-/root}"
 export TERM="\${TERM:-xterm-256color}"
-pkg() { apk "\$@"; }
-apt() { apk "\$@"; }
-apt-get() { apk "\$@"; }
+# NOTE: pkg/apt/apt-get are NOT defined as shell functions here — busybox
+# ash rejects function names containing '-' (POSIX), which aborted the whole
+# profile. Real executable wrappers are installed in /usr/local/bin instead.
 alias ls='ls --color=auto'
 alias ll='ls -la --color=auto'
 alias la='ls -la'
 alias l='ls -CF'
 alias ..='cd ..'
 alias ...='cd ../..'
-if [ ! -f /root/.panda-apk-updated ]; then
-  (apk update && touch /root/.panda-apk-updated) &
-fi
+# NOTE: no background 'apk update &' here — it races the user's own apk
+# commands and dies with "Unable to lock database" forever (the success
+# marker is never written when the lock is lost). Run `apk update` manually.
+
+# ── Prompt: busybox-ash compatible (no PROMPT_COMMAND, no bash \033/\w).
+# Real ESC bytes via printf, re-evaluated on every prompt display through
+# PS1 command substitution (busybox ASH_EXPAND_PRMT, enabled on Alpine).
+__panda_esc() { printf '\\033'; }
 __panda_git() {
-  command -v git >/dev/null 2>&1 || return
+  command -v git >/dev/null 2>&1 || return 0
   local b
-  b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return
+  b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return 0
   [ -n "\$(git status --porcelain 2>/dev/null)" ] && b="\$b *"
-  printf ' \033[38;5;141m %s\033[0m' "\$b"
+  printf ' %s[38;5;141m%s%s[0m' "\$(__panda_esc)" "\$b" "\$(__panda_esc)"
 }
-__panda_prompt() {
-  local code=\$?
-  local c='\033[38;5;75m'
-  [ "\$code" -ne 0 ] && c='\033[38;5;203m'
-  PS1="\033[38;5;110m╭─ \033[38;5;183m\w\033[0m\$(__panda_git) \033[38;5;110m[\${code}]\033[0m\\n\${c}╰─❯ \033[0m"
+__panda_ps() {
+  local code=\$? e p c=75
+  e=\$(__panda_esc)
+  [ "\$code" -ne 0 ] && c=203
+  case "\$PWD" in
+    "\$HOME") p='~' ;;
+    "\$HOME"/*) p="~\${PWD#\$HOME}" ;;
+    *) p="\$PWD" ;;
+  esac
+  printf '%s[38;5;110m╭─ %s[38;5;183m%s%s %s[38;5;%sm[%s]%s[0m\\n%s[38;5;%sm╰─❯ %s[0m ' \\
+    "\$e" "\$e" "\$p" "\$(__panda_git)" "\$e" "\$c" "\$code" "\$e" "\$e" "\$c" "\$e"
 }
-PROMPT_COMMAND=__panda_prompt
-__panda_prompt
+PS1='\$(__panda_ps)'
 ''';
 
   static Future<void> ensureAlpineRuntimeFiles() async =>
@@ -450,5 +460,19 @@ __panda_prompt
         'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n');
     _write('$dir/root/.profile', profile);
     _write('$dir/root/.bashrc', profile);
+
+    // apk wrappers so `pkg`, `apt` and `apt-get` behave like Termux's apt.
+    // Executable scripts (not functions) because busybox ash cannot define
+    // functions with '-' in their name.
+    const apkWrapper = '#!/bin/sh\nexec /sbin/apk "\$@"\n';
+    for (final name in const ['pkg', 'apt', 'apt-get']) {
+      _write('$dir/usr/local/bin/$name', apkWrapper);
+    }
+    try {
+      await Process.run('/system/bin/sh', [
+        '-c',
+        'chmod 755 "$dir/usr/local/bin/pkg" "$dir/usr/local/bin/apt" "$dir/usr/local/bin/apt-get"',
+      ]);
+    } catch (_) {}
   }
 }
