@@ -108,16 +108,26 @@ class _SetupScreenState extends State<SetupScreen>
     return done / _steps.length;
   }
 
-  /// Bulletproof logging - can never throw and kill setup.
+  /// Bulletproof logging - can never throw, block, and kill setup.
   void _addLog(String message) {
     try {
       final ts = DateTime.now().toString().substring(11, 19);
       _logs.add('[$ts] $message');
-      if (mounted) setState(() {});
       print('[SetupScreen] $message');
-      // Non-blocking: PandaLog.i can hang if bridge not initialized yet
+      // Schedule setState for next frame — never block this method.
       // ignore: unawaited_futures
-      try { Future.microtask(() { try { PandaLog.i('SetupScreen', message); } catch (_) {} }); } catch (_) {}
+      Future.microtask(() {
+        try {
+          if (mounted) setState(() {});
+        } catch (_) {}
+      });
+      // Fire-and-forget PandaLog — can hang if bridge not ready.
+      // ignore: unawaited_futures
+      Future(() {
+        try { PandaLog.i('SetupScreen', message); } catch (_) {}
+      });
+      // Auto-scroll log view on next frame.
+      // ignore: unawaited_futures
       WidgetsBinding.instance.addPostFrameCallback((_) {
         try {
           if (_logScrollController.hasClients) {
