@@ -6971,53 +6971,52 @@ class _SelectTypeState extends State<SelectType>
           );
         }
 
-        // Gather and combine thinking text
-        final thinkTexts = <String>[];
-        if (think.isNotEmpty) thinkTexts.add(think);
+        // ── Agrégation chronologique ─────────────────────────────────────
+        // Raisonnements + appels d'outils sont absorbés dans UN groupe
+        // Réflexion persistant ; chaque bloc texte devient un Output
+        // indépendant rendu en dessous, un par un.
+        final events = <Map<String, dynamic>>[];
         for (final b in blocks) {
-          if (b['type'] == 'thinking') {
-            final t = b['thinking'] as String? ?? '';
-            if (t.isNotEmpty) thinkTexts.add(t);
+          final bt = b['type'] as String? ?? '';
+          if (bt == 'thinking' || bt == 'toolCall') events.add(b);
+        }
+        // Messages legacy : tool calls stockés à plat dans msg['toolCalls'].
+        if (blocks.isEmpty) {
+          for (final c in calls) {
+            events.add({'type': 'toolCall', ...c});
           }
         }
-        final combinedThinking = thinkTexts.join('\n\n').trim();
-
-        // Gather all tool calls
-        final allTools = <Map<String, dynamic>>[];
-        if (blocks.isNotEmpty) {
-          for (final b in blocks) {
-            if (b['type'] == 'toolCall') {
-              allTools.add(b);
-            }
-          }
-        } else {
-          allTools.addAll(calls);
+        // Buffer de réflexion live pas encore flushé dans blocks.
+        if (think.isNotEmpty && !events.any((e) => e['type'] == 'thinking')) {
+          events.insert(0, {'type': 'thinking', 'thinking': think});
         }
 
-        // Separate pending approvals from completed/running tools
-        final pendingTools = allTools.where((t) => t['status'] == 'pending_approval' || t['status'] == 'pending').toList();
-        final completedTools = allTools.where((t) => t['status'] != 'pending_approval' && t['status'] != 'pending').toList();
 
-        // Gather final response text
-        String finalResponseText = text;
-        if (blocks.isNotEmpty) {
-          final textBlocks = blocks.where((b) => b['type'] == 'text').map((b) => b['text'] as String? ?? '').toList();
-          if (textBlocks.isNotEmpty) {
-            finalResponseText = textBlocks.join('').trim();
-          }
-        }
+        final isActiveMsg = i == _agentMessages.length - 1 && _agentGenerating;
 
-        // Ensure streaming thinking tag content is stripped from the text view
-        final processedText = _extractThinkingFromText(finalResponseText, '');
-        final cleanResponseText = processedText['text']!;
-        final extractedStreamingThink = processedText['thinking']!.trim();
-        String finalThinking = combinedThinking;
-        if (extractedStreamingThink.isNotEmpty) {
-          if (finalThinking.isEmpty) {
-            finalThinking = extractedStreamingThink;
-          } else if (!finalThinking.contains(extractedStreamingThink)) {
-            finalThinking = '$finalThinking\n\n$extractedStreamingThink';
+        final reflectionEvents = events
+            .where((e) =>
+                e['type'] != 'toolCall' ||
+                (e['status'] != 'pending_approval' && e['status'] != 'pending'))
+            .toList();
+        final pendingTools = events
+            .where((e) =>
+                e['type'] == 'toolCall' &&
+                (e['status'] == 'pending_approval' || e['status'] == 'pending'))
+            .toList();
+
+        // Outputs : une carte par segment de texte, ordre chronologique.
+        final outputs = <String>[];
+        final msgTextBlocks = blocks.where((b) => b['type'] == 'text').toList();
+        if (msgTextBlocks.isNotEmpty) {
+          for (final b in msgTextBlocks) {
+            final p = _extractThinkingFromText(b['text'] as String? ?? '', '');
+            final t = p['text']!.trim();
+            if (t.isNotEmpty) outputs.add(t);
           }
+        } else if (text.trim().isNotEmpty) {
+          final p = _extractThinkingFromText(text, '');
+          if (p['text']!.trim().isNotEmpty) outputs.add(p['text']!.trim());
         }
 
         return Padding(
@@ -7025,22 +7024,13 @@ class _SelectTypeState extends State<SelectType>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Grouped Agent Steps: Thinking (top) → Tool Calls (bottom) → Response
-              // All thinking blocks combined into one collapsible "Réflexion" box
-              if (finalThinking.isNotEmpty || (i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.thinking))
-                _ThinkingBlock(
-                  thinking: finalThinking.isEmpty ? 'Analyse en cours\u2026' : finalThinking,
-                  isDark: isDark,
-                  fg: fg,
-                  muted: muted,
-                ),
-
-              // All completed tool calls grouped in a single collapsible chevron box
-              if (completedTools.isNotEmpty)
-                _AgentToolCallsGroup(
-                  toolCalls: completedTools,
-                  isStreaming: i == _agentMessages.length - 1 && _agentGenerating && _agentPhase == AgentPhase.toolRunning,
-                  currentTool: i == _agentMessages.length - 1 && _agentGenerating ? _agentCurrentTool : '',
+              // 1. Groupe Réflexion persistant — absorbe TOUT le raisonnement et
+              //    TOUS les appels d'outils du tour. Jamais rendus séparément.
+              if (reflectionEvents.isNotEmpty ||
+                  (isActiveMsg && _agentPhase == AgentPhase.thinking))
+                _ReflectionGroup(
+                  events: reflectionEvents,
+                  isActive: isActiveMsg,
                   isDark: isDark,
                   fg: fg,
                   muted: muted,
@@ -7073,32 +7063,34 @@ class _SelectTypeState extends State<SelectType>
                       },
                     )),
 
-              // 3. Clean streaming / static response markdown view
-              if (cleanResponseText.isNotEmpty)
+              // 3. Outputs — chaque segment de réponse est rendu indépendamment.
+              for (var oi = 0; oi < outputs.length; oi++)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
                   child: _AgentMarkdownView(
-                    markdown: cleanResponseText,
+                    markdown: outputs[oi],
                     isDark: isDark,
                     fg: fg,
                     isError: isError,
-                    isStreaming: isStreaming,
+                    isStreaming: isStreaming && oi == outputs.length - 1,
                   ),
                 ),
 
               // 4. Fallback loader chip if generation is active and there is no text response yet
-              if (i == _agentMessages.length - 1 && _agentGenerating && cleanResponseText.isEmpty)
+              if (isActiveMsg && outputs.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: _AgentPhaseChip(
                     phase: _agentPhase,
                     isDark: isDark,
                     toolName: _agentCurrentTool,
+                    fg: fg,
+                    muted: muted,
                   ),
                 ),
 
               // Action row (copy + retry) — shown after generation
-              if (!isStreaming && (text.isNotEmpty || isError))
+              if (!isStreaming && (outputs.isNotEmpty || isError))
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
@@ -9769,6 +9761,147 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
   }
 }
 
+/// Groupe Réflexion persistant — absorbe TOUS les segments de raisonnement et
+/// tous les appels d'outils d'un tour de l'agent dans une timeline plate unique.
+/// Les appels d'outils n'apparaissent jamais comme des éléments séparés de la
+/// conversation : ils vivent uniquement à l'intérieur de ce groupe.
+class _ReflectionGroup extends StatefulWidget {
+  final List<Map<String, dynamic>> events;
+  final bool isActive;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  const _ReflectionGroup({
+    required this.events,
+    required this.isActive,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  State<_ReflectionGroup> createState() => _ReflectionGroupState();
+}
+
+class _ReflectionGroupState extends State<_ReflectionGroup> {
+  bool _userToggled = false;
+  bool _expanded = false;
+
+  Widget _eventRow(Map<String, dynamic> e) {
+    if (e['type'] == 'thinking') {
+      final txt = ((e['thinking'] as String?) ?? '')
+          .replaceAll(
+              RegExp(r'Executing \d+ tool\(s\)\.\.\.', caseSensitive: false),
+              '')
+          .replaceAll(RegExp(r'Tool call:.*', caseSensitive: false), '')
+          .trim();
+      if (txt.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(
+          txt,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1.45,
+            fontStyle: FontStyle.italic,
+            color: widget.fg.withValues(alpha: 0.65),
+          ),
+        ),
+      );
+    }
+
+    final name = (e['name'] as String?) ?? (e['toolName'] as String?) ?? '';
+    final status = (e['status'] as String?) ?? 'done';
+    return _ToolCallBlock(
+      toolName: name,
+      args: (e['args'] as Map?)?.cast<String, dynamic>() ?? const {},
+      result: e['result'] as String?,
+      status: status,
+      isDark: widget.isDark,
+      fg: widget.fg,
+      muted: widget.muted,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Pendant la génération le groupe reste déplié ; une fois terminé il se
+    // replie automatiquement (sauf si l'utilisateur a manuellement basculé).
+    final showBody = _userToggled ? _expanded : widget.isActive;
+    final toolCount = widget.events.where((e) => e['type'] == 'toolCall').length;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 2, bottom: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _expanded = !(_userToggled ? _expanded : widget.isActive);
+                _userToggled = true;
+              });
+            },
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+              child: Row(
+                children: [
+                  Icon(Icons.psychology,
+                      size: 14, color: widget.fg.withValues(alpha: 0.75)),
+                  const SizedBox(width: 6),
+                  Text(
+                    widget.isActive ? 'Réflexion en cours\u2026' : 'Réflexion',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w500,
+                      color: widget.fg.withValues(alpha: 0.85),
+                    ),
+                  ),
+                  if (toolCount > 0) ...[
+                    const SizedBox(width: 6),
+                    Text(
+                      '$toolCount outil${toolCount > 1 ? 's' : ''}',
+                      style: TextStyle(fontSize: 10, color: widget.muted),
+                    ),
+                  ],
+                  const Spacer(),
+                  if (widget.isActive)
+                    SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: widget.muted,
+                      ),
+                    ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    showBody ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                    size: 12,
+                    color: widget.muted,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (showBody)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 4, 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final e in widget.events) _eventRow(e),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // _ToolCallBlock — bloc expandable pour un appel d'outil (style Replit)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -9837,7 +9970,6 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark   = widget.isDark;
     final isPending = widget.status == 'pending_approval';
     final isRunning = widget.status == 'running';
     final isError   = widget.result?.startsWith('Error') ?? false;
@@ -9851,16 +9983,16 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
         margin: const EdgeInsets.symmetric(vertical: 6),
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xff2b2210) : const Color(0xfffff8e1),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.amber[700]!, width: 1.5),
+          border: Border.all(color: widget.fg.withValues(alpha: 0.35)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.shield_outlined, size: 16, color: Colors.amber[600]),
+                Icon(Icons.shield_outlined,
+                    size: 16, color: widget.fg.withValues(alpha: 0.85)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -9868,7 +10000,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.amber[200] : Colors.amber[900],
+                      color: widget.fg,
                     ),
                   ),
                 ),
@@ -9879,15 +10011,15 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
               padding: const EdgeInsets.all(8),
               width: double.infinity,
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xff1a1a1a) : Colors.white,
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: isDark ? Colors.grey[800]! : Colors.grey[300]!),
+                border: Border.all(color: widget.fg.withValues(alpha: 0.18)),
               ),
               child: SelectableText(
                 cmdStr,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontFamily: 'monospace',
+                  color: widget.fg,
                 ),
               ),
             ),
@@ -9901,20 +10033,19 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.red[700]!.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.red[400]!),
+                      border: Border.all(color: widget.fg.withValues(alpha: 0.4)),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.close, size: 12, color: Colors.red[400]),
+                        Icon(Icons.close, size: 12, color: widget.fg),
                         const SizedBox(width: 4),
                         Text(
                           'Refuser',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: Colors.red[400],
+                            color: widget.fg,
                           ),
                         ),
                       ],
@@ -9928,19 +10059,21 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.green[600],
+                      color: widget.fg,
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        Icon(Icons.check, size: 12, color: Colors.white),
-                        SizedBox(width: 4),
+                        Icon(Icons.check,
+                            size: 12,
+                            color: widget.isDark ? Colors.black : Colors.white),
+                        const SizedBox(width: 4),
                         Text(
                           'Approuver',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: widget.isDark ? Colors.black : Colors.white,
                           ),
                         ),
                       ],
@@ -9967,7 +10100,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       value: 'autopilot',
                       child: Row(
                         children: [
-                          Icon(Broken.send_2, size: 14, color: Colors.green[400]),
+                          Icon(Broken.send_2, size: 14, color: widget.fg.withValues(alpha: 0.8)),
                           const SizedBox(width: 8),
                           const Text('Passer en mode Autopilote', style: TextStyle(fontSize: 12)),
                         ],
@@ -9977,7 +10110,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       value: 'session',
                       child: Row(
                         children: [
-                          Icon(Broken.flash_1, size: 14, color: Colors.amber[400]),
+                          Icon(Broken.flash_1, size: 14, color: widget.fg.withValues(alpha: 0.8)),
                           const SizedBox(width: 8),
                           const Text('Autoriser toutes les commandes (session)', style: TextStyle(fontSize: 12)),
                         ],
@@ -9987,7 +10120,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       value: 'whitelist',
                       child: Row(
                         children: [
-                          Icon(Broken.shield_tick, size: 14, color: Colors.blue[400]),
+                          Icon(Broken.shield_tick, size: 14, color: widget.fg.withValues(alpha: 0.8)),
                           const SizedBox(width: 8),
                           const Text('Toujours autoriser cette commande', style: TextStyle(fontSize: 12)),
                         ],
@@ -9997,7 +10130,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       value: 'deny',
                       child: Row(
                         children: [
-                          Icon(Broken.close_circle, size: 14, color: Colors.red[400]),
+                          Icon(Broken.close_circle, size: 14, color: widget.fg.withValues(alpha: 0.8)),
                           const SizedBox(width: 8),
                           const Text('Refuser et annuler', style: TextStyle(fontSize: 12)),
                         ],
@@ -10012,25 +10145,12 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
       );
     }
 
-    final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
-    final bgC     = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
-    final iconC   = isRunning
-        ? Colors.orange
-        : isError
-            ? Colors.red[400]!
-            : Colors.green[400]!;
-
     return GestureDetector(
       onTap: widget.result != null
           ? () => setState(() => _expanded = !_expanded)
           : null,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 4),
-        decoration: BoxDecoration(
-          color: bgC,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: borderC),
-        ),
+        margin: const EdgeInsets.only(bottom: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -10046,11 +10166,17 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       height: 12,
                       child: CircularProgressIndicator(
                         strokeWidth: 1.5,
-                        color: Colors.orange,
+                        color: widget.muted,
                       ),
                     )
                   else
-                    Icon(_iconFor(widget.toolName), size: 12, color: iconC),
+                    Icon(
+                      _iconFor(widget.toolName),
+                      size: 12,
+                      color: isError
+                          ? widget.fg.withValues(alpha: 0.85)
+                          : widget.fg.withValues(alpha: 0.5),
+                    ),
                   const SizedBox(width: 6),
                   // Tool name
                   Text(
@@ -10084,26 +10210,17 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
             // ── Expanded result ────────────────────────────────────────
             if (_expanded && widget.result != null)
               Container(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xff1e1e1e)
-                        : const Color(0xfffafafa),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: borderC),
-                  ),
-                  child: SelectableText(
-                    widget.result!.length > 2000
-                        ? '${widget.result!.substring(0, 2000)}\n\u2026 (tronqué)'
-                        : widget.result!,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                      color: isError ? Colors.red[400] : widget.fg,
-                      height: 1.4,
-                    ),
+                padding: const EdgeInsets.fromLTRB(26, 0, 8, 8),
+                width: double.infinity,
+                child: SelectableText(
+                  widget.result!.length > 2000
+                      ? '${widget.result!.substring(0, 2000)}\n\u2026 (tronqué)'
+                      : widget.result!,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontFamily: 'monospace',
+                    color: widget.fg.withValues(alpha: 0.7),
+                    height: 1.4,
                   ),
                 ),
               ),
@@ -10230,11 +10347,15 @@ class _AgentPhaseChip extends StatefulWidget {
   final AgentPhase phase;
   final bool       isDark;
   final String     toolName;
+  final Color      fg;
+  final Color      muted;
 
   const _AgentPhaseChip({
     required this.phase,
     required this.isDark,
     this.toolName = '',
+    required this.fg,
+    required this.muted,
   });
 
   @override
@@ -10280,27 +10401,22 @@ class _AgentPhaseChipState extends State<_AgentPhaseChip> {
 
     final String label;
     final String variant;
-    final Color color;
 
     switch (widget.phase) {
       case AgentPhase.thinking:
         label = _isFrench ? 'Réflexion en cours\u2026' : 'Thinking\u2026';
         variant = 'Orbit';
-        color = Colors.purple;
         break;
       case AgentPhase.streaming:
         label = _isFrench ? 'Génération de la réponse\u2026' : 'Generating\u2026';
         variant = 'Dots';
-        color = const Color(0xff5090c8);
         break;
       case AgentPhase.error:
         label = _isFrench ? 'Erreur' : 'Error';
         variant = 'Drive';
-        color = Colors.red;
         break;
       case AgentPhase.toolRunning:
         variant = 'Drive';
-        color = Colors.orange;
         final tName = widget.toolName;
         if (tName.contains('runShellCommand') || tName.contains('run_command')) {
           label = _isFrench ? 'Exécution d\'une commande\u2026' : 'Running command\u2026';
@@ -10317,21 +10433,14 @@ class _AgentPhaseChipState extends State<_AgentPhaseChip> {
       default:
         label = _isFrench ? 'Traitement\u2026' : 'Working\u2026';
         variant = 'Drive';
-        color = Colors.green;
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(widget.isDark ? 0.12 : 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.2)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 6),
       child: LoadingStateWidget(
         label: label,
         variant: variant,
-        color: color,
+        color: widget.muted,
       ),
     );
   }
@@ -10846,25 +10955,15 @@ class _UserMessageBubbleState extends State<_UserMessageBubble> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: widget.isDark
-                      ? const Color(0xff1e293b)
-                      : const Color(0xffe2e8f0),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: widget.isDark
-                        ? const Color(0xff334155)
-                        : const Color(0xffcbd5e1),
-                    width: 1,
-                  ),
-                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
                 child: SelectableText(
                   widget.text,
+                  textAlign: TextAlign.right,
                   style: TextStyle(
                     fontSize: 13,
-                    height: 1.4,
+                    height: 1.45,
+                    fontWeight: FontWeight.w500,
                     color: widget.isDark ? Colors.white : Colors.black87,
                   ),
                 ),
