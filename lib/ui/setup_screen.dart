@@ -323,7 +323,7 @@ class _SetupScreenState extends State<SetupScreen>
         const Duration(seconds: 90),
         onTimeout: () {
           _addLog('⚠️ Alpine extraction timed out after 90s');
-          PandaLog.e('SetupScreen', 'Alpine extraction timeout');
+          try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Alpine extraction timeout'); } catch (_) {} }); } catch (_) {}
           return false;
         },
       );
