@@ -203,8 +203,12 @@ class AlpineSetup {
             final content = file.content;
             if (content is List<int>) {
               await outFile.writeAsBytes(content, flush: true);
-            } else if (content is InputStream) {
-              await outFile.writeAsBytes(content.toUint8List(), flush: true);
+            } else {
+              // Fallback: convert via byteData
+              final data = file.content as dynamic;
+              if (data != null) {
+                await outFile.writeAsBytes(List<int>.from(data), flush: true);
+              }
             }
             filesWritten++;
           } else if (file.name.endsWith('/') || file.isDirectory) {
