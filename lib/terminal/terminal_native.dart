@@ -590,14 +590,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
     // fichiers », il existe mais reste illisible : `ls` renvoie alors
     // "Permission denied". On teste la lisibilite reelle avant de choisir
     // le repertoire de travail de la session.
+    // Termux behaviour: no project open -> silent session in ~ (/root).
+    // The project (when any) is bind-mounted at /root/workspace.
     final projectReadable = widget.projectDir.trim().isNotEmpty &&
         AlpineSetup.isDirAccessible(widget.projectDir);
-    if (!projectReadable) {
-      runtime.terminal.write(
-        '\r\n\x1b[36m[Aucun projet ouvert — session dans /root. '
-        'Le projet apparaîtra dans ~/workspace.]\x1b[0m\r\n',
-      );
-    }
 
     try {
       final prootArgs = <String>[
@@ -634,10 +630,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
       addConditionalBind('/sdcard');
       addConditionalBind('/storage');
       addConditionalBind(appDir);
-      if (Directory(tempDir).existsSync()) {
+      // PROOT_TMP_DIR must exist on the host: PRoot extracts its internal
+      // loader there and chmods it before starting the tracee.
+      try {
+        Directory(tempDir).createSync(recursive: true);
         addConditionalBind(tempDir, '/tmp');
-      }
-      addConditionalBind(widget.projectDir);
+      } catch (_) {}
       // Point de montage stable du projet : evite les chemins Android
       // exotiques et donne un cwd previsible dans l'invite.
       if (projectReadable) {

@@ -26,7 +26,15 @@ android {
     defaultConfig {
         applicationId = "com.panda.ide"
         minSdk = 26
-        targetSdk = 36
+        // ── Termux approach (termux-app gradle.properties: targetSdkVersion=28) ──
+        // Android 10+ blocks exec() of binaries stored in app-writable data
+        // (SELinux execute_no_trans) for apps targeting API >= 29. That is why
+        // PRoot failed with: execve("/bin/sh"): Permission denied.
+        // Termux keeps targetSdk 28 for exactly this reason: apps targeting
+        // <= 28 keep the legacy SELinux domain where exec()/chmod() on app
+        // data files is allowed. The Alpine rootfs lives in app data, so this
+        // is what makes PRoot work. Do NOT raise it back to 29+.
+        targetSdk = 28
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         // NOTE: ndk.abiFilters retiré intentionnellement — le workflow CI passe

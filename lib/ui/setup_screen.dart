@@ -164,7 +164,7 @@ class _SetupScreenState extends State<SetupScreen>
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> _startSetup() async {
-    print('[SetupScreen] _startSetup called, mounted=$mounted, steps=\${_steps.length}');
+    print('[SetupScreen] _startSetup called, mounted=$mounted, steps=${_steps.length}');
     final sw = Stopwatch()..start();
 
     try {

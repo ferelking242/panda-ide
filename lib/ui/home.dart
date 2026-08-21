@@ -1374,7 +1374,7 @@ class _SelectTypeState extends State<SelectType>
                             minHeight: 10,
                           ),
                           child: Text(
-                            '\${PandaNotifications.unreadCount}',
+                            '${PandaNotifications.unreadCount}',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 7,

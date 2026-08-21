@@ -18,19 +18,19 @@ class LogsExplorerPage extends StatefulWidget {
 String _fmtTime(DateTime dt) {
   String p2(int v) => v.toString().padLeft(2, '0');
   String p3(int v) => v.toString().padLeft(3, '0');
-  return '\${p2(dt.hour)}:\${p2(dt.minute)}:\${p2(dt.second)}.\${p3(dt.millisecond)}';
+  return '${p2(dt.hour)}:${p2(dt.minute)}:${p2(dt.second)}.${p3(dt.millisecond)}';
 }
 String _fmtDateTime(DateTime dt) {
   String p2(int v) => v.toString().padLeft(2, '0');
-  return '\${dt.year}-\${p2(dt.month)}-\${p2(dt.day)} \${_fmtTime(dt)}';
+  return '${dt.year}-${p2(dt.month)}-${p2(dt.day)} ${_fmtTime(dt)}';
 }
 String _fmtHM(DateTime dt) {
   String p2(int v) => v.toString().padLeft(2, '0');
-  return '\${p2(dt.hour)}:\${p2(dt.minute)}';
+  return '${p2(dt.hour)}:${p2(dt.minute)}';
 }
 String _fmtTimeShort(DateTime dt) {
   String p2(int v) => v.toString().padLeft(2, '0');
-  return '\${p2(dt.hour)}:\${p2(dt.minute)}:\${p2(dt.second)}';
+  return '${p2(dt.hour)}:${p2(dt.minute)}:${p2(dt.second)}';
 }
 
 class _LogsExplorerPageState extends State<LogsExplorerPage>

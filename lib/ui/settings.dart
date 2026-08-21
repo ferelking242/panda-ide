@@ -669,7 +669,7 @@ class _SettingsState extends State<Settings> {
                   final file = await PandaLogger.exportDiagnostics();
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Rapport exporté: \${file.path}')),
+                      SnackBar(content: Text('Rapport exporté: ${file.path}')),
                     );
                   }
                 } catch (e) {
@@ -757,9 +757,9 @@ class _SettingsState extends State<Settings> {
       builder: (context, snapshot) {
         final size = snapshot.data ?? 0;
         final sizeStr = size > 1024 * 1024
-            ? '\${(size / 1024 / 1024).toStringAsFixed(1)} MB'
+            ? '${(size / 1024 / 1024).toStringAsFixed(1)} MB'
             : size > 1024
-                ? '\${(size / 1024).toStringAsFixed(1)} KB'
+                ? '${(size / 1024).toStringAsFixed(1)} KB'
                 : '$size B';
         return ListTile(
           title: const Text('Taille du stockage', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
