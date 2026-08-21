@@ -1195,7 +1195,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (state.sessions.isEmpty) return const Center(child: CircularProgressIndicator());
     return PageView.builder(
       controller: _pageController,
-      physics: const BouncingScrollPhysics(),
+      physics: state.sessions.length <= 1
+          ? const NeverScrollableScrollPhysics()
+          : const BouncingScrollPhysics(),
       onPageChanged: (index) {
         if (_syncingPage) return;
         if (index < state.sessions.length) {
@@ -1229,6 +1231,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
             autofocus: session.id == state.activeSessionId,
             keyboardType: TextInputType.multiline,
             theme: activeTheme.theme,
+            cursorType: TerminalCursorType.bar,
+            alwaysShowCursor: true,
+            deleteDetection: true,
             textStyle: TerminalStyle(
               fontSize: state.fontSize,
               fontFamily: _terminalFontFamilyFromConfig(),
@@ -1281,6 +1286,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 autofocus: isActive,
                 keyboardType: TextInputType.multiline,
                 theme: activeTheme.theme,
+                cursorType: TerminalCursorType.bar,
+                alwaysShowCursor: true,
+                deleteDetection: true,
                 textStyle: TerminalStyle(
                   fontSize: state.fontSize,
                   fontFamily: _terminalFontFamilyFromConfig(),
