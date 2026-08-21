@@ -187,28 +187,49 @@ class AlpineSetup {
         final tarArchive = TarDecoder().decodeBytes(tarBytes);
         PandaLog.d('AlpineSetup', '[4/6] Tar entries: ${tarArchive.length}');
 
+        // Collect symlinks to create AFTER all files are extracted
+        final List<ArchiveFile> symlinks = [];
         int filesWritten = 0;
         int dirsCreated = 0;
-        int symlinksCreated = 0;
         for (final file in tarArchive) {
           final destPath = '${destination.path}/${file.name}';
+          if (file.isSymbolicLink) {
+            symlinks.add(file);
+            continue;
+          }
           if (file.isFile) {
             final outFile = File(destPath);
             await outFile.parent.create(recursive: true);
-            await outFile.writeAsBytes(file.content as List<int>, flush: true);
-            // Preserve executable bit
-            if (file.mode & 0x49 != 0) {
-              try {
-                await Process.run('chmod', ['755', destPath]);
-              } catch (_) {}
+            final content = file.content;
+            if (content is List<int>) {
+              await outFile.writeAsBytes(content, flush: true);
+            } else if (content is InputStream) {
+              await outFile.writeAsBytes(content.toUint8List(), flush: true);
             }
             filesWritten++;
-          } else if (file.name.endsWith('/')) {
+          } else if (file.name.endsWith('/') || file.isDirectory) {
             await Directory(destPath).create(recursive: true);
             dirsCreated++;
           }
         }
-        PandaLog.d('AlpineSetup', '[4/6] Extracted: $filesWritten files, $dirsCreated dirs');
+
+        // Create symlinks after files so targets exist
+        int symlinksCreated = 0;
+        for (final link in symlinks) {
+          final destPath = '${destination.path}/${link.name}';
+          final target = link.symbolicLink;
+          if (target == null || target.isEmpty) continue;
+          try {
+            final parent = File(destPath).parent;
+            if (!parent.existsSync()) await parent.create(recursive: true);
+            Link(destPath).createSync(target, recursive: true);
+            symlinksCreated++;
+          } catch (e) {
+            PandaLog.w('AlpineSetup', 'Symlink failed: ${link.name} -> $target: $e');
+          }
+        }
+
+        PandaLog.d('AlpineSetup', '[4/6] Extracted: $filesWritten files, $dirsCreated dirs, $symlinksCreated symlinks');
       } catch (e) {
         if (lastError.isEmpty) lastError = 'Tar extraction failed: $e';
         throw StateError(lastError);
