@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
+import 'package:archive/archive.dart';
 import 'package:panda/utils/panda_log.dart';
 
 /// Installs the official Alpine minirootfs without trying to repair an archive
