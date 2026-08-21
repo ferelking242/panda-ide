@@ -7,6 +7,7 @@ import 'package:flutter_pty/flutter_pty.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:xterm/xterm.dart';
+import 'package:xterm/src/ui/render.dart' show RenderTerminal;
 import 'package:flutter/material.dart';
 import '../ui/notifications.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,72 @@ import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import './terminal_bridge.dart';
+
+/// Taille de police par défaut du terminal — source de vérité du zoom
+/// (100%). Le pinch et les boutons A+/A− gravitent autour de cette valeur.
+const double kDefaultTerminalFontSize = 15.0;
+
+/// Reconnaissance de geste dédiée au pinch à DEUX doigts.
+///
+/// Contrairement au ScaleGestureRecognizer générique, celle-ci revendique
+/// l'arène dès que le deuxième doigt touche l'écran : le pinch ne peut plus
+/// être interprété comme un tap (ouverture du clavier), un scroll ou un
+/// swipe de pages. À un seul doigt elle ne se manifeste jamais, donc le
+/// comportement natif du terminal (tap, long-press, drag) reste intact.
+class _TwoFingerPinchRecognizer extends OneSequenceGestureRecognizer {
+  _TwoFingerPinchRecognizer({super.debugOwner});
+
+  void Function()? onStart;
+  void Function(double scale)? onUpdate;
+  void Function()? onEnd;
+
+  final Map<int, Offset> _pointers = {};
+  double? _baseSpan;
+
+  @override
+  void addPointer(PointerDownEvent event) {
+    startTrackingPointer(event.pointer);
+    _pointers[event.pointer] = event.position;
+    if (_pointers.length == 2 && _baseSpan == null) {
+      resolve(GestureDisposition.accepted);
+      _baseSpan = _currentSpan;
+      onStart?.call();
+    }
+  }
+
+  @override
+  void handleEvent(PointerEvent event) {
+    if (event is PointerMoveEvent && _pointers.containsKey(event.pointer)) {
+      _pointers[event.pointer] = event.position;
+      final base = _baseSpan;
+      if (base != null && base > 0) {
+        onUpdate?.call(_currentSpan / base);
+      }
+    } else if (event is PointerUpEvent || event is PointerCancelEvent) {
+      _pointers.remove(event.pointer);
+      stopTrackingPointer(event.pointer);
+      if (_baseSpan != null && _pointers.length < 2) {
+        _baseSpan = null;
+        onEnd?.call();
+      }
+    }
+  }
+
+  double get _currentSpan {
+    final points = _pointers.values.toList(growable: false);
+    if (points.length < 2) return 0;
+    return (points[0] - points[1]).distance;
+  }
+
+  @override
+  void acceptGesture(int pointer) {}
+
+  @override
+  void rejectGesture(int pointer) {}
+
+  @override
+  String get debugDescription => 'two finger pinch zoom';
+}
 
 // ── Exit banner data ─────────────────────────────────────────────────────────
 class _ExitBannerData {
@@ -278,6 +345,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   OverlayEntry? _selectionToolbarOverlay;
   bool _hasSelection = false;
+  // Horloge de repositionnement des poignées de sélection (scroll, layout,
+  // changement de police) : incrémente un tick qui reconstruit l'overlay.
+  final ValueNotifier<int> _selectionUiTick = ValueNotifier<int>(0);
+  Timer? _selectionUiSyncTimer;
+  final GlobalKey _terminalHostKey = GlobalKey();
 
   final ValueNotifier<List<String>?> _suggestionsNotifier = ValueNotifier(null);
   final ScrollController _suggestionScrollController = ScrollController();
@@ -297,7 +369,22 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Axis _splitAxis = Axis.horizontal;
 
   // ── Pinch-to-zoom ────────────────────────────────────────────────────────
-  double _pinchBaseFontSize = 14.0;
+  double _pinchBaseFontSize = kDefaultTerminalFontSize;
+
+  void _onPinchStart() {
+    _pinchBaseFontSize = _sessionBloc.state.fontSize;
+    // Un pinch ne doit JAMAIS faire apparaître le clavier.
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  void _onPinchUpdate(double scale) {
+    final newSize = (_pinchBaseFontSize * scale).clamp(8.0, 40.0);
+    if ((newSize - _sessionBloc.state.fontSize).abs() >= 0.35) {
+      _onTerminalFontSizeChanged(newSize);
+    }
+  }
+
+  void _onPinchEnd() {}
 
   @override
   void initState() {
@@ -344,9 +431,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (hasSelection != _hasSelection) {
       _hasSelection = hasSelection;
       if (hasSelection) {
-        _showSelectionToolbar();
+        _showSelectionUI();
       } else {
-        _hideSelectionToolbar();
+        _hideSelectionUI();
       }
     }
   }
@@ -375,7 +462,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       sessionId: id,
       title: sessionTitle,
       terminal: Terminal(platform: TerminalTargetPlatform.android),
-      controller: TerminalController(selectionMode: SelectionMode.block),
+      controller: TerminalController(selectionMode: SelectionMode.line),
       isProot: true,
     );
     runtime.selectionListener = () => _onSelectionChanged(id);
@@ -430,7 +517,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       final runtime = _sessionRuntimes.remove(sessionId);
       await runtime?.dispose();
       _sessionBloc.add(DeleteTerminalSession(sessionId));
-      _hideSelectionToolbar();
+      _hideSelectionUI();
       _suggestionsNotifier.value = null;
       _hasSelection = false;
 
@@ -446,7 +533,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _sessionBloc.add(DeleteTerminalSession(sessionId));
 
     if (_sessionBloc.state.activeSessionId == sessionId) {
-      _hideSelectionToolbar();
+      _hideSelectionUI();
       _suggestionsNotifier.value = null;
       _hasSelection = false;
     }
@@ -507,9 +594,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
     try {
       final raw = context.read<ConfigBloc>().state.codeForgeConfig['terminalFontSize'];
       if (raw is num) return raw.toDouble();
-      if (raw is String) return double.tryParse(raw) ?? 14.0;
+      if (raw is String) return double.tryParse(raw) ?? kDefaultTerminalFontSize;
     } catch (_) {}
-    return 14.0;
+    return kDefaultTerminalFontSize;
   }
 
   String _terminalFontFamilyFromConfig() {
@@ -537,7 +624,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   void _onTerminalFontSizeChanged(double fontSize) {
     if (fontSize < 8) fontSize = 8;
-    if (fontSize > 32) fontSize = 32;
+    if (fontSize > 40) fontSize = 40;
     _sessionBloc.add(UpdateTerminalFontSize(fontSize: fontSize));
     _saveTerminalFontSize(fontSize);
   }
@@ -896,8 +983,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _suggestionsNotifier.value = null;
   }
 
-  void _showSelectionToolbar() {
-    _hideSelectionToolbar();
+  // ── UI de sélection : barre compacte + poignées déplaçables ────────────────
+
+  void _showSelectionUI() {
+    _hideSelectionUI();
     if (!mounted) return;
 
     final runtime = _activeRuntime();
@@ -906,175 +995,270 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final overlay = Overlay.of(context);
 
     _selectionToolbarOverlay = OverlayEntry(
-      builder: (context) {
-        return Positioned(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 56,
-          left: 0,
-          right: 0,
-          child: Center(
-            child: Material(
-              elevation: 8,
-              borderRadius: BorderRadius.circular(24),
-              color: const Color(0xff2d2d2d),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xff454545)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _toolbarButton(
-                      icon: Icons.copy,
-                      label: 'Copy',
-                      onTap: () {
-                        final selectedText =
-                            runtime.controller.selection != null
-                            ? runtime.terminal.buffer.getText(
-                                runtime.controller.selection!,
-                              )
-                            : '';
-                        if (selectedText.isNotEmpty) {
-                          Clipboard.setData(ClipboardData(text: selectedText));
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text('Copied to clipboard'),
-                              duration: const Duration(seconds: 1),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+      builder: (overlayCtx) {
+        return ValueListenableBuilder<int>(
+          valueListenable: _selectionUiTick,
+          builder: (context, _, __) {
+            if (runtime.controller.selection == null) return const SizedBox.shrink();
+
+            return Stack(
+              children: [
+                // ── Poignées de sélection ────────────────────────────────
+                ..._buildSelectionHandles(runtime),
+                // ── Barre d'actions compacte ─────────────────────────────
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: MediaQuery.of(overlayCtx).viewInsets.bottom + 48,
+                  child: Center(
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(14),
+                      color: const Color(0xdd1c1c1e),
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0x2effffff)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _toolbarIconButton(
+                              icon: Icons.select_all_rounded,
+                              tooltip: 'Tout sélectionner',
+                              onTap: () => _selectAll(runtime),
                             ),
-                          );
-                        }
-                        runtime.controller.clearSelection();
-                      },
-                    ),
-                    Container(
-                      width: 1,
-                      height: 24,
-                      color: const Color(0xff454545),
-                    ),
-                    _toolbarButton(
-                      icon: Icons.paste,
-                      label: 'Paste',
-                      onTap: () async {
-                        final data = await Clipboard.getData(
-                          Clipboard.kTextPlain,
-                        );
-                        if (data?.text != null) {
-                          runtime.pty?.write(
-                            const Utf8Encoder().convert(data!.text!),
-                          );
-                        }
-                        runtime.controller.clearSelection();
-                      },
-                    ),
-                    Container(
-                      width: 1,
-                      height: 24,
-                      color: const Color(0xff454545),
-                    ),
-                    _toolbarButton(
-                      icon: Icons.search,
-                      label: 'Search',
-                      onTap: () {
-                        final selectedText =
-                            runtime.controller.selection != null
-                            ? runtime.terminal.buffer.getText(
-                                runtime.controller.selection!,
-                              )
-                            : '';
-                        if (selectedText.isNotEmpty) {
-                          runtime.pty?.write(
-                            const Utf8Encoder().convert(
-                              'grep -r "${selectedText.replaceAll('"', '\\"')}" .',
+                            _toolbarIconButton(
+                              icon: Icons.copy_rounded,
+                              tooltip: 'Copier la sélection',
+                              onTap: () => _copySelection(runtime),
                             ),
-                          );
-                        }
-                        runtime.controller.clearSelection();
-                      },
+                            _toolbarIconButton(
+                              icon: Icons.paste_rounded,
+                              tooltip: 'Coller',
+                              onTap: () => _pasteIntoTerminal(runtime),
+                            ),
+                            _toolbarIconButton(
+                              icon: Icons.manage_search_rounded,
+                              tooltip: 'Rechercher dans le projet',
+                              onTap: () => _grepSelection(runtime),
+                            ),
+                            _toolbarIconButton(
+                              icon: Icons.auto_awesome,
+                              tooltip: "Envoyer à l'agent",
+                              onTap: () {
+                                final text = _selectedText(runtime);
+                                if (text.isNotEmpty) {
+                                  TerminalBridge.instance.sendToAgent(text);
+                                }
+                                runtime.controller.clearSelection();
+                              },
+                            ),
+                            _toolbarIconButton(
+                              icon: Icons.close_rounded,
+                              tooltip: 'Fermer',
+                              onTap: () => runtime.controller.clearSelection(),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    Container(
-                      width: 1,
-                      height: 24,
-                      color: const Color(0xff454545),
-                    ),
-                    _toolbarButton(
-                      icon: Icons.auto_awesome,
-                      label: 'Agent',
-                      onTap: () {
-                        final selectedText =
-                            runtime.controller.selection != null
-                            ? runtime.terminal.buffer.getText(
-                                runtime.controller.selection!,
-                              )
-                            : '';
-                        if (selectedText.isNotEmpty) {
-                          TerminalBridge.instance.sendToAgent(selectedText);
-                        }
-                        runtime.controller.clearSelection();
-                      },
-                    ),
-                    Container(
-                      width: 1,
-                      height: 24,
-                      color: const Color(0xff454545),
-                    ),
-                    _toolbarButton(
-                      icon: Icons.close,
-                      label: '',
-                      onTap: () {
-                        runtime.controller.clearSelection();
-                      },
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
+              ],
+            );
+          },
         );
       },
     );
 
     overlay.insert(_selectionToolbarOverlay!);
+
+    // Les poignées doivent suivre la sélection pendant le scroll / layout.
+    _selectionUiSyncTimer ??= Timer.periodic(const Duration(milliseconds: 250), (_) {
+      _selectionUiTick.value++;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_selectionToolbarOverlay != null) _selectionUiTick.value++;
+    });
   }
 
-  Widget _toolbarButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: label.isEmpty ? 8 : 12,
-          vertical: 8,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.9)),
-            if (label.isNotEmpty) ...[
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 13,
+  /// RenderTerminal de la vue active — donne accès à la conversion
+  /// pixel <-> cellule (scroll et padding inclus).
+  RenderTerminal? get _renderTerminal {
+    final ctx = _terminalHostKey.currentContext;
+    if (ctx == null) return null;
+    final root = ctx.findRenderObject();
+    if (root == null || !root.attached) return null;
+    final queue = <RenderObject>[root];
+    while (queue.isNotEmpty) {
+      final current = queue.removeLast();
+      if (current is RenderTerminal && current.attached) return current;
+      current.visitChildren(queue.add);
+    }
+    return null;
+  }
+
+  /// Positions écran des deux poignées : coin haut-gauche de la cellule de
+  /// début et bas de ligne de la cellule de fin.
+  (Offset?, Offset?) _handlePositions(_TerminalRuntime runtime) {
+    final rt = _renderTerminal;
+    final sel = runtime.controller.selection;
+    if (rt == null || sel == null || !rt.hasSize) return (null, null);
+    try {
+      final range = sel.normalized;
+      final startPx = rt.localToGlobal(rt.getOffset(range.begin));
+      final endCol = range.end.x > 0 ? range.end.x - 1 : range.end.x;
+      final endPx = rt.localToGlobal(rt.getOffset(CellOffset(endCol, range.end.y + 1)));
+      return (startPx, endPx);
+    } catch (_) {
+      return (null, null);
+    }
+  }
+
+  List<Widget> _buildSelectionHandles(_TerminalRuntime runtime) {
+    final (startPx, endPx) = _handlePositions(runtime);
+    if (startPx == null || endPx == null) return const [];
+
+    Widget handle(Offset pos, bool isStart) {
+      return Positioned(
+        left: pos.dx - 20,
+        top: isStart ? pos.dy - 28 : pos.dy + 2,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onPanUpdate: (details) =>
+              _dragSelectionHandle(runtime, isStart, details.globalPosition),
+          onPanEnd: (_) => _selectionUiTick.value++,
+          child: SizedBox(
+            width: 40,
+            height: 30,
+            child: Center(
+              child: Container(
+                width: 13,
+                height: 13,
+                decoration: BoxDecoration(
+                  color: const Color(0xff4c8dff),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black38, blurRadius: 3),
+                  ],
                 ),
               ),
-            ],
-          ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return [handle(startPx, true), handle(endPx, false)];
+  }
+
+  /// Déplace une poignée : convertit le doigt en cellule puis reconstruit
+  /// la sélection avec de nouvelles ancres.
+  void _dragSelectionHandle(
+    _TerminalRuntime runtime,
+    bool isStart,
+    Offset globalPos,
+  ) {
+    final rt = _renderTerminal;
+    final sel = runtime.controller.selection;
+    if (rt == null || sel == null) return;
+    try {
+      var cell = rt.getCellOffset(rt.globalToLocal(globalPos));
+      if (!isStart && cell.y == sel.end.y && cell.x < sel.end.x) {
+        cell = CellOffset(cell.x + 1, cell.y);
+      }
+      final base = isStart ? cell : sel.begin;
+      final extent = isStart ? sel.end : cell;
+      final buffer = runtime.terminal.buffer;
+      runtime.controller.setSelection(
+        buffer.createAnchorFromOffset(base),
+        buffer.createAnchorFromOffset(extent),
+        mode: SelectionMode.line,
+      );
+    } catch (_) {}
+  }
+
+  void _selectAll(_TerminalRuntime runtime) {
+    final buffer = runtime.terminal.buffer;
+    final rows = buffer.lines.length;
+    if (rows <= 0) return;
+    final cols = runtime.terminal.viewWidth > 0 ? runtime.terminal.viewWidth : 80;
+    try {
+      runtime.controller.setSelection(
+        buffer.createAnchorFromOffset(CellOffset(0, 0)),
+        buffer.createAnchorFromOffset(CellOffset(cols - 1, rows - 1)),
+        mode: SelectionMode.line,
+      );
+      _selectionUiTick.value++;
+    } catch (_) {}
+  }
+
+  String _selectedText(_TerminalRuntime runtime) {
+    final sel = runtime.controller.selection;
+    if (sel == null) return '';
+    try {
+      return runtime.terminal.buffer.getText(sel);
+    } catch (_) {
+      return '';
+    }
+  }
+
+  void _copySelection(_TerminalRuntime runtime) {
+    final selectedText = _selectedText(runtime);
+    if (selectedText.isEmpty) return;
+    Clipboard.setData(ClipboardData(text: selectedText));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Copié'),
+        duration: const Duration(milliseconds: 900),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
+  Future<void> _pasteIntoTerminal(_TerminalRuntime runtime) async {
+    if (widget.readOnly) return;
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = data?.text;
+    if (text != null && text.isNotEmpty) {
+      runtime.pty?.write(const Utf8Encoder().convert(text));
+    }
+  }
+
+  void _grepSelection(_TerminalRuntime runtime) {
+    final selectedText = _selectedText(runtime);
+    runtime.controller.clearSelection();
+    if (selectedText.isEmpty || widget.readOnly) return;
+    final escaped = selectedText.replaceAll('"', '\\"');
+    runtime.pty?.write(const Utf8Encoder().convert('grep -r "$escaped" .'));
+  }
+
+  Widget _toolbarIconButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 34,
+          height: 32,
+          child: Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.92)),
         ),
       ),
     );
   }
 
-  void _hideSelectionToolbar() {
+  void _hideSelectionUI() {
+    _selectionUiSyncTimer?.cancel();
+    _selectionUiSyncTimer = null;
     _selectionToolbarOverlay?.remove();
     _selectionToolbarOverlay = null;
   }
@@ -1126,7 +1310,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   @override
   void dispose() {
-    _hideSelectionToolbar();
+    _hideSelectionUI();
+    _selectionUiTick.dispose();
     _suggestionsNotifier.dispose();
     _suggestionScrollController.dispose();
     _pageController.dispose();
@@ -1165,17 +1350,17 @@ class _SetupTerminalState extends State<SetupTerminal> {
         final session = state.sessions[index];
         final runtime = _sessionRuntimes[session.id];
         if (runtime == null) return const SizedBox();
-        return GestureDetector(
-          onScaleStart: (details) {
-            _pinchBaseFontSize = state.fontSize;
-          },
-          onScaleUpdate: (details) {
-            if (details.pointerCount >= 2) {
-              final newSize = (_pinchBaseFontSize * details.scale).clamp(8.0, 32.0);
-              if ((newSize - state.fontSize).abs() > 0.5) {
-                _onTerminalFontSizeChanged(newSize);
-              }
-            }
+        return RawGestureDetector(
+          gestures: {
+            _TwoFingerPinchRecognizer:
+                GestureRecognizerFactoryWithHandlers<_TwoFingerPinchRecognizer>(
+              () => _TwoFingerPinchRecognizer(),
+              (instance) {
+                instance.onStart = _onPinchStart;
+                instance.onUpdate = _onPinchUpdate;
+                instance.onEnd = _onPinchEnd;
+              },
+            ),
           },
           child: TerminalView(
             runtime.terminal,
@@ -1220,17 +1405,17 @@ class _SetupTerminalState extends State<SetupTerminal> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(5),
-            child: GestureDetector(
-              onScaleStart: (details) {
-                _pinchBaseFontSize = state.fontSize;
-              },
-              onScaleUpdate: (details) {
-                if (details.pointerCount >= 2) {
-                  final newSize = (_pinchBaseFontSize * details.scale).clamp(8.0, 32.0);
-                  if ((newSize - state.fontSize).abs() > 0.5) {
-                    _onTerminalFontSizeChanged(newSize);
-                  }
-                }
+            child: RawGestureDetector(
+              gestures: {
+                _TwoFingerPinchRecognizer: GestureRecognizerFactoryWithHandlers<
+                    _TwoFingerPinchRecognizer>(
+                  () => _TwoFingerPinchRecognizer(),
+                  (instance) {
+                    instance.onStart = _onPinchStart;
+                    instance.onUpdate = _onPinchUpdate;
+                    instance.onEnd = _onPinchEnd;
+                  },
+                ),
               },
               child: TerminalView(
                 r.terminal,
@@ -1841,7 +2026,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         listenWhen: (previous, current) =>
             previous.activeSessionId != current.activeSessionId,
         listener: (context, state) {
-          _hideSelectionToolbar();
+          _hideSelectionUI();
           _suggestionsNotifier.value = null;
           _hasSelection = false;
           // Sync page to active session
@@ -1873,8 +2058,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 ? _buildSplitTerminalView(state, activeTerminalTheme)
                 : _buildSingleTerminalPage(state, activeTerminalTheme);
 
-            final terminalContent = Stack(
-              children: [
+            final terminalContent = Stack(key: _terminalHostKey, children: [
                 Column(
                   children: [
                     Expanded(child: mainTermView),
@@ -1913,8 +2097,33 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 // Feature 1: exit banner overlay
                 _buildExitBanner(),
                 _buildSuggestionBox(),
+                // ── Indicateur de zoom : tap = retour à la taille normale ────
+                if ((state.fontSize - kDefaultTerminalFontSize).abs() > 0.1)
+                  Positioned(
+                    top: 6,
+                    right: 8,
+                    child: Material(
+                      color: Colors.black45,
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => _onTerminalFontSizeChanged(kDefaultTerminalFontSize),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          child: Text(
+                            '${(state.fontSize / kDefaultTerminalFontSize * 100).round()}%',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
-            );
+            ]);
 
             if (!widget.useScaffold) return terminalContent;
 

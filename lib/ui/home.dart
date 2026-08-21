@@ -27,6 +27,7 @@ import 'donation_page.dart';
 import 'file_manager.dart';
 import 'editor_page.dart';
 import 'menu_screen.dart';
+import 'package_manager_page.dart';
 // downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
 import 'downloads.dart';
 import 'settings.dart';
@@ -130,6 +131,9 @@ class _SelectTypeState extends State<SelectType>
   int  _sidebarState     = 1;
   bool _rightPanelOpen   = false;
   bool _bottomPanelOpen  = false;
+  /// Anchor used to attach popup menus directly under the "Espace de travail"
+  /// box so they never appear detached or clipped by screen edges.
+  final GlobalKey _workspaceBoxKey = GlobalKey();
   int  _bottomPanelTab   = 0; // 0=Terminal 1=Problems 2=Output 3=Debug
 
   // Problems panel state
@@ -3108,12 +3112,7 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
             const SizedBox(width: 5),
-            Text('Panda',
-                style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: nameFg)),
-            const SizedBox(width: 4),
+            // (texte Panda retire : l'icone est l'identite visuelle)
 
             // ── CENTER: ← [workspace box] → ──────────────────────────────
             Expanded(
@@ -3126,11 +3125,14 @@ class _SelectTypeState extends State<SelectType>
                     Builder(builder: (ctx) => GestureDetector(
                       onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
                       child: Container(
-                        constraints: const BoxConstraints(
-                            minWidth: 200, maxWidth: 400),
-                        height: 24,
+                        key: _workspaceBoxKey,
+                        constraints: BoxConstraints(
+                            minWidth: 150,
+                            maxWidth: MediaQuery.of(ctx).size.width * 0.52),
+                        height: 26,
                         padding:
-                            const EdgeInsets.symmetric(horizontal: 8),
+                            const EdgeInsets.symmetric(horizontal: 10),
+                        alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: boxBg,
                           borderRadius: BorderRadius.circular(4),
@@ -3373,9 +3375,19 @@ class _SelectTypeState extends State<SelectType>
     void _showLayoutMenu(BuildContext ctx, bool isDark) {
       final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
       final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
+      // Open attached BELOW the workspace box and clamp inside the screen
+      // so the menu is never detached or cut off by an edge.
+      double left = 8, top = 40;
+      final wctx = _workspaceBoxKey.currentContext;
+      if (wctx != null) {
+        final box = wctx.findRenderObject()! as RenderBox;
+        final off = box.localToGlobal(Offset.zero);
+        left = off.dx.clamp(0.0, MediaQuery.of(ctx).size.width - 60);
+        top = off.dy + box.size.height + 2;
+      }
       showMenu<String>(
         context: ctx,
-        position: const RelativeRect.fromLTRB(0, 35, 0, 0),
+        position: RelativeRect.fromLTRB(left, top, 12, 0),
         color: bg,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
@@ -3452,8 +3464,9 @@ class _SelectTypeState extends State<SelectType>
         final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
         final RenderBox box = ctx.findRenderObject()! as RenderBox;
         final Offset off = box.localToGlobal(Offset.zero);
+        final screenW = MediaQuery.of(ctx).size.width;
         final pos = RelativeRect.fromLTRB(
-            off.dx, off.dy + box.size.height, off.dx + box.size.width, 0);
+            off.dx.clamp(0.0, screenW - 8), off.dy + box.size.height, 12, 0);
 
         showMenu<String>(
           context: ctx,
@@ -3532,6 +3545,24 @@ class _SelectTypeState extends State<SelectType>
                 const SizedBox(width: 10),
                 Text('Extensions & Marketplace', style: TextStyle(fontSize: 12, color: fg)),
               ])),
+            PopupMenuItem<String>(value: 'package_manager', height: 34,
+              child: Row(children: [
+                Icon(Icons.inventory_2_outlined, size: 16,
+                    color: isDark ? Colors.tealAccent[200] : Colors.teal[700]),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Gestionnaire de paquets (apk)',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg)),
+                      Text('Installer / supprimer des paquets Alpine',
+                          style: TextStyle(fontSize: 10, color: Colors.grey[500])),
+                    ],
+                  ),
+                ),
+              ])),
             const PopupMenuDivider(height: 6),
 
             // ── File & Project Operations ─────────────────────────────
@@ -3572,6 +3603,10 @@ class _SelectTypeState extends State<SelectType>
             setState(() { _activeRail = 2; _sidebarState = 2; });
           } else if (value == 'marketplace') {
             setState(() { _activeRail = 6; _sidebarState = 2; });
+          } else if (value == 'package_manager') {
+            Navigator.of(ctx).push(MaterialPageRoute(
+              builder: (_) => const PackageManagerPage(),
+            ));
           } else if (value == 'close_workspace') {
             setState(() {
               _currentWorkspaceDir  = null;
@@ -3705,21 +3740,42 @@ class _SelectTypeState extends State<SelectType>
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
             return Container(
               height: _bottomPanelHeight,
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12)),
                   border: Border(top: BorderSide(color: border))),
               child: Column(children: [
-                // Resize handle at top of bottom panel
+                // Resize handle at top of bottom panel.
+                // 20px opaque hit target (was a 4px sliver: the first touch
+                // was regularly missed and the drag felt random).
                 GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onVerticalDragStart: (_) {},
                   onVerticalDragUpdate: (details) {
+                    final maxH = MediaQuery.of(context).size.height - 160;
                     setState(() {
-                      _bottomPanelHeight = (_bottomPanelHeight - details.delta.dy).clamp(100.0, 600.0);
+                      _bottomPanelHeight =
+                          (_bottomPanelHeight - details.delta.dy).clamp(100.0, maxH);
                     });
                   },
+                  onVerticalDragEnd: (_) {},
                   child: MouseRegion(
                     cursor: SystemMouseCursors.resizeRow,
                     child: Container(
-                      height: 4,
-                      color: border,
+                      width: double.infinity,
+                      height: 20,
+                      color: Colors.transparent,
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 46,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: border,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -7081,14 +7137,7 @@ class _SelectTypeState extends State<SelectType>
     return Positioned(
       left: _agentFloatOffset.dx,
       top:  _agentFloatOffset.dy,
-      child: GestureDetector(
-        onPanUpdate: (d) => setState(() {
-          _agentFloatOffset = Offset(
-            (_agentFloatOffset.dx + d.delta.dx).clamp(0, double.infinity),
-            (_agentFloatOffset.dy + d.delta.dy).clamp(0, double.infinity),
-          );
-        }),
-        child: Material(
+      child: Material(
           elevation: 12,
           shadowColor: shadowC,
           borderRadius: BorderRadius.circular(12),
@@ -7103,6 +7152,29 @@ class _SelectTypeState extends State<SelectType>
                   child: Builder(
                     builder: (panelContext) => _buildPandaAgentPanel(
                       panelContext, appTheme, asPage: true),
+                  ),
+                ),
+                // Dedicated drag strip: deterministic dragging. Whole-panel
+                // panning competed with the chat ListView and only worked
+                // about half the time; the strip never loses the gesture.
+                Positioned(
+                  left: 0, right: 0, top: 0,
+                  height: 30,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onPanStart: (_) {},
+                    onPanUpdate: (d) {
+                      final mq = MediaQuery.of(context);
+                      setState(() {
+                        _agentFloatOffset = Offset(
+                          (_agentFloatOffset.dx + d.delta.dx).clamp(
+                              0.0, (mq.size.width - panelW).clamp(0.0, double.infinity)),
+                          (_agentFloatOffset.dy + d.delta.dy).clamp(
+                              0.0, (mq.size.height - panelH).clamp(0.0, double.infinity)),
+                        );
+                      });
+                    },
+                    onPanEnd: (_) {},
                   ),
                 ),
                 Positioned(
@@ -7138,7 +7210,6 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
         ),
-      ),
     );
   }
 
