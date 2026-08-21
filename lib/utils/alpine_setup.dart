@@ -123,6 +123,26 @@ class AlpineSetup {
   /// Last error message for display in terminal UI.
   static String lastError = '';
 
+  /// Set file permissions from tar header mode bits.
+  /// Mirrors TermuxInstaller.java: only bin/ files get +x.
+  static Future<void> _setFilePermissions(
+      String destPath, int unixPermissions) async {
+    if (unixPermissions == 0) return;
+    final octal = unixPermissions.toRadixString(8);
+    // Only chmod if the file actually has an execute bit in the tar header
+    final hasExec = (unixPermissions & 0x49) != 0;
+    if (!hasExec) return;
+    try {
+      await Process.run('chmod', [octal, destPath]);
+    } catch (_) {
+      try {
+        await Process.run('/system/bin/chmod', [octal, destPath]);
+      } catch (_) {
+        try { await Process.run('chmod', ['+x', destPath]); } catch (_) {}
+      }
+    }
+  }
+
   static Future<bool> ensureAlpineRootfs({bool force = false}) async {
     final destination = Directory(alpineDir);
     final marker = File('${destination.path}/.panda-rootfs-version');
@@ -210,6 +230,11 @@ class AlpineSetup {
                 await outFile.writeAsBytes(List<int>.from(data), flush: true);
               }
             }
+            // Set permissions from tar header (Termux pattern)
+            final perms = file.unixPermissions;
+            if (perms > 0) {
+              await _setFilePermissions(destPath, perms);
+            }
             filesWritten++;
           } else if (file.name.endsWith('/') || file.isDirectory) {
             await Directory(destPath).create(recursive: true);
@@ -263,9 +288,14 @@ class AlpineSetup {
         PandaLog.w('AlpineSetup', '[5/6] Failed to delete archive: $e');
       }
 
-      // Step 6: Validate extracted rootfs
-      PandaLog.d('AlpineSetup', '[6/6] Validating extracted rootfs...');
-      await marker.writeAsString(rootfsVersion, flush: true);
+      // Step 6: Validate staging rootfs THEN atomic rename
+      PandaLog.d('AlpineSetup', '[6/6] Validating staging rootfs...');
+      await File('\${stagingDir.path}/.panda-rootfs-version')
+          .writeAsString(rootfsVersion, flush: true);
+
+      // Ensure /root exists (PRoot -w /root needs it)
+      await Directory('\${stagingDir.path}/root').create(recursive: true);
+      await Directory('\${stagingDir.path}/root/workspace').create(recursive: true);
 
       // Detailed validation
       final checks = {
@@ -288,6 +318,22 @@ class AlpineSetup {
         throw StateError(lastError);
       }
 
+      // ── Atomic rename: staging -> final (Termux pattern) ──
+      PandaLog.i('AlpineSetup', '[6/6] Atomic rename staging -> final');
+      try {
+        if (destination.existsSync()) await destination.delete(recursive: true);
+        await stagingDir.rename(destination.path);
+      } catch (e) {
+        PandaLog.w('AlpineSetup', 'Rename failed (\$e), copying instead');
+        try {
+          await _copyDirectory(stagingDir, destination);
+          try { await stagingDir.delete(recursive: true); } catch (_) {}
+        } catch (e2) {
+          lastError = 'Failed to move staging to final: \$e2';
+          throw StateError(lastError);
+        }
+      }
+
       PandaLog.i('AlpineSetup', 'Rootfs extraction complete, setting up runtime files');
       await ensureAlpineRuntimeFiles();
       final ok = isRootfsComplete();
@@ -302,6 +348,23 @@ class AlpineSetup {
       if (lastError.isEmpty) lastError = e.toString();
       PandaLog.e('AlpineSetup', 'Échec rootfs Alpine: $e');
       return false;
+    }
+  }
+
+  /// Recursively copy a directory (fallback if rename fails across FS).
+  static Future<void> _copyDirectory(Directory src, Directory dest) async {
+    await dest.create(recursive: true);
+    await for (final entity in src.list(recursive: false)) {
+      final name = entity.path.split('/').last;
+      final destPath = '\${dest.path}/\$name';
+      if (entity is File) {
+        await entity.copy(destPath);
+      } else if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destPath));
+      } else if (entity is Link) {
+        final target = await entity.target();
+        await Link(destPath).create(target);
+      }
     }
   }
 
@@ -367,7 +430,9 @@ __panda_prompt
       if (d.existsSync()) {
         try {
           await Process.run('chmod', ['-R', '+x', d.path]);
-        } catch (_) {}
+        } catch (_) {
+          try { await Process.run('/system/bin/chmod', ['-R', '+x', d.path]); } catch (_) {}
+        }
       }
     }
 
