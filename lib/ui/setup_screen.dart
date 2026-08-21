@@ -115,7 +115,9 @@ class _SetupScreenState extends State<SetupScreen>
       _logs.add('[$ts] $message');
       if (mounted) setState(() {});
       print('[SetupScreen] $message');
-      try { PandaLog.i('SetupScreen', message); } catch (_) {}
+      // Non-blocking: PandaLog.i can hang if bridge not initialized yet
+      // ignore: unawaited_futures
+      try { Future.microtask(() { try { PandaLog.i('SetupScreen', message); } catch (_) {} }); } catch (_) {}
       WidgetsBinding.instance.addPostFrameCallback((_) {
         try {
           if (_logScrollController.hasClients) {
