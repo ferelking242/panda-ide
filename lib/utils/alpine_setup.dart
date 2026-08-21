@@ -18,137 +18,6 @@ class AlpineSetup {
   static String? _cachedProotBin;
   static String get alpineDir => '$runtimesDir/$_alpineDirName';
 
-  /// Termux pattern (TermuxInstaller.java): the rootfs is extracted into a
-  /// staging directory, validated there, then atomically renamed into place.
-  static Directory get stagingDir =>
-      Directory('$runtimesDir/$_alpineDirName.staging');
-
-  static Future<String> nativeLibDir() async {
-    if (_cachedNativeLibDir != null) return _cachedNativeLibDir!;
-    try {
-      final value = await NativeChannel.getLibraryPath();
-      PandaLog.d('AlpineSetup', 'NativeChannel.getLibraryPath() => "$value"');
-      if (value.isNotEmpty && Directory(value).existsSync()) {
-        _cachedNativeLibDir = value;
-        PandaLog.d('AlpineSetup', 'Native lib dir resolved: $value');
-        return value;
-      }
-      PandaLog.w('AlpineSetup', 'Native lib dir invalid or missing: "$value" (isDir=${value.isNotEmpty ? Directory(value).existsSync() : false})');
-    } catch (e) {
-      PandaLog.e('AlpineSetup', 'Failed to get native lib path: $e');
-    }
-    return '';
-  }
-
-  static Future<String?> prootLoaderPath() async {
-    final dir = await nativeLibDir();
-    final file = File('$dir/libproot-loader.so');
-    return file.existsSync() ? file.path : null;
-  }
-
-  static Future<Map<String, String>> prootLinkEnvironment() async {
-    final dir = await nativeLibDir();
-    final loader = '$dir/libproot-loader.so';
-    // PRoot extracts its internal loader into PROOT_TMP_DIR and chmods it:
-    // the directory must exist or PRoot dies with "can't chmod ...".
-    try {
-      Directory(tempDir).createSync(recursive: true);
-    } catch (_) {}
-    return {
-      if (dir.isNotEmpty) 'LD_LIBRARY_PATH': dir,
-      if (File(loader).existsSync()) 'PROOT_LOADER': loader,
-      'PROOT_TMP_DIR': tempDir,
-    };
-  }
-
-  static Future<Map<String, String>> prootSessionEnvironment({
-    Map<String, String> extra = const {},
-  }) async {
-    final env = <String, String>{
-      'HOME': '/root',
-      'USER': 'root',
-      'LOGNAME': 'root',
-      'TERM': 'xterm-256color',
-      'SHELL': '/bin/sh',
-      'LANG': 'C.UTF-8',
-      'LC_ALL': 'C.UTF-8',
-      'DISPLAY': ':0',
-      'ENV': '/root/.profile',
-      'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-      'TMPDIR': '/tmp',
-    };
-    env.addAll(await prootLinkEnvironment());
-    env.addAll(extra);
-    return env;
-  }
-
-  static Future<String?> locateProotBinary(String rootfsDir,
-      {bool useCache = true}) async {
-    final cached = _cachedProotBin;
-    if (useCache && cached != null && File(cached).existsSync()) return cached;
-    final dir = await nativeLibDir();
-    final candidate = '$dir/libproot.so';
-    if (dir.isEmpty || !File(candidate).existsSync()) return null;
-    try {
-      final result = await Process.run(candidate, ['--version'],
-          environment: await prootLinkEnvironment());
-      final output = '${result.stdout}${result.stderr}';
-      if (result.exitCode == 0 || output.contains('PRoot')) {
-        _cachedProotBin = candidate;
-        return candidate;
-      }
-    } catch (e) {
-      PandaLog.w('AlpineSetup', 'PRoot indisponible: $e');
-    }
-    return null;
-  }
-
-  static bool _isSymlink(String path) =>
-      FileSystemEntity.typeSync(path, followLinks: false) ==
-      FileSystemEntityType.link;
-
-  static bool isRootfsComplete() => isRootfsCompleteIn(alpineDir);
-
-  static bool isRootfsCompleteIn(String dir) {
-    return File('$dir/.panda-rootfs-version').existsSync() &&
-        File('$dir/bin/busybox').existsSync() &&
-        _isSymlink('$dir/bin/sh') &&
-        File('$dir/sbin/apk').existsSync() &&
-        File('$dir/lib/ld-musl-aarch64.so.1').existsSync() &&
-        Directory('$dir/etc/apk/keys').existsSync() &&
-        Directory('$dir/root').existsSync();
-  }
-
-  /// Batch chmod: one process for the whole tree instead of one spawn per
-  /// file (Termux uses Os.chmod per entry; without FFI a single
-  /// `/system/bin/sh -c 'chmod -R +x ...'` is the closest equivalent).
-  static Future<void> _makeBinariesExecutable(String rootPath) async {
-    const dirs = ['bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin'];
-    final quoted =
-        dirs.where((d) => Directory('$rootPath/$d').existsSync()).map((d) => '"$rootPath/$d"').toList();
-    if (quoted.isEmpty) return;
-    final list = quoted.join(' ');
-    try {
-      final r = await Process.run('/system/bin/sh', ['-c', 'chmod -R +x $list']);
-      if (r.exitCode == 0) return;
-      PandaLog.w('AlpineSetup', 'chmod via /system/bin/sh failed: ${r.stderr}');
-    } catch (e) {
-      PandaLog.w('AlpineSetup', 'chmod via /system/bin/sh unavailable: $e');
-    }
-  }
-
-  static bool isDirAccessible(String path) {
-    if (path.trim().isEmpty) return false;
-    try {
-      final directory = Directory(path);
-      if (!directory.existsSync()) return false;
-      directory.listSync(followLinks: false).take(1).toList();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
   /// Last error message for display in terminal UI.
   static String lastError = '';
 
@@ -255,54 +124,53 @@ class AlpineSetup {
 
   /// Batch chmod: one process for the whole tree instead of one spawn per
   /// file (Termux uses Os.chmod per entry; without FFI a single
-  /// `/system/bin/sh -c 'chmod -R +x ...'` is the closest equivalent).
+  /// `/system/bin/sh -c 'chmod -R ...'` is the closest equivalent).
+  ///
+  /// The Dart `archive` package drops Unix permission bits, so everything is
+  /// written 0644/0755. We restore what matters for execution:
+  ///   - 755 recursively on every directory holding executables AND on lib/
+  ///     (the kernel requires the exec bit on ELF interpreters such as
+  ///     /lib/ld-musl-aarch64.so.1 even when they are only mmap'd),
+  ///   - 1777 on tmp directories so guests can share /tmp.
   static Future<void> _makeBinariesExecutable(String rootPath) async {
-    const dirs = ['bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin'];
-    final quoted =
-        dirs.where((d) => Directory('$rootPath/$d').existsSync()).map((d) => '"$rootPath/$d"').toList();
-    if (quoted.isEmpty) return;
-    final list = quoted.join(' ');
+    const execDirs = [
+      'bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin',
+      'lib', 'usr/lib',
+    ];
+    const tmpDirs = ['tmp', 'var/tmp'];
+    final targets = <String>[];
+    for (final d in execDirs) {
+      if (Directory('$rootPath/$d').existsSync()) targets.add('"$rootPath/$d"');
+    }
+    if (targets.isEmpty) return;
+    final list = targets.join(' ');
     try {
-      final r = await Process.run('/system/bin/sh', ['-c', 'chmod -R +x $list']);
-      if (r.exitCode == 0) return;
-      PandaLog.w('AlpineSetup', 'chmod via /system/bin/sh failed: ${r.stderr}');
+      final r = await Process.run(
+          '/system/bin/sh', ['-c', 'chmod -R 755 $list']);
+      if (r.exitCode != 0) {
+        PandaLog.w('AlpineSetup', 'chmod via /system/bin/sh failed: ${r.stderr}');
+      }
     } catch (e) {
       PandaLog.w('AlpineSetup', 'chmod via /system/bin/sh unavailable: $e');
     }
-  }
-
-  static bool isDirAccessible(String path) {
-    if (path.trim().isEmpty) return false;
-    try {
-      final directory = Directory(path);
-      if (!directory.existsSync()) return false;
-      directory.listSync(followLinks: false).take(1).toList();
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  /// Last error message for display in terminal UI.
-  static String lastError = '';
-
-  /// Set file permissions from tar header mode bits.
-  /// Mirrors TermuxInstaller.java: only bin/ files get +x.
-  static Future<void> _setFilePermissions(
-      String destPath, int unixPermissions) async {
-    if (unixPermissions == 0) return;
-    final octal = unixPermissions.toRadixString(8);
-    // Only chmod if the file actually has an execute bit in the tar header
-    final hasExec = (unixPermissions & 0x49) != 0;
-    if (!hasExec) return;
-    try {
-      await Process.run('chmod', [octal, destPath]);
-    } catch (_) {
+    for (final d in tmpDirs) {
+      if (!Directory('$rootPath/$d').existsSync()) continue;
       try {
-        await Process.run('/system/bin/chmod', [octal, destPath]);
-      } catch (_) {
-        try { await Process.run('chmod', ['+x', destPath]); } catch (_) {}
-      }
+        await Process.run('/system/bin/sh',
+            ['-c', 'chmod 1777 "$rootPath/$d"']);
+      } catch (_) {}
+    }
+  }
+
+  static bool isDirAccessible(String path) {
+    if (path.trim().isEmpty) return false;
+    try {
+      final directory = Directory(path);
+      if (!directory.existsSync()) return false;
+      directory.listSync(followLinks: false).take(1).toList();
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -541,7 +409,7 @@ __panda_git() {
   local b
   b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return
   [ -n "\$(git status --porcelain 2>/dev/null)" ] && b="\$b *"
-  printf ' \033[38;5;141m %s\033[0m' "\$b"
+  printf ' \033[38;5;141m %s\033[0m' "\$b"
 }
 __panda_prompt() {
   local code=\$?
