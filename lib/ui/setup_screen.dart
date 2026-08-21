@@ -172,8 +172,8 @@ class _SetupScreenState extends State<SetupScreen>
       _addLog(_isFirstInstall
           ? 'Panda IDE first-install setup started'
           : 'Panda IDE runtime initialisation started');
-      _addLog('Steps: \${_steps.length}, isFirstInstall=\$_isFirstInstall');
-      _addLog('appDir=\$appDir, binDir=\$binDir');
+      _addLog('Steps: ${_steps.length}, isFirstInstall=$_isFirstInstall');
+      _addLog('appDir=$appDir, binDir=$binDir');
       print('[SetupScreen] entering step loop');
       int si = 0;
 
@@ -187,7 +187,7 @@ class _SetupScreenState extends State<SetupScreen>
           onTimeout: () => _addLog('⚠️ Directory creation timed out (continuing)'),
         );
       } catch (e) {
-        _addLog('⚠️ _createDirectories error: \$e');
+        _addLog('⚠️ _createDirectories error: $e');
       }
       print('[SetupScreen] _createDirectories done');
       _setStepState(si, completed: true);
@@ -204,7 +204,7 @@ class _SetupScreenState extends State<SetupScreen>
           onTimeout: () => _addLog('⚠️ Certificate install timed out'),
         );
       } catch (e) {
-        _addLog('⚠️ Certificate install error: \$e');
+        _addLog('⚠️ Certificate install error: $e');
       }
       print('[SetupScreen] _installCertificates done');
       _setStepState(si, completed: true);
@@ -218,7 +218,7 @@ class _SetupScreenState extends State<SetupScreen>
         try {
           await _setupAlpine(sw);
         } catch (e) {
-          _addLog('⚠️ Alpine setup error: \$e');
+          _addLog('⚠️ Alpine setup error: $e');
         }
         _setStepState(si, completed: true);
         _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
@@ -234,7 +234,7 @@ class _SetupScreenState extends State<SetupScreen>
           onTimeout: () => _addLog('⚠️ Runtime setup timed out (continuing)'),
         );
       } catch (e) {
-        _addLog('⚠️ Runtime setup error: \$e');
+        _addLog('⚠️ Runtime setup error: $e');
       }
       _setStepState(si, completed: true);
       _addLog('Runtime configured (${sw.elapsedMilliseconds}ms)');
