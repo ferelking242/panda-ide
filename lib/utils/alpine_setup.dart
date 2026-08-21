@@ -234,6 +234,22 @@ class AlpineSetup {
         }
 
         PandaLog.d('AlpineSetup', '[4/6] Extracted: $filesWritten files, $dirsCreated dirs, $symlinksCreated symlinks');
+
+        // Dart archive doesn't preserve Unix execute permissions.
+        // All binaries need +x or PRoot fails with "not executable".
+        PandaLog.d('AlpineSetup', '[4/6] Fixing executable permissions...');
+        for (final bindir in ['bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin']) {
+          final d = Directory('${destination.path}/$bindir');
+          if (d.existsSync()) {
+            try {
+              await Process.run('chmod', ['-R', '+x', d.path]);
+            } catch (_) {}
+          }
+        }
+        // Ensure /root exists (PRoot -w /root needs it)
+        await Directory('${destination.path}/root').create(recursive: true);
+        await Directory('${destination.path}/root/workspace').create(recursive: true);
+        PandaLog.d('AlpineSetup', '[4/6] Permissions fixed, /root ensured');
       } catch (e) {
         if (lastError.isEmpty) lastError = 'Tar extraction failed: $e';
         throw StateError(lastError);
@@ -344,6 +360,17 @@ __panda_prompt
     ]) {
       Directory('$dir/$name').createSync(recursive: true);
     }
+
+    // Ensure all binaries are executable (fix for rootfs extracted by Dart archive)
+    for (final bindir in ['bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin']) {
+      final d = Directory('$dir/$bindir');
+      if (d.existsSync()) {
+        try {
+          await Process.run('chmod', ['-R', '+x', d.path]);
+        } catch (_) {}
+      }
+    }
+
     _write('$dir/etc/resolv.conf',
         'nameserver 1.1.1.1\nnameserver 8.8.8.8\n');
     _write('$dir/etc/hosts',
