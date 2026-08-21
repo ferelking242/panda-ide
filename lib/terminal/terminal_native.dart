@@ -296,6 +296,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
   String? _splitSessionId;
   Axis _splitAxis = Axis.horizontal;
 
+  // ── Pinch-to-zoom ────────────────────────────────────────────────────────
+  double _pinchBaseFontSize = 14.0;
+
   @override
   void initState() {
     super.initState();
@@ -951,7 +954,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _selectionToolbarOverlay = OverlayEntry(
       builder: (context) {
         return Positioned(
-          top: 60,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 56,
           left: 0,
           right: 0,
           child: Center(
@@ -1206,18 +1209,31 @@ class _SetupTerminalState extends State<SetupTerminal> {
         final session = state.sessions[index];
         final runtime = _sessionRuntimes[session.id];
         if (runtime == null) return const SizedBox();
-        return TerminalView(
-          runtime.terminal,
-          readOnly: widget.readOnly,
-          padding: EdgeInsets.zero,
-          controller: runtime.controller,
-          autofocus: session.id == state.activeSessionId,
-          keyboardType: TextInputType.multiline,
-          theme: activeTheme.theme,
-          textStyle: TerminalStyle(
-            fontSize: state.fontSize,
-            fontFamily: _terminalFontFamilyFromConfig(),
-            height: 1.25,
+        return GestureDetector(
+          onScaleStart: (details) {
+            _pinchBaseFontSize = state.fontSize;
+          },
+          onScaleUpdate: (details) {
+            if (details.pointerCount >= 2) {
+              final newSize = (_pinchBaseFontSize * details.scale).clamp(8.0, 32.0);
+              if ((newSize - state.fontSize).abs() > 0.5) {
+                _onTerminalFontSizeChanged(newSize);
+              }
+            }
+          },
+          child: TerminalView(
+            runtime.terminal,
+            readOnly: widget.readOnly,
+            padding: EdgeInsets.zero,
+            controller: runtime.controller,
+            autofocus: session.id == state.activeSessionId,
+            keyboardType: TextInputType.multiline,
+            theme: activeTheme.theme,
+            textStyle: TerminalStyle(
+              fontSize: state.fontSize,
+              fontFamily: _terminalFontFamilyFromConfig(),
+              height: 1.2,
+            ),
           ),
         );
       },
@@ -1245,19 +1261,32 @@ class _SetupTerminalState extends State<SetupTerminal> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(5),
-            child: TerminalView(
-              r.terminal,
-              readOnly: widget.readOnly,
-              padding: EdgeInsets.zero,
-              controller: r.controller,
-              autofocus: isActive,
-              keyboardType: TextInputType.multiline,
-              theme: activeTheme.theme,
-               textStyle: TerminalStyle(
-                 fontSize: state.fontSize,
-                 fontFamily: _terminalFontFamilyFromConfig(),
-                 height: 1.25,
-               ),
+            child: GestureDetector(
+              onScaleStart: (details) {
+                _pinchBaseFontSize = state.fontSize;
+              },
+              onScaleUpdate: (details) {
+                if (details.pointerCount >= 2) {
+                  final newSize = (_pinchBaseFontSize * details.scale).clamp(8.0, 32.0);
+                  if ((newSize - state.fontSize).abs() > 0.5) {
+                    _onTerminalFontSizeChanged(newSize);
+                  }
+                }
+              },
+              child: TerminalView(
+                r.terminal,
+                readOnly: widget.readOnly,
+                padding: EdgeInsets.zero,
+                controller: r.controller,
+                autofocus: isActive,
+                keyboardType: TextInputType.multiline,
+                theme: activeTheme.theme,
+                textStyle: TerminalStyle(
+                  fontSize: state.fontSize,
+                  fontFamily: _terminalFontFamilyFromConfig(),
+                  height: 1.2,
+                ),
+              ),
             ),
           ),
         ),
