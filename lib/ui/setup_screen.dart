@@ -213,15 +213,13 @@ class _SetupScreenState extends State<SetupScreen>
 
       // Step: Alpine rootfs (first install only)
       if (_isFirstInstall) {
-        _addLog('Step ${si + 1}/${_steps.length}: Setting up Alpine Linux...');
+        // Alpine extraction happens in terminal (needs native bridge)
+        // Setup screen only ensures directories + certs + runtime + tools
+        _addLog('Step ${si + 1}/${_steps.length}: Alpine Linux (deferred to terminal)');
         _setStepState(si, active: true);
-        try {
-          await _setupAlpine(sw);
-        } catch (e) {
-          _addLog('⚠️ Alpine setup error: $e');
-        }
+        _addLog('Alpine rootfs extraction will run on first terminal launch');
         _setStepState(si, completed: true);
-        _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
+        _addLog('Alpine Linux deferred (${sw.elapsedMilliseconds}ms)');
         si++;
       }
 
