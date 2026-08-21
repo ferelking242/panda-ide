@@ -1231,7 +1231,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
             autofocus: session.id == state.activeSessionId,
             keyboardType: TextInputType.multiline,
             theme: activeTheme.theme,
-            cursorType: TerminalCursorType.bar,
+            cursorType: TerminalCursorType.verticalBar,
             alwaysShowCursor: true,
             deleteDetection: true,
             textStyle: TerminalStyle(
@@ -1286,7 +1286,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 autofocus: isActive,
                 keyboardType: TextInputType.multiline,
                 theme: activeTheme.theme,
-                cursorType: TerminalCursorType.bar,
+                cursorType: TerminalCursorType.verticalBar,
                 alwaysShowCursor: true,
                 deleteDetection: true,
                 textStyle: TerminalStyle(
