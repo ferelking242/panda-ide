@@ -6975,109 +6975,90 @@ class _SelectTypeState extends State<SelectType>
         // Raisonnements + appels d'outils sont absorbés dans UN groupe
         // Réflexion persistant ; chaque bloc texte devient un Output
         // indépendant rendu en dessous, un par un.
-        final events = <Map<String, dynamic>>[];
-        for (final b in blocks) {
-          final bt = b['type'] as String? ?? '';
-          if (bt == 'thinking' || bt == 'toolCall') events.add(b);
-        }
-        // Messages legacy : tool calls stockés à plat dans msg['toolCalls'].
-        if (blocks.isEmpty) {
-          for (final c in calls) {
-            events.add({'type': 'toolCall', ...c});
-          }
-        }
-        // Buffer de réflexion live pas encore flushé dans blocks.
-        if (think.isNotEmpty && !events.any((e) => e['type'] == 'thinking')) {
-          events.insert(0, {'type': 'thinking', 'thinking': think});
-        }
-
-
+        // Chaque entree de msg['blocks'] est un evenement independant :
+        // Reflexion, Call Tool (+ Output associe juste en dessous, hors de
+        // toute box Reflexion), et segments de reponse texte. Tous sont des
+        // FRERES rendus dans l'ordre chronologique reel du flux. Une
+        // nouvelle reflexion apres des outils cree une NOUVELLE box -
+        // jamais de fusion ni de conteneur parent.
         final isActiveMsg = i == _agentMessages.length - 1 && _agentGenerating;
 
-        final reflectionEvents = events
-            .where((e) =>
-                e['type'] != 'toolCall' ||
-                (e['status'] != 'pending_approval' && e['status'] != 'pending'))
-            .toList();
-        final pendingTools = events
-            .where((e) =>
-                e['type'] == 'toolCall' &&
-                (e['status'] == 'pending_approval' || e['status'] == 'pending'))
-            .toList();
-
-        // Outputs : une carte par segment de texte, ordre chronologique.
-        final outputs = <String>[];
-        final msgTextBlocks = blocks.where((b) => b['type'] == 'text').toList();
-        if (msgTextBlocks.isNotEmpty) {
-          for (final b in msgTextBlocks) {
-            final p = _extractThinkingFromText(b['text'] as String? ?? '', '');
-            final t = p['text']!.trim();
-            if (t.isNotEmpty) outputs.add(t);
+        final timeline = List<Map<String, dynamic>>.from(blocks);
+        if (timeline.isEmpty) {
+          // Messages legacy sans blocs : reconstruis depuis les champs plats.
+          if (think.trim().isNotEmpty) {
+            timeline.add({'type': 'thinking', 'thinking': think});
           }
-        } else if (text.trim().isNotEmpty) {
-          final p = _extractThinkingFromText(text, '');
-          if (p['text']!.trim().isNotEmpty) outputs.add(p['text']!.trim());
+          for (final c in calls) {
+            timeline.add({'type': 'toolCall', ...c});
+          }
         }
+
+        int lastThinkingIdx = -1;
+        int lastTextIdx = -1;
+        for (var bi = 0; bi < timeline.length; bi++) {
+          final bt = timeline[bi]['type'] as String? ?? '';
+          if (bt == 'thinking') lastThinkingIdx = bi;
+          if (bt == 'text') lastTextIdx = bi;
+        }
+
+        bool hasVisibleTimeline = false;
+        for (final b in timeline) {
+          final bt = b['type'] as String? ?? '';
+          if (bt == 'toolCall') {
+            hasVisibleTimeline = true;
+            break;
+          }
+          if (bt == 'thinking' &&
+              ((b['thinking'] as String?) ?? '').trim().isNotEmpty) {
+            hasVisibleTimeline = true;
+            break;
+          }
+          if (bt == 'text') {
+            final p = _extractThinkingFromText(b['text'] as String? ?? '', '');
+            if (p['text']!.trim().isNotEmpty) {
+              hasVisibleTimeline = true;
+              break;
+            }
+          }
+        }
+        if (blocks.isEmpty && text.trim().isNotEmpty) hasVisibleTimeline = true;
 
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Groupe Réflexion persistant — absorbe TOUT le raisonnement et
-              //    TOUS les appels d'outils du tour. Jamais rendus séparément.
-              if (reflectionEvents.isNotEmpty ||
-                  (isActiveMsg && _agentPhase == AgentPhase.thinking))
-                _ReflectionGroup(
-                  events: reflectionEvents,
-                  isActive: isActiveMsg,
+              // Timeline chronologique : Reflexion / Call Tool / Output /
+              // reponses texte - chaque evenement est un bloc independant.
+              for (var bi = 0; bi < timeline.length; bi++)
+                _buildAgentTimelineEvent(
+                  timeline[bi],
+                  eventIndex: bi,
+                  lastThinkingIdx: lastThinkingIdx,
+                  lastTextIdx: lastTextIdx,
+                  isActiveMsg: isActiveMsg,
                   isDark: isDark,
                   fg: fg,
                   muted: muted,
+                  isError: isError,
                 ),
 
-              // 2. Standalone interactive approval cards for pending tools immediately visible outside the step bar
-              if (pendingTools.isNotEmpty)
-                ...pendingTools.map((call) => _ToolCallBlock(
-                      toolName: call['name'] as String? ?? call['toolName'] as String? ?? '',
-                      args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
-                      result: call['result'] as String?,
-                      status: call['status'] as String? ?? 'pending_approval',
-                      isDark: isDark,
-                      fg: fg,
-                      muted: muted,
-                      onApprove: () => _pendingApprovalCompleter?.complete(true),
-                      onDeny: () => _pendingApprovalCompleter?.complete(false),
-                      onAutopilot: () {
-                        setState(() => _agentApprovalMode = 'autopilot');
-                        _pendingApprovalCompleter?.complete(true);
-                      },
-                      onAllowSession: () {
-                        AgenticTools.allowAllCommandsThisSession = true;
-                        _pendingApprovalCompleter?.complete(true);
-                      },
-                      onWhitelist: () {
-                        final cmd = (call['args'] as Map?)?['command']?.toString() ?? '';
-                        if (cmd.isNotEmpty) AgenticTools.approvedCommandsWhitelist.add(cmd.trim());
-                        _pendingApprovalCompleter?.complete(true);
-                      },
-                    )),
-
-              // 3. Outputs — chaque segment de réponse est rendu indépendamment.
-              for (var oi = 0; oi < outputs.length; oi++)
+              // Ancien format : message sans blocs mais avec du texte.
+              if (blocks.isEmpty && text.trim().isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
                   child: _AgentMarkdownView(
-                    markdown: outputs[oi],
+                    markdown: _extractThinkingFromText(text, '')['text']!.trim(),
                     isDark: isDark,
                     fg: fg,
                     isError: isError,
-                    isStreaming: isStreaming && oi == outputs.length - 1,
+                    isStreaming: isStreaming,
                   ),
                 ),
 
-              // 4. Fallback loader chip if generation is active and there is no text response yet
-              if (isActiveMsg && outputs.isEmpty)
+              // Loader chip tant qu'aucun evenement visible n'est affiche.
+              if (isActiveMsg && !hasVisibleTimeline)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: _AgentPhaseChip(
@@ -7090,7 +7071,7 @@ class _SelectTypeState extends State<SelectType>
                 ),
 
               // Action row (copy + retry) — shown after generation
-              if (!isStreaming && (outputs.isNotEmpty || isError))
+              if (!isStreaming && (text.isNotEmpty || isError))
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
@@ -7141,6 +7122,121 @@ class _SelectTypeState extends State<SelectType>
         );
       },
     );
+  }
+
+  /// Rend UN evenement de la timeline agent comme un bloc independant.
+  /// Les freres s'empilent dans l'ordre chronologique : une nouvelle
+  /// reflexion apres des outils cree une NOUVELLE box, jamais fusionnee,
+  /// et le tool call n'est JAMAIS un enfant de la Reflexion.
+  Widget _buildAgentTimelineEvent(
+    Map<String, dynamic> b, {
+    required int eventIndex,
+    required int lastThinkingIdx,
+    required int lastTextIdx,
+    required bool isActiveMsg,
+    required bool isDark,
+    required Color fg,
+    required Color muted,
+    required bool isError,
+  }) {
+    final bt = b['type'] as String? ?? '';
+
+    // -- Reflexion : phase de raisonnement autonome ------------------------
+    if (bt == 'thinking') {
+      final raw = ((b['thinking'] as String?) ?? '')
+          .replaceAll(
+              RegExp(r'Executing \d+ tool\(s\)\.\.\.', caseSensitive: false), '')
+          .replaceAll(RegExp(r'Tool call:.*', caseSensitive: false), '')
+          .trim();
+      if (raw.isEmpty) return const SizedBox.shrink();
+      return _ReflectionBox(
+        content: raw,
+        isActive: isActiveMsg &&
+            _agentPhase == AgentPhase.thinking &&
+            eventIndex == lastThinkingIdx,
+        isDark: isDark,
+        fg: fg,
+        muted: muted,
+      );
+    }
+
+    // -- Call Tool (+ son Output, hors de toute Reflexion) -----------------
+    if (bt == 'toolCall') {
+      final name =
+          (b['name'] as String?) ?? (b['toolName'] as String?) ?? '';
+      final args = (b['args'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final result = b['result'] as String?;
+      final status = b['status'] as String? ?? 'done';
+
+      if (status == 'pending_approval' || status == 'pending') {
+        return _ToolCallBlock(
+          toolName: name,
+          args: args,
+          result: result,
+          status: status,
+          isDark: isDark,
+          fg: fg,
+          muted: muted,
+          onApprove: () => _pendingApprovalCompleter?.complete(true),
+          onDeny: () => _pendingApprovalCompleter?.complete(false),
+          onAutopilot: () {
+            setState(() => _agentApprovalMode = 'autopilot');
+            _pendingApprovalCompleter?.complete(true);
+          },
+          onAllowSession: () {
+            AgenticTools.allowAllCommandsThisSession = true;
+            _pendingApprovalCompleter?.complete(true);
+          },
+          onWhitelist: () {
+            final cmd = args['command']?.toString() ?? '';
+            if (cmd.isNotEmpty) {
+              AgenticTools.approvedCommandsWhitelist.add(cmd.trim());
+            }
+            _pendingApprovalCompleter?.complete(true);
+          },
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ToolCallBlock(
+            toolName: name,
+            args: args,
+            result: result,
+            status: status,
+            isDark: isDark,
+            fg: fg,
+            muted: muted,
+            showResultInline: false,
+          ),
+          if (result != null && result.trim().isNotEmpty)
+            _ToolOutputBlock(output: result, isDark: isDark, fg: fg, muted: muted),
+        ],
+      );
+    }
+
+    // -- Segment de reponse texte (Output destine a l'utilisateur) ---------
+    if (bt == 'text') {
+      final p = _extractThinkingFromText(b['text'] as String? ?? '', '');
+      final t = p['text']!.trim();
+      if (t.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        child: _AgentMarkdownView(
+          markdown: t,
+          isDark: isDark,
+          fg: fg,
+          isError: isError,
+          isStreaming: isActiveMsg &&
+              _agentPhase == AgentPhase.streaming &&
+              eventIndex == lastTextIdx,
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   /// Returns the asset path of the provider's icon given a provider runtime type.
@@ -8582,6 +8678,29 @@ class _SelectTypeState extends State<SelectType>
                   _agentThinkingBuf = processed['thinking']!;
                   _agentMessages[agentIdx]['text'] = processed['text']!;
                   _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
+                  // -- Sync reflexion -> timeline ---------------------------
+                  // Le raisonnement extrait des balises <think> doit exister
+                  // comme evenement Reflexion INDEPENDANT dans la timeline,
+                  // au meme titre qu'un tool call ou un segment texte. Le
+                  // delta est ajoute au dernier segment thinking ; si un bloc
+                  // d'un autre type le precede, on OUVRE UN NOUVEAU segment
+                  // (nouvelle phase de raisonnement - jamais fusionnee).
+                  final storedThinkChars = blocks.fold<int>(
+                    0,
+                    (n, b) => b['type'] == 'thinking'
+                        ? n + ((b['thinking'] as String?) ?? '').length
+                        : n,
+                  );
+                  if (_agentThinkingBuf.length > storedThinkChars) {
+                    final thinkDelta = _agentThinkingBuf.substring(storedThinkChars);
+                    if (blocks.isNotEmpty && blocks.last['type'] == 'thinking') {
+                      blocks.last['thinking'] =
+                          (blocks.last['thinking'] as String? ?? '') + thinkDelta;
+                    } else {
+                      blocks.add({'type': 'thinking', 'thinking': thinkDelta});
+                    }
+                  }
+                  // Texte : un segment Output par phase, ordre chronologique.
                   if (blocks.isNotEmpty && blocks.last['type'] == 'text') {
                     blocks.last['text'] = (blocks.last['text'] as String? ?? '') + chunk.text;
                   } else {
@@ -9765,15 +9884,21 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 /// tous les appels d'outils d'un tour de l'agent dans une timeline plate unique.
 /// Les appels d'outils n'apparaissent jamais comme des éléments séparés de la
 /// conversation : ils vivent uniquement à l'intérieur de ce groupe.
-class _ReflectionGroup extends StatefulWidget {
-  final List<Map<String, dynamic>> events;
+/// Une phase de raisonnement AUTONOME de l'agent.
+///
+/// Chaque phase de réflexion crée SA propre box dans la timeline. Les tool
+/// calls ne sont JAMAIS des enfants de la réflexion : ils sont des blocs
+/// frères rendus avant/après, et une nouvelle réflexion après des outils
+/// ouvre une nouvelle [_ReflectionBox] (jamais de fusion).
+class _ReflectionBox extends StatefulWidget {
+  final String content;
   final bool isActive;
   final bool isDark;
   final Color fg;
   final Color muted;
 
-  const _ReflectionGroup({
-    required this.events,
+  const _ReflectionBox({
+    required this.content,
     required this.isActive,
     required this.isDark,
     required this.fg,
@@ -9781,58 +9906,31 @@ class _ReflectionGroup extends StatefulWidget {
   });
 
   @override
-  State<_ReflectionGroup> createState() => _ReflectionGroupState();
+  State<_ReflectionBox> createState() => _ReflectionBoxState();
 }
 
-class _ReflectionGroupState extends State<_ReflectionGroup> {
+class _ReflectionBoxState extends State<_ReflectionBox> {
   bool _userToggled = false;
   bool _expanded = false;
 
-  Widget _eventRow(Map<String, dynamic> e) {
-    if (e['type'] == 'thinking') {
-      final txt = ((e['thinking'] as String?) ?? '')
-          .replaceAll(
-              RegExp(r'Executing \d+ tool\(s\)\.\.\.', caseSensitive: false),
-              '')
-          .replaceAll(RegExp(r'Tool call:.*', caseSensitive: false), '')
-          .trim();
-      if (txt.isEmpty) return const SizedBox.shrink();
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          txt,
-          style: TextStyle(
-            fontSize: 11,
-            height: 1.45,
-            fontStyle: FontStyle.italic,
-            color: widget.fg.withValues(alpha: 0.65),
-          ),
-        ),
-      );
-    }
-
-    final name = (e['name'] as String?) ?? (e['toolName'] as String?) ?? '';
-    final status = (e['status'] as String?) ?? 'done';
-    return _ToolCallBlock(
-      toolName: name,
-      args: (e['args'] as Map?)?.cast<String, dynamic>() ?? const {},
-      result: e['result'] as String?,
-      status: status,
-      isDark: widget.isDark,
-      fg: widget.fg,
-      muted: widget.muted,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Pendant la génération le groupe reste déplié ; une fois terminé il se
-    // replie automatiquement (sauf si l'utilisateur a manuellement basculé).
+    // Pendant la génération la box reste dépliée ; une fois la phase
+    // terminée elle se replie automatiquement (sauf bascule manuelle).
     final showBody = _userToggled ? _expanded : widget.isActive;
-    final toolCount = widget.events.where((e) => e['type'] == 'toolCall').length;
+    final content = widget.content.trim();
 
     return Container(
+      width: double.infinity,
       margin: const EdgeInsets.only(top: 2, bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: widget.isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: widget.fg.withValues(alpha: 0.08)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -9845,7 +9943,7 @@ class _ReflectionGroupState extends State<_ReflectionGroup> {
             },
             borderRadius: BorderRadius.circular(4),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
               child: Row(
                 children: [
                   Icon(Icons.psychology,
@@ -9859,13 +9957,6 @@ class _ReflectionGroupState extends State<_ReflectionGroup> {
                       color: widget.fg.withValues(alpha: 0.85),
                     ),
                   ),
-                  if (toolCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Text(
-                      '$toolCount outil${toolCount > 1 ? 's' : ''}',
-                      style: TextStyle(fontSize: 10, color: widget.muted),
-                    ),
-                  ],
                   const Spacer(),
                   if (widget.isActive)
                     SizedBox(
@@ -9875,25 +9966,28 @@ class _ReflectionGroupState extends State<_ReflectionGroup> {
                         strokeWidth: 1.5,
                         color: widget.muted,
                       ),
+                    )
+                  else
+                    Icon(
+                      showBody ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                      size: 12,
+                      color: widget.muted,
                     ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    showBody ? Broken.arrow_up_2 : Broken.arrow_down_2,
-                    size: 12,
-                    color: widget.muted,
-                  ),
                 ],
               ),
             ),
           ),
-          if (showBody)
+          if (showBody && content.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 4, 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  for (final e in widget.events) _eventRow(e),
-                ],
+              padding: const EdgeInsets.fromLTRB(20, 0, 4, 4),
+              child: Text(
+                content,
+                style: TextStyle(
+                  fontSize: 11,
+                  height: 1.45,
+                  fontStyle: FontStyle.italic,
+                  color: widget.fg.withValues(alpha: 0.65),
+                ),
               ),
             ),
         ],
@@ -9919,6 +10013,9 @@ class _ToolCallBlock extends StatefulWidget {
   final VoidCallback? onAutopilot;
   final VoidCallback? onAllowSession;
   final VoidCallback? onWhitelist;
+  /// Quand false, le resultat n'est pas rendu inline : une carte Output
+  /// separee (_ToolOutputBlock) s'en charge dans la timeline.
+  final bool showResultInline;
 
   const _ToolCallBlock({
     required this.toolName,
@@ -9933,6 +10030,7 @@ class _ToolCallBlock extends StatefulWidget {
     this.onAutopilot,
     this.onAllowSession,
     this.onWhitelist,
+    this.showResultInline = true,
   });
 
   @override
@@ -10146,7 +10244,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
     }
 
     return GestureDetector(
-      onTap: widget.result != null
+      onTap: (widget.showResultInline && widget.result != null)
           ? () => setState(() => _expanded = !_expanded)
           : null,
       child: Container(
@@ -10197,8 +10295,8 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       style: TextStyle(fontSize: 10, color: widget.muted),
                     ),
                   ),
-                  // Expand chevron (only when result available)
-                  if (widget.result != null)
+                  // Expand chevron (only when result available inline)
+                  if (widget.result != null && widget.showResultInline)
                     Icon(
                       _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
                       size: 12,
@@ -10208,7 +10306,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
               ),
             ),
             // ── Expanded result ────────────────────────────────────────
-            if (_expanded && widget.result != null)
+            if (widget.showResultInline && _expanded && widget.result != null)
               Container(
                 padding: const EdgeInsets.fromLTRB(26, 0, 8, 8),
                 width: double.infinity,
@@ -10224,6 +10322,105 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                   ),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ------------------------------------------------------------------------------
+// _ToolOutputBlock - carte Output associee a son Tool Call mais rendue comme
+// un bloc FRERE dans la timeline (jamais a l'interieur d'une Reflexion).
+// ------------------------------------------------------------------------------
+
+class _ToolOutputBlock extends StatefulWidget {
+  final String output;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+
+  const _ToolOutputBlock({
+    required this.output,
+    required this.isDark,
+    required this.fg,
+    required this.muted,
+  });
+
+  @override
+  State<_ToolOutputBlock> createState() => _ToolOutputBlockState();
+}
+
+class _ToolOutputBlockState extends State<_ToolOutputBlock> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final output = widget.output.trim();
+    final isError =
+        output.startsWith('Error') || output.startsWith('Blocage');
+    final preview =
+        output.length > 300 ? '${output.substring(0, 300)}…' : output;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(left: 14, top: 2, bottom: 6),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: widget.isDark
+            ? Colors.white.withValues(alpha: 0.03)
+            : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isError
+              ? Colors.redAccent.withValues(alpha: 0.35)
+              : widget.fg.withValues(alpha: 0.08),
+        ),
+      ),
+      child: InkWell(
+        onTap:
+            output.length > 300 ? () => setState(() => _expanded = !_expanded) : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Broken.document_text, size: 11, color: widget.muted),
+                const SizedBox(width: 5),
+                Text(
+                  'Output',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.6,
+                    color: widget.muted,
+                  ),
+                ),
+                if (isError) ...[
+                  const SizedBox(width: 6),
+                  Icon(Icons.warning_amber_rounded,
+                      size: 11, color: Colors.redAccent.withValues(alpha: 0.9)),
+                ],
+                const Spacer(),
+                if (output.length > 300)
+                  Icon(
+                    _expanded ? Broken.arrow_up_2 : Broken.arrow_down_2,
+                    size: 12,
+                    color: widget.muted,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            SelectableText(
+              _expanded ? output : preview,
+              style: TextStyle(
+                fontSize: 10,
+                fontFamily: 'monospace',
+                height: 1.4,
+                color: widget.fg.withValues(alpha: 0.7),
+              ),
+            ),
           ],
         ),
       ),
