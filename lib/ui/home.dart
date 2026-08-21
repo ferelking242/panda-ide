@@ -27,6 +27,8 @@ import 'donation_page.dart';
 import 'file_manager.dart';
 import 'editor_page.dart';
 import 'menu_screen.dart';
+import 'package:path_provider/path_provider.dart';
+
 import 'package_manager_page.dart';
 // downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
 import 'downloads.dart';
@@ -7490,38 +7492,77 @@ class _SelectTypeState extends State<SelectType>
       }
     }
 
-    try {
-      final ts  =
-          '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
-          '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
-      // Export to the public Panda IDE root folder accessible to the user
-      final exportDir = Directory(pandaRootDir);
-      if (!exportDir.existsSync()) {
-        await exportDir.create(recursive: true);
+    final ts =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}'
+        '_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}';
+    final fileName = 'panda-agent-$ts.md';
+
+    // Le Markdown est TOUJOURS copie dans le presse-papiers en plus du .md.
+    await Clipboard.setData(ClipboardData(text: buf.toString()));
+
+    // Ecriture dans un dossier REELLEMENT accessible a l'utilisateur, avec
+    // sonde d'ecriture : Android renvoie sinon des chemins prives
+    // /data/user/0/... invisibles depuis tout gestionnaire de fichiers.
+    // Ordre : stockage public Panda IDE -> stockage externe propre a l'app
+    // (Android/data/com.panda.ide/files) -> interne en dernier recours.
+    String? savedPath;
+    for (final dirPath in <String>[
+      '$publicPandaRootDir/Exports',
+      publicPandaRootDir,
+    ]) {
+      try {
+        final dir = Directory(dirPath);
+        if (!dir.existsSync()) await dir.create(recursive: true);
+        final probe = File('$dirPath/.panda_write_probe');
+        await probe.writeAsString('ok', flush: true);
+        await probe.delete();
+        final file = File('$dirPath/$fileName');
+        await file.writeAsString(buf.toString(), flush: true);
+        savedPath = file.path;
+        break;
+      } catch (_) {
+        continue;
       }
-      final file = File('$pandaRootDir/panda-agent-$ts.md');
-      await file.writeAsString(buf.toString());
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Exporté → ${file.path}',
-            style: const TextStyle(fontSize: 12)),
-        duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'Copier le chemin',
-          onPressed: () =>
-              Clipboard.setData(ClipboardData(text: file.path)),
-        ),
-      ));
-    } catch (_) {
-      // Fallback : copier le Markdown dans le presse-papier
-      await Clipboard.setData(ClipboardData(text: buf.toString()));
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Markdown copié dans le presse-papier',
-            style: TextStyle(fontSize: 12)),
-        duration: Duration(seconds: 2),
-      ));
     }
+    if (savedPath == null) {
+      try {
+        final ext = await getExternalStorageDirectory();
+        if (ext != null) {
+          final dir = Directory('${ext.path}/exports');
+          await dir.create(recursive: true);
+          final file = File('${dir.path}/$fileName');
+          await file.writeAsString(buf.toString(), flush: true);
+          savedPath = file.path;
+        }
+      } catch (_) {}
+    }
+    if (savedPath == null) {
+      try {
+        final dir = Directory(pandaRootDir);
+        if (!dir.existsSync()) await dir.create(recursive: true);
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsString(buf.toString(), flush: true);
+        savedPath = file.path;
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        savedPath != null
+            ? 'Exporté → $savedPath\n+ copié dans le presse-papiers'
+            : 'Échec d’écriture — Markdown copié dans le presse-papiers',
+        style: const TextStyle(fontSize: 12),
+      ),
+      duration: const Duration(seconds: 5),
+      action: savedPath != null
+          ? SnackBarAction(
+              label: 'Copier le chemin',
+              onPressed: () =>
+                  Clipboard.setData(ClipboardData(text: savedPath!)),
+            )
+          : null,
+    ));
   }
 
   // ── P2: Token estimation ─────────────────────────────────────────────────

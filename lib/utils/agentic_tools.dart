@@ -6,6 +6,8 @@ import 'dart:math' as math;
 import 'package:code_forge/code_forge.dart';
 import 'package:diff_match_patch/diff_match_patch.dart';
 import 'package:flutter/material.dart';
+
+import 'alpine_setup.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:html/dom.dart' as dom;
@@ -1060,38 +1062,111 @@ class AgenticTools {
     };
   }
 
-  Future<ProcessResult> _runGitCommand(List<String> args) async {
-    final env = await _buildAgentShellEnvironment(workspacePath);
+  /// Exécute [script] dans l'environnement Alpine de l'agent en utilisant
+  /// EXACTEMENT la même recette proot que le terminal interactif (binaire
+  /// localisé via AlpineSetup, loader embarqué, PROOT_TMP_DIR, binds
+  /// conditionnels, kill-on-exit). C'était la cause des timeouts : l'agent
+  /// lançait un vieux binaire $binDir/proot sans loader ni binds.
+  Future<ProcessResult> _runGuestShell(
+    String script, {
+    Map<String, String> envs = const {},
+    required Duration timeout,
+    required String timeoutLabel,
+  }) async {
+    final rootfsDir = AlpineSetup.alpineDir;
 
-    final String prootBin = '$binDir/proot';
-    final String rootfsDir = '$runtimesDir/alpine-linux';
-    
-    if (File(prootBin).existsSync() && Directory(rootfsDir).existsSync()) {
-      final List<String> prootArgs = [
-        '--rootfs=$rootfsDir',
-        '-b', '/dev',
-        '-b', '/proc',
-        '-b', '/sys',
-        '-b', workspacePath,
-          '-b', '/storage',
-        '-w', workspacePath,
-        '/usr/bin/git',
-        ...args
-      ];
-      return Process.run(
-        prootBin,
-        prootArgs,
-        environment: env,
-        workingDirectory: workspacePath,
-      );
+    if (AlpineSetup.isRootfsComplete()) {
+      try {
+        await AlpineSetup.ensureAlpineRuntimeFiles();
+      } catch (_) {}
+      final prootBin = await AlpineSetup.locateProotBinary(rootfsDir);
+      if (prootBin != null) {
+        final prootArgs = <String>[
+          '-0',
+          '--link2symlink',
+          '--sysvipc',
+          '--kill-on-exit',
+          '--rootfs=$rootfsDir',
+          '-b', '/dev',
+          '-b', '/proc',
+          '-b', '/sys',
+        ];
+        void addBind(String hostPath, [String? guestPath]) {
+          try {
+            final host = hostPath.split(':').first;
+            if (Directory(host).existsSync() || File(host).existsSync()) {
+              prootArgs.addAll(['-b', guestPath != null ? '$hostPath:$guestPath' : hostPath]);
+            }
+          } catch (_) {}
+        }
+
+        addBind('/dev/pts');
+        addBind('/dev/urandom');
+        addBind('/dev/shm');
+        addBind('/proc/self/fd', '/dev/fd');
+        addBind('/system');
+        addBind('/apex');
+        addBind('/linkerconfig');
+        addBind('/vendor');
+        addBind('/sdcard');
+        addBind('/storage');
+        addBind(appDir);
+        addBind(tempDir, '/tmp');
+
+        // Le workspace hôte est monté au point stable /root/workspace.
+        final ws = workspacePath.trim();
+        final wsReadable = ws.isNotEmpty && AlpineSetup.isDirAccessible(ws);
+        if (wsReadable) addBind(ws, AlpineSetup.workspaceMount);
+        final guestCwd = wsReadable ? AlpineSetup.workspaceMount : '/root';
+
+        // PATH invité d'abord (outils musl), fallback binaires hôtes ensuite.
+        final env = await AlpineSetup.prootSessionEnvironment(extra: envs);
+        env['PATH'] =
+            '${env['PATH'] ?? ''}:$binDir:$libDir:$runtimesDir/node/bin';
+
+        return Process.run(
+          prootBin,
+          [...prootArgs, '-w', '/root', '/bin/sh', '-c', 'cd "$guestCwd" 2>/dev/null; $script'],
+          environment: env,
+          workingDirectory: appDir,
+        ).timeout(
+          timeout,
+          onTimeout: () => throw TimeoutException('$timeoutLabel exceeded ${timeout.inSeconds} s timeout'),
+        );
+      }
     }
 
+    // Rootfs indisponible : repli sur le shell hôte Android.
     return Process.run(
-      'git',
-      args,
-      environment: env,
-      workingDirectory: workspacePath,
+      '/system/bin/sh',
+      ['-c', script],
+      environment: envs,
+      workingDirectory: workspacePath.trim().isNotEmpty ? workspacePath : appDir,
+    ).timeout(
+      timeout,
+      onTimeout: () => throw TimeoutException('$timeoutLabel exceeded ${timeout.inSeconds} s timeout'),
     );
+  }
+
+  Future<ProcessResult> _runGitCommand(List<String> args) async {
+    final env = await _buildAgentShellEnvironment(workspacePath);
+    final guest = await _runGuestShell(
+      'git ${args.map((a) => "'$a'").join(' ')}',
+      envs: env,
+      timeout: const Duration(seconds: 120),
+      timeoutLabel: 'git ${args.first}',
+    );
+    // git absent de l'invité (exit 127) → repli binaire git hôte.
+    final out = '${guest.stdout}${guest.stderr}';
+    if (guest.exitCode == 127 || out.contains('not found')) {
+      return Process.run(
+        'git',
+        args,
+        environment: env,
+        workingDirectory: workspacePath.trim().isNotEmpty ? workspacePath : appDir,
+      );
+    }
+    return guest;
   }
 
   Future<ToolResult<GitStatusInfo>> gitStatus() async {
@@ -1617,45 +1692,11 @@ class AgenticTools {
       }
 
       final env = await _buildAgentShellEnvironment(workspacePath);
-
       env.addAll(envs);
-      final String prootBin = '$binDir/proot';
-      final String rootfsDir = '$runtimesDir/alpine-linux';
-      
-      ProcessResult process;
-      if (File(prootBin).existsSync() && Directory(rootfsDir).existsSync()) {
-        final List<String> prootArgs = [
-          '--rootfs=$rootfsDir',
-          '-b', '/dev',
-          '-b', '/proc',
-          '-b', '/sys',
-          '-b', workspacePath,
-          '-b', '/storage',
-          '-w', workspacePath,
-          '/bin/sh',
-          '-c',
-          fullCmdStr
-        ];
-        process = await Process.run(
-          prootBin,
-          prootArgs,
-          environment: env,
-          workingDirectory: workspacePath,
-        ).timeout(
-          const Duration(seconds: 120),
-          onTimeout: () => throw TimeoutException('runShellCommand "$command" exceeded 120 s timeout'),
-        );
-      } else {
-        process = await Process.run(
-          command,
-          args,
-          environment: env,
-          workingDirectory: workspacePath,
-        ).timeout(
-          const Duration(seconds: 120),
-          onTimeout: () => throw TimeoutException('runShellCommand "$command" exceeded 120 s timeout'),
-        );
-      }
+      final process = await _runGuestShell(fullCmdStr,
+          envs: env,
+          timeout: const Duration(seconds: 120),
+          timeoutLabel: 'runShellCommand "$command"');
       return ToolResult.success({
         "pid": process.pid.toString(),
         "exitCode": process.exitCode.toString(),

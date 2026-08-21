@@ -571,9 +571,9 @@ $toolLines
           allowWrites: allowWrites,
           agentMode: agentMode,
         )
-            .timeout(const Duration(seconds: 45), onTimeout: () {
-          PandaLog.w('Gemini', 'Tool $name timed out after 45 s');
-          return 'Error: tool $name exceeded 45 s timeout';
+            .timeout(const Duration(seconds: 150), onTimeout: () {
+          PandaLog.w('Gemini', 'Tool $name timed out after 150 s');
+          return 'Error: tool $name exceeded 150 s timeout';
         });
         PandaLog.toolResult('Gemini', name, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: name, toolResult: result));
@@ -796,9 +796,9 @@ $toolLines
           allowWrites: allowWrites,
           agentMode: agentMode,
         )
-            .timeout(const Duration(seconds: 45), onTimeout: () {
-          PandaLog.w('SSE', 'Tool $functionName timed out after 45 s');
-          return 'Error: tool $functionName exceeded 45 s timeout';
+            .timeout(const Duration(seconds: 150), onTimeout: () {
+          PandaLog.w('SSE', 'Tool $functionName timed out after 150 s');
+          return 'Error: tool $functionName exceeded 150 s timeout';
         });
         PandaLog.toolResult('SSE', functionName, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: functionName, toolResult: result));
