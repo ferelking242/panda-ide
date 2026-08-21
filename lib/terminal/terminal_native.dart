@@ -549,63 +549,19 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final sw = Stopwatch()..start();
 
     if (!AlpineSetup.isRootfsComplete()) {
-      runtime.terminal.write('\r\n\x1b[33m╔═══════════════════════════════════════════╗\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m║  ⚙  Configuration Alpine Linux            ║\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m╚═══════════════════════════════════════════╝\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[90m  Extraction du rootfs (première installation)\x1b[0m\r\n\r\n');
-      PandaLog.i('Terminal', 'Alpine rootfs incomplete, starting extraction');
-
-      // Live elapsed timer — shows progress so user knows it's not stuck
-      final elapsedTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-        final secs = sw.elapsed.inSeconds;
-        runtime.terminal.write('\x1b[90m  ⏳ En cours... ${secs}s\x1b[0m\r\n');
-      });
-
-      bool repaired = false;
-      for (int attempt = 1; attempt <= 2; attempt++) {
-        if (attempt > 1) {
-          runtime.terminal.write('\x1b[33m  ↻ Nouvelle tentative ($attempt/2)...\x1b[0m\r\n');
-          PandaLog.i('Terminal', 'Alpine extraction retry attempt $attempt');
-        }
-        try {
-          repaired = await AlpineSetup.ensureAlpineRootfs().timeout(
-            const Duration(seconds: 90),
-            onTimeout: () {
-              PandaLog.e('Terminal', 'Alpine extraction timed out after 90s');
-              return false;
-            },
-          );
-        } catch (e) {
-          PandaLog.e('Terminal', 'Alpine extraction error: $e');
-          repaired = false;
-        }
-        if (repaired) break;
-      }
-      elapsedTimer.cancel();
-
-      if (!repaired) {
-        final errDetail = AlpineSetup.lastError.isNotEmpty
-            ? AlpineSetup.lastError
-            : 'Erreur inconnue';
-        PandaLog.e('Terminal', 'Alpine extraction failed: $errDetail (elapsed: ${sw.elapsedMilliseconds}ms)');
-        runtime.terminal.write('\r\n\x1b[31m[\u00c9chec Alpine Linux]\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[31m  $errDetail\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[33m    /panda-ide/Logs/agent/\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[36m  Essayez:\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[36m    1. Fermer et relancer Panda IDE\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[36m    2. Aller dans Paramètres > Alpine > Réinitialiser\x1b[0m\r\n');
-        runtime.terminal.write('\x1b[36m    3. Réinstaller l\'application\x1b[0m\r\n');
-        _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
-        return;
-      }
-      PandaLog.i('Terminal', 'Alpine rootfs extraction succeeded in ${sw.elapsedMilliseconds}ms');
-      runtime.terminal.write('\x1b[32m  ✓ Alpine Linux configuré (${sw.elapsedMilliseconds}ms)\x1b[0m\r\n');
-    } else {
-      PandaLog.d('Terminal', 'Alpine rootfs already complete');
-      await AlpineSetup.ensureAlpineRuntimeFiles();
+      // Alpine should have been extracted during SettingUpScreen.
+      // If we're here, the extraction failed or was skipped.
+      PandaLog.e('Terminal', 'Alpine rootfs incomplete — cannot start PRoot session');
+      runtime.terminal.write('\r\n\x1b[31m[Alpine Linux non configuré]\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[31m  Le rootfs Alpine n\'a pas été extrait correctement.\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m  Solution:\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m    1. Fermer et relancer Panda IDE\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[33m    2. L\'extraction se fera automatiquement\x1b[0m\r\n');
+      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      return;
     }
+    PandaLog.d('Terminal', 'Alpine rootfs verified complete');
+    await AlpineSetup.ensureAlpineRuntimeFiles();
 
     PandaLog.i('Terminal', 'Locating PRoot binary in rootfs=$rootfsDir');
     final prootBin = await AlpineSetup.locateProotBinary(rootfsDir);
