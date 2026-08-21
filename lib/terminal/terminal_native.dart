@@ -78,6 +78,14 @@ class _TwoFingerPinchRecognizer extends OneSequenceGestureRecognizer {
   }
 
   @override
+  void didStopTrackingLastPointer(int pointer) {
+    // Gesture arena dropped us (all pointers gone / cancelled): drop any
+    // stale pinch state so a next two-finger gesture starts from scratch.
+    _pointers.clear();
+    _baseSpan = null;
+  }
+
+  @override
   void acceptGesture(int pointer) {}
 
   @override
