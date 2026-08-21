@@ -253,7 +253,7 @@ class _SetupScreenState extends State<SetupScreen>
     } catch (e, stack) {
       _addLog('❌ Setup failed: $e');
       _addLog('Stack: $stack');
-      PandaLog.e('SetupScreen', 'Setup failed: $e', error: e.toString());
+      try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Setup failed: $e', error: e.toString()); } catch (_) {} }); } catch (_) {}
       setState(() => _setupError = true);
       _setStepState(_currentStepIndex, failed: true, error: e.toString());
     }
@@ -309,7 +309,7 @@ class _SetupScreenState extends State<SetupScreen>
       _addLog('Archive size: ${sizeMB}MB');
     } catch (e) {
       _addLog('⚠️ Failed to read rootfs asset: $e');
-      PandaLog.e('SetupScreen', 'Rootfs asset read failed: $e');
+      try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Rootfs asset read failed: $e'); } catch (_) {} }); } catch (_) {}
     }
 
     // Retry logic: try up to 2 times
@@ -379,12 +379,12 @@ class _SetupScreenState extends State<SetupScreen>
         environment: gitEnvs(sharedPath),
       ).timeout(const Duration(seconds: 3));
     } catch (e) {
-      PandaLog.w('SetupScreen', 'Git global config failed (ignored): $e');
+      try { Future.microtask(() { try { PandaLog.w('SetupScreen', 'Git global config failed (ignored): $e'); } catch (_) {} }); } catch (_) {}
     }
 
     // ── Full symlink creation ──
     _addLog('Creating symlinks...');
-    PandaLog.i('SetupScreen', '[${sw.elapsedMilliseconds}ms] Creating symlinks');
+    try { Future.microtask(() { try { PandaLog.i('SetupScreen', '[${sw.elapsedMilliseconds}ms] Creating symlinks'); } catch (_) {} }); } catch (_) {}
 
     Map<String, dynamic> loader(String name,
             {String? loaderBin, Map<String, String>? env}) =>
@@ -455,7 +455,7 @@ class _SetupScreenState extends State<SetupScreen>
         await AlpineSetup.ensureAlpineRuntimeFiles();
         _addLog('Alpine runtime files ready');
       } catch (e) {
-        PandaLog.e('SetupScreen', 'Alpine runtime files error: $e');
+        try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Alpine runtime files error: $e'); } catch (_) {} }); } catch (_) {}
       }
 
       // Inject Panda tools into Alpine local bin
