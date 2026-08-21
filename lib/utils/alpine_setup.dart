@@ -166,46 +166,50 @@ class AlpineSetup {
       await archive.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
       PandaLog.d('AlpineSetup', '[2/6] Archive written to ${archive.path} (${await archive.length()} bytes)');
 
-      // Step 3: Locate BusyBox
-      final nativeLibPath = await nativeLibDir();
-      PandaLog.d('AlpineSetup', '[3/6] Native lib dir: $nativeLibPath');
-      final busybox = '$nativeLibPath/libbusybox.so';
-      final busyboxExists = File(busybox).existsSync();
-      PandaLog.d('AlpineSetup', '[3/6] libbusybox.so exists: $busyboxExists');
-      if (!busyboxExists) {
-        lastError = 'libbusybox.so introuvable dans $nativeLibPath';
-        throw StateError(lastError);
-      }
+      // Step 3: Read archive bytes
+      final archiveBytes = await archive.readAsBytes();
+      PandaLog.d('AlpineSetup', '[3/6] Archive read: ${archiveBytes.length} bytes');
 
-      // Step 4: Extract with BusyBox
-      PandaLog.i('AlpineSetup', '[4/6] Running: $busybox tar -xzpf ${archive.path} -C ${destination.path}');
-      final linkEnv = await prootLinkEnvironment();
-      PandaLog.d('AlpineSetup', '[4/6] LD_LIBRARY_PATH: ${linkEnv['LD_LIBRARY_PATH'] ?? 'unset'}');
-      PandaLog.d('AlpineSetup', '[4/6] PROOT_LOADER: ${linkEnv['PROOT_LOADER'] ?? 'unset'}');
-
-      ProcessResult result;
+      // Step 4: Extract with Dart archive (no external BusyBox dependency)
+      PandaLog.i('AlpineSetup', '[4/6] Extracting ${archive.path} -> ${destination.path}');
       try {
-        result = await Process.run(
-          busybox,
-          ['tar', '-xzpf', archive.path, '-C', destination.path],
-          environment: linkEnv,
-        ).timeout(const Duration(minutes: 2));
+        // Decompress gzip, then extract tar
+        final List<int> tarBytes;
+        try {
+          tarBytes = gzip.decode(archiveBytes);
+          PandaLog.d('AlpineSetup', '[4/6] Gzip decompressed: ${tarBytes.length} bytes');
+        } catch (e) {
+          lastError = 'Gzip decompression failed: $e';
+          throw StateError(lastError);
+        }
+
+        final tarArchive = TarDecoder().decodeBytes(tarBytes);
+        PandaLog.d('AlpineSetup', '[4/6] Tar entries: ${tarArchive.length}');
+
+        int filesWritten = 0;
+        int dirsCreated = 0;
+        int symlinksCreated = 0;
+        for (final file in tarArchive) {
+          final destPath = '${destination.path}/${file.name}';
+          if (file.isFile) {
+            final outFile = File(destPath);
+            await outFile.parent.create(recursive: true);
+            await outFile.writeAsBytes(file.content as List<int>, flush: true);
+            // Preserve executable bit
+            if (file.mode & 0x49 != 0) {
+              try {
+                await Process.run('chmod', ['755', destPath]);
+              } catch (_) {}
+            }
+            filesWritten++;
+          } else if (file.name.endsWith('/')) {
+            await Directory(destPath).create(recursive: true);
+            dirsCreated++;
+          }
+        }
+        PandaLog.d('AlpineSetup', '[4/6] Extracted: $filesWritten files, $dirsCreated dirs');
       } catch (e) {
-        lastError = 'BusyBox execution failed: $e';
-        PandaLog.e('AlpineSetup', '[4/6] BusyBox process error: $e');
-        throw StateError(lastError);
-      }
-
-      PandaLog.d('AlpineSetup', '[4/6] Exit code: ${result.exitCode}');
-      if (result.stdout.toString().isNotEmpty) {
-        PandaLog.d('AlpineSetup', '[4/6] stdout: ${result.stdout.toString().substring(0, result.stdout.toString().length.clamp(0, 500))}');
-      }
-      if (result.stderr.toString().isNotEmpty) {
-        PandaLog.w('AlpineSetup', '[4/6] stderr: ${result.stderr.toString().substring(0, result.stderr.toString().length.clamp(0, 500))}');
-      }
-
-      if (result.exitCode != 0) {
-        lastError = 'BusyBox tar failed (exit ${result.exitCode}): ${result.stderr}';
+        if (lastError.isEmpty) lastError = 'Tar extraction failed: $e';
         throw StateError(lastError);
       }
 
