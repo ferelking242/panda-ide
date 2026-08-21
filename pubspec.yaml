@@ -44,6 +44,7 @@ dependencies:
   percent_indicator: ^4.2.5
   re_highlight: ^0.0.3
   shared_preferences: ^2.5.5
+  speech_to_text: ^7.0.0
   url_launcher: ^6.3.2
   multi_split_view: ^3.2.0
   vector_math: ^2.2.0

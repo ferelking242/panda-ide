@@ -1455,6 +1455,33 @@ class _SelectTypeState extends State<SelectType>
     });
   }
 
+  /// Ouvre directement la page Providers de Panda Agent (depuis le sélecteur
+  /// de modèle : « Ajouter un provider »).
+  bool _agentSettingsOpenProviders = false;
+
+  void _openAgentProvidersPage() {
+    _agentSettingsOpenProviders = true;
+    setState(() {
+      final existing = _openTabs.indexWhere((tab) => tab.id == 'agent-settings');
+      if (existing == -1) {
+        _openTabs.add(const _TabDef(
+          id: 'agent-settings',
+          title: 'Providers IA',
+          icon: Broken.cpu_setting,
+        ));
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = existing;
+      }
+      _sidebarState = 1;
+      _activeRail = 0;
+    });
+    // Le flag n'est consommé qu'une fois (initState d'AgentSettings).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _agentSettingsOpenProviders = false;
+    });
+  }
+
   // ── Open a file / folder / project as a tab in the new Panda IDE UI ──────
   // ── Active editor helpers ─────────────────────────────────────────────────
   _EditorTabConfig? _activeEditorConfig() {
@@ -4189,7 +4216,10 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'agent-settings') {
       return BlocProvider(
         create: (_) => AIChatUIBloc(),
-        child: const AgentSettings(embedded: true),
+        child: AgentSettings(
+          embedded: true,
+          openProvidersDirectly: _agentSettingsOpenProviders,
+        ),
       );
     }
     if (tab.id == 'local_models') {
@@ -4286,7 +4316,10 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'agent-settings') {
       return BlocProvider(
         create: (_) => AIChatUIBloc(),
-        child: const AgentSettings(embedded: true),
+        child: AgentSettings(
+          embedded: true,
+          openProvidersDirectly: _agentSettingsOpenProviders,
+        ),
       );
     }
     if (tab.id == 'local_models') {
@@ -6190,7 +6223,7 @@ class _SelectTypeState extends State<SelectType>
                         Navigator.pop(ctx);
                         final bool isMobile = MediaQuery.of(context).size.width < 600;
                         if (isMobile) {
-                          _openAgentTab();
+                          _openAgentProvidersPage();
                         } else {
                           setState(() {
                             _rightPanelOpen = true;
@@ -6470,7 +6503,7 @@ class _SelectTypeState extends State<SelectType>
                   Navigator.pop(ctx);
                   final bool isMobile = MediaQuery.of(context).size.width < 600;
                   if (isMobile) {
-                    _openAgentTab();
+                    _openAgentProvidersPage();
                   } else {
                     setState(() {
                       _rightPanelOpen    = true;

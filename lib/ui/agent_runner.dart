@@ -54,13 +54,34 @@ class AgentChunk {
   final Map<String, dynamic>? toolArgs;
   /// Résultat retourné par l'outil (toolDone)
   final String? toolResult;
+  /// Identifiant du bloc chronologique (réflexion / texte / outils).
+  /// Permet à l'UI d'afficher les étapes dans le vrai ordre au lieu de tout
+  /// empiler la réflexion en haut et les outils au milieu.
+  final int? blockId;
   const AgentChunk({
     required this.phase,
     this.text = '',
     this.toolName,
     this.toolArgs,
     this.toolResult,
+    this.blockId,
   });
+}
+
+/// Séquenceur de blocs chronologiques partagé par les deux runners.
+/// Un nouveau bloc est ouvert dès que le type d'événement change
+/// (thinking → texte → outils → texte…), ce qui restitue le déroulé réel.
+class _BlockSequencer {
+  int _seq = -1;
+  String _lastKind = '';
+
+  int next(String kind) {
+    if (kind != _lastKind) {
+      _seq += 1;
+      _lastKind = kind;
+    }
+    return _seq;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -365,8 +386,10 @@ $toolLines
     _client = http.Client();
     bool terminalError = false;
     try {
-      // In ask mode, tools are completely disabled so that the model does not attempt any tool calls or shell commands.
-      final shouldUseTools = context != null && agentMode == 'agent';
+      // Ask = aucun outil du tout. Plan = outils en lecture seule.
+      // Agent = tous les outils.
+      final shouldUseTools =
+          context != null && (agentMode == 'agent' || agentMode == 'plan');
       final agenticTools = shouldUseTools
           ? AgenticTools(
               workspacePath: workspacePath,
@@ -402,17 +425,8 @@ $toolLines
           agenticTools,
           toolSchemas,
           allowWrites: agentMode == 'agent',
-        );
-      } else if (model is LocalLlama) {
-        // LocalLlama expose une API OpenAI-compatible → on passe par _runSse
-        await _runSse(
-          model,
-          messages,
-          systemPrompt,
-          ctrl,
-          agenticTools,
-          toolSchemas,
-          allowWrites: agentMode == 'agent',
+          agentMode: agentMode,
+          blocks: _BlockSequencer(),
         );
       } else {
         await _runSse(
@@ -423,6 +437,8 @@ $toolLines
           agenticTools,
           toolSchemas,
           allowWrites: agentMode == 'agent',
+          agentMode: agentMode,
+          blocks: _BlockSequencer(),
         );
       }
     } catch (e) {
@@ -450,8 +466,9 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent'}
+    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks}
   ) async {
+    final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
       <String, dynamic>{'role': 'system', 'content': systemPrompt},
       ...messages,
@@ -505,14 +522,16 @@ $toolLines
       for (final part in parts) {
         if (part['thought'] == true) {
           final t = part['text']?.toString() ?? '';
-          if (t.isNotEmpty) ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: t));
+          if (t.isNotEmpty) {
+            ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: t, blockId: seq.next('thinking')));
+          }
         } else if (part['functionCall'] != null) {
           functionCalls.add(Map<String, dynamic>.from(part['functionCall'] as Map));
         } else {
           final t = part['text']?.toString() ?? '';
           if (t.isNotEmpty) {
             assistantText += t;
-            ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: t));
+            ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: t, blockId: seq.next('text')));
           }
         }
       }
@@ -542,7 +561,7 @@ $toolLines
             ? Map<String, dynamic>.from(fc['args'] as Map)
             : <String, dynamic>{};
 
-        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: name, toolArgs: args));
+        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: name, toolArgs: args, blockId: seq.next('tool')));
         PandaLog.toolCall('Gemini', name, args);
 
         final result = await _dispatchTool(
@@ -585,8 +604,9 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent'}
+    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks}
   ) async {
+    final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
       <String, dynamic>{'role': 'system', 'content': systemPrompt},
       ...messages,
@@ -703,6 +723,7 @@ $toolLines
         ctrl.add(AgentChunk(
           phase: AgentPhase.thinking,
           text: reasoningText,
+          blockId: seq.next('thinking'),
         ));
         PandaLog.d(
           'AgentRunner',
@@ -714,7 +735,11 @@ $toolLines
       PandaLog.d('SSE', 'Parsed response — text=${assistantText.length} chars toolCalls=${toolCalls.length}');
 
       if (assistantText.isNotEmpty) {
-        ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: assistantText));
+        ctrl.add(AgentChunk(
+          phase: AgentPhase.streaming,
+          text: assistantText,
+          blockId: seq.next('text'),
+        ));
       } else {
         final fallbackChunks = parseSsePayload(decoded);
         if (fallbackChunks.isNotEmpty) {
@@ -757,7 +782,12 @@ $toolLines
           args = Map<String, dynamic>.from(rawArgs);
         }
 
-        ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: functionName, toolArgs: args));
+        ctrl.add(AgentChunk(
+          phase: AgentPhase.toolRunning,
+          toolName: functionName,
+          toolArgs: args,
+          blockId: seq.next('tool'),
+        ));
         PandaLog.toolCall('SSE', functionName, args);
         final result = await _dispatchTool(
           tools,
