@@ -8,6 +8,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:xterm/xterm.dart';
 import 'package:xterm/src/ui/render.dart' show RenderTerminal;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import '../ui/notifications.dart';
 import 'package:flutter/services.dart';
@@ -2123,7 +2124,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                     ),
                   ),
               ],
-            ]);
+            );
 
             if (!widget.useScaffold) return terminalContent;
 

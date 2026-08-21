@@ -162,12 +162,13 @@ class _PackageManagerPageState extends State<PackageManagerPage> {
     ));
 
     final result = await task((line) {
-      controller.write('$line\n');
+      controller.text = '${controller.text}$line\n';
       logKey.currentState?.scrollToBottom();
     });
 
     if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
-    controller.dispose();
+    // Dispose after the sheet close animation finished rendering.
+    Future.delayed(const Duration(milliseconds: 800), controller.dispose);
 
     if (!mounted) return result;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
