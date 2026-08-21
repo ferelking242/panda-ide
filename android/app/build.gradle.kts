@@ -69,6 +69,16 @@ android {
         }
     }
 
+    lint {
+        // Termux ships targetSdk 28 on purpose: exec()/chmod() on app-writable
+        // data requires the legacy SELinux domain (targetSdk <= 28), which is
+        // what makes PRoot/Alpine work. Google Play's ExpiredTargetSdkVersion
+        // lint is fatal by default on release builds and would abort
+        // assembleRelease — disable just that check, exactly like Termux
+        // disables 'ProtectedPermissions' for the same reason.
+        disable += "ExpiredTargetSdkVersion"
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
