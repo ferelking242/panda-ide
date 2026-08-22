@@ -67,6 +67,196 @@ import 'notifications.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'logs_ui/logs_explorer_page.dart';
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Agent Activity Feed — model + state machine controller
+// ═══════════════════════════════════════════════════════════════════════════════
+
+enum AgentActivityStatus { pending, running, completed, error }
+enum AgentActivityType { thinking, tool, status, output }
+
+class AgentActivityEvent {
+  final String id;
+  final DateTime timestamp;
+  AgentActivityType type;
+  AgentActivityStatus status;
+  String label;
+  String? toolName;
+  Map<String, dynamic>? toolArgs;
+  String? toolResult;
+  String? outputText;
+  Duration? duration;
+  bool isExpanded;
+
+  AgentActivityEvent({
+    required this.id, required this.timestamp,
+    required this.type, required this.status, required this.label,
+    this.toolName, this.toolArgs, this.toolResult, this.outputText,
+    this.duration, this.isExpanded = false,
+  });
+}
+
+/// Map raw tool names + args → human-readable French labels.
+/// NEVER returns "runShellCommand" or raw tool names.
+String toolHumanLabel(String toolName, Map<String, dynamic> args) {
+  final n = toolName.toLowerCase();
+  if (n.contains('shell') || n.contains('command') || n.contains('bash')) {
+    final cmd = (args['command'] ?? args['cmd'] ?? '').toString();
+    if (cmd.contains('git clone')) return 'Cloning\u2026';
+    if (cmd.contains('git push')) return 'Push vers GitHub\u2026';
+    if (cmd.contains('git commit')) return 'Cr\u00e9ation du commit\u2026';
+    if (cmd.contains('git pull')) return 'Pull en cours\u2026';
+    if (cmd.contains('npm install') || cmd.contains('bun install') || cmd.contains('pip install'))
+      return 'Installation des d\u00e9pendances\u2026';
+    if (cmd.contains('flutter build')) return 'Build en cours\u2026';
+    if (cmd.contains('flutter test') || cmd.contains('dart test')) return 'Tests en cours\u2026';
+    if (cmd.contains('flutter pub get') || cmd.contains('dart pub get'))
+      return 'R\u00e9solution des d\u00e9pendances\u2026';
+    if (cmd.contains('rm ') || cmd.contains('del ')) return 'Suppression\u2026';
+    if (cmd.contains('mkdir')) return 'Cr\u00e9ation de dossier\u2026';
+    if (cmd.contains('cp ') || cmd.contains('mv ')) return 'D\u00e9placement\u2026';
+    if (cmd.contains('curl') || cmd.contains('wget')) return 'T\u00e9l\u00e9chargement\u2026';
+    if (cmd.contains('git ')) return 'Commande Git\u2026';
+    final preview = cmd.length > 35 ? '${cmd.substring(0, 35)}\u2026' : cmd;
+    return preview.isEmpty ? 'Ex\u00e9cution\u2026' : 'Ex\u00e9cution: $preview';
+  }
+  if (n.contains('read') || n.contains('open') || n.contains('view')) return 'Lecture du fichier\u2026';
+  if (n.contains('write') || n.contains('edit') || n.contains('save') || n.contains('multi'))
+    return '\u00c9dition du fichier\u2026';
+  if (n.contains('search') || n.contains('grep') || n.contains('glob') || n.contains('find'))
+    return 'Recherche\u2026';
+  if (n.contains('list') || n.contains('dir')) return 'Exploration du dossier\u2026';
+  if (n.contains('web') || n.contains('fetch') || n.contains('http') || n.contains('url'))
+    return 'Recherche sur internet\u2026';
+  if (n.contains('git')) return 'Commande Git\u2026';
+  if (n.contains('delete') || n.contains('remove')) return 'Suppression\u2026';
+  if (n.contains('agent') || n.contains('task') || n.contains('delegate'))
+    return 'D\u00e9l\u00e9gation\u2026';
+  return 'Action en cours\u2026';
+}
+
+/// State machine for the activity feed.
+///
+/// Priority: ACTIVE REAL TOOL > Narrative update > "Running"
+/// A real tool is NEVER interrupted by thinking/text chunks.
+/// Only completeTool(toolId) can end a running tool.
+class AgentActivityController {
+  final List<AgentActivityEvent> history = [];
+  AgentActivityEvent? activeActivity;
+  VoidCallback? _onUpdate;
+
+  bool isToolRunning = false;
+  String? activeToolId;
+
+  void setOnUpdate(VoidCallback cb) => _onUpdate = cb;
+  void _notify() => _onUpdate?.call();
+  String _nextId() => 'act_${DateTime.now().microsecondsSinceEpoch}';
+
+  /// Called once when the agent turn begins. Creates "Running" card.
+  void startRun() {
+    reset();
+    activeActivity = AgentActivityEvent(
+      id: _nextId(), timestamp: DateTime.now(),
+      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Running',
+    );
+    _notify();
+  }
+
+  /// Update label of active card. Ignored if a real tool is running.
+  void updateNarrative(String label) {
+    if (isToolRunning) return;
+    if (activeActivity == null) return;
+    activeActivity!.label = label;
+    _notify();
+  }
+
+  /// Start a real tool. Moves current narrative to history.
+  void startTool({required String toolId, required String toolName, required Map<String, dynamic> args}) {
+    if (activeActivity != null) {
+      activeActivity!.status = AgentActivityStatus.completed;
+      activeActivity!.isExpanded = false;
+      history.add(activeActivity!);
+    }
+    final label = toolHumanLabel(toolName, args);
+    activeActivity = AgentActivityEvent(
+      id: toolId, timestamp: DateTime.now(),
+      type: AgentActivityType.tool, status: AgentActivityStatus.running,
+      label: label, toolName: toolName, toolArgs: args,
+    );
+    isToolRunning = true;
+    activeToolId = toolId;
+    _notify();
+  }
+
+  /// Complete a tool. ONLY if toolId matches.
+  void completeTool({required String toolId, String? result}) {
+    if (activeToolId != toolId) return;
+    final a = activeActivity;
+    if (a == null) return;
+    a.status = AgentActivityStatus.completed;
+    a.toolResult = result;
+    a.isExpanded = false;
+    history.add(a);
+    activeActivity = null;
+    isToolRunning = false;
+    activeToolId = null;
+    // Create new "Running" card for next activity
+    activeActivity = AgentActivityEvent(
+      id: _nextId(), timestamp: DateTime.now(),
+      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Running',
+    );
+    _notify();
+  }
+
+  /// Fail a tool.
+  void failTool({required String toolId, String? error}) {
+    if (activeToolId != toolId) return;
+    final a = activeActivity;
+    if (a == null) return;
+    a.status = AgentActivityStatus.error;
+    a.toolResult = error;
+    a.isExpanded = false;
+    history.add(a);
+    activeActivity = null;
+    isToolRunning = false;
+    activeToolId = null;
+    _notify();
+  }
+
+  /// Finish the entire run.
+  void finishRun({String? error}) {
+    if (activeActivity != null) {
+      if (error != null) {
+        activeActivity!.status = AgentActivityStatus.error;
+        activeActivity!.label = error;
+      } else {
+        activeActivity!.status = AgentActivityStatus.completed;
+      }
+      activeActivity!.isExpanded = false;
+      history.add(activeActivity!);
+      activeActivity = null;
+    }
+    isToolRunning = false;
+    activeToolId = null;
+    _notify();
+  }
+
+  void toggleExpand(String id) {
+    for (final e in history) {
+      if (e.id == id) { e.isExpanded = !e.isExpanded; _notify(); return; }
+    }
+  }
+
+  void reset() {
+    history.clear();
+    activeActivity = null;
+    isToolRunning = false;
+    activeToolId = null;
+    _notify();
+  }
+}
+
+
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
   final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
   final matches = thinkRegex.allMatches(rawText);
@@ -186,6 +376,7 @@ class _SelectTypeState extends State<SelectType>
   String     _agentStreamBuf    = '';
   String     _agentCurrentTool  = '';
   final      _agentRunner       = AgentRunner();
+  final      _activityCtrl      = AgentActivityController();
   int        _agentRequestSerial = 0;
   Completer<bool>? _pendingApprovalCompleter;
   int        _agentToolTabSeq   = 0;
@@ -343,6 +534,7 @@ class _SelectTypeState extends State<SelectType>
   @override
   void initState() {
     super.initState();
+    _activityCtrl.setOnUpdate(() { if (mounted) setState(() {}); });
     WidgetsBinding.instance.addObserver(this);
     _splitViewController = MultiSplitViewController(areas: [Area(), Area()]);
     // Send button pulse animation
@@ -1005,7 +1197,7 @@ class _SelectTypeState extends State<SelectType>
   Widget _dialogHeader(AppTheme appTheme, IconData icon, String title) =>
       Row(children: [
         Container(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
           decoration: BoxDecoration(
             color: _kAccent.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
@@ -7038,13 +7230,9 @@ class _SelectTypeState extends State<SelectType>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final w in _buildAgentTimelineWidgets(timeline,
-                      isActiveMsg: isActiveMsg,
-                      lastThinkingIdx: lastThinkingIdx,
-                      lastTextIdx: lastTextIdx,
-                      isDark: isDark, fg: fg, muted: muted,
-                      isError: isError))
-                w,
+              // Activity feed: history + active card
+              if (_activityCtrl.history.isNotEmpty || _activityCtrl.activeActivity != null)
+                _AgentActivityFeed(controller: _activityCtrl, isDark: isDark, fg: fg, muted: muted),
               if (!isStreaming && msg['checkpoint'] != null)
                 _AgentCheckpointCard(
                   data: (msg['checkpoint'] as Map).cast<String, dynamic>(),
@@ -7991,6 +8179,7 @@ class _SelectTypeState extends State<SelectType>
       _agentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
       _agentMessages.clear();
       _agentAttachments.clear();
+      _activityCtrl.reset();
       _showHistoryPanel = false;
       _agentConversationTitle = 'Nouvelle conversation';
     });
@@ -8861,6 +9050,7 @@ class _SelectTypeState extends State<SelectType>
       _agentInputCtrl.clear();
       _agentGenerating  = true;
       _agentPhase       = AgentPhase.streaming;
+      _activityCtrl.startRun();
       _agentThinkingBuf = '';
       _agentStreamBuf   = '';
     });
@@ -8896,6 +9086,7 @@ class _SelectTypeState extends State<SelectType>
                 case AgentPhase.thinking:
                   _agentPhase = AgentPhase.thinking;
                   _agentThinkingBuf += chunk.text;
+                  _activityCtrl.updateNarrative('Réflexion…');
                   _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
                   if (blocks.isNotEmpty && blocks.last['type'] == 'thinking') {
                     blocks.last['thinking'] = (blocks.last['thinking'] as String? ?? '') + chunk.text;
@@ -8907,6 +9098,11 @@ class _SelectTypeState extends State<SelectType>
                 case AgentPhase.toolRunning:
                   _agentPhase = AgentPhase.toolRunning;
                   _agentCurrentTool = chunk.toolName ?? '';
+                  _activityCtrl.startTool(
+                    toolId: '${chunk.toolName}_${DateTime.now().microsecondsSinceEpoch}',
+                    toolName: chunk.toolName ?? '',
+                    toolArgs: chunk.toolArgs ?? {},
+                  );
                   _agentMessages[agentIdx]['toolName'] = _agentCurrentTool;
                   final runningCalls = List<Map<String,dynamic>>.from(
                     (_agentMessages[agentIdx]['toolCalls'] as List?)
@@ -8929,6 +9125,9 @@ class _SelectTypeState extends State<SelectType>
 
                 case AgentPhase.toolDone:
                   _agentCurrentTool = '';
+                  if (_activityCtrl.activeToolId != null) {
+                    _activityCtrl.completeTool(toolId: _activityCtrl.activeToolId!, result: chunk.toolResult);
+                  }
                   final doneCalls = List<Map<String,dynamic>>.from(
                     (_agentMessages[agentIdx]['toolCalls'] as List?)
                         ?.cast<Map<String,dynamic>>() ?? []);
@@ -8958,6 +9157,7 @@ class _SelectTypeState extends State<SelectType>
                 case AgentPhase.streaming:
                   _agentPhase = AgentPhase.streaming;
                   _agentCurrentTool = '';
+                  _activityCtrl.updateNarrative('Génération…');
                   _agentStreamBuf += chunk.text;
                   final processed = _extractThinkingFromText(_agentStreamBuf, _agentThinkingBuf);
                   _agentThinkingBuf = processed['thinking']!;
@@ -8996,6 +9196,7 @@ class _SelectTypeState extends State<SelectType>
                   _agentPhase = AgentPhase.done;
                   _agentCurrentTool = '';
                   _agentGenerating = false;
+                  _activityCtrl.finishRun();
                   _agentMessages[agentIdx]['phase'] = 'done';
                   _sendAnimCtrl.stop();
                   unawaited(_finalizeAgentTurn(agentIdx));
@@ -9003,6 +9204,7 @@ class _SelectTypeState extends State<SelectType>
                   _agentPhase = AgentPhase.error;
                   _agentCurrentTool = '';
                   _agentGenerating = false;
+                  _activityCtrl.finishRun(error: chunk.text);
                   _sendAnimCtrl.stop();
                   unawaited(_finalizeAgentTurn(agentIdx));
                   _agentMessages[agentIdx]['text'] =
@@ -10174,6 +10376,196 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 /// conversation : ils vivent uniquement à l'intérieur de ce groupe.
 /// Une phase de raisonnement AUTONOME de l'agent.
 ///
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Agent Activity Feed — UI widgets
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Light wave painter for active text.
+class _LightWavePainter extends CustomPainter {
+  final Animation<double> animation;
+  final Color color;
+  _LightWavePainter({required this.animation, required this.color}) : super(repaint: animation);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment(-1.0 + 2.0 * animation.value, 0),
+        end: Alignment(-0.5 + 2.0 * animation.value, 0),
+        colors: [color.withValues(alpha: 0.0), color.withValues(alpha: 0.3), color.withValues(alpha: 0.0)],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+  }
+  @override
+  bool shouldRepaint(_LightWavePainter old) => old.animation.value != animation.value;
+}
+
+/// The single active activity card — always at the bottom.
+class _ActiveActivityCard extends StatefulWidget {
+  final AgentActivityEvent activity;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  const _ActiveActivityCard({required this.activity, required this.isDark, required this.fg, required this.muted});
+  @override
+  State<_ActiveActivityCard> createState() => _ActiveActivityCardState();
+}
+
+class _ActiveActivityCardState extends State<_ActiveActivityCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _waveCtrl;
+  @override
+  void initState() {
+    super.initState();
+    _waveCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
+  }
+  @override
+  void dispose() { _waveCtrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.activity;
+    final isError = a.status == AgentActivityStatus.error;
+    final accent = isError ? Colors.redAccent : widget.isDark ? const Color(0xff8b5cf6) : const Color(0xff6366f1);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xff1a1a2e).withValues(alpha: 0.7) : const Color(0xfff0f0f8).withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accent.withValues(alpha: 0.3), width: 1),
+      ),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+            child: child,
+          ),
+        ),
+        child: Row(
+          key: ValueKey(a.label),
+          children: [
+            if (isError)
+              Icon(Icons.error_outline, size: 14, color: Colors.redAccent)
+            else
+              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 1.8, color: accent)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ClipRect(
+                child: CustomPaint(
+                  painter: _LightWavePainter(animation: _waveCtrl, color: accent),
+                  child: Text(a.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: widget.fg)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact history entry — expandable.
+class _ActivityHistoryEntry extends StatelessWidget {
+  final AgentActivityEvent event;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final VoidCallback onToggle;
+  const _ActivityHistoryEntry({required this.event, required this.isDark, required this.fg, required this.muted, required this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    final e = event;
+    final isError = e.status == AgentActivityStatus.error;
+    final checkColor = isError ? Colors.redAccent : const Color(0xff22c55e);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+      InkWell(
+        onTap: (e.toolName != null || e.outputText != null) ? onToggle : null,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          child: Row(children: [
+            Icon(Icons.check_circle, size: 13, color: checkColor),
+            const SizedBox(width: 8),
+            Expanded(child: Text(e.label, style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.8)), maxLines: 1, overflow: TextOverflow.ellipsis)),
+            if (e.toolName != null || e.outputText != null)
+              Icon(e.isExpanded ? Icons.expand_less : Icons.expand_more, size: 14, color: muted),
+          ]),
+        ),
+      ),
+      if (e.isExpanded) _buildDetails(e),
+    ]);
+  }
+
+  Widget _buildDetails(AgentActivityEvent e) {
+    final lines = <Widget>[];
+    if (e.toolName != null) lines.add(_detailRow('Tool', e.toolName!));
+    if (e.toolArgs != null && e.toolArgs!.isNotEmpty) {
+      for (final entry in e.toolArgs!.entries) {
+        final v = entry.value?.toString() ?? '';
+        if (v.isNotEmpty && v.length < 200) lines.add(_detailRow(entry.key, v.length > 100 ? '${v.substring(0, 100)}\u2026' : v));
+      }
+    }
+    if (e.toolResult != null && e.toolResult!.isNotEmpty) {
+      final r = e.toolResult!;
+      lines.add(_detailRow('Output', r.length > 300 ? '${r.substring(0, 300)}\u2026' : r));
+    }
+    if (lines.isEmpty) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(33, 0, 12, 4),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xff1a1a1a).withValues(alpha: 0.4) : const Color(0xfff5f5f5).withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: lines),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 3),
+      child: RichText(text: TextSpan(children: [
+        TextSpan(text: '$label: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg.withValues(alpha: 0.7))),
+        TextSpan(text: value, style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: fg.withValues(alpha: 0.6), height: 1.4)),
+      ])),
+    );
+  }
+}
+
+/// Complete activity feed: history + active card.
+class _AgentActivityFeed extends StatelessWidget {
+  final AgentActivityController controller;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  const _AgentActivityFeed({required this.controller, required this.isDark, required this.fg, required this.muted});
+
+  @override
+  Widget build(BuildContext context) {
+    final history = controller.history;
+    final active = controller.activeActivity;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final event in history)
+          _ActivityHistoryEntry(event: event, isDark: isDark, fg: fg, muted: muted, onToggle: () => controller.toggleExpand(event.id)),
+        if (active != null)
+          _ActiveActivityCard(activity: active, isDark: isDark, fg: fg, muted: muted),
+      ],
+    );
+  }
+}
+
 /// Chaque phase de réflexion crée SA propre box dans la timeline. Les tool
 /// calls ne sont JAMAIS des enfants de la réflexion : ils sont des blocs
 /// frères rendus avant/après, et une nouvelle réflexion après des outils
@@ -11449,7 +11841,11 @@ class _UserMessageBubbleState extends State<_UserMessageBubble> {
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 4),
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.88,
+            maxWidth: MediaQuery.of(context).size.width * 0.85,
+          ),
+          decoration: BoxDecoration(
+            color: const Color(0xff3b82f6),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
