@@ -933,66 +933,89 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
             ),
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
 
-            // Hero Header Section
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+            // VS Code-style hero header
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: ext.iconUrl != null
-                        ? Image.network(ext.iconUrl!, width: 64, height: 64,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 64))
-                        : _DefaultExtIcon(size: 64),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(ext.namespace,
-                            style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
-                        const SizedBox(height: 8),
-                        Row(
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Extension icon (64px, rounded)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: ext.iconUrl != null
+                            ? Image.network(ext.iconUrl!, width: 64, height: 64,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 64))
+                            : _DefaultExtIcon(size: 64),
+                      ),
+                      const SizedBox(width: 16),
+                      // Name + Publisher + Version + Install
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (alreadyInstalled)
-                              _OutlineBadge(
-                                icon: Icons.check_circle_rounded,
-                                label: 'Installed',
-                                color: cs.primary,
-                              )
-                            else if (_installState == _InstallState.installing)
-                              const SizedBox(
-                                width: 20, height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            else
-                              FilledButton.icon(
-                                onPressed: _doInstall,
-                                icon: const Icon(Icons.download_rounded, size: 16),
-                                label: const Text('Install'),
-                                style: FilledButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                ),
+                            Text(
+                              ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                              style: theme.textTheme.titleLarge?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: cs.onSurface,
+                                fontSize: 20,
                               ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(ext.namespace,
+                                style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
+                            const SizedBox(height: 4),
+                            Text('v${ext.version}',
+                                style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.45))),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                if (alreadyInstalled)
+                                  _OutlineBadge(
+                                    icon: Icons.check_circle_rounded,
+                                    label: 'Installed',
+                                    color: cs.primary,
+                                  )
+                                else if (_installState == _InstallState.installing)
+                                  const SizedBox(
+                                    width: 20, height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                else
+                                  FilledButton.icon(
+                                    onPressed: _doInstall,
+                                    icon: const Icon(Icons.download_rounded, size: 16),
+                                    label: const Text('Install'),
+                                    style: FilledButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                    ),
+                                  ),
+                                const SizedBox(width: 12),
+                                // Stats inline
+                                _StatsRow(ext: ext),
+                              ],
+                            ),
                           ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 12),
+                  // Description under header (like VS Code)
+                  Text(ext.description,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: cs.onSurface.withValues(alpha: 0.75))),
                 ],
               ),
             ),
+            const SizedBox(height: 8),
+            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
 
             // TabBar (VSCode Style)
             TabBar(
@@ -1002,10 +1025,10 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
               tabs: const [
-                Tab(text: 'Details'),
+                Tab(text: 'Features'),
+                Tab(text: 'Changelog'),
                 Tab(text: 'Contributions'),
-                Tab(text: 'Settings ⚙️'),
-                Tab(text: 'Usage & F5 💡'),
+                Tab(text: 'Settings'),
               ],
             ),
             Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
@@ -1015,30 +1038,21 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Tab 1: Details (Overview + README)
+                  // Tab 1: Features (README + description, VS Code style)
                   ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      Text(ext.description,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                              color: cs.onSurface.withValues(alpha: 0.85))),
-                      const SizedBox(height: 16),
-                      _StatsRow(ext: ext),
-                      const SizedBox(height: 16),
-                      _InfoTile(label: 'Publisher', value: ext.namespace),
-                      _InfoTile(label: 'Version', value: ext.version),
-                      if (ext.license != null && ext.license!.isNotEmpty)
-                        _InfoTile(label: 'License', value: ext.license!),
-                      if (ext.categories.isNotEmpty)
-                        _InfoTile(label: 'Categories', value: ext.categories.join(', ')),
+                      // README content (main feature display)
                       if (_readmeLoading) ...[
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 40),
                         const Center(child: CircularProgressIndicator()),
                       ] else if (_readme != null && _readme!.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        Divider(color: cs.outlineVariant.withValues(alpha: 0.5)),
-                        const SizedBox(height: 12),
                         _MarkdownText(source: _readme!),
+                      ] else ...[
+                        // Fallback: show description
+                        Text(ext.description,
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurface.withValues(alpha: 0.85))),
                       ],
                     ],
                   ),
@@ -1089,7 +1103,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                     ],
                   ),
 
-                  // Tab 3: Settings
+                  // Tab 2: Changelog
                   ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
@@ -1126,7 +1140,7 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
                     ],
                   ),
 
-                  // Tab 4: Usage & F5 Guide
+                  // Tab 4: Settings
                   ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
