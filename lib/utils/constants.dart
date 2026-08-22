@@ -1,5 +1,6 @@
-// ── App private directories (resolved at startup via path_provider) ───────────
-// Starts with default, overwritten by resolveAppDir() in configureStorageRoots().
+// App private directories (resolved at startup via path_provider)
+import 'dart:io' if (dart.library.js_interop) '../web/io_stub.dart';
+Starts with default, overwritten by resolveAppDir() in configureStorageRoots().
 String appDir = "/data/data/com.panda.ide";
 String binDir = "$appDir/bin";
 String libDir = "$appDir/lib";
