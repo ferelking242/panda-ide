@@ -176,8 +176,8 @@ class _MarketplacePageState extends State<MarketplacePage> {
     setState(() => _installStates[ext.id] = _InstallState.installing);
     try {
       final url = await _client.getDownloadUrl(ext.namespace, ext.name, ext.version);
-      final vsixDir = '${extensionDir}/${ext.namespace}.${ext.name}';
-      await VsixInstaller.installFromUrl(url);
+      final installer = VsixInstaller();
+      await installer.installFromUrl(url);
       await ExtensionRegistry.instance.load();
       if (!mounted) return;
       setState(() => _installStates[ext.id] = _InstallState.installed);
