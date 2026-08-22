@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../ui/permission_screen.dart';
 import '../ui/splash_screen.dart';
+import '../ui/web_home.dart';
 import 'setup_screen.dart';
 
 /// Splash → PermissionScreen (first time) → SetupScreen → Home.
@@ -26,11 +27,12 @@ class _StartScreenState extends State<StartScreen> {
     if (!mounted || _navigated) return;
     _navigated = true;
 
-    // Web / non-Android: skip setup entirely
+    // Web / non-Android : landing produit + lien de téléchargement APK.
+    // (L'IDE complet requiert proot/Alpine natif — indisponible sur web.)
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const SizedBox.shrink(),
+          pageBuilder: (_, __, ___) => const WebHome(),
           transitionsBuilder: (_, __, ___, child) =>
               FadeTransition(opacity: __, child: child),
         ),

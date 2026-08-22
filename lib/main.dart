@@ -38,12 +38,34 @@ Future<void> main() async {
     }
   }
 
-  final recent = await getRecent();
-  final appTheme = await getAppTheme();
-  final codeForgeConfig = await getCodeForgeConfig();
-  final aiConfig = await getAiConfig();
-  final modelSelected = await getModelSelected();
-  final sshServerList = await SSHInfo.getSavedSSHServers();
+  // Chaque lecture de prefs est protégée : une exception ici ne doit JAMAIS
+  // empêcher runApp() (page blanche sur web sinon). Les fallbacks reproduisent
+  // exactement les défauts des fonctions correspondantes.
+  final recent = await _safe(getRecent, () => '[]');
+  final appTheme = await _safe(getAppTheme, () => 'dark');
+  final codeForgeConfig = await _safe(
+    getCodeForgeConfig,
+    () => jsonEncode(const <String, dynamic>{
+      'indentLineStatus': true,
+      'lineWrap': false,
+      'enableFolding': true,
+      'theme': 'vs2015',
+      'terminalTheme': 'classic-green',
+      'fontFamily': 'jetBrainsMono',
+      'terminalFontSize': 14.0,
+      'isAIEnabled': true,
+      'manualCompletion': true,
+      'autoSave': true,
+      'enableLSP': true,
+      'LSPFeatureToggle': <String, dynamic>{},
+      'customEditorThemes': <String, dynamic>{},
+    }),
+  );
+  final aiConfig = await _safe(getAiConfig, () => '{}');
+  final modelSelected = await _safe(
+      getModelSelected, () => jsonEncode(const {'code': '', 'chat': ''}));
+  final sshServerList =
+      await _safe(SSHInfo.getSavedSSHServers, () => <SSHInfo>[]);
   final termuxInfo = await TermuxCubit.getSavedTermuxInfo();
 
   runApp(
@@ -68,6 +90,17 @@ Future<void> main() async {
   // the first frame and may be slow or blocked by a storage provider.
   if (isAndroid) {
     unawaited(_finishAndroidStartup());
+  }
+}
+
+/// Exécute [fn] et retombe sur [fallback] en cas d'erreur — jamais de crash
+/// avant le premier frame.
+Future<T> _safe<T>(Future<T> Function() fn, T Function() fallback) async {
+  try {
+    return await fn();
+  } catch (e) {
+    debugPrint('[Main] init failed, using fallback: $e');
+    return fallback();
   }
 }
 

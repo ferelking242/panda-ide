@@ -1120,7 +1120,21 @@ class AgenticTools {
         final guestCwd = wsReadable ? AlpineSetup.workspaceMount : '/root';
 
         // PATH invité d'abord (outils musl), fallback binaires hôtes ensuite.
-        final env = await AlpineSetup.prootSessionEnvironment(extra: envs);
+        // Les extras ne doivent pas écraser le PATH invité : les paquets
+        // installés par l'utilisateur via apk (terminal ou UI) restent ainsi
+        // prioritaires sur les binaires hôtes embarqués.
+        final hostExtras = Map<String, String>.from(envs)..remove('PATH');
+        final env =
+            await AlpineSetup.prootSessionEnvironment(extra: hostExtras);
+
+        // Un git installé par l'utilisateur (apk add git) doit être utilisé
+        // en entier : on retire l'override GIT_EXEC_PATH qui pointerait sur
+        // le git-core hôte bionic et casserait le git musl de l'invité.
+        if (File('$rootfsDir/usr/bin/git').existsSync()) {
+          env.remove('GIT_EXEC_PATH');
+          // Le git apk utilise ses propres CA (/etc/ssl/certs du rootfs).
+          env.remove('GIT_SSL_CAINFO');
+        }
         env['PATH'] =
             '${env['PATH'] ?? ''}:$binDir:$libDir:$runtimesDir/node/bin';
 
