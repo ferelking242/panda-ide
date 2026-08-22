@@ -34,6 +34,7 @@ dependencies:
   font_awesome_flutter: ^11.0.0
   html: ^0.15.6
   http: ^1.2.2
+  intl: ^0.20.2
   llama_flutter_android: { git: https://github.com/heckmon/Llama-Flutter.git }
   markdown: ^7.3.1
   markdown_widget: ^2.3.2+8
