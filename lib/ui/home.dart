@@ -157,7 +157,7 @@ class AgentActivityController {
     reset();
     activeActivity = AgentActivityEvent(
       id: _nextId(), timestamp: DateTime.now(),
-      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Running',
+      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Generating...',
     );
     _notify();
   }
@@ -203,7 +203,7 @@ class AgentActivityController {
     // Create new "Running" card for next activity
     activeActivity = AgentActivityEvent(
       id: _nextId(), timestamp: DateTime.now(),
-      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Running',
+      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Generating...',
     );
     _notify();
   }
@@ -7149,7 +7149,7 @@ class _SelectTypeState extends State<SelectType>
   Widget _buildAgentMessages(bool isDark, Color fg, Color muted) {
     return ListView.builder(
       controller: _agentScrollCtrl,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       itemCount: _agentMessages.length,
       itemBuilder: (_, i) {
         final msg    = _agentMessages[i];
@@ -7255,7 +7255,8 @@ class _SelectTypeState extends State<SelectType>
                 ),
 
               // Loader chip tant qu'aucun evenement visible n'est affiche.
-              if (isActiveMsg && !hasVisibleTimeline)
+              // Masqué si l'activity feed gère déjà l'affichage.
+              if (isActiveMsg && !hasVisibleTimeline && _activityCtrl.activeActivity == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: _AgentPhaseChip(
@@ -10428,23 +10429,17 @@ class _ActiveActivityCardState extends State<_ActiveActivityCard>
     final a = widget.activity;
     final isError = a.status == AgentActivityStatus.error;
     final accent = isError ? Colors.redAccent : widget.isDark ? const Color(0xff8b5cf6) : const Color(0xff6366f1);
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xff1a1a2e).withValues(alpha: 0.7) : const Color(0xfff0f0f8).withValues(alpha: 0.8),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accent.withValues(alpha: 0.3), width: 1),
-      ),
+    // Compact line-style: same height as history entries, with light wave
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 350),
+        duration: const Duration(milliseconds: 300),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
         transitionBuilder: (child, anim) => FadeTransition(
           opacity: anim,
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+            position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
             child: child,
           ),
         ),
@@ -10452,15 +10447,26 @@ class _ActiveActivityCardState extends State<_ActiveActivityCard>
           key: ValueKey(a.label),
           children: [
             if (isError)
-              Icon(Icons.error_outline, size: 14, color: Colors.redAccent)
+              Icon(Icons.error_outline, size: 13, color: Colors.redAccent)
             else
-              SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 1.8, color: accent)),
-            const SizedBox(width: 10),
+              SizedBox(
+                width: 13, height: 13,
+                child: CircularProgressIndicator(strokeWidth: 1.5, color: accent),
+              ),
+            const SizedBox(width: 8),
             Expanded(
               child: ClipRect(
                 child: CustomPaint(
                   painter: _LightWavePainter(animation: _waveCtrl, color: accent),
-                  child: Text(a.label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: widget.fg)),
+                  child: Text(
+                    a.label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: widget.fg.withValues(alpha: 0.8),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ),

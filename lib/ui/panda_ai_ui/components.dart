@@ -617,8 +617,7 @@ class LoadingStateWidget extends StatelessWidget {
           text: label,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(width: 8),
-        const ElapsedTimerWidget(),
+        // ElapsedTimerWidget removed — no seconds counter per spec
       ],
     );
   }
