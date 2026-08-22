@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'gateway_installer.dart';
 
 /// États du gateway
 enum GatewayStatus { idle, installing, starting, running, stopping, error }
@@ -15,11 +16,12 @@ class GatewayManager extends ChangeNotifier {
   GatewayStatus _status = GatewayStatus.idle;
   String _statusMessage = 'Gateway arrêté';
   final List<String> _logs = [];
-  Process? _nodeProcess;
   Process? _pythonProcess;
   int _apiPort = 8000;
-  String _provider = 'chatgpt'; // 'chatgpt' | 'claude' | 'pandagateway'
-  String _token = ''; // API token for Panda Open Gateway
+  String _provider = 'chatgpt';
+  String _token = '';
+  String _installedVersion = 'unknown';
+  String? _availableUpdate;
 
   // Getters
   GatewayStatus get status => _status;
@@ -29,6 +31,9 @@ class GatewayManager extends ChangeNotifier {
   int get apiPort => _apiPort;
   String get provider => _provider;
   String get apiBaseUrl => 'http://127.0.0.1:$_apiPort/v1';
+  String get installedVersion => _installedVersion;
+  String? get availableUpdate => _availableUpdate;
+  bool get hasUpdate => _availableUpdate != null && _availableUpdate != _installedVersion;
 
   void setProvider(String p) {
     _provider = p;
@@ -43,13 +48,22 @@ class GatewayManager extends ChangeNotifier {
   /// Public wrapper so UI can detect Python without starting the server.
   Future<String?> findPython() => _findPython();
 
+  /// Vérifie les mises à jour disponibles.
+  Future<void> checkForUpdate() async {
+    try {
+      _availableUpdate = await GatewayInstaller.checkForUpdate();
+      _installedVersion = await GatewayInstaller.getInstalledVersion();
+      notifyListeners();
+    } catch (_) {}
+  }
+
   // ── Démarrage ──────────────────────────────────────────────────────────────
 
   Future<void> start(String installDir) async {
     if (_status == GatewayStatus.running || _status == GatewayStatus.starting) return;
 
     _setStatus(GatewayStatus.starting, 'Démarrage du gateway…');
-    _addLog('▶ Démarrage Panda Browser Gateway');
+    _addLog('▶ Démarrage Panda AI Gateway');
 
     final pythonBin = await _findPython();
     if (pythonBin == null) {
@@ -59,6 +73,15 @@ class GatewayManager extends ChangeNotifier {
 
     _addLog('Python: $pythonBin');
     _addLog('Répertoire: $installDir');
+
+    // Vérifier la version installée
+    try {
+      _installedVersion = await GatewayInstaller.getInstalledVersion();
+      _addLog('Version: $_installedVersion');
+    } catch (_) {}
+
+    // Vérifier les mises à jour en arrière-plan
+    checkForUpdate();
 
     // Trouver le fichier .env Android
     final envFile = File('$installDir/android.env');
@@ -75,8 +98,10 @@ class GatewayManager extends ChangeNotifier {
       'SLOW_MO': '0',
       'LOG_LEVEL': 'INFO',
       'VERBOSE': 'false',
-      if (_token.isNotEmpty) 'PANDA_GATEWAY_TOKEN': _token,
-      if (_token.isNotEmpty) 'API_KEY': _token,
+      'RESPONSE_TIMEOUT': '180000',
+      'SELECTOR_TIMEOUT': '15000',
+      'POLL_INTERVAL_MS': '500',
+      if (_token.isNotEmpty) 'API_TOKEN': _token,
     };
 
     // Charger l'env file si présent
@@ -89,7 +114,6 @@ class GatewayManager extends ChangeNotifier {
         if (eq < 0) continue;
         final key = trimmed.substring(0, eq).trim();
         final val = trimmed.substring(eq + 1).trim();
-        // Ne pas écraser les valeurs déjà définies (provider, port…)
         env.putIfAbsent(key, () => val);
       }
     }
@@ -128,7 +152,7 @@ class GatewayManager extends ChangeNotifier {
            line.contains('Started server process'))) {
         started = true;
         _setStatus(GatewayStatus.running, 'Gateway actif sur :$_apiPort');
-        _addLog('✓ API disponible sur http://127.0.0.1:$_apiPort/v1');
+        _addLog('✓ API disponible sur http://127.0.0.1:$_apiPort');
       }
     }
 
@@ -139,6 +163,14 @@ class GatewayManager extends ChangeNotifier {
       if (_status != GatewayStatus.idle) {
         _setStatus(GatewayStatus.idle, 'Gateway arrêté (code $code)');
         _addLog('■ Processus terminé (code $code)');
+        // Auto-restart on crash
+        if (code != 0) {
+          _addLog('⚠ Crash détecté — redémarrage automatique dans 3s…');
+          Future.delayed(const Duration(seconds: 3), () async {
+            final dir = await GatewayInstaller.getInstallDir();
+            start(dir);
+          });
+        }
       }
     });
   }
@@ -149,13 +181,35 @@ class GatewayManager extends ChangeNotifier {
     _setStatus(GatewayStatus.stopping, 'Arrêt en cours…');
     _addLog('■ Arrêt du gateway');
 
-    _nodeProcess?.kill();
-    _nodeProcess = null;
     _pythonProcess?.kill();
     _pythonProcess = null;
 
     await Future.delayed(const Duration(milliseconds: 500));
     _setStatus(GatewayStatus.idle, 'Gateway arrêté');
+  }
+
+  // ── Update ────────────────────────────────────────────────────────────────
+
+  Future<void> update({
+    void Function(String msg)? onProgress,
+  }) async {
+    _setStatus(GatewayStatus.installing, 'Mise à jour en cours…');
+    _addLog('⬆ Mise à jour du gateway…');
+
+    await GatewayInstaller.update(onProgress: (msg) {
+      _addLog(msg);
+      onProgress?.call(msg);
+    });
+
+    _installedVersion = await GatewayInstaller.getInstalledVersion();
+    _availableUpdate = null;
+    notifyListeners();
+
+    // Restart with new version
+    if (_status != GatewayStatus.running) {
+      final dir = await GatewayInstaller.getInstallDir();
+      await start(dir);
+    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -202,7 +256,6 @@ class GatewayManager extends ChangeNotifier {
   @override
   void dispose() {
     _pythonProcess?.kill();
-    _nodeProcess?.kill();
     super.dispose();
   }
 }

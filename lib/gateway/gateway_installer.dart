@@ -5,16 +5,17 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_archive/flutter_archive.dart';
 
-/// GatewayInstaller — télécharge et installe panda-browser-gateway.
+/// GatewayInstaller — télécharge et installe Panda AI Gateway.
 ///
 /// Stratégie :
 ///   1. Si le répertoire d'installation existe et est valide → skip
-///   2. Sinon : télécharger depuis GitHub Releases
+///   2. Sinon : télécharger depuis GitHub Releases (panda-ai)
 ///   3. Fallback : extraire depuis assets/gateway/ (bundlé dans l'APK)
 ///   4. Lancer pip install -r requirements.txt
 class GatewayInstaller {
-  static const _githubRepo = 'ferelking242/panda-browser-gateway';
-  static const _releaseAsset = 'panda-browser-gateway.zip';
+  static const _githubRepo = 'ferelking242/panda-ai';
+  static const _releaseAsset = 'panda-ai.zip';
+  static const _versionFile = '.gateway_version';
 
   /// Retourne le répertoire d'installation (crée si nécessaire).
   static Future<String> getInstallDir() async {
@@ -27,6 +28,41 @@ class GatewayInstaller {
     final dir = await getInstallDir();
     final marker = File('$dir/requirements.txt');
     return marker.exists();
+  }
+
+  /// Retourne la version installée (tag GitHub ou 'bundled').
+  static Future<String> getInstalledVersion() async {
+    final dir = await getInstallDir();
+    final vFile = File('$dir/$_versionFile');
+    if (await vFile.exists()) {
+      return (await vFile.readAsString()).trim();
+    }
+    return 'unknown';
+  }
+
+  /// Vérifie si une mise à jour est disponible.
+  static Future<String?> checkForUpdate() async {
+    try {
+      final apiUrl =
+          'https://api.github.com/repos/$_githubRepo/releases/latest';
+      final resp = await http.get(
+        Uri.parse(apiUrl),
+        headers: {'Accept': 'application/vnd.github+json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode != 200) return null;
+
+      final release = json.decode(resp.body) as Map<String, dynamic>;
+      final latestTag = release['tag_name'] as String? ?? 'latest';
+      final currentVersion = await getInstalledVersion();
+
+      if (latestTag != currentVersion) {
+        return latestTag;
+      }
+      return null; // already up to date
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Installe le gateway (download + pip install).
@@ -44,13 +80,16 @@ class GatewayInstaller {
       return;
     }
 
-    log('📦 Installation de panda-browser-gateway…');
+    log('📦 Installation de Panda AI Gateway…');
     await Directory(dir).create(recursive: true);
 
     // 1. Tenter le téléchargement GitHub
     bool downloaded = false;
+    String? tag;
     try {
-      downloaded = await _downloadFromGitHub(dir, log: log);
+      final result = await _downloadFromGitHub(dir, log: log);
+      downloaded = result.$1;
+      tag = result.$2;
     } catch (e) {
       log('⚠ Téléchargement GitHub échoué: $e');
     }
@@ -59,17 +98,30 @@ class GatewayInstaller {
     if (!downloaded) {
       log('📦 Extraction depuis les assets embarqués…');
       await _extractFromAssets(dir, log: log);
+      tag = 'bundled';
     }
 
     // 3. pip install
     await _pipInstall(dir, log: log);
 
-    log('✓ Installation terminée');
+    // 4. Sauvegarder la version
+    if (tag != null) {
+      await File('$dir/$_versionFile').writeAsString(tag);
+    }
+
+    log('✓ Installation terminée — version $tag');
+  }
+
+  /// Met à jour le gateway vers la dernière version.
+  static Future<void> update({
+    void Function(String msg)? onProgress,
+  }) async {
+    await install(onProgress: onProgress, forceReinstall: true);
   }
 
   // ── GitHub download ────────────────────────────────────────────────────────
 
-  static Future<bool> _downloadFromGitHub(
+  static Future<(bool, String?)> _downloadFromGitHub(
     String destDir, {
     void Function(String)? log,
   }) async {
@@ -93,20 +145,21 @@ class GatewayInstaller {
     // Chercher l'asset ZIP
     String? downloadUrl;
     for (final asset in assets) {
-      if ((asset['name'] as String).contains('panda-browser-gateway') &&
-          (asset['name'] as String).endsWith('.zip')) {
+      final name = asset['name'] as String;
+      if (name.contains('panda-ai') && name.endsWith('.zip')) {
         downloadUrl = asset['browser_download_url'] as String;
         break;
       }
     }
 
     // Fallback : zipball de la release
-    downloadUrl ??= 'https://github.com/$_githubRepo/archive/refs/tags/$tagName.zip';
+    downloadUrl ??=
+        'https://github.com/$_githubRepo/archive/refs/tags/$tagName.zip';
 
     log?.call('⬇ Téléchargement $tagName…');
 
-    final zipResp = await http.get(Uri.parse(downloadUrl))
-        .timeout(const Duration(seconds: 120));
+    final zipResp =
+        await http.get(Uri.parse(downloadUrl)).timeout(const Duration(seconds: 120));
 
     if (zipResp.statusCode != 200) {
       throw Exception('Download ${zipResp.statusCode}');
@@ -118,7 +171,7 @@ class GatewayInstaller {
 
     await _extractZip(zipFile, destDir, log: log);
     await zipFile.delete();
-    return true;
+    return (true, tagName);
   }
 
   // ── Assets bundlés ────────────────────────────────────────────────────────
@@ -141,8 +194,8 @@ class GatewayInstaller {
     // Créer les dossiers nécessaires
     await Directory('$destDir/src/api').create(recursive: true);
     await Directory('$destDir/src/browser').create(recursive: true);
-    log?.call('Note: assets limités — seuls les fichiers de config sont embarqués.');
-    log?.call('Clonez le repo complet via : git clone https://github.com/$_githubRepo');
+    log?.call('Note: assets limités — clonez le repo complet.');
+    log?.call('git clone https://github.com/$_githubRepo');
   }
 
   // ── ZIP extraction ────────────────────────────────────────────────────────
@@ -162,7 +215,6 @@ class GatewayInstaller {
       );
     } catch (e) {
       log?.call('⚠ ZipFile extraction échouée: $e');
-      // Fallback via unzip système si disponible
       final result = await Process.run(
         'unzip', ['-o', zipFile.path, '-d', destDir],
       );
@@ -221,10 +273,9 @@ class GatewayInstaller {
 
     log?.call('📦 Installation des dépendances Python…');
 
-    // Trouver pip
     final pip = await _findPip();
     if (pip == null) {
-      log?.call('⚠ pip introuvable. Installez Python + pip manuellement.');
+      log?.call('⚠ pip introuvable. Installez Python + pip via le Gestionnaire de paquets.');
       return;
     }
 
