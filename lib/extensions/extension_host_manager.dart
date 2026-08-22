@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 
 import 'extension_registry.dart';
 import 'ipc_bridge.dart';
+import 'command_registry.dart';
 import 'models/extension_manifest.dart';
 import 'models/extension_message.dart';
 
@@ -116,6 +117,25 @@ class ExtensionHostManager {
     try {
       await bridge.call('activate', [_buildActivationContext(ext)]);
       await host.markActivated();
+
+      // Auto-register contributed commands into CommandPalette
+      final contributes = ext.manifest.contributes;
+      if (contributes.commands.isNotEmpty) {
+        for (final cmd in contributes.commands) {
+          final commandId = cmd['command'] as String?;
+          if (commandId != null) {
+            CommandRegistry.instance.register(
+              command: commandId,
+              extensionId: id,
+              title: cmd['title'] as String?,
+              category: cmd['category'] as String?,
+              description: cmd['description'] as String?,
+            );
+          }
+        }
+        // ignore: avoid_print
+        print('[ExtHostManager] Registered ${contributes.commands.length} commands for $id');
+      }
     } catch (e) {
       await host.dispose();
       _hosts.remove(id);
