@@ -490,29 +490,83 @@ const authentication = {
 // ── vscode.notebooks (stub) ───────────────────────────────────────────────
 
 const notebooks = {
-  registerNotebookCellStatusBarItemProvider: _stubDisposable('notebooks', 'registerNotebookCellStatusBarItemProvider'),
-  createNotebookController: _stub('notebooks', 'createNotebookController'),
-  registerNotebookSerializer: _stubDisposable('notebooks', 'registerNotebookSerializer'),
+  registerNotebookCellStatusBarItemProvider: (notebookType, provider) => {
+    const pid = `ncsp-${notebookType}-${Date.now()}`;
+    ipc.onCall(`${pid}.provideCellStatusBarItems`, async (cell, token) => {
+      try { return await provider.provideCellStatusBarItems(cell, token) ?? []; } catch(e) { return []; }
+    });
+    ipc.callFlutter('vscode.notebooks.registerCellStatusBarProvider', [pid, notebookType]);
+    return new types.Disposable(() => {});
+  },
+  createNotebookController: (id, label, notebookType, handler) => {
+    const pid = `nctl-${id}-${Date.now()}`;
+    ipc.onCall(`${pid}.executeCells`, async (doc, cells) => { try { await handler(doc, cells); } catch(e) { throw e; } });
+    ipc.callFlutter('vscode.notebooks.createController', [pid, id, label, notebookType]);
+    return { id, label, notebookType, supportedLanguages: [], executeHandler: handler,
+      onDidChangeSelectedNotebooks: new types.EventEmitter().event,
+      dispose: () => ipc.callFlutter('vscode.notebooks.disposeController', [pid]) };
+  },
+  registerNotebookSerializer: (notebookType, serializer, options) => {
+    const pid = `nser-${notebookType}-${Date.now()}`;
+    ipc.onCall(`${pid}.deserialize`, async (content, token) => { try { return await serializer.deserializeNotebook(content, token); } catch(e) { return {}; } });
+    ipc.onCall(`${pid}.serialize`, async (doc, token) => { try { return await serializer.serializeNotebook(doc, token); } catch(e) { return new Uint8Array(); } });
+    ipc.callFlutter('vscode.notebooks.registerSerializer', [pid, notebookType, options]);
+    return new types.Disposable(() => {});
+  },
+  openNotebookDocument: (uri) => ipc.callFlutter('vscode.notebooks.open', [uri.toJSON?.() ?? uri]),
+  onDidOpenNotebookDocument: _makeWorkspaceEvent('onDidOpenNotebookDocument'),
+  onDidCloseNotebookDocument: _makeWorkspaceEvent('onDidCloseNotebookDocument'),
+  onDidChangeNotebookDocumentMetadata: _makeWorkspaceEvent('onDidChangeNotebookDocumentMetadata'),
+  notebookDocuments: [],
+  get notebookKernels() { return []; },
 };
 
 // ── vscode.lm (Language Models API) ──────────────────────────────────────
 
 const lm = {
-  selectChatModels: _stub('lm', 'selectChatModels'),
-  invokeLlm: _stub('lm', 'invokeLlm'),
+  selectChatModels: (sel) => ipc.callFlutter('vscode.lm.selectChatModels', [sel]),
+  invokeLlm: (model, msgs, opts) => ipc.callFlutter('vscode.lm.invokeLlm', [model, msgs, opts]),
   onDidChangeChatModels: _makeEditorEvent('onDidChangeChatModels'),
 };
 
 // ── vscode.chat (Copilot Chat API) ───────────────────────────────────────
 
 const chat = {
-  createChatParticipant: _stub('chat', 'createChatParticipant'),
+  createChatParticipant: (id, handler) => {
+    const pid = `chatp-${id}-${Date.now()}`;
+    ipc.onCall(`${pid}.respond`, async (req, ctx, token) => { try { return await handler(req, ctx, token); } catch(e) { throw e; } });
+    ipc.callFlutter('vscode.chat.createParticipant', [pid, id]);
+    return { id, onDidReceiveRequest: new types.EventEmitter().event, dispose: () => ipc.callFlutter('vscode.chat.disposeParticipant', [pid]) };
+  },
+  ChatRequestTurn: class { constructor(r,c,ref,loc) { this.request=r; this.command=c; this.references=ref; this.location=loc; } },
+  ChatResponseTurn: class { constructor(r,c,ref,loc) { this.response=r; this.command=c; this.references=ref; this.location=loc; } },
+  ChatRequestEditorSelection: class { constructor(uri,sel) { this.uri=uri; this.selection=sel; } },
+  ChatLocation: Object.freeze({ Editor:1, Terminal:2, Notebook:3 }),
 };
 
 // ── vscode.tests ──────────────────────────────────────────────────────────
 
 const tests = {
-  createTestController: _stub('tests', 'createTestController'),
+  createTestController: (id, label) => {
+    const pid = `tc-${id}-${Date.now()}`;
+    ipc.onCall(`${pid}.resolveHandler`, async (item) => { try { return await controller.resolveHandler(item); } catch(e) { return undefined; } });
+    ipc.onCall(`${pid}.runHandler`, async (req, token) => { try { await controller.runHandler(req, token); } catch(e) { throw e; } });
+    ipc.callFlutter('vscode.tests.createController', [pid, id, label]);
+    const controller = { id, label,
+      items: { forEach:()=>{}, add:()=>{}, delete:()=>{}, replace:()=>{}, size:0, [Symbol.iterator]:function*(){} },
+      resolveHandler: undefined, runHandler: undefined,
+      createTestItem: (id, label, uri) => ({ id, label, uri, children: [], tags: [], busy: false }),
+      invalidateTestResults: () => {}, refreshHandler: undefined,
+      onDidChangeTestProfile: new types.EventEmitter().event, onDidCreateTestItem: new types.EventEmitter().event, onDidChangeTestItem: new types.EventEmitter().event,
+      dispose: () => ipc.callFlutter('vscode.tests.disposeController', [pid]),
+    };
+    controller.resolveHandler = () => {};
+    controller.runHandler = () => {};
+    return controller;
+  },
+  TestTag: Object.freeze({ debug: { id: 'debug' }, executable: { id: 'executable' } }),
+  TestRunProfileKind: Object.freeze({ Run:1, Debug:2, Coverage:3 }),
+  TestResultState: Object.freeze({ Queued:1, Running:2, Passed:3, Failed:4, Skipped:5, Errored:6 }),
 };
 
 // ── États internes (mis à jour via events de Flutter) ─────────────────────
