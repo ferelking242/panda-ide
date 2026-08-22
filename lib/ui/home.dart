@@ -7049,7 +7049,7 @@ class _SelectTypeState extends State<SelectType>
                 _AgentCheckpointCard(
                   data: (msg['checkpoint'] as Map).cast<String, dynamic>(),
                   isDark: isDark, fg: fg, muted: muted,
-                  onRestore: () {{ unawaited(_restoreAgentCheckpoint(msg['checkpoint'] as Map<String, dynamic>)); }},
+                  onRestore: () { unawaited(_restoreAgentCheckpoint(msg['checkpoint'] as Map<String, dynamic>)); },
                   onOpenGit: _openGithubTab,
                 ),
 
@@ -7703,9 +7703,7 @@ class _SelectTypeState extends State<SelectType>
             if (bt == 'thinking') {
               final th = ((b['thinking'] as String?) ?? '').trim();
               if (th.isEmpty) continue;
-              buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('
-', '
-> '));
+              buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('\n', '\n> '));
               buf.writeln();
             } else if (bt == 'toolCall') {
               final nm = ((b['name'] ?? b['toolName']) ?? '').toString();
@@ -7713,8 +7711,7 @@ class _SelectTypeState extends State<SelectType>
               buf.writeln('- ⚙️ `' + nm + '`');
               if (res.isNotEmpty) {
                 buf.writeln('  ```');
-                for (final line in res.split('
-').take(40)) buf.writeln('  ' + line);
+                for (final line in res.split('\n').take(40)) buf.writeln('  ' + line);
                 buf.writeln('  ```');
               }
               buf.writeln();
@@ -7728,9 +7725,7 @@ class _SelectTypeState extends State<SelectType>
         } else {
           final th = (msg['thinking'] as String? ?? '').trim();
           if (th.isNotEmpty) {
-            buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('
-', '
-> '));
+            buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('\n', '\n> '));
             buf.writeln();
           }
           final t = cleanExport(text);
