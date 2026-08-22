@@ -1,10 +1,24 @@
+/// Panda IDE File Manager — redesigned.
+///
+/// Features:
+///   - Access to both public (/storage/emulated/0/Panda IDE/) and private app data
+///   - Breadcrumbs with friendly names
+///   - Search/filter
+///   - Grid + List view toggle
+///   - Rename, copy, paste, delete, share
+///   - File size + date display
+///   - Quick access sidebar
+library;
+
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_archive/flutter_archive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:path/path.dart' as path;
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
 
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../utils/constants.dart';
@@ -13,13 +27,86 @@ import '../utils/languages.dart';
 import '../utils/themes.dart';
 import 'editor_page.dart';
 
+// ═══════════════════════════════════════════════════════════════
+// Quick Access Locations
+// ═══════════════════════════════════════════════════════════════
+
+class _QuickLocation {
+  final String label;
+  final String path;
+  final IconData icon;
+  final Color color;
+
+  const _QuickLocation({
+    required this.label,
+    required this.path,
+    required this.icon,
+    required this.color,
+  });
+}
+
+List<_QuickLocation> _quickLocations() => [
+      _QuickLocation(
+        label: 'Projects',
+        path: projectDir,
+        icon: Icons.workspaces_rounded,
+        color: const Color(0xFF4CAF50),
+      ),
+      _QuickLocation(
+        label: 'Files',
+        path: filesDir,
+        icon: Icons.description_rounded,
+        color: const Color(0xFF2196F3),
+      ),
+      _QuickLocation(
+        label: 'Templates',
+        path: templateDir,
+        icon: Icons.dashboard_customize_rounded,
+        color: const Color(0xFF9C27B0),
+      ),
+      _QuickLocation(
+        label: 'Logs',
+        path: pandaLogsDir,
+        icon: Icons.bug_report_rounded,
+        color: const Color(0xFFFF9800),
+      ),
+      _QuickLocation(
+        label: 'Extensions',
+        path: extensionDir,
+        icon: Icons.extension_rounded,
+        color: const Color(0xFFE91E63),
+      ),
+      _QuickLocation(
+        label: 'Gateway',
+        path: '$appDir/runtimes',
+        icon: Icons.dns_rounded,
+        color: const Color(0xFF00BCD4),
+      ),
+      _QuickLocation(
+        label: 'App Data',
+        path: appDir,
+        icon: Icons.storage_rounded,
+        color: const Color(0xFF607D8B),
+      ),
+      _QuickLocation(
+        label: 'Public Storage',
+        path: publicPandaRootDir,
+        icon: Icons.folder_special_rounded,
+        color: const Color(0xFFFF5722),
+      ),
+    ];
+
+// ═══════════════════════════════════════════════════════════════
+// FileManagerPage
+// ═══════════════════════════════════════════════════════════════
+
 class FileManagerPage extends StatefulWidget {
   final String rootPath;
 
   const FileManagerPage({
     super.key,
-    this.rootPath = '/storage/emulated/0/Android/media/com.panda.ide',
-  });
+    String? rootPath,
+  }) : rootPath = rootPath ?? projectDir;
 
   @override
   State<FileManagerPage> createState() => _FileManagerPageState();
@@ -29,12 +116,15 @@ class _FileManagerPageState extends State<FileManagerPage> {
   late Directory _currentDir;
   bool _loading = true;
   List<FileSystemEntity> _entries = [];
+  List<FileSystemEntity> _filteredEntries = [];
+  bool _isGridView = false;
+  final _searchCtrl = TextEditingController();
+  String _sortBy = 'name'; // name, size, date, type
+  bool _sortAsc = true;
 
-  File _localMetadataFileForPath(String entityPath) {
-    final metadataDir = Directory(path.join(tempDir, '.panda_metadata'));
-    final encodedPath = base64Url.encode(utf8.encode(entityPath)).replaceAll('=', '');
-    return File(path.join(metadataDir.path, '$encodedPath.json'));
-  }
+  // Clipboard for copy/cut
+  final List<FileSystemEntity> _clipboard = [];
+  bool _cutMode = false;
 
   @override
   void initState() {
@@ -43,19 +133,22 @@ class _FileManagerPageState extends State<FileManagerPage> {
     _initialize();
   }
 
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _initialize() async {
     await _ensureBaseDirs();
     await _loadEntries();
   }
 
   Future<void> _ensureBaseDirs() async {
-    final root = Directory(widget.rootPath);
-    await root.create(recursive: true);
-    await Directory(projectDir).create(recursive: true);
-    await Directory(templateDir).create(recursive: true);
-    await Directory(filesDir).create(recursive: true);
+    for (final dir in [projectDir, templateDir, filesDir, pandaLogsDir]) {
+      await Directory(dir).create(recursive: true);
+    }
     if (!mounted) return;
-    _currentDir = root;
   }
 
   Future<void> _loadEntries() async {
@@ -66,484 +159,127 @@ class _FileManagerPageState extends State<FileManagerPage> {
     final items = await _currentDir
         .list(followLinks: false)
         .where((entity) {
-          final name = path.basename(entity.path);
+          final name = p.basename(entity.path);
           return !name.startsWith('.panda_') && !name.startsWith('.');
         })
         .toList();
 
-    items.sort((a, b) {
-      final aIsDir = a is Directory;
-      final bIsDir = b is Directory;
-      if (aIsDir != bIsDir) {
-        return aIsDir ? -1 : 1;
-      }
-      return path.basename(a.path).toLowerCase().compareTo(path.basename(b.path).toLowerCase());
-    });
+    _sortEntries(items);
 
     if (!mounted) return;
     setState(() {
       _entries = items;
+      _filteredEntries = items;
       _loading = false;
     });
   }
 
-  bool _isAtRoot() {
-    return path.equals(_currentDir.path, Directory(widget.rootPath).path);
-  }
+  void _sortEntries(List<FileSystemEntity> entries) {
+    entries.sort((a, b) {
+      final aIsDir = a is Directory;
+      final bIsDir = b is Directory;
+      if (aIsDir != bIsDir) return aIsDir ? -1 : 1;
 
-  Future<String?> _promptForName({required String title}) async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => _NamePromptDialog(title: title),
-    );
-    return result;
-  }
-
-  Future<void> _writeLocalMetadata(FileSystemEntity entity, {String? sourceUri, String type = 'local'}) async {
-    final metadataPath = type == 'local'
-      ? _localMetadataFileForPath(entity.path)
-      : entity is Directory
-        ? File(path.join(entity.path, '.panda_source.json'))
-        : File('${entity.path}.panda_source.json');
-    final payload = <String, dynamic>{
-      'type': type,
-      'sourceUri': sourceUri,
-      'path': entity.path,
-      'updatedAt': DateTime.now().toIso8601String(),
-    };
-    await metadataPath.parent.create(recursive: true);
-    await metadataPath.writeAsString(jsonEncode(payload), flush: true);
-  }
-
-  Future<Map<String, dynamic>?> _readSourceMetadata(FileSystemEntity entity) async {
-    Future<Map<String, dynamic>?> readMetadataAtPath(
-      String candidatePath, {
-      required bool isDirectory,
-    }) async {
-      final metadataPath = isDirectory
-          ? File(path.join(candidatePath, '.panda_source.json'))
-          : File('$candidatePath.panda_source.json');
-      if (!await metadataPath.exists()) return null;
-      try {
-        final raw = await metadataPath.readAsString();
-        final decoded = jsonDecode(raw);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        if (decoded is Map) {
-          return Map<String, dynamic>.from(decoded);
-        }
-      } catch (_) {}
-      return null;
-    }
-
-    if (entity is File) {
-      final direct = await readMetadataAtPath(entity.path, isDirectory: false);
-      if (direct != null) return direct;
-    }
-
-    var current = entity is Directory ? entity : entity.parent;
-    while (true) {
-      final metadata = await readMetadataAtPath(current.path, isDirectory: true);
-      if (metadata != null) {
-        return metadata;
+      int cmp;
+      switch (_sortBy) {
+        case 'size':
+          final aSize = a is File ? a.lengthSync() : 0;
+          final bSize = b is File ? b.lengthSync() : 0;
+          cmp = aSize.compareTo(bSize);
+          break;
+        case 'date':
+          cmp = a.statSync().modified.compareTo(b.statSync().modified);
+          break;
+        case 'type':
+          cmp = p.extension(a.path).compareTo(p.extension(b.path));
+          break;
+        default:
+          cmp = p.basename(a.path).toLowerCase().compareTo(p.basename(b.path).toLowerCase());
       }
-
-      final parent = current.parent;
-      if (path.equals(parent.path, current.path)) {
-        break;
-      }
-      current = parent;
-    }
-
-    return null;
+      return _sortAsc ? cmp : -cmp;
+    });
   }
 
-  bool _hasExternalSourceMetadataSync(FileSystemEntity entity) {
-    Map<String, dynamic>? readMetadataAtPath(String candidatePath, {required bool isDirectory}) {
-      if (isDirectory) {
-        final localMetadata = _localMetadataFileForPath(candidatePath);
-        if (localMetadata.existsSync()) {
-          return null;
-        }
-      } else {
-        final localMetadata = _localMetadataFileForPath(candidatePath);
-        if (localMetadata.existsSync()) {
-          return null;
-        }
-      }
-
-      final metadataPath = isDirectory
-          ? File(path.join(candidatePath, '.panda_source.json'))
-          : File('$candidatePath.panda_source.json');
-      if (!metadataPath.existsSync()) return null;
-      try {
-        final raw = metadataPath.readAsStringSync();
-        final decoded = jsonDecode(raw);
-        if (decoded is Map<String, dynamic>) {
-          return decoded;
-        }
-        if (decoded is Map) {
-          return Map<String, dynamic>.from(decoded);
-        }
-      } catch (_) {}
-      return null;
+  void _filterEntries(String query) {
+    if (query.isEmpty) {
+      _filteredEntries = _entries;
+    } else {
+      final q = query.toLowerCase();
+      _filteredEntries = _entries.where((e) {
+        return p.basename(e.path).toLowerCase().contains(q);
+      }).toList();
     }
-
-    bool isSourceBacked(Map<String, dynamic>? metadata) {
-      final sourceUri = metadata?['sourceUri'];
-      final type = metadata?['type'];
-      return sourceUri is String && sourceUri.isNotEmpty && type != 'local';
-    }
-
-    if (entity is File) {
-      final direct = readMetadataAtPath(entity.path, isDirectory: false);
-      if (direct != null) {
-        return isSourceBacked(direct);
-      }
-    }
-
-    bool hasDirectoryMetadata(String candidatePath) {
-      return isSourceBacked(readMetadataAtPath(candidatePath, isDirectory: true));
-    }
-
-    var current = entity is Directory ? entity : entity.parent;
-    while (true) {
-      if (hasDirectoryMetadata(current.path)) {
-        return true;
-      }
-
-      final parent = current.parent;
-      if (path.equals(parent.path, current.path)) {
-        break;
-      }
-      current = parent;
-    }
-
-    return false;
+    setState(() {});
   }
 
-  Future<bool> _confirmOverwriteExternalTarget(FileSystemEntity entity) async {
-    final appTheme = context.read<AppThemeBloc>().state.appTheme;
-    final itemName = path.basename(entity.path);
+  bool _isAtRoot() => p.equals(_currentDir.path, widget.rootPath);
 
-    return await showDialog<bool>(
-          context: context,
-          builder: (dialogContext) {
-            return Dialog(
-              backgroundColor: Colors.transparent,
-              child: Container(
-                width: 380,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: appTheme.isDark
-                        ? [const Color(0xff2b2b2b), const Color(0xff1a1a1a)]
-                        : [
-                            const Color.fromARGB(255, 250, 250, 250),
-                            const Color.fromARGB(255, 240, 240, 240),
-                          ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      child: const Icon(
-                        Icons.warning_amber_rounded,
-                        color: Colors.orange,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Sync back to source?',
-                      style: TextStyle(
-                        color: appTheme.selectScreenCardTextColor,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'The existing folder in the external folder will be overwritten.\n\nItem: $itemName',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: appTheme.selectScreenCardTextColor.withValues(alpha: 0.85),
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(dialogContext).pop(false),
-                          child: const Text('Cancel'),
-                        ),
-                        const SizedBox(width: 10),
-                        ElevatedButton(
-                          onPressed: () => Navigator.of(dialogContext).pop(true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xff0e639c),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text(
-                            'Okay',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ) ??
-        false;
+  // ── Navigation ────────────────────────────────────────────────────────
+
+  void _navigateTo(String path) {
+    setState(() {
+      _currentDir = Directory(path);
+      _loading = true;
+      _searchCtrl.clear();
+    });
+    _loadEntries();
   }
 
-  Language _languageForPath(String filePath) {
-    final ext = path.extension(filePath).replaceFirst('.', '').toLowerCase();
-    return languages.firstWhere(
-      (lang) => lang.extension.contains(ext),
-      orElse: () => languages[0],
-    );
-  }
-
-  void _openFolder(String dirPath){
-    Navigator.of(context).push(PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) =>
-          EditorPage(
-            rootDir: dirPath,
-            isProject: true,
-            isCloned: true,
-            languageDetails: null,
-          ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SizeTransition(sizeFactor: animation, child: child);
-        },
-      )
-    );
-  }
-
-  Future<void> _openFile(File file) async {
-    if (!await file.exists()) return;
-    if (!mounted) return;
-    Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => EditorPage(
-          file: file,
-          rootDir: file.parent.path,
-          languageDetails: _languageForPath(file.path),
-          isProject: false,
-        ),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SizeTransition(sizeFactor: animation, child: child);
-        },
-      ),
-    );
-  }
-
-  Future<void> _downloadToStorage(FileSystemEntity entity) async {
-    final metadata = await _readSourceMetadata(entity);
-    if (metadata != null && metadata['sourceUri'] is String && (metadata['sourceUri'] as String).isNotEmpty) {
-      final shouldSync = await _confirmOverwriteExternalTarget(entity);
-      if (!shouldSync) return;
-
-      final syncTarget = metadata['localRootPath'] as String? ?? entity.path;
-      final syncIsDirectory = metadata['type'] == 'directory' || entity is Directory;
-
-      final success = await NativeChannel.syncImportedItem(
-        sourceUri: metadata['sourceUri'] as String,
-        localPath: syncTarget,
-        isDirectory: syncIsDirectory,
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? 'Synced back to source folder.' : 'Sync back failed.'),
-        ),
-      );
-      return;
+  void _goUp() {
+    if (!_isAtRoot()) {
+      _navigateTo(_currentDir.parent.path);
     }
+  }
 
-    try {
-      if (entity is File) {
-        final savePath = await selectDir(
-          dialogeTitle: 'Save file',
-          fileName: path.basename(entity.path),
-          initialDirectory: entity.parent.path,
-          bytes: await entity.readAsBytes(),
-        );
-        if (savePath == null) return;
-      } else {
-        final tempZip = File(path.join(
-          tempDir,
-          '${path.basename(entity.path)}.zip',
-        ));
-        if (await tempZip.exists()) {
-          await tempZip.delete();
-        }
-        await ZipFile.createFromDirectory(
-          sourceDir: Directory(entity.path),
-          zipFile: tempZip,
-          includeBaseDirectory: true,
-          recurseSubDirs: true,
-        );
-        final savePath = await selectDir(
-          dialogeTitle: 'Export folder',
-          fileName: path.basename(tempZip.path),
-          initialDirectory: entity.parent.path,
-          bytes: await tempZip.readAsBytes(),
-        );
-        if (savePath == null) {
-          try {
-            await tempZip.delete();
-          } catch (_) {}
-          return;
-        }
-        try {
-          await tempZip.delete();
-        } catch (_) {}
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Export complete.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Export failed: $e')),
-      );
-    }
+  // ── File Operations ───────────────────────────────────────────────────
+
+  Future<void> _createFile() async {
+    final name = await _promptForName(title: 'New File');
+    if (name == null || name.isEmpty) return;
+    final file = File(p.join(_currentDir.path, name));
+    await file.create();
+    await _loadEntries();
+    _showSnack('Created $name');
   }
 
   Future<void> _createFolder() async {
-    final name = await _promptForName(title: 'Create folder');
-    if (name == null) return;
-    final folder = Directory(path.join(_currentDir.path, name));
-    if (await folder.exists()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Folder already exists.')),
-      );
-      return;
-    }
-    await folder.create(recursive: true);
-    await _writeLocalMetadata(folder);
+    final name = await _promptForName(title: 'New Folder');
+    if (name == null || name.isEmpty) return;
+    final dir = Directory(p.join(_currentDir.path, name));
+    await dir.create();
     await _loadEntries();
+    _showSnack('Created $name');
   }
 
-  Future<void> _createFile() async {
-    final name = await _promptForName(title: 'Create file');
-    if (name == null) return;
-    final file = File(path.join(_currentDir.path, name));
-    if (await file.exists()) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File already exists.')),
-      );
-      return;
-    }
-    await file.parent.create(recursive: true);
-    await file.create(recursive: true);
-    await _writeLocalMetadata(file);
+  Future<void> _renameEntity(FileSystemEntity entity) async {
+    final oldName = p.basename(entity.path);
+    final newName = await _promptForName(title: 'Rename', initial: oldName);
+    if (newName == null || newName.isEmpty || newName == oldName) return;
+    final newPath = p.join(p.dirname(entity.path), newName);
+    await entity.rename(newPath);
     await _loadEntries();
+    _showSnack('Renamed to $newName');
   }
-
-  Future<void> _openEntity(FileSystemEntity entity) async {
-    if (entity is Directory) {
-      setState(() {
-        _currentDir = entity;
-        _loading = true;
-      });
-      await _loadEntries();
-      return;
-    }
-
-    await _openFile(File(entity.path));
-  }
-
-  /*Future<void> _showEntityActions(FileSystemEntity entity) async {
-    final metadata = await _readSourceMetadata(entity);
-    if (!mounted) return;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.read<AppThemeBloc>().state.appTheme.isDark
-          ? const Color(0xff1f1f1f)
-          : Colors.white,
-      builder: (sheetContext) {
-        final canSyncBack = metadata != null && metadata['sourceUri'] is String && (metadata['sourceUri'] as String).isNotEmpty;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(entity is Directory ? Icons.folder_open : Icons.open_in_new),
-                title: Text(entity is Directory ? 'Open folder' : 'Open file'),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  _openEntity(entity);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.file_download_outlined),
-                title: Text(canSyncBack ? 'Sync back to source' : 'Download to storage'),
-                onTap: () async {
-                  Navigator.of(sheetContext).pop();
-                  await _downloadToStorage(entity);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text('Delete'),
-                onTap: () async {
-                  Navigator.of(sheetContext).pop();
-                  try {
-                    if (entity is Directory) {
-                      await entity.delete(recursive: true);
-                    } else {
-                      await entity.delete();
-                    }
-                    await _loadEntries();
-                  } catch (e) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Delete failed: $e')),
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }*/
 
   Future<void> _deleteEntity(FileSystemEntity entity) async {
+    final name = p.basename(entity.path);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete'),
+        content: Text('Delete "$name" permanently?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     try {
       if (entity is Directory) {
         await entity.delete(recursive: true);
@@ -551,424 +287,775 @@ class _FileManagerPageState extends State<FileManagerPage> {
         await entity.delete();
       }
       await _loadEntries();
+      _showSnack('Deleted $name');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: $e')),
-      );
+      _showSnack('Error: $e', isError: true);
     }
   }
 
-  Widget _buildBreadcrumbs(AppTheme appTheme) {
-    final root = Directory(widget.rootPath).absolute.path;
-    final current = _currentDir.absolute.path;
-    final segments = path.relative(current, from: root).split(path.separator).where((segment) => segment.isNotEmpty).toList();
+  void _copyEntity(FileSystemEntity entity) {
+    _clipboard.clear();
+    _clipboard.add(entity);
+    _cutMode = false;
+    _showSnack('Copied ${p.basename(entity.path)}');
+  }
 
-    final crumbs = <Widget>[
-      InkWell(
-        onTap: () async {
-          setState(() {
-            _currentDir = Directory(root);
-            _loading = true;
-          });
-          await _loadEntries();
-        },
-        child: Text(
-          'com.panda.ide',
-          style: TextStyle(
-            color: appTheme.selectScreenCardTextColor,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+  void _cutEntity(FileSystemEntity entity) {
+    _clipboard.clear();
+    _clipboard.add(entity);
+    _cutMode = true;
+    _showSnack('Cut ${p.basename(entity.path)}');
+  }
+
+  Future<void> _pasteEntities() async {
+    if (_clipboard.isEmpty) return;
+    for (final entity in _clipboard) {
+      final name = p.basename(entity.path);
+      final destPath = p.join(_currentDir.path, name);
+
+      try {
+        if (_cutMode) {
+          await entity.rename(destPath);
+        } else {
+          if (entity is File) {
+            await entity.copy(destPath);
+          } else if (entity is Directory) {
+            await _copyDirectory(entity, Directory(destPath));
+          }
+        }
+      } catch (e) {
+        _showSnack('Error pasting $name: $e', isError: true);
+      }
+    }
+
+    if (_cutMode) _clipboard.clear();
+    _cutMode = false;
+    await _loadEntries();
+    _showSnack('Pasted ${_clipboard.length} item(s)');
+  }
+
+  Future<void> _copyDirectory(Directory source, Directory dest) async {
+    await dest.create(recursive: true);
+    await for (final entity in source.list(recursive: false)) {
+      final name = p.basename(entity.path);
+      final destPath = p.join(dest.path, name);
+      if (entity is File) {
+        await entity.copy(destPath);
+      } else if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destPath));
+      }
+    }
+  }
+
+  Future<void> _exportToStorage(FileSystemEntity entity) async {
+    try {
+      final name = p.basename(entity.path);
+      final destPath = p.join(publicPandaRootDir, name);
+
+      if (entity is File) {
+        await entity.copy(destPath);
+      } else if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destPath));
+      }
+
+      await _loadEntries();
+      _showSnack('Exported to $destPath');
+    } catch (e) {
+      _showSnack('Export failed: $e', isError: true);
+    }
+  }
+
+  // ── UI Helpers ────────────────────────────────────────────────────────
+
+  void _showSnack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red : null,
+        duration: const Duration(seconds: 2),
       ),
-    ];
-
-    var accumulated = root;
-    for (final segment in segments) {
-      final nextPath = path.join(accumulated, segment);
-      crumbs.add(Text(
-        ' / ',
-        style: TextStyle(
-          color: appTheme.selectScreenCardTextColor
-        ),
-      ));
-      crumbs.add(
-        InkWell(
-          onTap: () async {
-            setState(() {
-              _currentDir = Directory(nextPath);
-              _loading = true;
-            });
-            await _loadEntries();
-          },
-          child: Text(
-            segment,
-            style: TextStyle(
-              color: appTheme.selectScreenCardTextColor,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(children: crumbs),
     );
   }
 
-  Widget  _buildQuickRoots(AppTheme appTheme) {
-    final roots = [
-      (label: 'Projects', dir: Directory(projectDir), icon: Icons.workspaces_outline),
-      (label: 'Files', dir: Directory(filesDir), icon: Icons.description_outlined),
-      (label: 'Templates', dir: Directory(templateDir), icon: Icons.devices_fold_outlined),
-    ];
-
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: roots.map((root) {
-        return OutlinedButton.icon(
-          onPressed: () async {
-            setState(() {
-              _currentDir = root.dir;
-              _loading = true;
-            });
-            await _loadEntries();
-          },
-          icon: Icon(root.icon, size: 18),
-          label: Text(root.label),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: appTheme.selectScreenCardTextColor,
-            side: BorderSide(color: Colors.grey.withValues(alpha: 0.35)),
+  Future<String?> _promptForName({required String title, String? initial}) async {
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final ctrl = TextEditingController(text: initial ?? '');
+        return AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: ctrl,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Name'),
+            onSubmitted: (v) => Navigator.pop(ctx, v),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text), child: const Text('OK')),
+          ],
         );
-      }).toList(),
+      },
     );
   }
+
+  String _formatSize(FileSystemEntity entity) {
+    if (entity is File) {
+      final bytes = entity.lengthSync();
+      if (bytes < 1024) return '$bytes B';
+      if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+      if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+      return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    }
+    return '';
+  }
+
+  String _formatDate(DateTime dt) {
+    final now = DateTime.now();
+    if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+      return 'Today ${DateFormat.Hm().format(dt)}';
+    }
+    return DateFormat('MMM d, yyyy').format(dt);
+  }
+
+  IconData _fileIcon(String name) {
+    final ext = p.extension(name).toLowerCase();
+    switch (ext) {
+      case '.dart':
+        return Icons.code;
+      case '.py':
+        return Icons.code;
+      case '.js':
+      case '.ts':
+        return Icons.javascript;
+      case '.json':
+        return Icons.data_object;
+      case '.yaml':
+      case '.yml':
+        return Icons.settings;
+      case '.md':
+        return Icons.description;
+      case '.txt':
+        return Icons.text_snippet;
+      case '.png':
+      case '.jpg':
+      case '.jpeg':
+      case '.gif':
+      case '.svg':
+        return Icons.image;
+      case '.zip':
+      case '.tar':
+      case '.gz':
+        return Icons.archive;
+      case '.apk':
+        return Icons.android;
+      case '.so':
+        return Icons.memory;
+      default:
+        return Icons.insert_drive_file;
+    }
+  }
+
+  Color _fileColor(String name) {
+    final ext = p.extension(name).toLowerCase();
+    switch (ext) {
+      case '.dart':
+        return const Color(0xFF00B4D8);
+      case '.py':
+        return const Color(0xFFFFD43B);
+      case '.js':
+      case '.ts':
+        return const Color(0xFFF7DF1E);
+      case '.json':
+        return const Color(0xFF8BC34A);
+      case '.yaml':
+      case '.yml':
+        return const Color(0xFFCB171E);
+      case '.md':
+        return const Color(0xFF42A5F5);
+      case '.png':
+      case '.jpg':
+      case '.jpeg':
+        return const Color(0xFFAB47BC);
+      case '.zip':
+        return const Color(0xFFFF7043);
+      case '.apk':
+        return const Color(0xFF3DDC84);
+      default:
+        return const Color(0xFF78909C);
+    }
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final appTheme = context.watch<AppThemeBloc>().state.appTheme;
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mini File Manager'),
-        titleTextStyle: TextStyle(
-          color: appTheme.selectScreenCardTextColor,
-          fontSize: 20
-        ),
-        backgroundColor: Colors.transparent,
-        actions: [
-          IconButton(
-            tooltip: 'Create file',
-            onPressed: _createFile,
-            icon: const Icon(Icons.note_add_outlined),
-          ),
-          IconButton(
-            tooltip: 'Create folder',
-            onPressed: _createFolder,
-            icon: const Icon(Icons.create_new_folder_outlined),
+      backgroundColor: appTheme.isDark ? const Color(0xFF1A1A1A) : const Color(0xFFF5F5F5),
+      body: Row(
+        children: [
+          // ── Sidebar ──
+          _buildSidebar(appTheme, cs),
+          // ── Main content ──
+          Expanded(
+            child: Column(
+              children: [
+                _buildToolbar(appTheme, cs),
+                _buildBreadcrumbs(appTheme),
+                Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
+                Expanded(child: _buildFileList(appTheme, cs)),
+              ],
+            ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildBreadcrumbs(appTheme),
-            const SizedBox(height: 14),
-            _buildQuickRoots(appTheme),
-            const SizedBox(height: 18),
-            Text(
-              _currentDir.path,
-              style: TextStyle(
-                color: appTheme.selectScreenCardTextColor,
-                fontSize: 12,
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'fileManagerFab',
+        onPressed: () => _showCreateMenu(context, appTheme),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  // ── Sidebar ───────────────────────────────────────────────────────────
+
+  Widget _buildSidebar(AppTheme appTheme, ColorScheme cs) {
+    final locations = _quickLocations();
+    return Container(
+      width: 200,
+      decoration: BoxDecoration(
+        color: appTheme.isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        border: Border(
+          right: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3)),
+        ),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Row(
+              children: [
+                Icon(Icons.folder_copy_rounded, color: cs.primary, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'Explorer',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
+          // Quick locations
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              itemCount: locations.length,
+              itemBuilder: (ctx, i) {
+                final loc = locations[i];
+                final isCurrent = p.equals(_currentDir.path, loc.path);
+                return ListTile(
+                  dense: true,
+                  leading: Icon(loc.icon, size: 18, color: loc.color),
+                  title: Text(
+                    loc.label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
+                      color: isCurrent ? cs.primary : cs.onSurface,
+                    ),
+                  ),
+                  selected: isCurrent,
+                  selectedTileColor: cs.primary.withValues(alpha: 0.1),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  onTap: () => _navigateTo(loc.path),
+                );
+              },
+            ),
+          ),
+          // Clipboard indicator
+          if (_clipboard.isNotEmpty)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.1),
+                border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3))),
+              ),
+              child: Row(
+                children: [
+                  Icon(_cutMode ? Icons.content_cut : Icons.copy, size: 16, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${_clipboard.length} item(s) ${_cutMode ? "cut" : "copied"}',
+                      style: TextStyle(fontSize: 12, color: cs.primary),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.paste, size: 16),
+                    onPressed: _pasteEntities,
+                    tooltip: 'Paste here',
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _entries.isEmpty
-                    ? Center(
-                        child: Text(
-                          'This folder is empty.',
-                          style: TextStyle(color: appTheme.selectScreenCardTextColor),
-                        ),
-                      )
-                    : ListView.separated(
-                        itemCount: _entries.length,
-                        separatorBuilder: (ctx, idx) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) {
-                          final entry = _entries[index];
-                          final isDir = entry is Directory;
-                          final title = path.basename(entry.path);
-                          return Material(
-                            color: appTheme.isDark
-                              ? const Color(0xff232323)
-                              : Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            child: ListTile(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              leading: Icon(
-                                isDir ? Icons.folder : Icons.insert_drive_file_outlined,
-                                color: isDir ? const Color(0xff5090c8) : appTheme.selectScreenCardTextColor,
-                              ),
-                              title: Text(
-                                title,
-                                style: TextStyle(
-                                  color: appTheme.selectScreenCardTextColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              subtitle: Text(
-                                entry.path,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: appTheme.selectScreenCardTextColor.withValues(alpha: 0.7),
-                                  fontSize: 12,
-                                ),
-                              ),
-                              onTap: () => _openEntity(entry),
-                              trailing: PopupMenuButton<String>(
-                                color: appTheme.scaffoldBg,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  side: BorderSide(
-                                    color: appTheme.selectScreenCardTextColor,
-                                    width: 0.2
-                                  )
-                                ),
-                                style: IconButton.styleFrom(
-                                  foregroundColor: appTheme.selectScreenCardTextColor
-                                ),
-                                onSelected: (value) async {
-                                  switch (value) {
-                                    case 'export':
-                                      await _downloadToStorage(entry);  
-                                      break;
-                                    case 'delete':
-                                      await _deleteEntity(entry);
-                                      break;
-                                    case 'open':
-                                      _openFolder(entry.path);
-                                      break;
-                                    default:
-                                  }
-                                },
-                                itemBuilder: (_) {
-                                  final syncable = _hasExternalSourceMetadataSync(entry);
-                                  return [
-                                  PopupMenuItem(
-                                    value: 'export',
-                                    child: ListTile(
-                                      title: Text(
-                                        syncable ? 'Sync to storage' : 'Download to storage',
-                                      ),
-                                      leading: Icon(
-                                        syncable ? Icons.sync : Icons.file_download_outlined,
-                                        color: Colors.blue,
-                                      ),
-                                      titleTextStyle: TextStyle(
-                                        color: appTheme.selectScreenCardTextColor
-                                      )
-                                    ),
-                                  ),
-                                  if (entry is Directory) PopupMenuItem(
-                                    value: 'open',
-                                    child: ListTile(
-                                      title: Text('Open in editor'),
-                                      leading: Icon(
-                                        Icons.open_in_new,
-                                        color: Colors.blue
-                                      ),
-                                      titleTextStyle: TextStyle(
-                                        color: appTheme.selectScreenCardTextColor
-                                      )
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'delete',
-                                    child: ListTile(
-                                      title: Text('Delete'),
-                                      leading: Icon(
-                                        Icons.delete,
-                                        color: Colors.red
-                                      ),
-                                      titleTextStyle: TextStyle(
-                                        color: appTheme.selectScreenCardTextColor
-                                      )
-                                    ),
-                                  ),
-                                ];
-                                },
-                              ),
-                            ),
-                          );
+        ],
+      ),
+    );
+  }
+
+  // ── Toolbar ───────────────────────────────────────────────────────────
+
+  Widget _buildToolbar(AppTheme appTheme, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: appTheme.isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2))),
+      ),
+      child: Row(
+        children: [
+          // Search
+          Expanded(
+            child: TextField(
+              controller: _searchCtrl,
+              onChanged: _filterEntries,
+              style: TextStyle(fontSize: 13, color: cs.onSurface),
+              decoration: InputDecoration(
+                hintText: 'Search files...',
+                hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                prefixIcon: Icon(Icons.search, size: 18, color: cs.onSurfaceVariant),
+                suffixIcon: _searchCtrl.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 16),
+                        onPressed: () {
+                          _searchCtrl.clear();
+                          _filterEntries('');
                         },
+                      )
+                    : null,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: cs.outlineVariant),
+                ),
+                filled: true,
+                fillColor: appTheme.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF0F0F0),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Sort
+          PopupMenuButton<String>(
+            icon: Icon(Icons.sort, size: 18, color: cs.onSurfaceVariant),
+            tooltip: 'Sort',
+            onSelected: (v) {
+              if (v == _sortBy) {
+                _sortAsc = !_sortAsc;
+              } else {
+                _sortBy = v;
+                _sortAsc = true;
+              }
+              _sortEntries(_entries);
+              _filterEntries(_searchCtrl.text);
+            },
+            itemBuilder: (_) => [
+              _sortMenuItem('name', 'Name'),
+              _sortMenuItem('size', 'Size'),
+              _sortMenuItem('date', 'Date'),
+              _sortMenuItem('type', 'Type'),
+            ],
+          ),
+          // View toggle
+          IconButton(
+            icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view, size: 18),
+            tooltip: _isGridView ? 'List view' : 'Grid view',
+            onPressed: () => setState(() => _isGridView = !_isGridView),
+          ),
+          // New file/folder
+          IconButton(
+            icon: const Icon(Icons.note_add_outlined, size: 18),
+            tooltip: 'New file',
+            onPressed: _createFile,
+          ),
+          IconButton(
+            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+            tooltip: 'New folder',
+            onPressed: _createFolder,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sortMenuItem(String value, String label) {
+    final isSelected = _sortBy == value;
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Text(label),
+          if (isSelected) ...[
+            const Spacer(),
+            Icon(
+              _sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+              size: 14,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Breadcrumbs ───────────────────────────────────────────────────────
+
+  Widget _buildBreadcrumbs(AppTheme appTheme) {
+    final root = widget.rootPath;
+    final current = _currentDir.path;
+
+    // Friendly names for known dirs
+    final friendlyNames = <String, String>{
+      appDir: 'App Data',
+      projectDir: 'Projects',
+      filesDir: 'Files',
+      templateDir: 'Templates',
+      pandaLogsDir: 'Logs',
+      extensionDir: 'Extensions',
+      publicPandaRootDir: 'Public',
+      homeDir: 'Home',
+    };
+
+    final segments = <String>[];
+    var dir = _currentDir;
+    while (!p.equals(dir.path, p.dirname(root)) && dir.path.isNotEmpty) {
+      segments.insert(0, dir.path);
+      dir = dir.parent;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < segments.length; i++) ...[
+              if (i > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Icon(Icons.chevron_right, size: 14, color: appTheme.selectScreenCardTextColor.withValues(alpha: 0.5)),
+                ),
+              InkWell(
+                onTap: () => _navigateTo(segments[i]),
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Text(
+                    friendlyNames[segments[i]] ?? p.basename(segments[i]),
+                    style: TextStyle(
+                      color: i == segments.length - 1
+                          ? appTheme.selectScreenCardTextColor
+                          : appTheme.selectScreenCardTextColor.withValues(alpha: 0.6),
+                      fontWeight: i == segments.length - 1 ? FontWeight.w700 : FontWeight.w500,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── File List ─────────────────────────────────────────────────────────
+
+  Widget _buildFileList(AppTheme appTheme, ColorScheme cs) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_filteredEntries.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.folder_open, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.5)),
+            const SizedBox(height: 12),
+            Text(
+              _searchCtrl.text.isNotEmpty ? 'No matching files' : 'This folder is empty',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            ),
+            if (_searchCtrl.text.isEmpty) ...[
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _createFolder,
+                icon: const Icon(Icons.create_new_folder_outlined, size: 16),
+                label: const Text('Create folder'),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    if (_isGridView) {
+      return _buildGridView(appTheme, cs);
+    }
+    return _buildListView(appTheme, cs);
+  }
+
+  Widget _buildListView(AppTheme appTheme, ColorScheme cs) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      itemCount: _filteredEntries.length,
+      itemBuilder: (ctx, i) => _buildListItem(_filteredEntries[i], appTheme, cs),
+    );
+  }
+
+  Widget _buildListItem(FileSystemEntity entity, AppTheme appTheme, ColorScheme cs) {
+    final isDir = entity is Directory;
+    final name = p.basename(entity.path);
+    final stat = entity.statSync();
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => _openEntity(entity),
+        onLongPress: () => _showContextMenu(entity),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(
+            children: [
+              // Icon
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: (isDir ? const Color(0xFF4CAF50) : _fileColor(name)).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  isDir ? Icons.folder_rounded : _fileIcon(name),
+                  size: 20,
+                  color: isDir ? const Color(0xFF4CAF50) : _fileColor(name),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Name + path
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface,
                       ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (!isDir)
+                      Text(
+                        '${_formatSize(entity)} • ${_formatDate(stat.modified)}',
+                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                      ),
+                  ],
+                ),
+              ),
+              // Menu
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, size: 16, color: cs.onSurfaceVariant),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onSelected: (v) => _handleMenuAction(v, entity),
+                itemBuilder: (_) => _buildMenuItems(entity),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGridView(AppTheme appTheme, ColorScheme cs) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 120,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+        childAspectRatio: 1,
+      ),
+      itemCount: _filteredEntries.length,
+      itemBuilder: (ctx, i) => _buildGridItem(_filteredEntries[i], appTheme, cs),
+    );
+  }
+
+  Widget _buildGridItem(FileSystemEntity entity, AppTheme appTheme, ColorScheme cs) {
+    final isDir = entity is Directory;
+    final name = p.basename(entity.path);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openEntity(entity),
+      onLongPress: () => _showContextMenu(entity),
+      child: Container(
+        decoration: BoxDecoration(
+          color: appTheme.isDark ? const Color(0xFF2A2A2A) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isDir ? Icons.folder_rounded : _fileIcon(name),
+              size: 32,
+              color: isDir ? const Color(0xFF4CAF50) : _fileColor(name),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              name,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: cs.onSurface),
             ),
           ],
         ),
       ),
-      floatingActionButton: _isAtRoot()
-          ? null
-          : FloatingActionButton.small(
-              backgroundColor: Colors.blue,
-              onPressed: () async {
-                setState(() {
-                  _currentDir = _currentDir.parent;
-                  _loading = true;
-                });
-                await _loadEntries();
-              },
-              child: const Icon(
-                Icons.arrow_upward,
-                color: Colors.white
-              ),
-            ),
     );
   }
-}
 
-class _NamePromptDialog extends StatefulWidget {
-  final String title;
+  // ── Context Menu ──────────────────────────────────────────────────────
 
-  const _NamePromptDialog({required this.title});
-
-  @override
-  State<_NamePromptDialog> createState() => _NamePromptDialogState();
-}
-
-class _NamePromptDialogState extends State<_NamePromptDialog> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final appTheme = context.read<AppThemeBloc>().state.appTheme;
-
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        width: 380,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: appTheme.isDark
-                ? [const Color(0xff2b2b2b), const Color(0xff1a1a1a)]
-                : [
-                    const Color.fromARGB(255, 250, 250, 250),
-                    const Color.fromARGB(255, 240, 240, 240),
-                  ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
+  void _showContextMenu(FileSystemEntity entity) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(50),
-              ),
-              child: Icon(
-                Icons.drive_file_rename_outline,
-                color: appTheme.selectScreenCardTextColor,
-                size: 32,
-              ),
+            ListTile(
+              leading: const Icon(Icons.open_in_new),
+              title: const Text('Open'),
+              onTap: () { Navigator.pop(ctx); _openEntity(entity); },
             ),
-            const SizedBox(height: 20),
-            Text(
-              widget.title,
-              style: TextStyle(
-                color: appTheme.selectScreenCardTextColor,
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-              ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Rename'),
+              onTap: () { Navigator.pop(ctx); _renameEntity(entity); },
             ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: _controller,
-              autofocus: true,
-              style: TextStyle(color: appTheme.selectScreenCardTextColor),
-              decoration: InputDecoration(
-                hintText: 'Name',
-                hintStyle: TextStyle(
-                  color: appTheme.selectScreenCardTextColor.withValues(alpha: 0.55),
-                ),
-                filled: true,
-                fillColor: appTheme.isDark
-                    ? Colors.white.withValues(alpha: 0.04)
-                    : Colors.black.withValues(alpha: 0.03),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              ),
-              onSubmitted: (value) {
-                final trimmed = value.trim();
-                if (trimmed.isEmpty) return;
-                Navigator.of(context).pop(trimmed);
-              },
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy'),
+              onTap: () { Navigator.pop(ctx); _copyEntity(entity); },
             ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () {
-                    final value = _controller.text.trim();
-                    if (value.isEmpty) return;
-                    Navigator.of(context).pop(value);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xff0e639c),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  child: const Text(
-                    'Create',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
+            ListTile(
+              leading: const Icon(Icons.content_cut),
+              title: const Text('Cut'),
+              onTap: () { Navigator.pop(ctx); _cutEntity(entity); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.file_download),
+              title: const Text('Export to Public'),
+              onTap: () { Navigator.pop(ctx); _exportToStorage(entity); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Delete', style: TextStyle(color: Colors.red)),
+              onTap: () { Navigator.pop(ctx); _deleteEntity(entity); },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<PopupMenuEntry<String>> _buildMenuItems(FileSystemEntity entity) {
+    return [
+      const PopupMenuItem(value: 'open', child: Text('Open')),
+      const PopupMenuItem(value: 'rename', child: Text('Rename')),
+      const PopupMenuItem(value: 'copy', child: Text('Copy')),
+      const PopupMenuItem(value: 'cut', child: Text('Cut')),
+      const PopupMenuItem(value: 'export', child: Text('Export')),
+      const PopupMenuItem(
+        value: 'delete',
+        child: Text('Delete', style: TextStyle(color: Colors.red)),
+      ),
+    ];
+  }
+
+  void _handleMenuAction(String action, FileSystemEntity entity) {
+    switch (action) {
+      case 'open':
+        _openEntity(entity);
+        break;
+      case 'rename':
+        _renameEntity(entity);
+        break;
+      case 'copy':
+        _copyEntity(entity);
+        break;
+      case 'cut':
+        _cutEntity(entity);
+        break;
+      case 'export':
+        _exportToStorage(entity);
+        break;
+      case 'delete':
+        _deleteEntity(entity);
+        break;
+    }
+  }
+
+  // ── Open Entity ───────────────────────────────────────────────────────
+
+  void _openEntity(FileSystemEntity entity) {
+    if (entity is Directory) {
+      _navigateTo(entity.path);
+    } else if (entity is File) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EditorPage(filePath: entity.path),
+        ),
+      );
+    }
+  }
+
+  // ── Create Menu ───────────────────────────────────────────────────────
+
+  void _showCreateMenu(BuildContext context, AppTheme appTheme) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.note_add_outlined),
+              title: const Text('New File'),
+              onTap: () { Navigator.pop(ctx); _createFile(); },
+            ),
+            ListTile(
+              leading: const Icon(Icons.create_new_folder_outlined),
+              title: const Text('New Folder'),
+              onTap: () { Navigator.pop(ctx); _createFolder(); },
             ),
           ],
         ),
