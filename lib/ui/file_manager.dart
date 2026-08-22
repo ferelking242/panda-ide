@@ -78,13 +78,14 @@ class FileManagerPage extends StatefulWidget {
   const FileManagerPage({
     super.key,
     String? rootPath,
-  }) : rootPath = rootPath ?? projectDir;
+  });
 
   @override
   State<FileManagerPage> createState() => _FileManagerPageState();
 }
 
 class _FileManagerPageState extends State<FileManagerPage> {
+  late final String rootPath;
   late Directory _currentDir;
   bool _loading = true;
   List<FileSystemEntity> _entries = [];
@@ -460,6 +461,12 @@ class _FileManagerPageState extends State<FileManagerPage> {
   }
 
   // ── Build ─────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    rootPath = widget.rootPath ?? projectDir;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -960,14 +967,14 @@ class _FileManagerPageState extends State<FileManagerPage> {
 
   List<PopupMenuEntry<String>> _buildMenuItems(FileSystemEntity entity) {
     return [
-      const PopupMenuItem(value: 'open', child: Text('Open')),
-      const PopupMenuItem(value: 'rename', child: Text('Rename')),
-      const PopupMenuItem(value: 'copy', child: Text('Copy')),
-      const PopupMenuItem(value: 'cut', child: Text('Cut')),
-      const PopupMenuItem(value: 'export', child: Text('Export')),
-      const PopupMenuItem(
+      PopupMenuItem(value: 'open', child: const Text('Open')),
+      PopupMenuItem(value: 'rename', child: const Text('Rename')),
+      PopupMenuItem(value: 'copy', child: const Text('Copy')),
+      PopupMenuItem(value: 'cut', child: const Text('Cut')),
+      PopupMenuItem(value: 'export', child: const Text('Export')),
+      PopupMenuItem(
         value: 'delete',
-        child: Text('Delete', style: TextStyle(color: Colors.red)),
+        child: const Text('Delete', style: TextStyle(color: Colors.red)),
       ),
     ];
   }
@@ -1004,7 +1011,12 @@ class _FileManagerPageState extends State<FileManagerPage> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => EditorPage(filePath: entity.path),
+          builder: (_) => EditorPage(
+              languageDetails: null,
+              rootDir: rootPath,
+              isProject: false,
+              file: File(entity.path),
+            ),
         ),
       );
     }
