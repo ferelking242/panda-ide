@@ -8,6 +8,7 @@
 library;
 
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -176,7 +177,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     try {
       final url = await _client.getDownloadUrl(ext.namespace, ext.name, ext.version);
       final vsixDir = '${extensionDir}/${ext.namespace}.${ext.name}';
-      await VsixInstaller.installFromUrl(url, vsixDir);
+      await VsixInstaller.installFromUrl(url);
       await ExtensionRegistry.instance.load();
       if (!mounted) return;
       setState(() => _installStates[ext.id] = _InstallState.installed);
@@ -575,7 +576,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                       Icon(Icons.star_rounded, size: 14, color: Colors.amber[600]),
                       const SizedBox(width: 2),
                       Text(
-                        ext.rating != null ? ext.rating!.toStringAsFixed(1) : '—',
+                        ext.averageRating != null ? ext.averageRating!.toStringAsFixed(1) : '—',
                         style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurface),
                       ),
                       const SizedBox(width: 10),
@@ -653,7 +654,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                 Icon(Icons.star_rounded, size: 12, color: Colors.amber[600]),
                 const SizedBox(width: 2),
                 Text(
-                  ext.rating != null ? ext.rating!.toStringAsFixed(1) : '—',
+                  ext.averageRating != null ? ext.averageRating!.toStringAsFixed(1) : '—',
                   style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cs.onSurface),
                 ),
               ],
@@ -862,7 +863,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                           ),
                         const SizedBox(width: 12),
                         // Stats
-                        _statBadge(Icons.star_rounded, '${ext.rating?.toStringAsFixed(1) ?? "—"}', Colors.amber[600]!),
+                        _statBadge(Icons.star_rounded, '${ext.averageRating?.toStringAsFixed(1) ?? "—"}', Colors.amber[600]!),
                         const SizedBox(width: 8),
                         _statBadge(Icons.download_rounded, _formatDownloads(ext.downloadCount), cs.onSurfaceVariant),
                       ],
