@@ -7,11 +7,8 @@
 ///   - Detail: VS Code-style extension detail page
 library;
 
-import 'dart:async';
-import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:percent_indicator/percent_indicator.dart';
