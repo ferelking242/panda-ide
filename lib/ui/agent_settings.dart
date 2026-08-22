@@ -276,6 +276,8 @@ class _AgentSettingsState extends State<AgentSettings>
   final _chatScrollCtrl = ScrollController();
   bool       _chatGenerating   = false;
   AgentPhase _chatPhase        = AgentPhase.idle;
+  String     _chatActivityLabel = '';
+  DateTime?  _chatGenerationStartedAt;
   String     _chatStreamBuf    = '';
   String     _chatThinkingBuf  = '';
   int        _chatSerial       = 0;
@@ -670,6 +672,8 @@ class _AgentSettingsState extends State<AgentSettings>
     setState(() {
       _chatGenerating = true;
       _chatPhase      = AgentPhase.thinking;
+      _chatActivityLabel = 'Réflexion sur votre demande…';
+      _chatGenerationStartedAt = DateTime.now();
     });
 
     try {
@@ -690,6 +694,8 @@ class _AgentSettingsState extends State<AgentSettings>
         setState(() {
           _chatGenerating = false;
           _chatPhase      = AgentPhase.error;
+          _chatActivityLabel = '';
+          _chatGenerationStartedAt = null;
           _chatMessages.add({'role': 'user', 'text': text});
           _chatMessages.add({'role': 'agent', 'text': 'Erreur résolution modèle : $e', 'thinking': '', 'phase': 'error'});
           _chatInputCtrl.clear();
@@ -702,6 +708,8 @@ class _AgentSettingsState extends State<AgentSettings>
         setState(() {
           _chatGenerating = false;
           _chatPhase      = AgentPhase.error;
+          _chatActivityLabel = '';
+          _chatGenerationStartedAt = null;
           _chatMessages.add({'role': 'user', 'text': text});
           _chatMessages.add({'role': 'agent', 'text': 'Modèle non disponible. Vérifiez votre configuration dans Tools → Settings.', 'thinking': '', 'phase': 'error'});
           _chatInputCtrl.clear();
@@ -762,6 +770,8 @@ class _AgentSettingsState extends State<AgentSettings>
         setState(() {
           _chatGenerating = false;
           _chatPhase      = AgentPhase.error;
+          _chatActivityLabel = '';
+          _chatGenerationStartedAt = null;
         });
       }
     }
@@ -809,12 +819,32 @@ class _AgentSettingsState extends State<AgentSettings>
         setState(() {
           _chatGenerating = false;
           _chatPhase      = AgentPhase.error;
+          _chatActivityLabel = '';
+          _chatGenerationStartedAt = null;
           _chatMessages[agentIdx]['text']  = 'Erreur : $e';
           _chatMessages[agentIdx]['phase'] = 'error';
         });
       },
       onDone: () => _onAgentTurnDone(requestId, agentIdx),
     );
+  }
+
+  String _activityLabelForTool(String toolName) {
+    if (toolName == 'runShellCommand') return 'Exécution dans le terminal…';
+    if (toolName.startsWith('search') || toolName.startsWith('grep') ||
+        toolName.startsWith('glob')) {
+      return 'Recherche dans le projet…';
+    }
+    if (toolName.startsWith('read') || toolName.startsWith('list')) {
+      return 'Lecture du projet…';
+    }
+    if (toolName.startsWith('write') || toolName.startsWith('edit') ||
+        toolName.startsWith('replace') || toolName.startsWith('insert')) {
+      return 'Modification des fichiers…';
+    }
+    if (toolName.startsWith('openLinks')) return 'Recherche sur internet…';
+    if (toolName.startsWith('git')) return 'Opération Git…';
+    return 'Exécution d’une action…';
   }
 
   void _handleAgentChunk(AgentChunk chunk, int agentIdx) {
@@ -858,11 +888,13 @@ class _AgentSettingsState extends State<AgentSettings>
       switch (chunk.phase) {
         case AgentPhase.thinking:
           _chatPhase = AgentPhase.thinking;
+          _chatActivityLabel = 'Réflexion…';
           _chatThinkingBuf += chunk.text;
           msg['thinking'] = _chatThinkingBuf;
           if (chunk.text.isNotEmpty) upsertBlock('thinking', chunk.blockId, chunk.text);
         case AgentPhase.streaming:
           _chatPhase = AgentPhase.streaming;
+          _chatActivityLabel = 'Génération de la réponse…';
           _chatStreamBuf += chunk.text;
           msg['text'] = _chatStreamBuf;
           // Un texte qui suit des outils ouvre forcément un NOUVEAU bloc :
@@ -870,6 +902,9 @@ class _AgentSettingsState extends State<AgentSettings>
           if (chunk.text.isNotEmpty) upsertBlock('text', chunk.blockId, chunk.text);
         case AgentPhase.toolRunning:
           _chatPhase = AgentPhase.toolRunning;
+          _chatActivityLabel = chunk.toolName == null || chunk.toolName!.isEmpty
+              ? 'Exécution d’une action…'
+              : _activityLabelForTool(chunk.toolName!);
           tl.add({
             'type': 'tool',
             'name': chunk.toolName ?? '',
@@ -893,6 +928,8 @@ class _AgentSettingsState extends State<AgentSettings>
         case AgentPhase.done:
           _chatPhase      = AgentPhase.done;
           _chatGenerating = false;
+          _chatActivityLabel = '';
+          _chatGenerationStartedAt = null;
           msg['phase'] = 'done';
           KeyRotationBrain.instance.reportSuccess(_turnProvider ?? '', _turnKeyId);
         case AgentPhase.error:
@@ -906,6 +943,8 @@ class _AgentSettingsState extends State<AgentSettings>
           } else {
             _chatPhase      = AgentPhase.error;
             _chatGenerating = false;
+            _chatActivityLabel = '';
+            _chatGenerationStartedAt = null;
             msg['text']  = _chatStreamBuf.isNotEmpty ? _chatStreamBuf : 'Erreur : ${chunk.text}';
             msg['phase'] = 'error';
           }
@@ -934,6 +973,8 @@ class _AgentSettingsState extends State<AgentSettings>
       setState(() {
         _chatGenerating = false;
         _chatPhase      = AgentPhase.error;
+        _chatActivityLabel = '';
+        _chatGenerationStartedAt = null;
         if (_isTurnMessage(agentIdx)) {
           _chatMessages[agentIdx]['text']  = message;
           _chatMessages[agentIdx]['phase'] = 'error';
@@ -969,6 +1010,7 @@ class _AgentSettingsState extends State<AgentSettings>
         _chatMessages[agentIdx]['phase']    = 'streaming';
       }
       _chatPhase = AgentPhase.thinking;
+      _chatActivityLabel = 'Réflexion…';
     });
     PandaLog.i('AgentSettings', 'Rotation: retry attempt $_turnAttempt with another key');
     _subscribeAgentTurn(requestId: _chatSerial, agentIdx: agentIdx, model: model);
@@ -1117,9 +1159,15 @@ class _AgentSettingsState extends State<AgentSettings>
     setState(() {
       _chatGenerating = false;
       _chatPhase      = AgentPhase.idle;
-      if (_chatMessages.isNotEmpty && _chatMessages.last['role'] == 'agent' && _chatMessages.last['phase'] == 'streaming') {
-        _chatMessages.last['text']  = _chatStreamBuf.isEmpty ? 'Arrêté.' : _chatStreamBuf;
-        _chatMessages.last['phase'] = 'error';
+      _chatActivityLabel = '';
+      _chatGenerationStartedAt = null;
+      if (_chatMessages.isNotEmpty &&
+          _chatMessages.last['role'] == 'agent' &&
+          (_chatMessages.last['phase'] == 'streaming' ||
+              _chatMessages.last['phase'] == 'thinking')) {
+        _chatMessages.last['text'] =
+            _chatStreamBuf.isEmpty ? 'Génération arrêtée.' : _chatStreamBuf;
+        _chatMessages.last['phase'] = 'cancelled';
       }
     });
   }
@@ -1599,6 +1647,36 @@ class _AgentSettingsState extends State<AgentSettings>
           ),
           child: Column(
             children: [
+              if (_chatGenerating)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 4, 7),
+                  child: Row(
+                    children: [
+                      _DotsIndicator(color: _kAccent, size: 3.5),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _chatActivityLabel.isEmpty
+                              ? 'Génération…'
+                              : _chatActivityLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            color: muted,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                      _ChatSmallIconButton(
+                        icon: Broken.stop_circle,
+                        color: _kDanger,
+                        tooltip: 'Arrêter la génération',
+                        onTap: _chatStop,
+                      ),
+                    ],
+                  ),
+                ),
               if (_chatContextChips.isNotEmpty)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -1683,14 +1761,7 @@ class _AgentSettingsState extends State<AgentSettings>
                   const SizedBox(width: 4),
                   _modeChip('plan', 'Plan', isDark, muted, fg),
                   const Spacer(),
-                  if (_chatGenerating)
-                    _ChatSmallIconButton(
-                      icon: Broken.stop_circle,
-                      color: _kDanger,
-                      tooltip: 'Arrêter',
-                      onTap: _chatStop,
-                    )
-                  else
+                  if (!_chatGenerating)
                     _ChatSmallIconButton(
                       icon: Broken.send_1,
                       color: _chatInputCtrl.text.trim().isNotEmpty ? _kAccent : muted,
