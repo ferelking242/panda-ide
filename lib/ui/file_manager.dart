@@ -73,12 +73,12 @@ List<_QuickLocation> _quickLocations() => [
 // ═══════════════════════════════════════════════════════════════
 
 class FileManagerPage extends StatefulWidget {
-  final String rootPath;
+  final String rootDir;
 
   const FileManagerPage({
     super.key,
-    String? rootPath,
-  });
+    String? rootDir,
+  }) : rootDir = rootDir ?? '';
 
   @override
   State<FileManagerPage> createState() => _FileManagerPageState();
@@ -102,7 +102,7 @@ class _FileManagerPageState extends State<FileManagerPage> {
   @override
   void initState() {
     super.initState();
-    _rootPath = widget.rootPath ?? projectDir;
+    _rootPath = widget.rootDir.isNotEmpty ? widget.rootDir : projectDir;
     _currentDir = Directory(_rootPath);
     _initialize();
   }
@@ -672,10 +672,9 @@ class _FileManagerPageState extends State<FileManagerPage> {
     );
   }
 
-  Widget _sortMenuItem(String value, String label) {
+  PopupMenuItem<String> _sortMenuItem(String value, String label) {
     final isSelected = _sortBy == value;
-    return PopupMenuItem(
-      value: value,
+    return PopupMenuItem<String>(
       child: Row(
         children: [
           Text(label),
@@ -1008,7 +1007,7 @@ class _FileManagerPageState extends State<FileManagerPage> {
         MaterialPageRoute(
           builder: (_) => EditorPage(
               languageDetails: null,
-              rootDir: rootPath,
+              rootDir: _rootPath,
               isProject: false,
               file: File(entity.path),
             ),
