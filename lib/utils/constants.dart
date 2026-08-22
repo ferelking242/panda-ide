@@ -44,4 +44,35 @@ void usePrivateStorageRoots() {
 }
 
 // Legacy download cache (app-private, no permission needed)
-String downloadsDir = "/storage/emulated/0/Android/data/com.panda.ide/files/data/user/0/com.panda.ide/files";
+String downloadsDir = "$appDir/downloads";
+
+// ── Additional storage paths ────────────────────────────────────────────────
+String modelsDir = "$appDir/models";
+String downloadsCacheDir = "$appDir/downloads";
+String pandaTempCacheDir = "$appDir/.cache";
+
+/// Create all storage directories at startup.
+Future<void> createAllStorageDirs() async {
+  for (final dir in [
+    Directory(appDir),
+    Directory(binDir),
+    Directory(libDir),
+    Directory(certDir),
+    Directory(runtimesDir),
+    Directory(tempDir),
+    Directory(extensionDir),
+    Directory(homeDir),
+    Directory(pandaRootDir),
+    Directory(projectDir),
+    Directory(templateDir),
+    Directory(filesDir),
+    Directory(pandaLogsDir),
+    Directory(modelsDir),
+    Directory(downloadsCacheDir),
+    Directory(pandaTempCacheDir),
+  ]) {
+    if (!dir.existsSync()) {
+      await dir.create(recursive: true);
+    }
+  }
+}
