@@ -85,7 +85,7 @@ class FileManagerPage extends StatefulWidget {
 }
 
 class _FileManagerPageState extends State<FileManagerPage> {
-  late final String rootPath;
+  late final String _rootPath;
   late Directory _currentDir;
   bool _loading = true;
   List<FileSystemEntity> _entries = [];
@@ -102,7 +102,8 @@ class _FileManagerPageState extends State<FileManagerPage> {
   @override
   void initState() {
     super.initState();
-    _currentDir = Directory(widget.rootPath);
+    _rootPath = widget.rootPath ?? projectDir;
+    _currentDir = Directory(_rootPath);
     _initialize();
   }
 
@@ -185,7 +186,7 @@ class _FileManagerPageState extends State<FileManagerPage> {
     setState(() {});
   }
 
-  bool _isAtRoot() => p.equals(_currentDir.path, widget.rootPath);
+  bool _isAtRoot() => p.equals(_currentDir.path, _rootPath);
 
   // ── Navigation ────────────────────────────────────────────────────────
 
@@ -463,12 +464,6 @@ class _FileManagerPageState extends State<FileManagerPage> {
   // ── Build ─────────────────────────────────────────────────────────────
 
   @override
-  void initState() {
-    super.initState();
-    rootPath = widget.rootPath ?? projectDir;
-  }
-
-  @override
   Widget build(BuildContext context) {
     final appTheme = context.watch<AppThemeBloc>().state.appTheme;
     final cs = Theme.of(context).colorScheme;
@@ -699,7 +694,7 @@ class _FileManagerPageState extends State<FileManagerPage> {
   // ── Breadcrumbs ───────────────────────────────────────────────────────
 
   Widget _buildBreadcrumbs(AppTheme appTheme) {
-    final root = widget.rootPath;
+    final root = _rootPath;
     final current = _currentDir.path;
 
     // Friendly names for known dirs
