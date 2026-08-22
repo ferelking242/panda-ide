@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../ui/home.dart';
 import '../ui/permission_screen.dart';
 import '../ui/splash_screen.dart';
-import '../ui/web_home.dart';
 import 'setup_screen.dart';
 
 /// Splash → PermissionScreen (first time) → SetupScreen → Home.
@@ -27,12 +27,12 @@ class _StartScreenState extends State<StartScreen> {
     if (!mounted || _navigated) return;
     _navigated = true;
 
-    // Web / non-Android : landing produit + lien de téléchargement APK.
-    // (L'IDE complet requiert proot/Alpine natif — indisponible sur web.)
+    // Web / non-Android : l'IDE complet tourne directement (terminal proot
+    // masqué par des gardes kIsWeb dans home.dart) — pas d'écrans natifs.
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const WebHome(),
+          pageBuilder: (_, __, ___) => const SelectType(),
           transitionsBuilder: (_, __, ___, child) =>
               FadeTransition(opacity: __, child: child),
         ),
