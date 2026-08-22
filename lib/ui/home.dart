@@ -188,6 +188,9 @@ class _SelectTypeState extends State<SelectType>
   final      _agentRunner       = AgentRunner();
   int        _agentRequestSerial = 0;
   Completer<bool>? _pendingApprovalCompleter;
+  int        _agentToolTabSeq   = 0;
+  final Map<String, Map<String, String>> _agentToolTabs = {};
+  DateTime?  _agentTurnStartedAt;
 
   Future<bool> _handleAgentConfirmRequired({
     required String toolName,
@@ -4233,6 +4236,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'logs') {
       return const LogsExplorerPage();
     }
+    if (tab.id == 'agenttool:') {
+      return _buildAgentToolTabPage(tab.id, appTheme);
+    }
     if (tab.id == 'update') {
       return _buildUpdatePage(appTheme);
     }
@@ -4258,6 +4264,7 @@ class _SelectTypeState extends State<SelectType>
 
       _openTabs.removeAt(i);
       _editorTabs.remove(removedId);
+      _agentToolTabs.remove(removedId);
 
       // If the closed tab was the persistent workspace project tab, clear it.
       if (removedCfg != null &&
@@ -7031,19 +7038,19 @@ class _SelectTypeState extends State<SelectType>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Timeline chronologique : Reflexion / Call Tool / Output /
-              // reponses texte - chaque evenement est un bloc independant.
-              for (var bi = 0; bi < timeline.length; bi++)
-                _buildAgentTimelineEvent(
-                  timeline[bi],
-                  eventIndex: bi,
-                  lastThinkingIdx: lastThinkingIdx,
-                  lastTextIdx: lastTextIdx,
-                  isActiveMsg: isActiveMsg,
-                  isDark: isDark,
-                  fg: fg,
-                  muted: muted,
-                  isError: isError,
+              for (final w in _buildAgentTimelineWidgets(timeline,
+                      isActiveMsg: isActiveMsg,
+                      lastThinkingIdx: lastThinkingIdx,
+                      lastTextIdx: lastTextIdx,
+                      isDark: isDark, fg: fg, muted: muted,
+                      isError: isError))
+                w,
+              if (!isStreaming && msg['checkpoint'] != null)
+                _AgentCheckpointCard(
+                  data: (msg['checkpoint'] as Map).cast<String, dynamic>(),
+                  isDark: isDark, fg: fg, muted: muted,
+                  onRestore: () {{ unawaited(_restoreAgentCheckpoint(msg['checkpoint'] as Map<String, dynamic>)); }},
+                  onOpenGit: _openGithubTab,
                 ),
 
               // Ancien format : message sans blocs mais avec du texte.
@@ -7211,6 +7218,8 @@ class _SelectTypeState extends State<SelectType>
             isDark: isDark,
             fg: fg,
             muted: muted,
+            onOpenInEditor: () => _openAgentToolTabForCall(
+                name, args, result),
             showResultInline: false,
           ),
           if (result != null && result.trim().isNotEmpty)
@@ -7239,6 +7248,209 @@ class _SelectTypeState extends State<SelectType>
     }
 
     return const SizedBox.shrink();
+  }
+
+  // ── Agent timeline : groupes d’actions compressés ───────────────────────
+  List<Widget> _buildAgentTimelineWidgets(
+    List<Map<String, dynamic>> tl, {
+    required bool isActiveMsg,
+    required int lastThinkingIdx,
+    required int lastTextIdx,
+    required bool isDark,
+    required Color fg,
+    required Color muted,
+    required bool isError,
+  }) {
+    Widget renderEvent(int idx, Map<String, dynamic> b) =>
+        _buildAgentTimelineEvent(
+          b, eventIndex: idx, lastThinkingIdx: lastThinkingIdx,
+          lastTextIdx: lastTextIdx, isActiveMsg: isActiveMsg,
+          isDark: isDark, fg: fg, muted: muted, isError: isError,
+        );
+
+    final widgets = <Widget>[];
+    var run = <Map<String, dynamic>>[];
+    var runStart = 0;
+
+    void flushRun() {
+      if (run.isEmpty) return;
+      if (isActiveMsg) {
+        for (var k = 0; k < run.length; k++)
+          widgets.add(renderEvent(runStart + k, run[k]));
+      } else {
+        final captured = List<Map<String, dynamic>>.from(run);
+        final startIdx = runStart;
+        widgets.add(_AgentActionStrip(
+          events: captured, isDark: isDark, fg: fg, muted: muted,
+          buildExpanded: (ctx) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [for (var k = 0; k < captured.length; k++) renderEvent(startIdx + k, captured[k])],
+          ),
+        ));
+      }
+      run = <Map<String, dynamic>>[];
+    }
+
+    for (var i = 0; i < tl.length; i++) {
+      final bt = (tl[i]['type'] as String? ?? '');
+      if (bt == 'text') { flushRun(); widgets.add(renderEvent(i, tl[i])); }
+      else { if (run.isEmpty) runStart = i; run.add(tl[i]); }
+    }
+    flushRun();
+    return widgets;
+  }
+
+  static String _agentCmdFromArgs(Map<String, dynamic> args) {
+    for (final key in const ['command', 'cmd', 'path', 'file_path', 'pattern', 'query', 'url']) {
+      final v = args[key]?.toString();
+      if (v != null && v.trim().isNotEmpty) return v.trim();
+    }
+    if (args.isEmpty) return '';
+    return args.values.map((e) => e?.toString() ?? '').join(' ');
+  }
+
+  void _openAgentToolTabForCall(String toolName, Map<String, dynamic> args, String? result) {
+    setState(() {
+      final id = 'agenttool:${DateTime.now().microsecondsSinceEpoch}';
+      final title = toolName.isEmpty ? '>_' : toolName;
+      _openTabs.add(_TabDef(id: id, title: title.length > 20 ? '${title.substring(0, 20)}\u2026' : title, icon: Broken.command_square));
+      _agentToolTabs[id] = {'title': title, 'cmd': _agentCmdFromArgs(args), 'output': result ?? ''};
+      _activeTabIdx = _openTabs.length - 1;
+      _bottomPanelOpen = false;
+    });
+  }
+
+  Widget _buildAgentToolTabPage(String id, AppTheme appTheme) {
+    final data = _agentToolTabs[id];
+    final isDark = appTheme.isDark;
+    final fg = isDark ? const Color(0xffe0e0e0) : const Color(0xff222222);
+    final muted = isDark ? const Color(0xff8a8a8a) : const Color(0xff777777);
+    if (data == null) return Center(child: Text('Onglet expiré.', style: TextStyle(fontSize: 12, color: muted)));
+    final cmd = data['cmd'] ?? '';
+    final output = data['output'] ?? '';
+    return Container(
+      color: isDark ? const Color(0xff141414) : Colors.white,
+      child: ListView(padding: const EdgeInsets.all(14), children: [
+        Row(children: [
+          agentToolIconWidget(data['title'] ?? '', 15, fg),
+          const SizedBox(width: 8),
+          Expanded(child: Text(data['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'monospace', color: fg))),
+          InkWell(onTap: () { Clipboard.setData(ClipboardData(text: '$cmd\n\n$output')); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copié !'), duration: Duration(seconds: 1))); }, borderRadius: BorderRadius.circular(4), child: Padding(padding: const EdgeInsets.all(6), child: Icon(Broken.copy, size: 14, color: muted))),
+        ]),
+        const SizedBox(height: 12),
+        if (cmd.isNotEmpty) ...[
+          Text('COMMANDE', style: TextStyle(fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: muted)),
+          const SizedBox(height: 4),
+          SelectableText(wrapLongTokensForDisplay(cmd), style: TextStyle(fontSize: 12, height: 1.5, fontFamily: 'monospace', color: fg)),
+          const SizedBox(height: 18),
+        ],
+        if (output.trim().isNotEmpty) ...[
+          Text('SORTIE', style: TextStyle(fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: muted)),
+          const SizedBox(height: 4),
+          SelectableText(wrapLongTokensForDisplay(output.trim()), style: TextStyle(fontSize: 11, height: 1.5, fontFamily: 'monospace', color: fg.withValues(alpha: 0.85))),
+        ],
+      ]),
+    );
+  }
+
+  // ── Fin de tour : rapport garanti + checkpoint local ──────────────────────
+  Future<void> _finalizeAgentTurn(int agentIdx) async {
+    try {
+      if (!mounted || agentIdx < 0 || agentIdx >= _agentMessages.length) return;
+      final msg = _agentMessages[agentIdx];
+      if (msg['finalized'] == true) return;
+      msg['finalized'] = true;
+
+      final blocks = List<Map<String, dynamic>>.from((msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? []);
+      var hasFinalText = false;
+      for (final b in blocks) {
+        if ((b['type'] as String? ?? '') == 'text' && ((b['text'] as String?) ?? '').trim().isNotEmpty) { hasFinalText = true; break; }
+      }
+
+      if (!hasFinalText) {
+        final sb = StringBuffer('**Rapport**\n\n');
+        var anyTool = false;
+        var anyFail = false;
+        for (final b in blocks) {
+          if ((b['type'] as String? ?? '') != 'toolCall') continue;
+          final nm = ((b['name'] ?? b['toolName']) ?? '').toString();
+          final res = (((b['result'] as String?) ?? '')).trim();
+          final failed = res.startsWith('Error') || res.startsWith('Blocage');
+          anyTool = true;
+          if (failed) anyFail = true;
+          final firstLine = failed ? res.split('\n').first : '';
+          sb.writeln('- `$nm` ${failed ? '\u274c \u00e9chec' : '\u2705 succ\u00e8s'}${firstLine.isEmpty ? '' : ' \u2014 $firstLine'}');
+        }
+        if (!anyTool) sb.writeln('- Aucun outil ex\u00e9cut\u00e9.');
+        sb.writeln();
+        sb.writeln(anyFail ? 'Certaines actions ont \u00e9chou\u00e9.' : 'Toutes les actions ont \u00e9t\u00e9 ex\u00e9cut\u00e9es.');
+        final report = sb.toString();
+        setState(() { msg['text'] = report; msg['blocks'] = blocks..add({'type': 'text', 'text': '\n$report'}); });
+      }
+
+      final ws = _activeProjectDir() ?? _currentWorkspaceDir;
+      if (ws != null && ws.isNotEmpty && Directory(ws).existsSync()) {
+        final startedAt = _agentTurnStartedAt ?? DateTime.now().subtract(const Duration(seconds: 1));
+        final durMs = DateTime.now().difference(startedAt).inMilliseconds;
+        final cp = await _createAgentCheckpoint(ws, durMs);
+        if (cp != null && mounted) setState(() => msg['checkpoint'] = cp);
+      }
+    } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>?> _createAgentCheckpoint(String wsPath, int durationMs) async {
+    try {
+      final root = Directory(wsPath);
+      if (!root.existsSync()) return null;
+      final ts = DateTime.now().millisecondsSinceEpoch.toString();
+      final destDir = Directory(path.join(root.path, '.panda', 'checkpoints', ts));
+      await destDir.create(recursive: true);
+      const skips = {'.git', '.panda', 'node_modules', '__pycache__', '.gradle', 'build'};
+      final saved = <String>[];
+      final stack = <Directory>[root];
+      while (stack.isNotEmpty && saved.length < 400) {
+        final dir = stack.removeLast();
+        await for (final ent in dir.list(followLinks: false)) {
+          if (saved.length >= 400) break;
+          final name = path.basename(ent.path);
+          if (ent is Directory) { if (!skips.contains(name)) stack.add(ent); }
+          else if (ent is File) {
+            try { if (await ent.length() > 2 * 1024 * 1024) continue; } catch (_) { continue; }
+            final rel = path.relative(ent.path, from: root.path);
+            final target = File(path.join(destDir.path, rel));
+            try { await target.parent.create(recursive: true); await ent.copy(target.path); saved.add(rel); } catch (_) {}
+          }
+        }
+      }
+      await File(path.join(destDir.path, 'meta.json'))
+          .writeAsString(jsonEncode({'createdAt': DateTime.now().toIso8601String(), 'durationMs': durationMs, 'files': saved.length}), flush: true);
+      return {'ts': ts, 'durationMs': durationMs, 'path': destDir.path, 'filesCount': saved.length};
+    } catch (_) { return null; }
+  }
+
+  Future<void> _restoreAgentCheckpoint(Map<String, dynamic> cp) async {
+    final ws = _activeProjectDir() ?? _currentWorkspaceDir;
+    final srcPath = cp['path'] as String? ?? '';
+    if (ws == null || srcPath.isEmpty || !Directory(srcPath).existsSync()) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Checkpoint introuvable.')));
+      return;
+    }
+    var restored = 0;
+    try {
+      final stack = <Directory>[Directory(srcPath)];
+      while (stack.isNotEmpty) {
+        final d = stack.removeLast();
+        await for (final ent in d.list(followLinks: false)) {
+          if (ent is Directory) stack.add(ent);
+          else if (ent is File && path.basename(ent.path) != 'meta.json') {
+            final rel = path.relative(ent.path, from: Directory(srcPath).path);
+            final target = File(path.join(ws, rel));
+            try { await target.parent.create(recursive: true); await ent.copy(target.path); restored++; } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Checkpoint restauré ($restored fichiers)'), duration: const Duration(seconds: 3)));
   }
 
   /// Returns the asset path of the provider's icon given a provider runtime type.
@@ -7479,16 +7691,52 @@ class _SelectTypeState extends State<SelectType>
       } else {
         buf.writeln('## 🐼 Panda Agent');
         buf.writeln();
-        final think = msg['thinking'] as String? ?? '';
-        if (think.isNotEmpty) {
-          buf.writeln('<details><summary>Réflexion</summary>');
-          buf.writeln();
-          buf.writeln(think);
-          buf.writeln('</details>');
+        final blocksX = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
+        String cleanExport(String s) {
+          var t = s.replaceAll(RegExp(r'</?think[^>]*>', caseSensitive: false), '');
+          t = _extractThinkingFromText(t, '')['text'] ?? t;
+          return t.trim();
+        }
+        if (blocksX.isNotEmpty) {
+          for (final b in blocksX) {
+            final bt = b['type'] as String? ?? '';
+            if (bt == 'thinking') {
+              final th = ((b['thinking'] as String?) ?? '').trim();
+              if (th.isEmpty) continue;
+              buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('
+', '
+> '));
+              buf.writeln();
+            } else if (bt == 'toolCall') {
+              final nm = ((b['name'] ?? b['toolName']) ?? '').toString();
+              final res = (((b['result'] as String?) ?? '')).trim();
+              buf.writeln('- ⚙️ `' + nm + '`');
+              if (res.isNotEmpty) {
+                buf.writeln('  ```');
+                for (final line in res.split('
+').take(40)) buf.writeln('  ' + line);
+                buf.writeln('  ```');
+              }
+              buf.writeln();
+            } else if (bt == 'text') {
+              final t = cleanExport((b['text'] as String?) ?? '');
+              if (t.isEmpty) continue;
+              buf.writeln(t);
+              buf.writeln();
+            }
+          }
+        } else {
+          final th = (msg['thinking'] as String? ?? '').trim();
+          if (th.isNotEmpty) {
+            buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('
+', '
+> '));
+            buf.writeln();
+          }
+          final t = cleanExport(text);
+          if (t.isNotEmpty) buf.writeln(t);
           buf.writeln();
         }
-        if (text.isNotEmpty) buf.writeln(text);
-        buf.writeln();
       }
     }
 
@@ -8614,6 +8862,7 @@ class _SelectTypeState extends State<SelectType>
         'toolCalls': <Map<String, dynamic>>[],
         'blocks': <Map<String, dynamic>>[],
       });
+      _agentTurnStartedAt = DateTime.now();
       _agentInputCtrl.clear();
       _agentGenerating  = true;
       _agentPhase       = AgentPhase.streaming;
@@ -8754,11 +9003,13 @@ class _SelectTypeState extends State<SelectType>
                   _agentGenerating = false;
                   _agentMessages[agentIdx]['phase'] = 'done';
                   _sendAnimCtrl.stop();
+                  unawaited(_finalizeAgentTurn(agentIdx));
                 case AgentPhase.error:
                   _agentPhase = AgentPhase.error;
                   _agentCurrentTool = '';
                   _agentGenerating = false;
                   _sendAnimCtrl.stop();
+                  unawaited(_finalizeAgentTurn(agentIdx));
                   _agentMessages[agentIdx]['text'] =
                       _agentStreamBuf.isNotEmpty
                           ? _agentStreamBuf
@@ -8780,6 +9031,7 @@ class _SelectTypeState extends State<SelectType>
               _agentMessages[agentIdx]['text'] = 'Erreur : $e';
               _agentMessages[agentIdx]['phase'] = 'error';
             });
+            unawaited(_finalizeAgentTurn(agentIdx));
           },
           onDone: () {
             PandaLog.i('PandaAgent', 'Stream closed');
@@ -9965,13 +10217,6 @@ class _ReflectionBoxState extends State<_ReflectionBox> {
       width: double.infinity,
       margin: const EdgeInsets.only(top: 2, bottom: 6),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: widget.isDark
-            ? Colors.white.withValues(alpha: 0.04)
-            : Colors.black.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: widget.fg.withValues(alpha: 0.08)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -10021,13 +10266,19 @@ class _ReflectionBoxState extends State<_ReflectionBox> {
           if (showBody && content.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 4, 4),
-              child: Text(
-                content,
-                style: TextStyle(
+              child: _InlineMdText(
+                markdown: wrapLongTokensForDisplay(content),
+                baseStyle: TextStyle(
                   fontSize: 11,
                   height: 1.45,
                   fontStyle: FontStyle.italic,
                   color: widget.fg.withValues(alpha: 0.65),
+                ),
+                codeStyle: TextStyle(
+                  fontSize: 10.5,
+                  fontFamily: 'monospace',
+                  fontStyle: FontStyle.normal,
+                  color: widget.isDark ? Colors.amber[300] : Colors.blue[900],
                 ),
               ),
             ),
@@ -10057,6 +10308,7 @@ class _ToolCallBlock extends StatefulWidget {
   /// Quand false, le resultat n'est pas rendu inline : une carte Output
   /// separee (_ToolOutputBlock) s'en charge dans la timeline.
   final bool showResultInline;
+  final VoidCallback? onOpenInEditor;
 
   const _ToolCallBlock({
     required this.toolName,
@@ -10067,6 +10319,7 @@ class _ToolCallBlock extends StatefulWidget {
     required this.fg,
     required this.muted,
     this.onApprove,
+    this.onOpenInEditor,
     this.onDeny,
     this.onAutopilot,
     this.onAllowSession,
@@ -10105,6 +10358,13 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
     final first = args.values.first?.toString() ?? '';
     final preview = first.length > 40 ? '${first.substring(0, 40)}\u2026' : first;
     return preview;
+  }
+
+  static String _argsSummaryFull(Map<String, dynamic> args) {
+    if (args.isEmpty) return '';
+    final cmd = args['command']?.toString() ?? args['cmd']?.toString() ?? '';
+    if (cmd.isNotEmpty) return cmd;
+    return args.values.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).join('  ');
   }
 
   @override
@@ -10309,13 +10569,10 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       ),
                     )
                   else
-                    Icon(
-                      _iconFor(widget.toolName),
-                      size: 12,
-                      color: isError
-                          ? widget.fg.withValues(alpha: 0.85)
-                          : widget.fg.withValues(alpha: 0.5),
-                    ),
+                    agentToolIconWidget(widget.toolName, 12,
+                        isError
+                            ? widget.fg.withValues(alpha: 0.85)
+                            : widget.fg.withValues(alpha: 0.5)),
                   const SizedBox(width: 6),
                   // Tool name
                   Text(
@@ -10327,15 +10584,28 @@ class _ToolCallBlockState extends State<_ToolCallBlock> {
                       color: widget.fg,
                     ),
                   ),
-                  const SizedBox(width: 6),
-                  // Args preview
                   Expanded(
-                    child: Text(
-                      _argsSummary(widget.args),
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 10, color: widget.muted),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const ClampingScrollPhysics(),
+                      child: Text(
+                        _argsSummaryFull(widget.args),
+                        softWrap: false,
+                        maxLines: 1,
+                        style: TextStyle(fontSize: 10, color: widget.muted),
+                      ),
                     ),
                   ),
+                  if (widget.onOpenInEditor != null)
+                    InkWell(
+                      onTap: widget.onOpenInEditor,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: Icon(Icons.open_in_new,
+                            size: 13, color: widget.fg.withValues(alpha: 0.55)),
+                      ),
+                    ),
                   // Expand chevron (only when result available inline)
                   if (widget.result != null && widget.showResultInline)
                     Icon(
@@ -10408,14 +10678,10 @@ class _ToolOutputBlockState extends State<_ToolOutputBlock> {
       margin: const EdgeInsets.only(left: 14, top: 2, bottom: 6),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: widget.isDark
-            ? Colors.white.withValues(alpha: 0.03)
-            : Colors.black.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: isError
-              ? Colors.redAccent.withValues(alpha: 0.35)
-              : widget.fg.withValues(alpha: 0.08),
+        border: Border(
+          left: BorderSide(
+            color: isError ? Colors.redAccent.withValues(alpha: 0.5) : widget.fg.withValues(alpha: 0.12),
+          ),
         ),
       ),
       child: InkWell(
@@ -10454,7 +10720,7 @@ class _ToolOutputBlockState extends State<_ToolOutputBlock> {
             ),
             const SizedBox(height: 4),
             SelectableText(
-              _expanded ? output : preview,
+              _expanded ? wrapLongTokensForDisplay(output) : wrapLongTokensForDisplay(preview),
               style: TextStyle(
                 fontSize: 10,
                 fontFamily: 'monospace',
@@ -12143,6 +12409,212 @@ class AttachmentPreviewCard extends StatelessWidget {
         ext.isEmpty ? Broken.folder : Broken.document,
         size: 20, color: accent,
       ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Agent UI helpers
+// ═════════════════════════════════════════════════════════════════════════════
+
+String wrapLongTokensForDisplay(String input, {int threshold = 48}) {
+  if (input.isEmpty) return input;
+  final out = StringBuffer();
+  for (final token in input.split(' ')) {
+    if (token.length > threshold) {
+      for (var i = 0; i < token.length; i++) {
+        out.write(token[i]);
+        if (i > 0 && (i + 1) % threshold == 0 && i + 1 < token.length) out.write('\u200b');
+      }
+    } else {
+      out.write(token);
+    }
+    out.write(' ');
+  }
+  return out.toString().trimRight();
+}
+
+String formatAgentDuration(int ms) {
+  final s = ms ~/ 1000;
+  if (s < 60) return '${s}s';
+  final m = s ~/ 60;
+  final r = s % 60;
+  if (m < 60) return '${m}m ${r}s';
+  return '${m ~/ 60}h ${m % 60}m';
+}
+
+Widget agentToolIconWidget(String name, double size, Color color) {
+  final n = name.toLowerCase();
+  if (n.contains('shell') || n.contains('command') || n.contains('bash') || n.contains('cmd')) {
+    return Text('>_', style: TextStyle(fontSize: size + 1.5, height: 1.0, fontWeight: FontWeight.w800, fontFamily: 'monospace', color: color));
+  }
+  IconData icon;
+  if (n.contains('grep') || n.contains('search') || n.contains('glob') || n.contains('find')) icon = Broken.search_normal;
+  else if (n.contains('edit') || n.contains('write') || n.contains('save')) icon = Broken.edit;
+  else if (n.contains('read') || n.contains('open') || n.contains('view')) icon = Broken.document_text;
+  else if (n.contains('git')) icon = Broken.code_circle;
+  else if (n.contains('web') || n.contains('fetch') || n.contains('http') || n.contains('download')) icon = Broken.global;
+  else if (n.contains('list') || n.contains('dir')) icon = Broken.folder;
+  else if (n.contains('delete') || n.contains('remove')) icon = Broken.trash;
+  else icon = Broken.code_1;
+  return Icon(icon, size: size, color: color);
+}
+
+class _InlineMdText extends StatelessWidget {
+  final String markdown;
+  final TextStyle baseStyle;
+  final TextStyle codeStyle;
+  const _InlineMdText({required this.markdown, required this.baseStyle, required this.codeStyle});
+
+  @override
+  Widget build(BuildContext context) {
+    final spans = <InlineSpan>[];
+    final regex = RegExp(r'\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`]+)`');
+    var last = 0;
+    for (final m in regex.allMatches(markdown)) {
+      if (m.start > last) spans.add(TextSpan(text: markdown.substring(last, m.start)));
+      if (m.group(1) != null) spans.add(TextSpan(text: m.group(1), style: baseStyle.copyWith(fontWeight: FontWeight.w700)));
+      else if (m.group(2) != null) spans.add(TextSpan(text: m.group(2)));
+      else if (m.group(3) != null) spans.add(TextSpan(text: m.group(3), style: codeStyle));
+      last = m.end;
+    }
+    if (last < markdown.length) spans.add(TextSpan(text: markdown.substring(last)));
+    return SelectableText.rich(TextSpan(children: spans, style: baseStyle));
+  }
+}
+
+class _AgentActionStrip extends StatefulWidget {
+  final List<Map<String, dynamic>> events;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final WidgetBuilder buildExpanded;
+  const _AgentActionStrip({required this.events, required this.isDark, required this.fg, required this.muted, required this.buildExpanded});
+  @override
+  State<_AgentActionStrip> createState() => _AgentActionStripState();
+}
+
+class _AgentActionStripState extends State<_AgentActionStrip> {
+  bool _expanded = false;
+  static const int _maxChips = 6;
+
+  @override
+  Widget build(BuildContext context) {
+    final events = widget.events;
+    var hadError = false;
+    for (final e in events) {
+      final st = (e['status'] as String?) ?? '';
+      final res = ((e['result'] as String?) ?? '').trim();
+      if (st == 'error' || res.startsWith('Error') || res.startsWith('Blocage')) { hadError = true; break; }
+    }
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+      InkWell(
+        onTap: () => setState(() => _expanded = !_expanded),
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+          child: Row(children: [
+            for (var ci = 0; ci < events.length && ci < _maxChips; ci++)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Container(
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(color: widget.fg.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(6)),
+                  child: Center(
+                    child: (events[ci]['type'] as String? ?? '') == 'thinking'
+                        ? Icon(Icons.psychology, size: 13, color: widget.fg.withValues(alpha: 0.55))
+                        : agentToolIconWidget(((events[ci]['name'] ?? events[ci]['toolName']) ?? '').toString(), 11, widget.fg.withValues(alpha: 0.55)),
+                  ),
+                ),
+              ),
+            if (events.length > _maxChips)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Container(
+                  width: 24, height: 24,
+                  decoration: BoxDecoration(color: widget.fg.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(6)),
+                  child: Center(child: Text('\u00b7\u00b7\u00b7', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: widget.muted))),
+                ),
+              ),
+            const SizedBox(width: 4),
+            Text('${events.length} action${events.length > 1 ? 's' : ''}', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: hadError ? Colors.redAccent.withValues(alpha: 0.9) : widget.muted)),
+            const Spacer(),
+            Icon(_expanded ? Broken.arrow_up_2 : Broken.arrow_down_2, size: 12, color: widget.muted),
+          ]),
+        ),
+      ),
+      if (_expanded) ...[
+        widget.buildExpanded(context),
+        InkWell(
+          onTap: () => setState(() => _expanded = false),
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Row(children: [Icon(Broken.arrow_up_2, size: 12, color: widget.muted), const SizedBox(width: 4), Text('Show less', style: TextStyle(fontSize: 10.5, color: widget.muted))]),
+          ),
+        ),
+      ],
+    ]);
+  }
+}
+
+class _AgentCheckpointCard extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final bool isDark;
+  final Color fg;
+  final Color muted;
+  final VoidCallback onRestore;
+  final VoidCallback onOpenGit;
+  const _AgentCheckpointCard({required this.data, required this.isDark, required this.fg, required this.muted, required this.onRestore, required this.onOpenGit});
+  @override
+  State<_AgentCheckpointCard> createState() => _AgentCheckpointCardState();
+}
+
+class _AgentCheckpointCardState extends State<_AgentCheckpointCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final durMs = (widget.data['durationMs'] as num?)?.toInt() ?? 0;
+    final files = (widget.data['filesCount'] as num?)?.toInt() ?? 0;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 2),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(6),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+            child: Row(children: [
+              Icon(Icons.speed, size: 13, color: widget.muted),
+              const SizedBox(width: 6),
+              Text('Travaill\u00e9 pendant ${formatAgentDuration(durMs)}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: widget.fg.withValues(alpha: 0.7))),
+              if (files > 0) ...[const SizedBox(width: 8), Text('$files fichier${files > 1 ? 's' : ''}', style: TextStyle(fontSize: 10, color: widget.muted))],
+              const Spacer(),
+              Icon(_expanded ? Broken.arrow_up_2 : Broken.arrow_down_2, size: 12, color: widget.muted),
+            ]),
+          ),
+        ),
+        if (_expanded)
+          Container(
+            margin: const EdgeInsets.only(left: 2, top: 4),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(border: Border.all(color: widget.fg.withValues(alpha: 0.1)), borderRadius: BorderRadius.circular(6)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Checkpoint local', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: widget.muted)),
+              const SizedBox(height: 6),
+              Text("L'agent a modifi\u00e9 $files fichier${files > 1 ? 's' : ''}. Un snapshot a \u00e9t\u00e9 cr\u00e9\u00e9 pour restaurer.", style: TextStyle(fontSize: 10.5, color: widget.fg.withValues(alpha: 0.6))),
+              const SizedBox(height: 8),
+              Row(children: [
+                TextButton.icon(onPressed: widget.onRestore, icon: Icon(Icons.restore, size: 13, color: widget.fg), label: Text('Restaurer', style: TextStyle(fontSize: 11, color: widget.fg))),
+                const SizedBox(width: 8),
+                TextButton.icon(onPressed: widget.onOpenGit, icon: Icon(Broken.programming_arrows, size: 13, color: widget.fg), label: Text('Git panel', style: TextStyle(fontSize: 11, color: widget.fg))),
+              ]),
+            ]),
+          ),
+      ]),
     );
   }
 }
