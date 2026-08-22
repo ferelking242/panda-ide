@@ -57,6 +57,9 @@ List<_QuickLocation> _quickLocations() => [
       _QuickLocation(label: 'Binaries', path: binDir, icon: Icons.terminal, color: const Color(0xFF795548)),
       _QuickLocation(label: 'Libraries', path: libDir, icon: Icons.memory, color: const Color(0xFF607D8B)),
       _QuickLocation(label: 'Certificates', path: certDir, icon: Icons.security, color: const Color(0xFF455A64)),
+      _QuickLocation(label: 'Models', path: modelsDir, icon: Icons.smart_toy_rounded, color: const Color(0xFF009688)),
+      _QuickLocation(label: 'Downloads', path: downloadsCacheDir, icon: Icons.download_rounded, color: const Color(0xFF3F51B5)),
+      _QuickLocation(label: 'Cache', path: pandaTempCacheDir, icon: Icons.cleaning_services, color: const Color(0xFF795548)),
       _QuickLocation(label: 'Temp', path: tempDir, icon: Icons.timer, color: const Color(0xFFFF5722)),
       _QuickLocation(label: 'Home', path: homeDir, icon: Icons.home, color: const Color(0xFF8BC34A)),
       // ── App Root ─────────────────────────────────────────
