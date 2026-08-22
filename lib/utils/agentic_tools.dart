@@ -1062,6 +1062,52 @@ class AgenticTools {
     };
   }
 
+  /// Launches [cmd] with [args] and reads stdout+stderr CONCURRENTLY
+  /// to avoid the classic deadlock when proot writes to both streams
+  /// simultaneously.  Process.run reads them sequentially, so if stderr
+  /// fills the 64 KB pipe buffer the process blocks → timeout.
+  Future<ProcessResult> _runProcessSafe(
+    String cmd,
+    List<String> args, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    required Duration timeout,
+  }) async {
+    final proc = await Process.start(
+      cmd,
+      args,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      mode: ProcessStartMode.inheritStdio,
+    );
+
+    // Read both streams concurrently — this is the key fix.
+    final stdoutF = proc.stdout
+        .fold<List<int>>([], (buf, chunk) => buf..addAll(chunk));
+    final stderrF = proc.stderr
+        .fold<List<int>>([], (buf, chunk) => buf..addAll(chunk));
+
+    final results = await Future.wait([
+      proc.exitCode,
+      stdoutF,
+      stderrF,
+    ]).timeout(timeout, onTimeout: () {
+      proc.kill(ProcessSignal.sigkill);
+      throw TimeoutException('Command timed out after ${timeout.inSeconds}s');
+    });
+
+    final exitCode = results[0] as int;
+    final stdoutBytes = results[1] as List<int>;
+    final stderrBytes = results[2] as List<int>;
+
+    return ProcessResult(
+      exitCode,
+      exitCode,
+      utf8.decode(stdoutBytes, allowMalformed: true),
+      utf8.decode(stderrBytes, allowMalformed: true),
+    );
+  }
+
   /// Exécute [script] dans l'environnement Alpine de l'agent en utilisant
   /// EXACTEMENT la même recette proot que le terminal interactif (binaire
   /// localisé via AlpineSetup, loader embarqué, PROOT_TMP_DIR, binds
@@ -1138,27 +1184,23 @@ class AgenticTools {
         env['PATH'] =
             '${env['PATH'] ?? ''}:$binDir:$libDir:$runtimesDir/node/bin';
 
-        return Process.run(
+        return _runProcessSafe(
           prootBin,
           [...prootArgs, '-w', '/root', '/bin/sh', '-c', 'cd "$guestCwd" 2>/dev/null; $script'],
           environment: env,
           workingDirectory: appDir,
-        ).timeout(
-          timeout,
-          onTimeout: () => throw TimeoutException('$timeoutLabel exceeded ${timeout.inSeconds} s timeout'),
+          timeout: timeout,
         );
       }
     }
 
     // Rootfs indisponible : repli sur le shell hôte Android.
-    return Process.run(
+    return _runProcessSafe(
       '/system/bin/sh',
       ['-c', script],
       environment: envs,
       workingDirectory: workspacePath.trim().isNotEmpty ? workspacePath : appDir,
-    ).timeout(
-      timeout,
-      onTimeout: () => throw TimeoutException('$timeoutLabel exceeded ${timeout.inSeconds} s timeout'),
+      timeout: timeout,
     );
   }
 
@@ -1173,11 +1215,12 @@ class AgenticTools {
     // git absent de l'invité (exit 127) → repli binaire git hôte.
     final out = '${guest.stdout}${guest.stderr}';
     if (guest.exitCode == 127 || out.contains('not found')) {
-      return Process.run(
+      return _runProcessSafe(
         'git',
         args,
         environment: env,
         workingDirectory: workspacePath.trim().isNotEmpty ? workspacePath : appDir,
+        timeout: const Duration(seconds: 120),
       );
     }
     return guest;
