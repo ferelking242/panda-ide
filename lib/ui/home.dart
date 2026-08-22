@@ -9101,7 +9101,7 @@ class _SelectTypeState extends State<SelectType>
                   _activityCtrl.startTool(
                     toolId: '${chunk.toolName}_${DateTime.now().microsecondsSinceEpoch}',
                     toolName: chunk.toolName ?? '',
-                    toolArgs: chunk.toolArgs ?? {},
+                    args: chunk.toolArgs ?? {},
                   );
                   _agentMessages[agentIdx]['toolName'] = _agentCurrentTool;
                   final runningCalls = List<Map<String,dynamic>>.from(
