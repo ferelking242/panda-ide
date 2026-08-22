@@ -47,6 +47,7 @@ function _stubDisposable(namespace, method) {
 }
 
 let _statusBarItemCounter = 0;
+let _decoCnt = 0;
 
 // ── vscode.window ─────────────────────────────────────────────────────────
 // Phase 2 : implémentation complète
@@ -126,18 +127,18 @@ const window = {
   onDidChangeWindowState:           _makeEditorEvent('onDidChangeWindowState'),
 
   // Decorations (Phase 2)
-  createTextEditorDecorationType: _stubDisposable('window', 'createTextEditorDecorationType'),
+  createTextEditorDecorationType:(o)=>{const id=`deco-${_decoCnt++}`;return{id,dispose:()=>ipc.callFlutter('vscode.window.deco.dispose',[id])};},
 
   // Webview Panels (Phase 9) — implémentation complète via webview.js
   createWebviewPanel: (viewType, title, showOptions, options) =>
     webview.createWebviewPanel(viewType, title, showOptions, options),
   registerWebviewPanelSerializer: (viewType, serializer) =>
     webview.registerWebviewPanelSerializer(viewType, serializer),
-  createWebviewView: _stub('window', 'createWebviewView'),
+  createWebviewView: (vt,t,so,opts)=>{const vid=`wvv-${vt}-${Date.now()}`;ipc.callFlutter('vscode.window.webviewView.create',[vid,vt,t,so,opts]);return{webview:{html:'',options:opts||{},cspSource:'',asWebviewUri:(u)=>u,postMessage:(m)=>ipc.callFlutter('vscode.window.webviewView.postMessage',[vid,m]),onDidReceiveMessage:new types.EventEmitter().event},visible:true,onDidDispose:new types.EventEmitter().event,onDidChangeVisibility:new types.EventEmitter().event,show:(p)=>ipc.callFlutter('vscode.window.webviewView.show',[vid,!!p]),dispose:()=>ipc.callFlutter('vscode.window.webviewView.dispose',[vid])};},
 
   // Tree views (Phase 8 — stub, TreeDataProvider is pull-model via commands)
-  createTreeView: _stub('window', 'createTreeView'),
-  registerTreeDataProvider: _stubDisposable('window', 'registerTreeDataProvider'),
+  createTreeView: (tid, opts) => { const vid=`tree-${tid}-${Date.now()}`; ipc.callFlutter('vscode.window.treeView.create',[vid,tid,opts]); return {onDidChangeSelection:new types.EventEmitter().event,onDidChangeVisibility:new types.EventEmitter().event,onDidExpandElement:new types.EventEmitter().event,onDidCollapseElement:new types.EventEmitter().event,reveal:(el,o)=>ipc.callFlutter('vscode.window.treeView.reveal',[vid,el,o]),dispose:()=>ipc.callFlutter('vscode.window.treeView.dispose',[vid])}; },
+  registerTreeDataProvider: (tid, prov) => { const pid=`tdp-${tid}-${Date.now()}`; ipc.onCall(`${pid}.getChildren`,async(e)=>{try{return await prov.getChildren(e)??[]}catch(x){return[]}}); ipc.onCall(`${pid}.getParent`,async(e)=>{try{return await prov.getParent(e)??null}catch(x){return null}}); ipc.onCall(`${pid}.getTreeItem`,async(e)=>{try{return await prov.getTreeItem(e)}catch(x){return null}}); ipc.callFlutter('vscode.window.treeDataProvider.register',[pid,tid]); return new types.Disposable(()=>{ipc.callFlutter('vscode.window.treeDataProvider.unregister',[pid])}); },
 
   // Terminal
   createTerminal: (options = {}) => {
@@ -222,8 +223,8 @@ const workspace = {
 
   textDocuments: [],
 
-  registerTextDocumentContentProvider: _stubDisposable('workspace', 'registerTextDocumentContentProvider'),
-  registerFileSystemProvider: _stubDisposable('workspace', 'registerFileSystemProvider'),
+  registerTextDocumentContentProvider:(s,p)=>{const pid=`cdp-${s}-${Date.now()}`;ipc.onCall(`${pid}.provide`,async(u)=>{try{return await p.provideTextDocumentContent(u)}catch(e){return''}});ipc.callFlutter('vscode.workspace.contentProvider.register',[pid,s]);return new types.Disposable(()=>{ipc.callFlutter('vscode.workspace.contentProvider.unregister',[pid])});},
+  registerFileSystemProvider:(s,p,o)=>{const pid=`fsp-${s}-${Date.now()}`;for(const m of['stat','readDirectory','readFile','writeFile','createDirectory','delete','rename','copy']){ipc.onCall(`${pid}.${m}`,async(...a)=>{try{return await p[m](...a)}catch(e){return null}});}ipc.callFlutter('vscode.workspace.fsProvider.register',[pid,s,o]);return new types.Disposable(()=>{ipc.callFlutter('vscode.workspace.fsProvider.unregister',[pid])});},
 };
 
 // ── vscode.languages ──────────────────────────────────────────────────────
@@ -459,7 +460,7 @@ const env = {
 
   asExternalUri: (uri) => Promise.resolve(uri),
 
-  createTelemetryLogger: _stub('env', 'createTelemetryLogger'),
+  createTelemetryLogger:()=>({sendUsageData:()=>{},sendErrorData:()=>{},logUsage:()=>{},logError:()=>{},logWarning:()=>{},logInformation:()=>{},dispose:()=>{}}),
 };
 
 // ── vscode.scm ────────────────────────────────────────────────────────────
@@ -482,7 +483,7 @@ const debug = debugImpl;
 const authentication = {
   getSession: (providerId, scopes, options) =>
     ipc.callFlutter('vscode.authentication.getSession', [providerId, scopes, options]),
-  registerAuthenticationProvider: _stubDisposable('authentication', 'registerAuthenticationProvider'),
+  registerAuthenticationProvider:(id,p,o)=>{const pid=`auth-${id}-${Date.now()}`;for(const m of['getSessions','createSession','removeSession']){ipc.onCall(`${pid}.${m}`,async(...a)=>{try{return await p[m](...a)}catch(e){throw e}});}ipc.callFlutter('vscode.authentication.registerProvider',[pid,id,o]);return new types.Disposable(()=>{ipc.callFlutter('vscode.authentication.unregisterProvider',[pid])});},
   onDidChangeSessions: _makeEditorEvent('onDidChangeAuthSessions'),
 };
 
