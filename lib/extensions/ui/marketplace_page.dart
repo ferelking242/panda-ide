@@ -1,65 +1,59 @@
-/// Marketplace Open VSX — redesigned.
+/// Marketplace — Play Store pixel-perfect redesign.
 ///
-/// Fixes:
-///  1. Full dark-theme compliance — no hardcoded colours, uses ColorScheme.
-///  2. Filter button in header toggles category chips; larger icons; header
-///     colour = scaffold bg (consistent); top pill nav (no bottom dock);
-///     pills compact/stick to header on scroll.
-///  3. Null-check operator crash on install → graceful error path.
-///  4. Extension detail = single VSCode-style scrollable page, opens inside
-///     the panel (not rootNavigator / fullscreen).
-///  5. Bottom dock removed; Extensions / Runtimes / SDK / Panda Ext. / Installed
-///     are top pills; downloads inline with progress (no separate page).
-///  6. Panda Extensions pill replaces the separate Downloads page.
-///  7. Download buttons trigger inline download+progress via PackageDownloader.
+/// Sections:
+///   - Home: Featured banner, categories grid, trending, recommended
+///   - Search: Full-text search with category chips
+///   - Installed: Manage installed extensions
+///   - Detail: VS Code-style extension detail page
 library;
 
 import 'dart:async';
 import 'dart:io' as io;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:percent_indicator/linear_percent_indicator.dart';
+import 'package:percent_indicator/percent_indicator.dart';
 
 import '../models/marketplace_extension.dart';
 import '../open_vsx_client.dart';
 import '../extension_registry.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
-import '../../ui/adb_setup_page.dart';
 import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../utils/constants.dart';
 import '../../utils/languages.dart' as lang;
-import '../../services/package_downloader.dart';
 import '../../local_models/ui/local_models_page.dart';
 
-// ── Categories ─────────────────────────────────────────────────────────────────
-const _kCategories = [
-  'All',
-  'Programming Languages',
-  'Snippets',
-  'Linters',
-  'Themes',
-  'Debuggers',
-  'Formatters',
-  'Keymaps',
-  'Other',
+// ═══════════════════════════════════════════════════════════════
+// Categories (Play Store style)
+// ═══════════════════════════════════════════════════════════════
+
+class _Category {
+  final String name;
+  final IconData icon;
+  final Color color;
+  const _Category(this.name, this.icon, this.color);
+}
+
+const _categories = [
+  _Category('Themes', Icons.palette_rounded, Color(0xFF9C27B0)),
+  _Category('Languages', Icons.code_rounded, Color(0xFF2196F3)),
+  _Category('Linters', Icons.check_circle_outline, Color(0xFF4CAF50)),
+  _Category('Formatters', Icons.format_align_left, Color(0xFFFF9800)),
+  _Category('Debuggers', Icons.bug_report_rounded, Color(0xFFF44336)),
+  _Category('Snippets', Icons.shortcut_rounded, Color(0xFF00BCD4)),
+  _Category('Keymaps', Icons.keyboard_rounded, Color(0xFF607D8B)),
+  _Category('AI Tools', Icons.smart_toy_rounded, Color(0xFFE91E63)),
 ];
 
-const _kSortOptions = {
-  'Relevance': 'relevance',
-  'Downloads': 'downloadCount',
-  'Rating': 'rating',
-  'Recent': 'timestamp',
-};
+// ═══════════════════════════════════════════════════════════════
+// MarketplacePage — main entry
+// ═══════════════════════════════════════════════════════════════
 
-// ── Section enum ───────────────────────────────────────────────────────────────
-enum _Section { extensions, pandaExt, sdks, localModels, installed }
+enum _Tab { home, search, installed }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// MarketplacePage
-// ══════════════════════════════════════════════════════════════════════════════
 class MarketplacePage extends StatefulWidget {
   final bool embedded;
   const MarketplacePage({super.key, this.embedded = false});
@@ -69,1129 +63,603 @@ class MarketplacePage extends StatefulWidget {
 }
 
 class _MarketplacePageState extends State<MarketplacePage> {
-  final _client     = OpenVsxClient();
+  final _client = OpenVsxClient();
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
 
-  _Section _section = _Section.extensions;
-
+  _Tab _currentTab = _Tab.home;
   List<MarketplaceExtension> _results = [];
-  bool   _loading      = false;
+  List<MarketplaceExtension> _featured = [];
+  bool _loading = false;
   String? _error;
-  int    _offset       = 0;
-  int    _totalSize    = 0;
-  bool   _loadingMore  = false;
-
+  int _offset = 0;
+  int _totalSize = 0;
+  bool _loadingMore = false;
   String _selectedCategory = 'All';
   String _sortBy = 'relevance';
-
   final Map<String, _InstallState> _installStates = {};
-
   Timer? _debounce;
 
-  // Scroll-driven collapse
-  bool   _searchCollapsed  = false;
-  bool   _pillsCompact     = false;   // pills shrink on scroll
-  bool   _filtersVisible   = false;   // filter chip panel toggle
-  double _lastScroll       = 0;
-
-  // Detail overlay (opens in-panel instead of rootNavigator push)
+  // Detail overlay
   MarketplaceExtension? _detailExt;
 
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(_onSearchChanged);
-    _scrollCtrl.addListener(_onScroll);
     _loadFeatured();
+    _scrollCtrl.addListener(_onScroll);
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
+    _debounce?.cancel();
     _client.dispose();
     super.dispose();
   }
 
-  // ── Scroll ──────────────────────────────────────────────────────────────────
-
   void _onScroll() {
-    final pos          = _scrollCtrl.position.pixels;
-    final scrollingDown = pos > _lastScroll + 6;
-    final scrollingUp   = pos < _lastScroll - 6;
-
-    if (scrollingDown) {
-      if (!_searchCollapsed) setState(() => _searchCollapsed = true);
-      if (!_pillsCompact)    setState(() => _pillsCompact = true);
-      if (_filtersVisible)   setState(() => _filtersVisible = false);
-    } else if (scrollingUp) {
-      if (_searchCollapsed) setState(() => _searchCollapsed = false);
-      if (_pillsCompact)    setState(() => _pillsCompact = false);
-    }
-    _lastScroll = pos;
-
-    // Infinite scroll
-    if (!_loadingMore && !_loading && _offset < _totalSize) {
-      if (pos >= _scrollCtrl.position.maxScrollExtent - 200) {
-        _offset = _results.length;
-        _search(reset: false);
-      }
+    if (_scrollCtrl.position.pixels >= _scrollCtrl.position.maxScrollExtent - 200) {
+      _loadMore();
     }
   }
 
-  // ── Data ────────────────────────────────────────────────────────────────────
+  // ── Data loading ──────────────────────────────────────────────────────
 
   Future<void> _loadFeatured() async {
-    setState(() { _loading = true; _error = null; _offset = 0; });
+    setState(() { _loading = true; _error = null; });
     try {
-      final r = await _client.featured(size: 20);
+      final result = await _client.featured(size: 20);
       if (!mounted) return;
-      setState(() { _results = r.extensions; _totalSize = r.totalSize; _loading = false; });
+      setState(() {
+        _featured = result.extensions;
+        _totalSize = result.totalSize;
+        _loading = false;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
-  Future<void> _search({bool reset = true}) async {
-    if (reset) {
-      setState(() { _loading = true; _error = null; _offset = 0; _results = []; });
-    } else {
-      setState(() => _loadingMore = true);
+  Future<void> _search(String query) async {
+    if (query.trim().isEmpty) {
+      _loadFeatured();
+      return;
     }
+    setState(() { _loading = true; _error = null; _offset = 0; });
     try {
-      final category = _selectedCategory == 'All' ? null : _selectedCategory;
-      final r = await _client.search(
-        query: _searchCtrl.text.trim(),
-        offset: _offset,
+      final result = await _client.search(
+        query: query.trim(),
+        offset: 0,
         size: 20,
-        category: category,
+        category: _selectedCategory == 'All' ? null : _selectedCategory,
         sortBy: _sortBy,
       );
       if (!mounted) return;
       setState(() {
-        _results  = reset ? r.extensions : [..._results, ...r.extensions];
-        _totalSize = r.totalSize;
-        _offset   += r.extensions.length;
-        _loading     = false;
+        _results = result.extensions;
+        _totalSize = result.totalSize;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() { _error = e.toString(); _loading = false; });
+    }
+  }
+
+  Future<void> _loadMore() async {
+    if (_loadingMore || _results.isEmpty) return;
+    setState(() { _loadingMore = true; });
+    try {
+      _offset += 20;
+      final result = await _client.search(
+        query: _searchCtrl.text.trim(),
+        offset: _offset,
+        size: 20,
+        category: _selectedCategory == 'All' ? null : _selectedCategory,
+        sortBy: _sortBy,
+      );
+      if (!mounted) return;
+      setState(() {
+        _results.addAll(result.extensions);
         _loadingMore = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _error = e.toString(); _loading = false; _loadingMore = false; });
+      setState(() { _loadingMore = false; });
     }
   }
 
-  void _onSearchChanged() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
-      _searchCtrl.text.trim().isEmpty ? _loadFeatured() : _search();
-    });
-  }
-
-  // ── Install ──────────────────────────────────────────────────────────────────
+  // ── Install ───────────────────────────────────────────────────────────
 
   Future<void> _install(MarketplaceExtension ext) async {
     setState(() => _installStates[ext.id] = _InstallState.installing);
     try {
-      final installer = VsixInstaller(onProgress: (_, __) {});
-      final result = await installer.installFromUrl(ext.buildDownloadUrl());
+      final url = await _client.getDownloadUrl(ext.namespace, ext.name, ext.version);
+      final vsixDir = '${extensionDir}/${ext.namespace}.${ext.name}';
+      await VsixInstaller.installFromUrl(url, vsixDir);
+      await ExtensionRegistry.instance.load();
       if (!mounted) return;
-      switch (result) {
-        case InstallSuccess():
-          setState(() => _installStates[ext.id] = _InstallState.installed);
-          _showSnack('${ext.displayName} installed ✓');
-        case InstallFailure(:final reason):
-          setState(() => _installStates[ext.id] = _InstallState.error);
-          _showSnack('Error: $reason', isError: true);
-      }
+      setState(() => _installStates[ext.id] = _InstallState.installed);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${ext.displayName} installed')),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _installStates[ext.id] = _InstallState.error);
-      _showSnack('Error: $e', isError: true);
-    }
-  }
-
-  void _showSnack(String msg, {bool isError = false}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
-      behavior: SnackBarBehavior.floating,
-    ));
-  }
-
-  // ── Detail ───────────────────────────────────────────────────────────────────
-
-  void _openExtensionDetail(MarketplaceExtension ext) {
-    setState(() => _detailExt = ext);
-  }
-
-  void _closeDetail() => setState(() => _detailExt = null);
-
-  // ── Build ────────────────────────────────────────────────────────────────────
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-
-    Widget body = Column(
-      children: [
-        // ── Header ──────────────────────────────────────────────────────────
-        _MarketplaceHeader(
-          section:         _section,
-          searchCtrl:      _searchCtrl,
-          collapsed:       _searchCollapsed,
-          filtersVisible:  _filtersVisible,
-          embedded:        widget.embedded,
-          sortBy:          _sortBy,
-          onSortChanged:   (v) {
-            setState(() => _sortBy = v);
-            _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
-          },
-          onSearchExpand:  () => setState(() => _searchCollapsed = false),
-          onFilterToggle:  () => setState(() => _filtersVisible = !_filtersVisible),
-        ),
-
-        // ── Top pill nav (replaces bottom dock) ──────────────────────────────
-        _TopPillNav(
-          current:  _section,
-          compact:  _pillsCompact,
-          onTap:    (s) => setState(() {
-            _section        = s;
-            _searchCollapsed = false;
-            _pillsCompact   = false;
-          }),
-        ),
-
-        // ── Category filter chips (toggled by filter button) ─────────────────
-        if (_section == _Section.extensions)
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 200),
-            crossFadeState: _filtersVisible
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            firstChild: SizedBox(
-              height: 44,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                itemCount: _kCategories.length,
-                itemBuilder: (_, i) {
-                  final cat = _kCategories[i];
-                  final sel = cat == _selectedCategory;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: FilterChip(
-                      label: Text(cat, style: const TextStyle(fontSize: 12)),
-                      selected: sel,
-                      selectedColor: cs.primary.withValues(alpha: 0.18),
-                      checkmarkColor: cs.primary,
-                      side: BorderSide(color: sel ? cs.primary : cs.outlineVariant),
-                      showCheckmark: false,
-                      onSelected: (_) {
-                        setState(() => _selectedCategory = cat);
-                        _searchCtrl.text.isEmpty ? _loadFeatured() : _search();
-                      },
-                    ),
-                  );
-                },
-              ),
-            ),
-            secondChild: const SizedBox(height: 2),
-          ),
-
-        // ── Body ─────────────────────────────────────────────────────────────
-        Expanded(child: _buildSectionBody(theme, cs)),
-      ],
-    );
-
-    // Detail overlay — slides in-panel over the list
-    if (_detailExt != null) {
-      body = Stack(
-        children: [
-          body,
-          _ExtensionDetailOverlay(
-            ext:          _detailExt!,
-            client:       _client,
-            installState: _installStates[_detailExt!.id] ?? _InstallState.notInstalled,
-            onInstall:    () => _install(_detailExt!),
-            onClose:      _closeDetail,
-          ),
-        ],
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Install failed: $e'), backgroundColor: Colors.red),
       );
     }
-
-    if (widget.embedded) return body;
-    return Scaffold(body: body);
   }
 
-  Widget _buildSectionBody(ThemeData theme, ColorScheme cs) {
-    switch (_section) {
-      case _Section.extensions:
-        if (_loading) return const Center(child: CircularProgressIndicator());
-        if (_error != null) return _ErrorView(error: _error!, onRetry: _loadFeatured);
-        if (_results.isEmpty) return Center(
-          child: Text('No extensions found',
-              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5))),
-        );
-        return ListView.builder(
-          controller: _scrollCtrl,
-          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-          itemCount: _results.length + (_loadingMore ? 1 : 0),
-          itemBuilder: (_, i) {
-            if (i == _results.length) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            final ext = _results[i];
-            return _ExtensionCard(
-              ext:          ext,
-              installState: _installStates[ext.id] ?? _InstallState.notInstalled,
-              onInstall:    () => _install(ext),
-              onTap:        () => _openExtensionDetail(ext),
-            );
-          },
-        );
-
-      case _Section.sdks:
-        return _RuntimesSection(scrollCtrl: _scrollCtrl, showSdks: true);
-
-      case _Section.pandaExt:
-        return _PandaExtensionsSection(scrollCtrl: _scrollCtrl);
-
-      case _Section.localModels:
-        return LocalModelsPage(embedded: true);
-
-      case _Section.installed:
-        return _InstalledSection(
-          onTap: (ext) => _openExtensionDetail(ext),
-          client: _client,
-        );
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Animated header
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _MarketplaceHeader extends StatelessWidget {
-  final _Section section;
-  final TextEditingController searchCtrl;
-  final bool collapsed;
-  final bool filtersVisible;
-  final bool embedded;
-  final String sortBy;
-  final ValueChanged<String> onSortChanged;
-  final VoidCallback onSearchExpand;
-  final VoidCallback onFilterToggle;
-
-  const _MarketplaceHeader({
-    required this.section,
-    required this.searchCtrl,
-    required this.collapsed,
-    required this.filtersVisible,
-    required this.embedded,
-    required this.sortBy,
-    required this.onSortChanged,
-    required this.onSearchExpand,
-    required this.onFilterToggle,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme    = Theme.of(context);
-    final cs       = theme.colorScheme;
-    // Use scaffold background so header matches the rest of the app
-    final headerBg = theme.scaffoldBackgroundColor;
-    final onHeader = cs.onSurface;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeInOut,
-      decoration: BoxDecoration(
-        color: headerBg,
-        border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4))),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        12,
-        embedded ? 6 : MediaQuery.of(context).padding.top + 6,
-        8,
-        8,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // ── Top bar ─────────────────────────────────────────────────────
-          Row(
-            children: [
-              Icon(Icons.storefront_rounded, size: 22, color: cs.primary),
-              const SizedBox(width: 8),
-              Text(
-                'Marketplace',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: onHeader,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              const Spacer(),
-
-              // Filter button (toggles category chips) — extensions only
-              if (section == _Section.extensions) ...[
-                IconButton(
-                  icon: Icon(
-                    filtersVisible ? Icons.filter_list_off : Icons.filter_list_rounded,
-                    size: 22,
-                    color: filtersVisible
-                        ? cs.primary
-                        : onHeader.withValues(alpha: 0.65),
-                  ),
-                  tooltip: filtersVisible ? 'Hide filters' : 'Show filters',
-                  onPressed: onFilterToggle,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
-                // Sort
-                _SortButton(sortBy: sortBy, onSelected: onSortChanged),
-              ],
-
-              // Search restore (when collapsed)
-              if (collapsed && section == _Section.extensions)
-                IconButton(
-                  icon: Icon(Icons.search, size: 22, color: onHeader.withValues(alpha: 0.65)),
-                  tooltip: 'Search',
-                  onPressed: onSearchExpand,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                ),
-            ],
-          ),
-
-          // ── Search bar (Extensions only, collapses on scroll) ────────────
-          if (section == _Section.extensions)
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 200),
-              crossFadeState: collapsed
-                  ? CrossFadeState.showSecond
-                  : CrossFadeState.showFirst,
-              firstChild: Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TextField(
-                  controller: searchCtrl,
-                  style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
-                  decoration: InputDecoration(
-                    hintText: 'Search extensions…',
-                    hintStyle: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.4)),
-                    prefixIcon: Icon(Icons.search, size: 20, color: cs.onSurface.withValues(alpha: 0.5)),
-                    suffixIcon: searchCtrl.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close, size: 16),
-                            onPressed: () => searchCtrl.clear(),
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: cs.surfaceContainerHighest,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: cs.primary, width: 1.5),
-                    ),
-                  ),
-                ),
-              ),
-              secondChild: const SizedBox(height: 2),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SortButton extends StatelessWidget {
-  final String sortBy;
-  final ValueChanged<String> onSelected;
-  const _SortButton({required this.sortBy, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return PopupMenuButton<String>(
-      icon: Icon(Icons.sort_rounded, size: 22, color: cs.onSurface.withValues(alpha: 0.65)),
-      tooltip: 'Sort',
-      onSelected: onSelected,
-      itemBuilder: (_) => _kSortOptions.entries.map((e) => PopupMenuItem(
-        value: e.value,
-        child: Row(children: [
-          if (sortBy == e.value)
-            Icon(Icons.check, size: 14, color: cs.primary),
-          const SizedBox(width: 8),
-          Text(e.key),
-        ]),
-      )).toList(),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Top pill navigation (replaces bottom dock)
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _TopPillNav extends StatelessWidget {
-  final _Section current;
-  final bool compact;
-  final ValueChanged<_Section> onTap;
-  const _TopPillNav({required this.current, required this.compact, required this.onTap});
-
-  static const _items = [
-    _NavItem(_Section.extensions, Icons.extension_outlined, Icons.extension,         'Extensions VS Code'),
-    _NavItem(_Section.pandaExt,   Icons.extension_rounded,  Icons.extension_rounded,  'Extensions Panda'),
-    _NavItem(_Section.sdks,       Icons.layers_outlined,    Icons.layers_rounded,    'Panda Runtime SDK'),
-    _NavItem(_Section.localModels,Icons.smart_toy_outlined, Icons.smart_toy_rounded,  'Local Models'),
-    _NavItem(_Section.installed,  Icons.check_circle_outline, Icons.check_circle,   'Installés'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeInOut,
-      height: compact ? 36 : 46,
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        border: Border(bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.4))),
-      ),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        children: _items.map((item) {
-          final sel = item.section == current;
-          return GestureDetector(
-            onTap: () => onTap(item.section),
-            behavior: HitTestBehavior.opaque,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: compact ? 4 : 6,
-              ),
-              padding: EdgeInsets.symmetric(
-                horizontal: compact ? 10 : 14,
-                vertical: compact ? 2 : 4,
-              ),
-              decoration: BoxDecoration(
-                color: sel ? cs.primary.withValues(alpha: 0.14) : Colors.transparent,
-                borderRadius: BorderRadius.circular(20),
-                border: sel ? Border.all(color: cs.primary.withValues(alpha: 0.3)) : null,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    sel ? item.activeIcon : item.icon,
-                    size: compact ? 16 : 18,
-                    color: sel ? cs.primary : cs.onSurface.withValues(alpha: 0.55),
-                  ),
-                  const SizedBox(width: 5),
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 200),
-                    style: TextStyle(
-                      fontSize: compact ? 11 : 12,
-                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
-                      color: sel ? cs.primary : cs.onSurface.withValues(alpha: 0.7),
-                    ),
-                    child: Text(item.label),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _NavItem {
-  final _Section section;
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  const _NavItem(this.section, this.icon, this.activeIcon, this.label);
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Extension card
-// ══════════════════════════════════════════════════════════════════════════════
-
-enum _InstallState { notInstalled, installing, installed, error }
-
-class _ExtensionCard extends StatelessWidget {
-  final MarketplaceExtension ext;
-  final _InstallState installState;
-  final VoidCallback onInstall;
-  final VoidCallback onTap;
-
-  const _ExtensionCard({
-    required this.ext,
-    required this.installState,
-    required this.onInstall,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-    final sub   = cs.onSurface.withValues(alpha: 0.55);
-    final alreadyInstalled = ExtensionRegistry.instance.isInstalled(ext.id) ||
-        installState == _InstallState.installed;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-      elevation: 0,
-      color: cs.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Icon
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: ext.iconUrl != null
-                    ? Image.network(ext.iconUrl!, width: 44, height: 44,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 44))
-                    : _DefaultExtIcon(size: 44),
-              ),
-              const SizedBox(width: 12),
-
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(
-                          ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurface,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text('v${ext.version}',
-                          style: TextStyle(fontSize: 10, color: sub)),
-                    ]),
-                    const SizedBox(height: 2),
-                    Text(ext.namespace, style: TextStyle(fontSize: 11, color: sub)),
-                    const SizedBox(height: 4),
-                    Text(ext.description,
-                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.8)),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 6),
-                    Row(children: [
-                      if (ext.averageRating != null) ...[
-                        const Icon(Icons.star_rounded, size: 12, color: Colors.amber),
-                        const SizedBox(width: 2),
-                        Text(ext.averageRating!.toStringAsFixed(1),
-                            style: TextStyle(fontSize: 11, color: sub)),
-                        const SizedBox(width: 8),
-                      ],
-                      if (ext.downloadCount > 0) ...[
-                        Icon(Icons.download_outlined, size: 12, color: sub),
-                        const SizedBox(width: 2),
-                        Text(_fmtCount(ext.downloadCount),
-                            style: TextStyle(fontSize: 11, color: sub)),
-                      ],
-                      if (ext.categories.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: cs.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(ext.categories.first,
-                              style: TextStyle(fontSize: 10, color: cs.primary)),
-                        ),
-                      ],
-                    ]),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Install button
-              _InstallButton(
-                state: alreadyInstalled ? _InstallState.installed : installState,
-                onPressed: alreadyInstalled ? null : onInstall,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () => _search(value));
   }
 
-  static String _fmtCount(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(0)}K';
-    return n.toString();
-  }
-}
-
-class _InstallButton extends StatelessWidget {
-  final _InstallState state;
-  final VoidCallback? onPressed;
-  const _InstallButton({required this.state, this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    switch (state) {
-      case _InstallState.notInstalled:
-        return SizedBox(
-          height: 30,
-          child: TextButton(
-            onPressed: onPressed,
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              backgroundColor: cs.primary.withValues(alpha: 0.12),
-              foregroundColor: cs.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-            child: const Text('Install', style: TextStyle(fontSize: 12)),
-          ),
-        );
-      case _InstallState.installing:
-        return SizedBox(
-          width: 24, height: 24,
-          child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
-        );
-      case _InstallState.installed:
-        return Icon(Icons.check_circle_rounded, color: cs.primary, size: 22);
-      case _InstallState.error:
-        return Icon(Icons.error_outline, color: cs.error, size: 22);
-    }
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Extension detail — in-panel overlay (VSCode-style single scrollable section)
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _ExtensionDetailOverlay extends StatefulWidget {
-  final MarketplaceExtension ext;
-  final OpenVsxClient client;
-  final _InstallState installState;
-  final VoidCallback onInstall;
-  final VoidCallback onClose;
-
-  const _ExtensionDetailOverlay({
-    required this.ext,
-    required this.client,
-    required this.installState,
-    required this.onInstall,
-    required this.onClose,
-  });
-
-  @override
-  State<_ExtensionDetailOverlay> createState() => _ExtensionDetailOverlayState();
-}
-
-class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
-    with TickerProviderStateMixin {
-  late AnimationController _anim;
-  late Animation<Offset> _slide;
-  late TabController _tabController;
-  String? _readme;
-  bool _readmeLoading = true;
-  late _InstallState _installState;
-
-  @override
-  void initState() {
-    super.initState();
-    _installState = widget.installState;
-    _anim = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
-    _slide = Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _anim, curve: Curves.easeOutCubic));
-    _tabController = TabController(length: 4, vsync: this);
-    _anim.forward();
-    _loadReadme();
-  }
-
-  @override
-  void dispose() {
-    _anim.dispose();
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadReadme() async {
-    try {
-      final r = await widget.client.getReadme(
-          widget.ext.namespace, widget.ext.name, widget.ext.version);
-      if (!mounted) return;
-      setState(() { _readme = r; _readmeLoading = false; });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() { _readmeLoading = false; });
-    }
-  }
-
-  Future<void> _close() async {
-    await _anim.reverse();
-    widget.onClose();
-  }
-
-  Future<void> _doInstall() async {
-    setState(() => _installState = _InstallState.installing);
-    try {
-      widget.onInstall();
-      await Future.delayed(const Duration(milliseconds: 400));
-      if (mounted) setState(() => _installState = _InstallState.installed);
-    } catch (e) {
-      if (mounted) setState(() => _installState = _InstallState.error);
-    }
-  }
+  // ── Build ─────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    final ext = widget.ext;
-    final installedExt = ExtensionRegistry.instance.get(ext.id);
-    final alreadyInstalled = installedExt != null || _installState == _InstallState.installed;
+    final isDark = theme.brightness == Brightness.dark;
 
-    return SlideTransition(
-      position: _slide,
-      child: Material(
-        color: theme.scaffoldBackgroundColor,
-        child: Column(
-          children: [
-            // Top Navigation Bar
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5),
+      body: _detailExt != null
+          ? _buildDetailPage(theme, cs)
+          : Column(
+              children: [
+                _buildHeader(theme, cs, isDark),
+                _buildTabBar(theme, cs, isDark),
+                if (_currentTab == _Tab.search) _buildSearchBar(theme, cs, isDark),
+                if (_currentTab == _Tab.search) _buildCategoryChips(theme, cs, isDark),
+                Expanded(child: _buildBody(theme, cs, isDark)),
+              ],
+            ),
+      bottomNavigationBar: _detailExt != null ? null : _buildBottomNav(theme, cs, isDark),
+    );
+  }
+
+  // ── Header ────────────────────────────────────────────────────────────
+
+  Widget _buildHeader(ThemeData theme, ColorScheme cs, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Row(
+        children: [
+          Icon(Icons.storefront_rounded, color: cs.primary, size: 28),
+          const SizedBox(width: 10),
+          Text(
+            'Marketplace',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
+            ),
+          ),
+          const Spacer(),
+          // Installed badge
+          if (ExtensionRegistry.instance.all.isNotEmpty)
             Container(
-              height: 44,
-              color: theme.scaffoldBackgroundColor,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: cs.primary.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${ExtensionRegistry.instance.all.length}',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.primary),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Tab Bar ───────────────────────────────────────────────────────────
+
+  Widget _buildTabBar(ThemeData theme, ColorScheme cs, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          _tabItem(_Tab.home, Icons.home_rounded, 'Home', cs),
+          _tabItem(_Tab.search, Icons.search_rounded, 'Search', cs),
+          _tabItem(_Tab.installed, Icons.check_circle_outline, 'Installed', cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabItem(_Tab tab, IconData icon, String label, ColorScheme cs) {
+    final isSelected = _currentTab == tab;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _currentTab = tab;
+          _detailExt = null;
+        }),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? cs.primary.withValues(alpha: 0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: isSelected ? cs.primary : cs.onSurfaceVariant),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                  color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Search Bar ────────────────────────────────────────────────────────
+
+  Widget _buildSearchBar(ThemeData theme, ColorScheme cs, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: _onSearchChanged,
+        style: TextStyle(fontSize: 14, color: cs.onSurface),
+        decoration: InputDecoration(
+          hintText: 'Search extensions...',
+          hintStyle: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+          prefixIcon: Icon(Icons.search, size: 20, color: cs.onSurfaceVariant),
+          suffixIcon: _searchCtrl.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 18),
+                  onPressed: () { _searchCtrl.clear(); _search(''); },
+                )
+              : null,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE),
+        ),
+      ),
+    );
+  }
+
+  // ── Category Chips ────────────────────────────────────────────────────
+
+  Widget _buildCategoryChips(ThemeData theme, ColorScheme cs, bool isDark) {
+    final cats = ['All', ..._categories.map((c) => c.name)];
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        scrollDirection: Axis.horizontal,
+        itemCount: cats.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final cat = cats[i];
+          final isSelected = _selectedCategory == cat;
+          return FilterChip(
+            label: Text(cat, style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? Colors.white : cs.onSurface,
+            )),
+            selected: isSelected,
+            onSelected: (_) {
+              setState(() => _selectedCategory = cat);
+              _search(_searchCtrl.text);
+            },
+            selectedColor: cs.primary,
+            backgroundColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFEEEEEE),
+            side: BorderSide.none,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Body ──────────────────────────────────────────────────────────────
+
+  Widget _buildBody(ThemeData theme, ColorScheme cs, bool isDark) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: cs.error),
+            const SizedBox(height: 12),
+            Text('Something went wrong', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text(_error!, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12), textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton.tonal(onPressed: _loadFeatured, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+
+    switch (_currentTab) {
+      case _Tab.home:
+        return _buildHomeTab(theme, cs, isDark);
+      case _Tab.search:
+        return _buildSearchResults(theme, cs, isDark);
+      case _Tab.installed:
+        return _buildInstalledTab(theme, cs, isDark);
+    }
+  }
+
+  // ── Home Tab ──────────────────────────────────────────────────────────
+
+  Widget _buildHomeTab(ThemeData theme, ColorScheme cs, bool isDark) {
+    final extensions = _featured.isNotEmpty ? _featured : _results;
+    return ListView(
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.only(bottom: 80),
+      children: [
+        // Categories grid
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Text('Browse by Category', style: TextStyle(
+            fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface,
+          )),
+        ),
+        _buildCategoriesGrid(cs, isDark),
+
+        // Featured / Trending
+        if (extensions.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+            child: Row(
+              children: [
+                Icon(Icons.trending_up_rounded, size: 20, color: cs.primary),
+                const SizedBox(width: 8),
+                Text('Trending Extensions', style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface,
+                )),
+              ],
+            ),
+          ),
+          ...extensions.take(6).map((ext) => _buildExtensionCard(ext, theme, cs, isDark)),
+        ],
+
+        // Recommended for you
+        if (extensions.length > 6) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+            child: Text('Recommended for You', style: TextStyle(
+              fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface,
+            )),
+          ),
+          SizedBox(
+            height: 200,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: extensions.length - 6,
+              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              itemBuilder: (_, i) => _buildHorizontalCard(extensions[i + 6], theme, cs, isDark),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ── Categories Grid (Play Store style) ────────────────────────────────
+
+  Widget _buildCategoriesGrid(ColorScheme cs, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: 2.2,
+        ),
+        itemCount: _categories.length,
+        itemBuilder: (_, i) {
+          final cat = _categories[i];
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedCategory = cat.name;
+                _currentTab = _Tab.search;
+              });
+              _search(_searchCtrl.text);
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.2)),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: cs.onSurface),
-                    onPressed: _close,
-                    tooltip: 'Back',
-                  ),
                   Expanded(
                     child: Text(
-                      ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
+                      cat.name,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: cs.onSurface,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (alreadyInstalled)
-                    IconButton(
-                      icon: const Icon(Icons.settings_outlined, size: 20),
-                      tooltip: 'Extension Settings',
-                      onPressed: () {
-                        if (installedExt != null && context.mounted) {
-                          Navigator.push(context, MaterialPageRoute(
-                            builder: (_) => ExtensionSettingsPage(extension: installedExt),
-                          ));
-                        }
-                      },
-                    ),
+                  Icon(cat.icon, size: 28, color: cat.color),
                 ],
               ),
             ),
-            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
+          );
+        },
+      ),
+    );
+  }
 
-            // VS Code-style hero header
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+  // ── Extension Card (Play Store style) ─────────────────────────────────
+
+  Widget _buildExtensionCard(MarketplaceExtension ext, ThemeData theme, ColorScheme cs, bool isDark) {
+    final installState = _installStates[ext.id] ?? _InstallState.notInstalled;
+    final alreadyInstalled = ExtensionRegistry.instance.get(ext.id) != null;
+
+    return GestureDetector(
+      onTap: () => setState(() => _detailExt = ext),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            // Icon
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: ext.iconUrl != null
+                  ? Image.network(ext.iconUrl!, width: 52, height: 52, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _defaultIcon(52, cs))
+                  : _defaultIcon(52, cs),
+            ),
+            const SizedBox(width: 14),
+            // Info
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    ext.namespace,
+                    style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 4),
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Extension icon (64px, rounded)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: ext.iconUrl != null
-                            ? Image.network(ext.iconUrl!, width: 64, height: 64,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _DefaultExtIcon(size: 64))
-                            : _DefaultExtIcon(size: 64),
+                      Icon(Icons.star_rounded, size: 14, color: Colors.amber[600]),
+                      const SizedBox(width: 2),
+                      Text(
+                        ext.rating != null ? ext.rating!.toStringAsFixed(1) : '—',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.onSurface),
                       ),
-                      const SizedBox(width: 16),
-                      // Name + Publisher + Version + Install
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              ext.displayName.isNotEmpty ? ext.displayName : ext.name,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: cs.onSurface,
-                                fontSize: 20,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(ext.namespace,
-                                style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
-                            const SizedBox(height: 4),
-                            Text('v${ext.version}',
-                                style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.45))),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                if (alreadyInstalled)
-                                  _OutlineBadge(
-                                    icon: Icons.check_circle_rounded,
-                                    label: 'Installed',
-                                    color: cs.primary,
-                                  )
-                                else if (_installState == _InstallState.installing)
-                                  const SizedBox(
-                                    width: 20, height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                else
-                                  FilledButton.icon(
-                                    onPressed: _doInstall,
-                                    icon: const Icon(Icons.download_rounded, size: 16),
-                                    label: const Text('Install'),
-                                    style: FilledButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                    ),
-                                  ),
-                                const SizedBox(width: 12),
-                                // Stats inline
-                                _StatsRow(ext: ext),
-                              ],
-                            ),
-                          ],
-                        ),
+                      const SizedBox(width: 10),
+                      Icon(Icons.download_rounded, size: 13, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 2),
+                      Text(
+                        _formatDownloads(ext.downloadCount),
+                        style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  // Description under header (like VS Code)
-                  Text(ext.description,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                          color: cs.onSurface.withValues(alpha: 0.75))),
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
+            // Install button
+            if (alreadyInstalled || installState == _InstallState.installed)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('Installed', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: cs.primary)),
+              )
+            else if (installState == _InstallState.installing)
+              const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              FilledButton(
+                onPressed: () => _install(ext),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
+                ),
+                child: const Text('Install', style: TextStyle(fontSize: 12)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // TabBar (VSCode Style)
-            TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13),
-              tabs: const [
-                Tab(text: 'Features'),
-                Tab(text: 'Changelog'),
-                Tab(text: 'Contributions'),
-                Tab(text: 'Settings'),
+  // ── Horizontal Card (for recommended section) ────────────────────────
+
+  Widget _buildHorizontalCard(MarketplaceExtension ext, ThemeData theme, ColorScheme cs, bool isDark) {
+    return GestureDetector(
+      onTap: () => setState(() => _detailExt = ext),
+      child: Container(
+        width: 160,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.15)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: ext.iconUrl != null
+                  ? Image.network(ext.iconUrl!, width: 48, height: 48, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => _defaultIcon(48, cs))
+                  : _defaultIcon(48, cs),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurface),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Icon(Icons.star_rounded, size: 12, color: Colors.amber[600]),
+                const SizedBox(width: 2),
+                Text(
+                  ext.rating != null ? ext.rating!.toStringAsFixed(1) : '—',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: cs.onSurface),
+                ),
               ],
-            ),
-            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.4)),
-
-            // TabBar View Body
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Tab 1: Features (README + description, VS Code style)
-                  ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      // README content (main feature display)
-                      if (_readmeLoading) ...[
-                        const SizedBox(height: 40),
-                        const Center(child: CircularProgressIndicator()),
-                      ] else if (_readme != null && _readme!.isNotEmpty) ...[
-                        _MarkdownText(source: _readme!),
-                      ] else ...[
-                        // Fallback: show description
-                        Text(ext.description,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                                color: cs.onSurface.withValues(alpha: 0.85))),
-                      ],
-                    ],
-                  ),
-
-                  // Tab 2: Contributions
-                  ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text('Contributed Features',
-                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text('Features and capabilities registered by this extension in package.json.',
-                          style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6))),
-                      const SizedBox(height: 16),
-                      if (installedExt != null) ...[
-                        _buildContributionCategory(
-                          context,
-                          'Commands (${installedExt.manifest.contributes.commands.length})',
-                          Icons.terminal,
-                          installedExt.manifest.contributes.commands.map((c) =>
-                              '• ${c["title"] ?? c["command"]} (${c["command"]})').toList(),
-                        ),
-                        _buildContributionCategory(
-                          context,
-                          'Configuration Settings (${installedExt.manifest.contributes.configuration.length})',
-                          Icons.settings,
-                          installedExt.manifest.contributes.configuration.map((s) =>
-                              '• ${s["title"] ?? "Setting"}').toList(),
-                        ),
-                        _buildContributionCategory(
-                          context,
-                          'Languages & Grammars (${installedExt.manifest.contributes.languages.length})',
-                          Icons.code,
-                          installedExt.manifest.contributes.languages.map((l) =>
-                              '• ${l["id"] ?? "Language"}').toList(),
-                        ),
-                      ] else ...[
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              'Install this extension to inspect all contributed commands, grammars, and settings.',
-                              style: TextStyle(color: cs.onSurfaceVariant),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-
-                  // Tab 2: Changelog
-                  ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if (installedExt != null) ...[
-                        Text('Extension Settings',
-                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => ExtensionSettingsPage(extension: installedExt),
-                            ));
-                          },
-                          icon: const Icon(Icons.tune),
-                          label: const Text('Open Full Extension Settings Page'),
-                        ),
-                      ] else ...[
-                        Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(32),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.settings_suggest, size: 48, color: cs.primary),
-                                const SizedBox(height: 12),
-                                const Text('No active settings', style: TextStyle(fontWeight: FontWeight.bold)),
-                                const SizedBox(height: 4),
-                                const Text('Install extension to configure its options.', style: TextStyle(fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-
-                  // Tab 4: Settings
-                  ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Text('How to Use Installed Extensions in Panda IDE',
-                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 12),
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.touch_app, color: Colors.blueAccent),
-                                  SizedBox(width: 8),
-                                  Text('Workspace Box & Command Palette', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              SizedBox(height: 6),
-                              Text('''• Tap the Workspace Box at the top of Panda IDE to open the Command Palette.
-• Type ">" to search and run any command registered by this extension.'''),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Card(
-                        child: Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.play_circle_fill, color: Colors.green),
-                                  SizedBox(width: 8),
-                                  Text('Running & Debugging (No F5 Needed)', style: TextStyle(fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              SizedBox(height: 6),
-                              Text('''• Open the EXÉCUTER / DEBUG panel in the left sidebar.
-• Tap ▶ Start Debugging or ⚡ Hot Reload directly without needing a physical keyboard F5 key.'''),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -1199,1244 +667,379 @@ class _ExtensionDetailOverlayState extends State<_ExtensionDetailOverlay>
     );
   }
 
-  Widget _buildContributionCategory(BuildContext context, String title, IconData icon, List<String> items) {
-    if (items.isEmpty) return const SizedBox.shrink();
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ExpansionTile(
-        leading: Icon(icon, size: 20),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        children: items.map((item) => ListTile(
-          dense: true,
-          title: Text(item, style: const TextStyle(fontSize: 12, fontFamily: 'monospace')),
-        )).toList(),
-      ),
-    );
-  }
-}
+  // ── Search Results ────────────────────────────────────────────────────
 
-
-class _StatsRow extends StatelessWidget {
-  final MarketplaceExtension ext;
-  const _StatsRow({required this.ext});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Wrap(
-      spacing: 10,
-      runSpacing: 6,
-      children: [
-        if (ext.averageRating != null)
-          _StatChip(
-            icon: Icons.star_rounded,
-            iconColor: Colors.amber,
-            label: ext.averageRating!.toStringAsFixed(1),
-            sub: '${ext.reviewCount} reviews',
-          ),
-        if (ext.downloadCount > 0)
-          _StatChip(
-            icon: Icons.download_rounded,
-            iconColor: cs.primary,
-            label: _fmtCount(ext.downloadCount),
-            sub: 'installs',
-          ),
-      ],
-    );
-  }
-
-  static String _fmtCount(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000)    return '${(n / 1000).toStringAsFixed(0)}K';
-    return n.toString();
-  }
-}
-
-class _StatChip extends StatelessWidget {
-  final IconData icon;
-  final Color    iconColor;
-  final String   label;
-  final String   sub;
-  const _StatChip({required this.icon, required this.iconColor,
-      required this.label, required this.sub});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: iconColor),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              Text(sub, style: TextStyle(fontSize: 10, color: cs.onSurface.withValues(alpha: 0.55))),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoTile extends StatelessWidget {
-  final String label;
-  final String value;
-  const _InfoTile({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(label,
-                style: TextStyle(fontSize: 12,
-                    color: cs.onSurface.withValues(alpha: 0.55),
-                    fontWeight: FontWeight.w500)),
-          ),
-          Expanded(
-            child: Text(value,
-                style: TextStyle(fontSize: 12, color: cs.onSurface)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OutlineBadge extends StatelessWidget {
-  final IconData icon;
-  final String   label;
-  final Color    color;
-  const _OutlineBadge({required this.icon, required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-        borderRadius: BorderRadius.circular(20),
-        color: color.withValues(alpha: 0.08),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Runtimes / SDKs section
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _RuntimeInfo {
-  final String  key;
-  final String  name;
-  final String  description;
-  final String  version;
-  final String  longDescription;
-  final String  website;
-  final Widget  icon;
-  final String  useCase;
-  final String? extraAction;
-
-  const _RuntimeInfo({
-    required this.key,
-    required this.name,
-    required this.description,
-    required this.version,
-    required this.longDescription,
-    required this.website,
-    required this.icon,
-    required this.useCase,
-    this.extraAction,
-  });
-}
-
-// ── SDKs ──────────────────────────────────────────────────────────────────────
-final _kSdks = <_RuntimeInfo>[
-  _RuntimeInfo(
-    key: 'flutter',
-    name: 'Flutter SDK',
-    description: 'Flutter framework + Dart SDK + flutter run',
-    version: '3.x stable',
-    longDescription:
-        'The full Flutter SDK for ARM64 Android. Includes the flutter CLI, '
-        'Dart SDK, pub package manager, and everything needed to run '
-        '"flutter run", "flutter build apk", and "flutter pub get" '
-        'directly on this device — no computer required.\n\n'
-        'After installing, open the ADB Setup page to enable '
-        '"flutter run" on your device via Shizuku or Wireless ADB.',
-    website: 'https://flutter.dev',
-    useCase: 'flutter run / build / pub get directly on your phone',
-    icon: const Icon(Icons.flutter_dash, size: 26, color: Color(0xFF54C5F8)),
-    extraAction: 'ADB Setup for flutter run',
-  ),
-  _RuntimeInfo(
-    key: 'android-sdk',
-    name: 'Android SDK',
-    description: 'adb, fastboot — required for flutter run',
-    version: 'r35+',
-    longDescription:
-        'Android SDK platform-tools provides the adb (Android Debug Bridge) '
-        'binary for ARM64 Android. This is required for "flutter run" '
-        'and for wireless debugging. Install this alongside the Flutter SDK.',
-    website: 'https://developer.android.com/studio/releases/platform-tools',
-    useCase: 'flutter run, adb install, adb shell, wireless debugging',
-    icon: const FaIcon(FontAwesomeIcons.android, size: 26, color: Color(0xFF3DDC84)),
-  ),
-];
-
-// ── Language Runtimes ──────────────────────────────────────────────────────────
-final _kRuntimes = <_RuntimeInfo>[
-  _RuntimeInfo(
-    key: "alpine-linux",
-    name: "Alpine Linux (PRoot)",
-    description: "Linux embarqué complet avec gestionnaire apk / pkg / apt",
-    version: "3.21",
-    longDescription:
-        "Environnement Linux complet autonome fonctionnant sous PRoot (aucun root requis).\n"
-        "Comprend le gestionnaire de paquets apk : installez Python, Node, Git, GCC et tout outil Linux directement depuis le terminal !",
-    website: "https://alpinelinux.org",
-    useCase: "Gestionnaire de paquets Linux (apk/pkg), environnement Linux embarqué complet",
-    icon: const Icon(Icons.terminal, size: 26, color: Color(0xFF0D597F)),
-  ),
-  _RuntimeInfo(
-    key: 'node',
-    name: 'Node.js',
-    description: 'JavaScript / TypeScript runtime',
-    version: '22.x LTS',
-    longDescription:
-        'Node.js is an open-source, cross-platform JavaScript runtime. '
-        'Executes JavaScript outside a browser using V8. '
-        'Ideal for servers, CLI tools, and full-stack TypeScript projects.',
-    website: 'https://nodejs.org',
-    useCase: 'Web servers, REST APIs, CLI tools, TypeScript apps',
-    icon: const FaIcon(FontAwesomeIcons.nodeJs, size: 26, color: Color(0xFF539E43)),
-  ),
-  _RuntimeInfo(
-    key: 'python',
-    name: 'Python',
-    description: 'Python 3 interpreter & pip',
-    version: '3.12',
-    longDescription:
-        'Python is a high-level, general-purpose language renowned for its readability. '
-        'Comes with pip and supports the full data-science & ML ecosystem.',
-    website: 'https://python.org',
-    useCase: 'Data science, ML, scripting, web (Django/Flask)',
-    icon: const FaIcon(FontAwesomeIcons.python, size: 26, color: Color(0xFF3776AB)),
-  ),
-  _RuntimeInfo(
-    key: 'java',
-    name: 'Java',
-    description: 'JDK 21 Temurin (LTS)',
-    version: '21 LTS',
-    longDescription:
-        'Java JDK 21 (Eclipse Temurin) — LTS release with virtual threads, '
-        'pattern matching, and record classes.',
-    website: 'https://adoptium.net',
-    useCase: 'Android dev, enterprise apps, Spring Boot',
-    icon: const FaIcon(FontAwesomeIcons.java, size: 26, color: Color(0xFFED8B00)),
-  ),
-  _RuntimeInfo(
-    key: 'kotlin',
-    name: 'Kotlin',
-    description: 'Kotlin SDK & Gradle',
-    version: '2.x',
-    longDescription:
-        'Modern, statically typed language on the JVM. '
-        'Preferred language for Android and Kotlin Multiplatform.',
-    website: 'https://kotlinlang.org',
-    useCase: 'Android, Kotlin Multiplatform, server-side',
-    icon: const FaIcon(FontAwesomeIcons.k, size: 26, color: Color(0xFF7F52FF)),
-  ),
-  _RuntimeInfo(
-    key: 'dart',
-    name: 'Dart',
-    description: 'Dart SDK standalone',
-    version: '3.x',
-    longDescription:
-        'Dart is an optimised language for fast apps on any platform. '
-        'Paired with Flutter for cross-platform mobile, web, and desktop.',
-    website: 'https://dart.dev',
-    useCase: 'Flutter apps, CLI tools, server-side Dart',
-    icon: const Icon(Icons.flutter_dash, size: 26, color: Color(0xFF0175C2)),
-  ),
-  _RuntimeInfo(
-    key: 'go',
-    name: 'Go',
-    description: 'Go toolchain',
-    version: '1.22',
-    longDescription:
-        'Statically typed, compiled with built-in concurrency primitives. '
-        'Produces small, fast binaries — great for CLIs and cloud-native.',
-    website: 'https://go.dev',
-    useCase: 'CLIs, microservices, cloud-native backends',
-    icon: const FaIcon(FontAwesomeIcons.golang, size: 26, color: Color(0xFF00ADD8)),
-  ),
-  _RuntimeInfo(
-    key: 'rust',
-    name: 'Rust',
-    description: 'Rust toolchain (rustup)',
-    version: 'stable',
-    longDescription:
-        'Systems language focused on safety, speed, and concurrency. '
-        'Memory-safe without a garbage collector.',
-    website: 'https://rust-lang.org',
-    useCase: 'Systems, WebAssembly, CLI tools, embedded',
-    icon: const FaIcon(FontAwesomeIcons.rust, size: 26, color: Color(0xFFDEA584)),
-  ),
-  _RuntimeInfo(
-    key: 'clang',
-    name: 'Clang / LLVM',
-    description: 'C / C++ compiler suite',
-    version: '21',
-    longDescription:
-        'Clang front-end for C, C++, and Objective-C. '
-        'Required for Rust and Go on Android. Full C17/C++23 support.',
-    website: 'https://clang.llvm.org',
-    useCase: 'C/C++ native code, required for Rust & Go',
-    icon: const FaIcon(FontAwesomeIcons.c, size: 26, color: Color(0xFF00599C)),
-  ),
-  _RuntimeInfo(
-    key: 'ruby',
-    name: 'Ruby',
-    description: 'Ruby interpreter & gems',
-    version: '3.3',
-    longDescription:
-        'Dynamic, reflective, object-oriented language. '
-        'Popular for Ruby on Rails. Bundler and RubyGems included.',
-    website: 'https://ruby-lang.org',
-    useCase: 'Web (Rails), scripting, DevOps automation',
-    icon: const FaIcon(FontAwesomeIcons.gem, size: 24, color: Color(0xFFCC342D)),
-  ),
-  _RuntimeInfo(
-    key: 'lua',
-    name: 'Lua',
-    description: 'Lightweight scripting language',
-    version: '5.4',
-    longDescription:
-        'Lightweight, high-level scripting language designed for embedding. '
-        'Used in game engines (Love2D, Roblox) and as an extension language.',
-    website: 'https://lua.org',
-    useCase: 'Game scripting, embedded configs, Neovim plugins',
-    icon: const Icon(Icons.code, size: 26, color: Color(0xFF000080)),
-  ),
-];
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Runtimes / SDKs section — with inline download progress
-// ──────────────────────────────────────────────────────────────────────────────
-
-class _RuntimesSection extends StatefulWidget {
-  final ScrollController scrollCtrl;
-  final bool showSdks;
-  const _RuntimesSection({required this.scrollCtrl, required this.showSdks});
-
-  @override
-  State<_RuntimesSection> createState() => _RuntimesSectionState();
-}
-
-class _RuntimesSectionState extends State<_RuntimesSection> {
-  @override
-  Widget build(BuildContext context) {
-    final catalogState = context.watch<PackageCatalogCubit>().state;
-    final items = widget.showSdks ? _kSdks : _kRuntimes;
-
-    // Map _RuntimeInfo.key → catalog index (needed for DownloadManagerBloc)
-    final Map<String, int> keyToIndex = {};
-    for (int i = 0; i < catalogState.runtimes.length; i++) {
-      keyToIndex[catalogState.runtimes[i].parentName.toLowerCase()] = i;
+  Widget _buildSearchResults(ThemeData theme, ColorScheme cs, bool isDark) {
+    if (_results.isEmpty && !_loading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+            const SizedBox(height: 12),
+            Text(
+              _searchCtrl.text.isEmpty ? 'Search for extensions' : 'No results found',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+            ),
+          ],
+        ),
+      );
     }
-
     return ListView.builder(
-      controller: widget.scrollCtrl,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
-      itemCount: items.length,
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.only(bottom: 80),
+      itemCount: _results.length + (_loadingMore ? 1 : 0),
       itemBuilder: (_, i) {
-        final info = items[i];
-        final resolvedKey = PackageDownloader.resolveAlias(info.key);
-        final idx  = keyToIndex[resolvedKey];
-        // Find the catalog RunTime for url/archiveName
-        lang.RunTime? rt;
-        if (idx != null) {
-          rt = catalogState.runtimes[idx];
+        if (i == _results.length) {
+          return const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(child: CircularProgressIndicator()),
+          );
         }
-        return _RuntimeCard(
-          info: info,
-          catalogIndex: idx,
-          catalogRuntime: rt,
-          catalogState: catalogState,
-        );
+        return _buildExtensionCard(_results[i], theme, cs, isDark);
       },
     );
   }
-}
 
-class _RuntimeCard extends StatelessWidget {
-  final _RuntimeInfo info;
-  final int? catalogIndex;
-  final lang.RunTime? catalogRuntime;
-  final PackageCatalogState catalogState;
+  // ── Installed Tab ─────────────────────────────────────────────────────
 
-  const _RuntimeCard({
-    required this.info,
-    required this.catalogIndex,
-    required this.catalogRuntime,
-    required this.catalogState,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      elevation: 0,
-      color: cs.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => _RuntimeDetailPage(
-              info: info,
-              catalogIndex: catalogIndex,
-              catalogRuntime: catalogRuntime,
-              catalogState: catalogState,
-            ))),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+  Widget _buildInstalledTab(ThemeData theme, ColorScheme cs, bool isDark) {
+    final installed = ExtensionRegistry.instance.all;
+    if (installed.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.extension_off_rounded, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+            const SizedBox(height: 12),
+            Text('No extensions installed', style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14)),
+            const SizedBox(height: 8),
+            Text(
+              'Browse the marketplace to find extensions',
+              style: TextStyle(color: cs.onSurfaceVariant.withValues(alpha: 0.6), fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 80),
+      itemCount: installed.length,
+      itemBuilder: (_, i) {
+        final ext = installed[i];
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.15)),
+          ),
           child: Row(
             children: [
-              // Icon circle
               Container(
-                width: 46, height: 46,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  shape: BoxShape.circle,
+                  color: cs.primary.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Center(child: info.icon),
+                child: Icon(Icons.extension_rounded, color: cs.primary, size: 22),
               ),
-              const SizedBox(width: 14),
-
-              // Name + desc
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(info.name,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600, color: cs.onSurface)),
-                    const SizedBox(height: 2),
-                    Text(info.description,
-                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.55))),
+                    Text(
+                      ext.manifest.displayName ?? ext.manifest.name,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: cs.onSurface),
+                    ),
+                    Text(
+                      ext.manifest.version,
+                      style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                    ),
                   ],
                 ),
               ),
-
-              // Version chip
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: cs.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(info.version,
-                    style: TextStyle(fontSize: 11, color: cs.primary, fontWeight: FontWeight.w600)),
+              IconButton(
+                icon: Icon(Icons.settings_outlined, size: 18, color: cs.onSurfaceVariant),
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => ExtensionSettingsPage(extension: ext),
+                  ));
+                },
               ),
-              const SizedBox(width: 6),
-
-              // Inline download button / progress
-              if (catalogIndex != null)
-                _InlineDownloadButton(
-                  index: catalogIndex!,
-                  onDownload: () => _triggerDownload(context),
-                  installDir: io.Directory('$runtimesDir/${info.key}'),
-                )
-              else
-                Icon(Icons.download_rounded, size: 22, color: cs.onSurface.withValues(alpha: 0.3)),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  void _triggerDownload(BuildContext context) {
-    final rt = catalogRuntime;
-    final idx = catalogIndex;
-    if (rt == null || idx == null) return;
-    PackageDownloader.startDownload(
-      context: context,
-      index: idx,
-      url: rt.url,
-      archiveName: rt.archiveName,
-      targetDir: downloadsDir,
-      isExtension: false,
-      packageParentName: rt.parentName,
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Inline download button — shows progress bar while downloading
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _InlineDownloadButton extends StatelessWidget {
-  final int index;
-  final VoidCallback onDownload;
-  final io.Directory installDir;
-
-  const _InlineDownloadButton({
-    required this.index,
-    required this.onDownload,
-    required this.installDir,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return BlocBuilder<DownloadManagerBloc, DownloadManagerState>(
-      builder: (context, dlState) {
-        final percent         = dlState.downloadProgress[index] ?? 0.0;
-        final isExtracting    = dlState.isExtracting(index);
-        final extractPct      = dlState.extractionProgress[index] ?? 0.0;
-        final isFullyDone     = dlState.isFullyCompleted(index);
-        final isInstalled     = isFullyDone || installDir.existsSync();
-
-        // Completion wins over any final 80%/100% progress event. The bloc
-        // clears those transient values, but this ordering also protects the
-        // button from a stale frame during the state transition.
-        if (isInstalled) {
-          return Icon(Icons.check_circle_rounded, color: cs.primary, size: 26);
-        }
-
-        // ── Extracting ──────────────────────────────────────────────────
-        if (isExtracting) {
-          return SizedBox(
-            width: 90,
-            child: LinearPercentIndicator(
-              progressColor: Colors.greenAccent.withValues(alpha: 0.7),
-              percent: (extractPct / 100).clamp(0.0, 1.0),
-              width: 86,
-              lineHeight: 36,
-              barRadius: const Radius.circular(18),
-              center: Text(
-                extractPct > 0 ? '${extractPct.toStringAsFixed(0)}%' : '…',
-                style: const TextStyle(fontSize: 11),
-              ),
-            ),
-          );
-        }
-
-        // ── Downloading ─────────────────────────────────────────────────
-        if (percent > 0.0 && percent < 100.0) {
-          return SizedBox(
-            width: 90,
-            child: LinearPercentIndicator(
-              progressColor: cs.primary.withValues(alpha: 0.7),
-              percent: (percent / 100).clamp(0.0, 1.0),
-              width: 86,
-              lineHeight: 36,
-              barRadius: const Radius.circular(18),
-              center: Text('${percent.toStringAsFixed(0)}%',
-                  style: const TextStyle(fontSize: 11)),
-            ),
-          );
-        }
-
-        // ── Starting (index active but 0 progress) ──────────────────────
-        if (PackageDownloader.isActive(index)) {
-          return SizedBox(
-            width: 90,
-            child: LinearPercentIndicator(
-              progressColor: cs.primary.withValues(alpha: 0.5),
-              percent: 0.0,
-              width: 86,
-              lineHeight: 36,
-              barRadius: const Radius.circular(18),
-              center: SizedBox(
-                width: 18, height: 18,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: cs.primary),
-              ),
-            ),
-          );
-        }
-
-        // ── Not started ─────────────────────────────────────────────────
-        return IconButton(
-          icon: Icon(Icons.download_rounded, size: 22, color: cs.primary),
-          onPressed: onDownload,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
         );
       },
     );
   }
-}
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Runtime detail page
-// ══════════════════════════════════════════════════════════════════════════════
+  // ── Detail Page (VS Code style) ──────────────────────────────────────
 
-class _RuntimeDetailPage extends StatelessWidget {
-  final _RuntimeInfo info;
-  final int? catalogIndex;
-  final lang.RunTime? catalogRuntime;
-  final PackageCatalogState catalogState;
+  Widget _buildDetailPage(ThemeData theme, ColorScheme cs) {
+    final ext = _detailExt!;
+    final installState = _installStates[ext.id] ?? _InstallState.notInstalled;
+    final alreadyInstalled = ExtensionRegistry.instance.get(ext.id) != null;
 
-  const _RuntimeDetailPage({
-    required this.info,
-    required this.catalogIndex,
-    required this.catalogRuntime,
-    required this.catalogState,
-  });
+    return Column(
+      children: [
+        // Top bar
+        Container(
+          padding: const EdgeInsets.fromLTRB(4, 8, 8, 0),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                onPressed: () => setState(() => _detailExt = null),
+              ),
+              Expanded(
+                child: Text(
+                  ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-    final idx   = catalogIndex;
-    final rt    = catalogRuntime;
-
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        foregroundColor: cs.onSurface,
-        iconTheme: IconThemeData(color: cs.onSurface),
-        title: Text(info.name, style: TextStyle(color: cs.onSurface, fontSize: 16)),
-        elevation: 0,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // Hero
-          Row(
+        // Hero header
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 72, height: 72,
-                decoration: BoxDecoration(
-                  color: cs.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Center(child: info.icon),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: ext.iconUrl != null
+                    ? Image.network(ext.iconUrl!, width: 72, height: 72, fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => _defaultIcon(72, cs))
+                    : _defaultIcon(72, cs),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(info.name,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700, color: cs.onSurface)),
+                    Text(
+                      ext.displayName.isNotEmpty ? ext.displayName : ext.name,
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: cs.onSurface),
+                    ),
                     const SizedBox(height: 4),
-                    Text(info.description,
-                        style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.55))),
+                    Text(ext.namespace, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                    const SizedBox(height: 6),
+                    Text('v${ext.version}', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant.withValues(alpha: 0.6))),
                     const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: cs.primary.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Text('v${info.version}',
-                          style: TextStyle(fontSize: 12, color: cs.primary,
-                              fontWeight: FontWeight.w700)),
+                    Row(
+                      children: [
+                        if (alreadyInstalled || installState == _InstallState.installed)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: cs.primary.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded, size: 14, color: cs.primary),
+                                const SizedBox(width: 4),
+                                Text('Installed', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.primary)),
+                              ],
+                            ),
+                          )
+                        else if (installState == _InstallState.installing)
+                          const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        else
+                          FilledButton.icon(
+                            onPressed: () => _install(ext),
+                            icon: const Icon(Icons.download_rounded, size: 16),
+                            label: const Text('Install'),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                            ),
+                          ),
+                        const SizedBox(width: 12),
+                        // Stats
+                        _statBadge(Icons.star_rounded, '${ext.rating?.toStringAsFixed(1) ?? "—"}', Colors.amber[600]!),
+                        const SizedBox(width: 8),
+                        _statBadge(Icons.download_rounded, _formatDownloads(ext.downloadCount), cs.onSurfaceVariant),
+                      ],
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
+        ),
 
-          // Install button — inline with progress
-          if (idx != null && rt != null)
-            BlocBuilder<DownloadManagerBloc, DownloadManagerState>(
-              builder: (context, dlState) {
-                final percent      = dlState.downloadProgress[idx] ?? 0.0;
-                final isExtracting = dlState.isExtracting(idx);
-                final extractPct   = dlState.extractionProgress[idx] ?? 0.0;
-                final runtimeDir = io.Directory('$runtimesDir/${info.key}');
-                final isInstalled  = runtimeDir.existsSync() ||
-                    dlState.isFullyCompleted(idx);
+        Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.3)),
 
-                if (isExtracting || (percent > 0 && percent < 100) || PackageDownloader.isActive(idx)) {
-                  final pct = isExtracting ? extractPct : percent;
-                  return Column(
-                    children: [
-                      LinearProgressIndicator(
-                        value: (pct / 100).clamp(0.0, 1.0),
-                        backgroundColor: cs.surfaceContainerHighest,
-                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-                        minHeight: 8,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        isExtracting ? 'Extracting… ${extractPct.toStringAsFixed(0)}%'
-                            : 'Downloading… ${percent.toStringAsFixed(0)}%',
-                        style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.6)),
-                      ),
-                    ],
-                  );
-                }
+        // README content
+        Expanded(
+          child: _DetailReadme(client: _client, ext: ext),
+        ),
+      ],
+    );
+  }
 
-                if (isInstalled) {
-                  return OutlinedButton.icon(
-                    onPressed: null,
-                    icon: Icon(Icons.check_circle_rounded, color: cs.primary, size: 16),
-                    label: Text('Installed',
-                        style: TextStyle(color: cs.primary)),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      side: BorderSide(color: cs.primary.withValues(alpha: 0.4)),
-                    ),
-                  );
-                }
-
-                return FilledButton.icon(
-                  onPressed: () => PackageDownloader.startDownload(
-                    context: context,
-                    index: idx,
-                    url: rt.url,
-                    archiveName: rt.archiveName,
-                    targetDir: downloadsDir,
-                    isExtension: false,
-                    packageParentName: rt.parentName,
-                  ),
-                  icon: const Icon(Icons.download_rounded, size: 18),
-                  label: Text('Installer ${info.name}'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                );
-              },
-            )
-          else
-            FilledButton.icon(
-              onPressed: null,
-              icon: const Icon(Icons.download_rounded, size: 18),
-              label: Text('Installer ${info.name}'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-
-          // ADB Setup (Flutter SDK only)
-          if (info.extraAction != null) ...[
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AdbSetupPage())),
-              icon: const Icon(Icons.usb_rounded, size: 16),
-              label: Text(info.extraAction!),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ],
-          const SizedBox(height: 20),
-
-          // About
-          _SectionHeader(title: 'À propos'),
-          const SizedBox(height: 8),
-          Text(info.longDescription,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.85), height: 1.6)),
-          const SizedBox(height: 20),
-
-          // Use cases
-          _SectionHeader(title: 'Cas d\'utilisation'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.lightbulb_outline, size: 18, color: cs.primary.withValues(alpha: 0.8)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(info.useCase,
-                      style: TextStyle(fontSize: 13, color: cs.onSurface.withValues(alpha: 0.85))),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Website
-          _SectionHeader(title: 'Site officiel'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.language, size: 18, color: cs.onSurface.withValues(alpha: 0.55)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(info.website,
-                      style: TextStyle(fontSize: 13, color: cs.primary,
-                          decoration: TextDecoration.underline)),
-                ),
-                Icon(Icons.open_in_new, size: 14, color: cs.onSurface.withValues(alpha: 0.4)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
+  Widget _statBadge(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 3),
+          Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
         ],
       ),
     );
   }
+
+  // ── Bottom Nav ────────────────────────────────────────────────────────
+
+  Widget _buildBottomNav(ThemeData theme, ColorScheme cs, bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        border: Border(top: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.2))),
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            _bottomNavItem(_Tab.home, Icons.home_rounded, 'Home', cs),
+            _bottomNavItem(_Tab.search, Icons.search_rounded, 'Search', cs),
+            _bottomNavItem(_Tab.installed, Icons.check_circle_outline, 'Installed', cs),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomNavItem(_Tab tab, IconData icon, String label, ColorScheme cs) {
+    final isSelected = _currentTab == tab;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() {
+          _currentTab = tab;
+          _detailExt = null;
+        }),
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 22, color: isSelected ? cs.primary : cs.onSurfaceVariant),
+              const SizedBox(height: 4),
+              Text(label, style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? cs.primary : cs.onSurfaceVariant,
+              )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+
+  Widget _defaultIcon(double size, ColorScheme cs) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: cs.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(size * 0.22),
+      ),
+      child: Icon(Icons.extension_rounded, size: size * 0.5, color: cs.primary),
+    );
+  }
+
+  String _formatDownloads(int? count) {
+    if (count == null) return '—';
+    if (count >= 1000000) return '${(count / 1000000).toStringAsFixed(1)}M';
+    if (count >= 1000) return '${(count / 1000).toStringAsFixed(1)}K';
+    return count.toString();
+  }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Panda Extensions section — LSP servers & tools (former Downloads page)
-// ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// Detail README widget (loads async)
+// ═══════════════════════════════════════════════════════════════
 
-class _PandaExtensionsSection extends StatefulWidget {
-  final ScrollController scrollCtrl;
-  const _PandaExtensionsSection({required this.scrollCtrl});
+class _DetailReadme extends StatefulWidget {
+  final OpenVsxClient client;
+  final MarketplaceExtension ext;
+  const _DetailReadme({required this.client, required this.ext});
 
   @override
-  State<_PandaExtensionsSection> createState() => _PandaExtensionsSectionState();
+  State<_DetailReadme> createState() => _DetailReadmeState();
 }
 
-class _PandaExtensionsSectionState extends State<_PandaExtensionsSection> {
+class _DetailReadmeState extends State<_DetailReadme> {
+  String? _readme;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final r = await widget.client.getReadme(
+          widget.ext.namespace, widget.ext.name, widget.ext.version);
+      if (!mounted) return;
+      setState(() { _readme = r; _loading = false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _loading = false; });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme        = Theme.of(context);
-    final cs           = theme.colorScheme;
-    final catalogState = context.watch<PackageCatalogCubit>().state;
-    final extItems     = catalogState.extensions;
+    final cs = Theme.of(context).colorScheme;
 
-    if (catalogState.isSyncing && extItems.isEmpty) {
+    if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (extItems.isEmpty) {
+    if (_readme == null || _readme!.isEmpty) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.download_outlined, size: 52, color: cs.onSurface.withValues(alpha: 0.3)),
-              const SizedBox(height: 14),
-              Text('No Panda extensions available',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.6))),
-              const SizedBox(height: 8),
-              FilledButton.tonal(
-                onPressed: () => context.read<PackageCatalogCubit>().refreshCatalog(),
-                child: const Text('Refresh'),
-              ),
-            ],
-          ),
+        child: Text(
+          widget.ext.description,
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+          textAlign: TextAlign.center,
         ),
       );
     }
 
-    // extensions list uses offset runtimes.length for DownloadManagerBloc index
-    final runtimeCount = catalogState.runtimes.length;
-
-    return ListView.builder(
-      controller: widget.scrollCtrl,
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 24),
-      itemCount: extItems.length,
-      itemBuilder: (_, i) {
-        final ext = extItems[i];
-        final extIdx = i + runtimeCount;
-        return _PandaExtCard(
-          ext: ext,
-          index: extIdx,
-          hasUpdate: catalogState.extensionUpdates.contains(ext.parentName),
-        );
-      },
-    );
-  }
-}
-
-class _PandaExtCard extends StatelessWidget {
-  final lang.Extension ext;
-  final int index;
-  final bool hasUpdate;
-
-  const _PandaExtCard({
-    required this.ext,
-    required this.index,
-    required this.hasUpdate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final cs     = theme.colorScheme;
-    final sub    = cs.onSurface.withValues(alpha: 0.55);
-    final String pName = ext.parentName;
-    final extDir = io.Directory('$extensionDir/$pName');
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-      elevation: 0,
-      color: cs.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
-        side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Icon
-            ext.icon,
-            const SizedBox(width: 12),
-
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Expanded(
-                      child: Text(ext.name,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600, color: cs.onSurface),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    if (hasUpdate)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text('Update',
-                            style: TextStyle(
-                                color: Colors.orange, fontSize: 10,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                  ]),
-                  const SizedBox(height: 3),
-                  Text(ext.details,
-                      style: TextStyle(fontSize: 11, color: sub),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
-                  Text('${ext.archiveSize} MB',
-                      style: TextStyle(fontSize: 11, color: sub)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-
-            // Inline download button / progress
-            _InlineDownloadButton(
-              index: index,
-              onDownload: () => PackageDownloader.startDownload(
-                context: context,
-                index: index,
-                url: ext.url,
-                archiveName: ext.archiveName,
-                targetDir: downloadsDir,
-                isExtension: true,
-                packageParentName: ext.parentName,
-                extensionMetadata: ext,
-              ),
-              installDir: extDir,
-            ),
-          ],
-        ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        _readme!,
+        style: TextStyle(fontSize: 13, color: cs.onSurface, height: 1.5),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// Enums
+// ═══════════════════════════════════════════════════════════════
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Text(title,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: cs.onSurface.withValues(alpha: 0.7),
-          letterSpacing: 0.4,
-        ));
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Installed section
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _InstalledSection extends StatelessWidget {
-  final void Function(MarketplaceExtension ext) onTap;
-  final OpenVsxClient client;
-  const _InstalledSection({required this.onTap, required this.client});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme     = Theme.of(context);
-    final cs        = theme.colorScheme;
-    final installed = ExtensionRegistry.instance.allInstalled();
-
-    if (installed.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.extension_outlined, size: 52, color: cs.onSurface.withValues(alpha: 0.3)),
-              const SizedBox(height: 14),
-              Text('No extensions installed',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                      color: cs.onSurface.withValues(alpha: 0.6))),
-              const SizedBox(height: 6),
-              Text('Browse Extensions to install one.',
-                  style: TextStyle(fontSize: 12, color: cs.onSurface.withValues(alpha: 0.45)),
-                  textAlign: TextAlign.center),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-      itemCount: installed.length,
-      itemBuilder: (_, i) {
-        final extId = installed[i];
-        final ext   = ExtensionRegistry.instance.get(extId);
-        final name  = ext?.manifest.displayName ?? extId;
-        final desc  = ext?.manifest.description ?? 'Installed';
-
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
-          elevation: 0,
-          color: cs.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.5)),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () {
-              // Build a minimal MarketplaceExtension from installed info
-              final mExt = MarketplaceExtension(
-                namespace:   ext?.manifest.publisher ?? extId.split('.').first,
-                name:        ext?.manifest.name ?? extId,
-                displayName: name,
-                description: desc,
-                version:     ext?.manifest.version ?? '?',
-                categories:  ext?.manifest.categories ?? [],
-                tags:        ext?.manifest.keywords ?? [],
-                repository:  ext?.manifest.repository,
-                license:     null,
-              );
-              onTap(mExt);
-            },
-            child: ListTile(
-              leading: _DefaultExtIcon(size: 40),
-              title: Text(name,
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: cs.onSurface)),
-              subtitle: Text(desc,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.55))),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (ext != null)
-                    IconButton(
-                      icon: Icon(Icons.settings_outlined, size: 18,
-                          color: cs.onSurface.withValues(alpha: 0.55)),
-                      tooltip: 'Settings',
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => ExtensionSettingsPage(extension: ext),
-                      )),
-                    ),
-                  Icon(Icons.check_circle_rounded, color: cs.primary, size: 18),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Shared helpers
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _DefaultExtIcon extends StatelessWidget {
-  final double size;
-  const _DefaultExtIcon({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: size, height: size,
-      decoration: BoxDecoration(
-        color: cs.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Icon(Icons.extension_rounded, size: size * 0.55, color: cs.primary),
-    );
-  }
-}
-
-class _ErrorView extends StatelessWidget {
-  final String      error;
-  final VoidCallback onRetry;
-  const _ErrorView({required this.error, required this.onRetry});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_outlined, size: 48, color: cs.onSurface.withValues(alpha: 0.35)),
-            const SizedBox(height: 12),
-            Text('Could not load extensions',
-                style: Theme.of(context).textTheme.titleSmall,
-                textAlign: TextAlign.center),
-            const SizedBox(height: 8),
-            Text(error,
-                style: TextStyle(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.5)),
-                textAlign: TextAlign.center,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Minimal markdown renderer — preserves line breaks and highlights headings/code.
-class _MarkdownText extends StatelessWidget {
-  final String source;
-  const _MarkdownText({required this.source});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs    = theme.colorScheme;
-    final lines = source.split('\n');
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: lines.map((line) {
-        if (line.startsWith('### ')) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 14, bottom: 4),
-            child: Text(line.substring(4),
-                style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700, color: cs.onSurface)),
-          );
-        }
-        if (line.startsWith('## ')) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 18, bottom: 6),
-            child: Text(line.substring(3),
-                style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700, color: cs.onSurface)),
-          );
-        }
-        if (line.startsWith('# ')) {
-          return Padding(
-            padding: const EdgeInsets.only(top: 22, bottom: 8),
-            child: Text(line.substring(2),
-                style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w700, color: cs.onSurface)),
-          );
-        }
-        if (line.startsWith('```')) {
-          return Container(
-            width: double.infinity,
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(line,
-                style: TextStyle(fontSize: 12, fontFamily: 'monospace',
-                    color: cs.onSurface.withValues(alpha: 0.8))),
-          );
-        }
-        if (line.trim() == '---' || line.trim() == '___') {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Divider(color: cs.outlineVariant),
-          );
-        }
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 1),
-          child: Text(line,
-              style: theme.textTheme.bodySmall?.copyWith(
-                  color: cs.onSurface.withValues(alpha: 0.85), height: 1.6)),
-        );
-      }).toList(),
-    );
-  }
-}
+enum _InstallState { notInstalled, installing, installed, error }
