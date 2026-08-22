@@ -46,54 +46,23 @@ class _QuickLocation {
 }
 
 List<_QuickLocation> _quickLocations() => [
-      _QuickLocation(
-        label: 'Projects',
-        path: projectDir,
-        icon: Icons.workspaces_rounded,
-        color: const Color(0xFF4CAF50),
-      ),
-      _QuickLocation(
-        label: 'Files',
-        path: filesDir,
-        icon: Icons.description_rounded,
-        color: const Color(0xFF2196F3),
-      ),
-      _QuickLocation(
-        label: 'Templates',
-        path: templateDir,
-        icon: Icons.dashboard_customize_rounded,
-        color: const Color(0xFF9C27B0),
-      ),
-      _QuickLocation(
-        label: 'Logs',
-        path: pandaLogsDir,
-        icon: Icons.bug_report_rounded,
-        color: const Color(0xFFFF9800),
-      ),
-      _QuickLocation(
-        label: 'Extensions',
-        path: extensionDir,
-        icon: Icons.extension_rounded,
-        color: const Color(0xFFE91E63),
-      ),
-      _QuickLocation(
-        label: 'Gateway',
-        path: '$appDir/runtimes',
-        icon: Icons.dns_rounded,
-        color: const Color(0xFF00BCD4),
-      ),
-      _QuickLocation(
-        label: 'App Data',
-        path: appDir,
-        icon: Icons.storage_rounded,
-        color: const Color(0xFF607D8B),
-      ),
-      _QuickLocation(
-        label: 'Public Storage',
-        path: publicPandaRootDir,
-        icon: Icons.folder_special_rounded,
-        color: const Color(0xFFFF5722),
-      ),
+      // ── User Data ────────────────────────────────────────
+      _QuickLocation(label: 'Projects', path: projectDir, icon: Icons.workspaces_rounded, color: const Color(0xFF4CAF50)),
+      _QuickLocation(label: 'Files', path: filesDir, icon: Icons.description_rounded, color: const Color(0xFF2196F3)),
+      _QuickLocation(label: 'Templates', path: templateDir, icon: Icons.dashboard_customize_rounded, color: const Color(0xFF9C27B0)),
+      _QuickLocation(label: 'Logs', path: pandaLogsDir, icon: Icons.bug_report_rounded, color: const Color(0xFFFF9800)),
+      // ── System ───────────────────────────────────────────
+      _QuickLocation(label: 'Extensions', path: extensionDir, icon: Icons.extension_rounded, color: const Color(0xFFE91E63)),
+      _QuickLocation(label: 'Runtimes', path: runtimesDir, icon: Icons.dns_rounded, color: const Color(0xFF00BCD4)),
+      _QuickLocation(label: 'Binaries', path: binDir, icon: Icons.terminal, color: const Color(0xFF795548)),
+      _QuickLocation(label: 'Libraries', path: libDir, icon: Icons.memory, color: const Color(0xFF607D8B)),
+      _QuickLocation(label: 'Certificates', path: certDir, icon: Icons.security, color: const Color(0xFF455A64)),
+      _QuickLocation(label: 'Temp', path: tempDir, icon: Icons.timer, color: const Color(0xFFFF5722)),
+      _QuickLocation(label: 'Home', path: homeDir, icon: Icons.home, color: const Color(0xFF8BC34A)),
+      // ── App Root ─────────────────────────────────────────
+      _QuickLocation(label: 'App Root', path: appDir, icon: Icons.storage_rounded, color: const Color(0xFF37474F)),
+      // ── Public ───────────────────────────────────────────
+      _QuickLocation(label: 'Public Storage', path: publicPandaRootDir, icon: Icons.folder_special_rounded, color: const Color(0xFFFF9800)),
     ];
 
 // ═══════════════════════════════════════════════════════════════
