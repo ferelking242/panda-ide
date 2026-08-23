@@ -638,6 +638,50 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _saveTerminalFontSize(fontSize);
   }
 
+  // ── Serveur adb partagé (survit à la fermeture des terminaux) ───────────────
+  // Un proot détaché (sans --kill-on-exit) héberge `adb start-server`.
+  // Toutes les sessions terminal partagent ce daemon sur 127.0.0.1:5037 :
+  // fermer/réouvrir un terminal NE PERD PLUS la connexion adb.
+  static Process? _sharedAdbHost;
+
+  Future<void> _ensureSharedAdbServer(String prootBin, String rootfsDir) async {
+    if (_sharedAdbHost != null) return;
+    try {
+      final sessionEnv = await AlpineSetup.prootSessionEnvironment();
+      // Endpoint mémorisé par l'extension Panda Device (IP:port de debug)
+      String endpoint = '';
+      try {
+        final f = File('$appDir/adb_endpoint.txt');
+        if (f.existsSync()) endpoint = f.readAsStringSync().trim();
+      } catch (_) {}
+
+      final env = <String, String>{...sessionEnv, if (endpoint.isNotEmpty) 'ADB_ENDPOINT': endpoint};
+      final hostArgs = <String>[
+        '-0',
+        '--link2symlink',
+        '--sysvipc',
+        '--rootfs=$rootfsDir',
+        '-b', '/dev',
+        '-b', '/proc',
+        '-b', '/sys',
+        if (Directory(tempDir).existsSync()) ...['-b', '$tempDir:/tmp'],
+        if (Directory(appDir).existsSync()) ...['-b', appDir],
+        '-w', '/root',
+        '/bin/sh',
+        '-c',
+        'adb start-server >/dev/null 2>&1 || true; '
+            'if [ -n "\$ADB_ENDPOINT" ]; then '
+            'adb connect "\$ADB_ENDPOINT" >/dev/null 2>&1 || true; fi; '
+            'exec sleep infinity',
+      ];
+      _sharedAdbHost = await Process.start(prootBin, hostArgs,
+          environment: env, workingDirectory: appDir, mode: ProcessStartMode.detached);
+      PandaLog.i('Terminal', 'Shared adb server host started${endpoint.isNotEmpty ? " (endpoint=$endpoint)" : ""}');
+    } catch (e) {
+      PandaLog.w('Terminal', 'Shared adb host failed (non fatal): $e');
+    }
+  }
+
   // ── PRoot + Alpine session ─────────────────────────────────────────────────
 
   Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
@@ -680,6 +724,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
       PandaLog.w('Terminal', 'PRoot loader (libproot-loader.so) not found');
       runtime.terminal.write('\r\n\x1b[33m[Avertissement: loader PRoot (libproot-loader.so) absent du dossier de libs natives.]\x1b[0m\r\n');
     }
+
+    // Serveur adb partagé démarré AVANT la session (survit aux terminaux)
+    await _ensureSharedAdbServer(prootBin, rootfsDir);
 
     // Le dossier de projet vit souvent sur le stockage public Android
     // (/storage/emulated/0/...). Sans la permission « acces a tous les
@@ -763,6 +810,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
       runtime.pty = process;
       PandaLog.i('Terminal', 'PRoot PTY started successfully in ${sw.elapsedMilliseconds}ms, session=${runtime.sessionId}');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
+      // Notification persistante « Panda IDE working » → anti-kill Android
+      const MethodChannel('com.panda.ide').invokeMethod('startKeepAlive');
 
       process.output
         .cast<List<int>>()
@@ -1377,7 +1426,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
             padding: EdgeInsets.zero,
             controller: runtime.controller,
             autofocus: session.id == state.activeSessionId,
-            keyboardType: TextInputType.multiline,
             theme: activeTheme.theme,
             cursorType: TerminalCursorType.verticalBar,
             alwaysShowCursor: true,
@@ -1432,8 +1480,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 padding: EdgeInsets.zero,
                 controller: r.controller,
                 autofocus: isActive,
-                keyboardType: TextInputType.multiline,
-                theme: activeTheme.theme,
+                    theme: activeTheme.theme,
                 cursorType: TerminalCursorType.verticalBar,
                 alwaysShowCursor: true,
                 deleteDetection: true,
