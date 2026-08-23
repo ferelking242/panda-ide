@@ -30,6 +30,14 @@
     <!-- Foreground service (build / agent tasks) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <!-- Permissions déclarées POUR les extensions (jamais utilisées par l'app) -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.READ_CONTACTS"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
 
     <!-- Overlay / draw over other apps (mode flottant) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
@@ -45,6 +53,11 @@
         android:networkSecurityConfig="@xml/network_security_config">
         <service
             android:name="com.write4me.llama_flutter_android.InferenceService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+        />
+        <service
+            android:name=".KeepAliveService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
         />
