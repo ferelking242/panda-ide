@@ -4516,63 +4516,113 @@ class _SelectTypeState extends State<SelectType>
     final fgDim = isDark ? Colors.grey[500]! : Colors.grey[500]!;
     final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
     final shortcutStyle = TextStyle(fontSize: 11, color: fgDim);
+    Widget _mi(String value, String label, [String? shortcut]) {
+      return PopupMenuItem<String>(value: value,
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(label, style: TextStyle(fontSize: 13, color: fg)),
+          if (shortcut != null) Text(shortcut, style: shortcutStyle),
+        ]));
+    }
     showMenu<String>(
       context: ctx,
       position: const RelativeRect.fromLTRB(0, 35, 0, 0),
       color: bg,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       items: [
-        PopupMenuItem<String>(
-          value: 'close_all',
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Close All', style: TextStyle(fontSize: 13, color: fg)),
-            Text('Ctrl+K W', style: shortcutStyle),
-          ])),
-        PopupMenuItem<String>(
-          value: 'close_saved',
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Close Saved', style: TextStyle(fontSize: 13, color: fg)),
-            Text('Ctrl+K U', style: shortcutStyle),
-          ])),
+        // Group 1_close
+        _mi('close', 'Close', 'Ctrl+W'),
+        _mi('close_others', 'Close Others', 'Ctrl+K Ctrl+W'),
+        _mi('close_right', 'Close to the Right'),
+        _mi('close_saved', 'Close Saved', 'Ctrl+K U'),
+        _mi('close_all', 'Close All', 'Ctrl+K W'),
         const PopupMenuDivider(height: 1),
-        PopupMenuItem<String>(
-          value: 'split_editor',
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Split Editor Right', style: TextStyle(fontSize: 13, color: fg)),
-            Text('Ctrl+\\', style: shortcutStyle),
-          ])),
+        // Group 1_open
+        _mi('reopen', 'Reopen Editor With...'),
         const PopupMenuDivider(height: 1),
-        PopupMenuItem<String>(
-          value: 'show_opened',
-          child: Text('Show Opened Editors',
-              style: TextStyle(fontSize: 13, color: fg))),
-        PopupMenuItem<String>(
-          value: 'reopen',
-          child: Text("Reopen Editor With...",
-              style: TextStyle(fontSize: 13, color: fg))),
-        PopupMenuItem<String>(
-          value: 'enable_preview',
-          child: Row(children: [
-            Icon(Icons.check, size: 14, color: fg),
-            const SizedBox(width: 8),
-            Text('Enable Preview Editors',
-                style: TextStyle(fontSize: 13, color: fg)),
-          ])),
+        // Group 3_preview
+        _mi('keep_open', 'Keep Open'),
+        _mi('pin', 'Pin'),
+        _mi('unpin', 'Unpin'),
+        const PopupMenuDivider(height: 1),
+        // Group 5_split
+        _mi('split_right', 'Split Right', 'Ctrl+\\'),
+        _mi('split_down', 'Split Down'),
+        const PopupMenuDivider(height: 1),
+        // Group 7_new_window
+        _mi('move_new_window', 'Move into New Window'),
+        _mi('copy_new_window', 'Copy into New Window'),
+        const PopupMenuDivider(height: 1),
+        // Group 11_share
+        _mi('share', 'Share'),
+        const PopupMenuDivider(height: 1),
+        // Extra
+        _mi('show_opened', 'Show Opened Editors'),
+        _mi('enable_preview', 'Enable Preview Editors'),
       ],
     ).then((value) {
       if (value == null) return;
-      if (value == 'close_all') {
-        setState(() {
-          if (isPrimary) {
-            _editorTabs.clear(); // clean up all editor tab configs
-            _openTabs.clear();
-            _activeTabIdx = 0;
-          } else {
-            _splitTabs.clear();
-            _splitTabIdx = 0;
-            _splitEditor = false; // ferme le split quand tous les onglets sont fermés
+      final tabs = isPrimary ? _openTabs : _splitTabs;
+      final idx = isPrimary ? _activeTabIdx : _splitTabIdx;
+      switch (value) {
+        case 'close':
+          if (tabs.isNotEmpty && idx >= 0 && idx < tabs.length) {
+            setState(() => tabs.removeAt(idx));
           }
-        });
+          break;
+        case 'close_others':
+          if (tabs.isNotEmpty && idx >= 0 && idx < tabs.length) {
+            final kept = tabs[idx];
+            setState(() {
+              tabs.clear();
+              tabs.add(kept);
+              if (isPrimary) _activeTabIdx = 0; else _splitTabIdx = 0;
+            });
+          }
+          break;
+        case 'close_right':
+          if (tabs.isNotEmpty && idx >= 0 && idx < tabs.length) {
+            setState(() => tabs.removeRange(idx + 1, tabs.length));
+          }
+          break;
+        case 'close_saved':
+          setState(() {
+            final dirty = <_TabDef>[];
+            for (final t in tabs) {
+              if (_editorTabs[t.id]?.isDirty ?? false) dirty.add(t);
+            }
+            final kept = dirty.isEmpty ? [tabs.first] : dirty;
+            tabs.clear();
+            tabs.addAll(kept);
+            if (isPrimary) _activeTabIdx = 0; else _splitTabIdx = 0;
+          });
+          break;
+        case 'close_all':
+          setState(() {
+            if (isPrimary) {
+              _editorTabs.clear();
+              _openTabs.clear();
+              _activeTabIdx = 0;
+            } else {
+              _splitTabs.clear();
+              _splitTabIdx = 0;
+              _splitEditor = false;
+            }
+          });
+          break;
+        case 'split_right':
+        case 'split_down':
+          setState(() => _splitEditor = true);
+          break;
+        case 'show_opened':
+        case 'enable_preview':
+        case 'reopen':
+        case 'keep_open':
+        case 'pin':
+        case 'unpin':
+        case 'move_new_window':
+        case 'copy_new_window':
+        case 'share':
+          break;
       }
     });
   }
