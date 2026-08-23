@@ -82,7 +82,8 @@ class ApkService {
     final env = await AlpineSetup.prootSessionEnvironment();
     // No LD_PRELOAD-style leakage into guest: profile unsets it, but apk runs
     // non-login here so drop it explicitly for cleanliness.
-    env.remove('LD_LIBRARY_PATH');
+    // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK
+        // pour trouver libtalloc.so (sinon CANNOT LINK EXECUTABLE).;
 
     final lines = <String>[];
     try {
