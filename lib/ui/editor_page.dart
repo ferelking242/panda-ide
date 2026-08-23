@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -15,6 +16,7 @@ import 'package:panda/ui/mdview.dart';
 import 'package:panda/utils/constants.dart';
 import 'webview.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
+import '../extensions/extension_host.dart';
 import '../terminal/terminal.dart';
 import '../utils/languages.dart';
 import '../utils/functions.dart';
@@ -460,6 +462,9 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
 
     final newController = CodeForgeController(lspConfig: lspConfig);
     await _applyPendingAgenticDiffForFile(newController, file.path);
+
+    // Activation paresseuse : onLanguage:<id> façon VS Code.
+    unawaited(ExtensionHost.instance.onFileOpened(lang.name.toLowerCase()));
 
     return ActiveEditor(
       controller: newController,
