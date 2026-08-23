@@ -12,6 +12,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/panda_manifest.dart';
 import '../native_extension_loader.dart';
 import '../remote_registry.dart';
 import '../../ui/flutter_device_panel.dart';
@@ -32,6 +33,9 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
   RegistryIndex? _index;
   String? _error;
   final Set<String> _installed = {};
+  /// Versions réellement installées (lues dans le panda.yaml local) —
+  /// permet l'état « Mettre à jour » façon VS Code.
+  final Map<String, String> _installedVersions = {};
   final Set<String> _busy = {};
 
   @override
@@ -63,22 +67,51 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
         _error = null;
       });
       for (final e in index.extensions) {
-        if (await RemoteExtensionRegistry.instance.isInstalled(e.id)) {
-          if (mounted) setState(() => _installed.add(e.id));
-        }
+        final ver = await _readInstalledVersion(e.id);
+        if (!mounted) return;
+        setState(() {
+          if (ver != null) {
+            _installed.add(e.id);
+            _installedVersions[e.id] = ver;
+          } else {
+            _installed.remove(e.id);
+            _installedVersions.remove(e.id);
+          }
+        });
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
   }
 
+  /// Lit la version installée directement dans le panda.yaml local.
+  Future<String?> _readInstalledVersion(String id) async {
+    try {
+      final f = File(
+          '\${RemoteExtensionRegistry.instance.installRoot}/\$id/panda.yaml');
+      if (!await f.exists()) return null;
+      return (await PandaManifest.fromFile(f.path)).version;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _install(RegistryEntry entry) async {
     setState(() => _busy.add(entry.id));
     try {
+      // Mise à jour : décharger + purger l'ancien dossier d'abord (fichiers
+      // supprimés entre les versions ne doivent pas traîner).
+      if (_installed.contains(entry.id)) {
+        await NativeExtensionLoader.instance.unload(entry.id);
+        await RemoteExtensionRegistry.instance.uninstall(entry.id);
+      }
       final path = await RemoteExtensionRegistry.instance.install(entry);
       await NativeExtensionLoader.instance.load(path);
       if (!mounted) return;
-      setState(() => _installed.add(entry.id));
+      setState(() {
+        _installed.add(entry.id);
+        _installedVersions[entry.id] = entry.latestVersion;
+      });
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${entry.name} installé 🐼'),
           backgroundColor: Colors.green.shade700));
@@ -106,7 +139,12 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
     try {
       await NativeExtensionLoader.instance.unload(entry.id);
       await RemoteExtensionRegistry.instance.uninstall(entry.id);
-      if (mounted) setState(() => _installed.remove(entry.id));
+      if (mounted) {
+        setState(() {
+          _installed.remove(entry.id);
+          _installedVersions.remove(entry.id);
+        });
+      }
     } finally {
       if (mounted) setState(() => _busy.remove(entry.id));
     }
@@ -191,6 +229,12 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
   Widget _buildCard(RegistryEntry e, ColorScheme cs) {
     final isInstalled = _installed.contains(e.id);
     final isBusy = _busy.contains(e.id);
+    final installedVer = _installedVersions[e.id];
+    // État « mise à jour disponible » comme le marketplace VS Code :
+    // la version distante est strictement plus récente que l'installée.
+    final needsUpdate = isInstalled &&
+        installedVer != null &&
+        RegistryEntry.isNewer(e.latestVersion, installedVer);
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       elevation: 0,
@@ -268,18 +312,38 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
             if (isBusy)
               const SizedBox(width: 18, height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2))
-            else
-              FilledButton.icon(
-                icon: Icon(isInstalled
-                    ? Icons.delete_outline
-                    : Icons.download_rounded, size: 17),
-                label: Text(isInstalled ? 'Désinstaller' : 'Installer'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: isInstalled ? null : cs.primary,
-                  foregroundColor: isInstalled ? cs.error : cs.onPrimary,
+            else ...[
+              if (needsUpdate)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text('\$installedVer → \${e.latestVersion}',
+                      style: TextStyle(
+                          fontSize: 11, color: cs.onSurfaceVariant)),
                 ),
-                onPressed: () => isInstalled ? _uninstall(e) : _install(e),
+              FilledButton.icon(
+                icon: Icon(
+                    needsUpdate
+                        ? Icons.update_rounded
+                        : isInstalled
+                            ? Icons.delete_outline
+                            : Icons.download_rounded,
+                    size: 17),
+                label: Text(needsUpdate
+                    ? 'Mettre à jour'
+                    : isInstalled
+                        ? 'Désinstaller'
+                        : 'Installer'),
+                style: FilledButton.styleFrom(
+                  backgroundColor:
+                      needsUpdate ? Colors.green.shade700 : null,
+                  foregroundColor: isInstalled && !needsUpdate
+                      ? cs.error
+                      : cs.onPrimary,
+                ),
+                onPressed: () =>
+                    needsUpdate || !isInstalled ? _install(e) : _uninstall(e),
               ),
+            ],
           ]),
         ]),
       ),
