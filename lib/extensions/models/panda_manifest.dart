@@ -6,6 +6,8 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:yaml/yaml.dart';
+
 /// Parsed panda.yaml manifest.
 class PandaManifest {
   final String id;
@@ -42,15 +44,29 @@ class PandaManifest {
 
   /// Parse from YAML string (simplified parser — no dependency needed).
   static PandaManifest parse(String yaml) {
-    final doc = _parseYaml(yaml);
+    Map<String, dynamic> doc;
+    try {
+      final loaded = loadYaml(yaml);
+      doc = loaded is YamlMap ? _yamlToMap(loaded) : <String, dynamic>{};
+    } catch (_) {
+      doc = <String, dynamic>{};
+    }
+    // Fallback : mini-parser maison si le vrai YAML échoue ou rend vide.
+    if (doc.isEmpty) {
+      try {
+        doc = _parseYaml(yaml);
+      } catch (_) {
+        doc = <String, dynamic>{};
+      }
+    }
     return PandaManifest(
       id: doc['id'] ?? '',
       name: doc['name'] ?? '',
       version: doc['version'] ?? '0.0.0',
-      author: doc['author'],
-      description: doc['description'],
-      license: doc['license'],
-      repository: doc['repository'],
+      author: _asStr(doc['author']),
+      description: _asStr(doc['description']),
+      license: _asStr(doc['license']),
+      repository: _asStr(doc['repository']),
       compatibility: PandaCompatibility.fromMap(doc['panda'] ?? {}),
       activation: ActivationConfig.fromMap(doc['activation'] ?? {}),
       contributes: ContributedFeatures.fromMap(doc['contributes'] ?? {}),
@@ -93,10 +109,10 @@ class PandaCompatibility {
 
   factory PandaCompatibility.fromMap(Map<String, dynamic> m) =>
       PandaCompatibility(
-        minVersion: m['min_version'],
-        maxVersion: m['max_version'],
+        minVersion: _asStr(m['min_version']),
+        maxVersion: _asStr(m['max_version']),
         platforms: _toStringList(m['platforms']),
-        dartSdk: m['dart_sdk'],
+        dartSdk: _asStr(m['dart_sdk']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -172,53 +188,45 @@ class ContributedFeatures {
 
   factory ContributedFeatures.fromMap(Map<String, dynamic> m) =>
       ContributedFeatures(
-        commands: (m['commands'] as List? ?? [])
-            .map((c) => CommandContribution.fromMap(c))
+        commands: _asList(m['commands'])
+            .map((c) => CommandContribution.fromMap(_asMap(c)))
             .toList(),
-        sidebarViews: (m['views'] is Map
-                ? (m['views']['sidebar'] as List? ?? [])
-                : [])
-            .map((v) => ViewContribution.fromMap(v))
+        sidebarViews: _asList(_asMap(m['views'])['sidebar'])
+            .map((v) => ViewContribution.fromMap(_asMap(v)))
             .toList(),
-        panelViews: (m['views'] is Map
-                ? (m['views']['panel'] as List? ?? [])
-                : [])
-            .map((v) => ViewContribution.fromMap(v))
+        panelViews: _asList(_asMap(m['views'])['panel'])
+            .map((v) => ViewContribution.fromMap(_asMap(v)))
             .toList(),
-        themes: (m['themes'] as List? ?? [])
-            .map((t) => ThemeContribution.fromMap(t))
+        themes: _asList(m['themes'])
+            .map((t) => ThemeContribution.fromMap(_asMap(t)))
             .toList(),
-        languages: (m['languages'] as List? ?? [])
-            .map((l) => LanguageContribution.fromMap(l))
+        languages: _asList(m['languages'])
+            .map((l) => LanguageContribution.fromMap(_asMap(l)))
             .toList(),
-        snippets: (m['snippets'] as List? ?? [])
-            .map((s) => SnippetContribution.fromMap(s))
+        snippets: _asList(m['snippets'])
+            .map((s) => SnippetContribution.fromMap(_asMap(s)))
             .toList(),
-        keybindings: (m['keybindings'] as List? ?? [])
-            .map((k) => KeybindingContribution.fromMap(k))
+        keybindings: _asList(m['keybindings'])
+            .map((k) => KeybindingContribution.fromMap(_asMap(k)))
             .toList(),
-        menus: (m['menus'] is Map
-                ? (m['menus'] as Map).entries
-                    .map((e) => MenuContribution.fromMap(
-                        {'position': e.key, 'items': e.value}))
-                    .toList()
-                : []),
-        configuration: m['configuration'] is Map
-            ? _parseConfigProperties(m['configuration'])
-            : [],
-        icons: (m['icons'] is Map
-                ? (m['icons']['activity_bar'] as List? ?? [])
-                : [])
-            .map((i) => IconContribution.fromMap(i))
+        menus: _asMap(m['menus']).entries
+                .map((e) => MenuContribution.fromMap(
+                    {'position': e.key.toString(), 'command': ''}))
+                .toList(),
+        configuration: m['configuration'] == null
+            ? []
+            : _parseConfigProperties(_asMap(m['configuration'])),
+        icons: _asList(_asMap(m['icons'])['activity_bar'])
+            .map((i) => IconContribution.fromMap(_asMap(i)))
             .toList(),
-        listeners: (m['listeners'] as List? ?? [])
-            .map((l) => ListenerContribution.fromMap(l))
+        listeners: _asList(m['listeners'])
+            .map((l) => ListenerContribution.fromMap(_asMap(l)))
             .toList(),
-        services: (m['services'] as List? ?? [])
-            .map((s) => ServiceContribution.fromMap(s))
+        services: _asList(m['services'])
+            .map((s) => ServiceContribution.fromMap(_asMap(s)))
             .toList(),
-        webviews: (m['webviews'] as List? ?? [])
-            .map((w) => WebviewContribution.fromMap(w))
+        webviews: _asList(m['webviews'])
+            .map((w) => WebviewContribution.fromMap(_asMap(w)))
             .toList(),
       );
 
@@ -259,11 +267,11 @@ class CommandContribution {
 
   factory CommandContribution.fromMap(Map<String, dynamic> m) =>
       CommandContribution(
-        id: m['id'] ?? '',
-        title: m['title'] ?? '',
-        category: m['category'],
-        icon: m['icon'],
-        keybinding: m['keybinding'],
+        id: _asStr(m['id']) ?? '',
+        title: _asStr(m['title']) ?? '',
+        category: _asStr(m['category']),
+        icon: _asStr(m['icon']),
+        keybinding: _asStr(m['keybinding']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -293,11 +301,11 @@ class ViewContribution {
 
   factory ViewContribution.fromMap(Map<String, dynamic> m) =>
       ViewContribution(
-        id: m['id'] ?? '',
-        name: m['name'] ?? '',
-        icon: m['icon'],
-        widget: m['widget'],
-        defaultVisible: m['default_visible'] ?? false,
+        id: _asStr(m['id']) ?? '',
+        name: _asStr(m['name']) ?? '',
+        icon: _asStr(m['icon']),
+        widget: _asStr(m['widget']),
+        defaultVisible: _asBool(m['default_visible']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -325,10 +333,10 @@ class ThemeContribution {
 
   factory ThemeContribution.fromMap(Map<String, dynamic> m) =>
       ThemeContribution(
-        id: m['id'] ?? '',
-        name: m['name'] ?? '',
-        type: m['type'] ?? 'dark',
-        file: m['file'],
+        id: _asStr(m['id']) ?? '',
+        name: _asStr(m['name']) ?? '',
+        type: _asStr(m['type']) ?? 'dark',
+        file: _asStr(m['file']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -362,9 +370,9 @@ class LanguageContribution {
         id: m['id'] ?? '',
         name: m['name'] ?? '',
         extensions: _toStringList(m['extensions']),
-        grammar: m['grammar'],
-        autocomplete: m['autocomplete'] ?? false,
-        linting: m['linting'] ?? false,
+        grammar: _asStr(m['grammar']),
+        autocomplete: _asBool(m['autocomplete']),
+        linting: _asBool(m['linting']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -386,8 +394,8 @@ class SnippetContribution {
 
   factory SnippetContribution.fromMap(Map<String, dynamic> m) =>
       SnippetContribution(
-        language: m['language'] ?? '',
-        file: m['file'] ?? '',
+        language: _asStr(m['language']) ?? '',
+        file: _asStr(m['file']) ?? '',
       );
 
   Map<String, dynamic> toMap() => {'language': language, 'file': file};
@@ -407,9 +415,9 @@ class KeybindingContribution {
 
   factory KeybindingContribution.fromMap(Map<String, dynamic> m) =>
       KeybindingContribution(
-        key: m['key'] ?? '',
-        command: m['command'] ?? '',
-        when: m['when'],
+        key: _asStr(m['key']) ?? '',
+        command: _asStr(m['command']) ?? '',
+        when: _asStr(m['when']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -433,9 +441,9 @@ class MenuContribution {
 
   factory MenuContribution.fromMap(Map<String, dynamic> m) =>
       MenuContribution(
-        position: m['position'] ?? '',
-        command: m['command'] ?? '',
-        when: m['when'],
+        position: _asStr(m['position']) ?? '',
+        command: _asStr(m['command']) ?? '',
+        when: _asStr(m['when']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -470,12 +478,12 @@ class ConfigContribution {
   factory ConfigContribution.fromMap(String key, Map<String, dynamic> m) =>
       ConfigContribution(
         key: key,
-        type: m['type'] ?? 'string',
+        type: _asStr(m['type']) ?? 'string',
         defaultValue: m['default'],
-        description: m['description'],
-        secret: m['secret'] ?? false,
-        min: m['min'],
-        max: m['max'],
+        description: _asStr(m['description']),
+        secret: _asBool(m['secret']),
+        min: _asInt(m['min']),
+        max: _asInt(m['max']),
         values: _toStringList(m['values']),
       );
 
@@ -508,10 +516,10 @@ class IconContribution {
 
   factory IconContribution.fromMap(Map<String, dynamic> m) =>
       IconContribution(
-        id: m['id'] ?? '',
-        name: m['name'] ?? '',
-        icon: m['icon'] ?? '',
-        position: m['position'],
+        id: _asStr(m['id']) ?? '',
+        name: _asStr(m['name']) ?? '',
+        icon: _asStr(m['icon']) ?? '',
+        position: _asStr(m['position']),
       );
 
   Map<String, dynamic> toMap() => {
@@ -531,8 +539,8 @@ class ListenerContribution {
 
   factory ListenerContribution.fromMap(Map<String, dynamic> m) =>
       ListenerContribution(
-        event: m['event'] ?? '',
-        handler: m['handler'] ?? '',
+        event: _asStr(m['event']) ?? '',
+        handler: _asStr(m['handler']) ?? '',
       );
 
   Map<String, dynamic> toMap() => {'event': event, 'handler': handler};
@@ -552,8 +560,8 @@ class ServiceContribution {
 
   factory ServiceContribution.fromMap(Map<String, dynamic> m) =>
       ServiceContribution(
-        id: m['id'] ?? '',
-        type: m['type'] ?? 'background',
+        id: _asStr(m['id']) ?? '',
+        type: _asStr(m['type']) ?? 'background',
         command: _toStringList(m['command']),
       );
 
@@ -580,10 +588,10 @@ class WebviewContribution {
 
   factory WebviewContribution.fromMap(Map<String, dynamic> m) =>
       WebviewContribution(
-        id: m['id'] ?? '',
-        title: m['title'] ?? '',
-        icon: m['icon'],
-        contentType: m['content_type'] ?? 'flutter',
+        id: _asStr(m['id']) ?? '',
+        title: _asStr(m['title']) ?? '',
+        icon: _asStr(m['icon']),
+        contentType: _asStr(m['content_type']) ?? 'flutter',
       );
 
   Map<String, dynamic> toMap() => {
@@ -597,6 +605,38 @@ class WebviewContribution {
 // ═══════════════════════════════════════════════════════════════
 // Helpers — Minimal YAML parser (no external deps)
 // ═══════════════════════════════════════════════════════════════
+
+// ── Conversions sûres (YamlMap / dynamic → types Dart) ──────────────
+
+Map<String, dynamic> _yamlToMap(YamlMap y) => {
+      for (final e in y.entries) e.key.toString(): _convertYaml(e.value),
+    };
+
+dynamic _convertYaml(dynamic v) {
+  if (v is YamlMap) return _yamlToMap(v);
+  if (v is YamlList) return [for (final i in v) _convertYaml(i)];
+  return v;
+}
+
+String? _asStr(dynamic v) =>
+    v == null ? null : (v is String ? v : v.toString());
+
+List<dynamic> _asList(dynamic v) =>
+    v is List ? v : const [];
+
+Map<String, dynamic> _asMap(dynamic v) {
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) return {for (final e in v.entries) e.key.toString(): e.value};
+  return <String, dynamic>{};
+}
+
+bool _asBool(dynamic v, [bool def = false]) => v is bool ? v : def;
+
+int? _asInt(dynamic v) => v is int
+    ? v
+    : v is num
+        ? v.toInt()
+        : int.tryParse(v?.toString() ?? '');
 
 Map<String, dynamic> _parseYaml(String yaml) {
   // Simple line-by-line YAML parser for manifests.
@@ -734,11 +774,11 @@ List<String> _toStringList(dynamic v) {
 }
 
 List<ConfigContribution> _parseConfigProperties(Map<String, dynamic> m) {
-  final props = m['properties'];
-  if (props is Map<String, dynamic>) {
-    return props.entries
-        .map((e) => ConfigContribution.fromMap(e.key, e.value as Map<String, dynamic>))
-        .toList();
-  }
-  return [];
+  final props = _asMap(m['properties']);
+  final source = props.isNotEmpty ? props : m;
+  return [
+    for (final e in source.entries)
+      if (e.key.toString() != 'properties')
+        ConfigContribution.fromMap(e.key.toString(), _asMap(e.value)),
+  ];
 }
