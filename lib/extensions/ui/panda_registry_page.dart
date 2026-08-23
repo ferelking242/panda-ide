@@ -15,7 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import '../models/panda_manifest.dart';
 import '../native_extension_loader.dart';
 import '../remote_registry.dart';
-import '../../ui/flutter_device_panel.dart';
+import '../../services/ide_tab_opener.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION EMBARQUÉE (dans le store)
@@ -138,12 +138,8 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
   }
 
   void _openDevicePanel() {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => Scaffold(
-        appBar: AppBar(title: const Text('🐼 Panda Device')),
-        body: const FlutterDevicePanel(),
-      ),
-    ));
+    // Ouvre le panneau comme onglet IDE (pas de fullscreen Navigator.push).
+    IdeTabOpener.instance.openFlutterDevice();
   }
 
   Future<void> _uninstall(RegistryEntry entry) async {
