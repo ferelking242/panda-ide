@@ -16,6 +16,10 @@ class RegistryEntry {
   final String id;
   final String name;
   final String version;
+  /// Dernière version publiée (versions[0] du registre) — peut différer
+  /// de [version] quand l'index embarque un historique.
+  final String latestVersion;
+  final List<String> dependencies;
   final String? author;
   final String description;
   final String? iconUrl;
@@ -29,6 +33,8 @@ class RegistryEntry {
     required this.id,
     required this.name,
     required this.version,
+    this.latestVersion,
+    this.dependencies = const [],
     this.author,
     this.description = '',
     this.iconUrl,
@@ -39,10 +45,26 @@ class RegistryEntry {
     this.featured = false,
   });
 
-  factory RegistryEntry.fromJson(Map<String, dynamic> j) => RegistryEntry(
+  factory RegistryEntry.fromJson(Map<String, dynamic> j) {
+    // Version la plus récente : versions[0].version si présent (façon
+    // marketplace VS Code), sinon le champ version simple.
+    var latest = (j['version'] ?? '0.0.0').toString();
+    final versions = j['versions'];
+    if (versions is List && versions.isNotEmpty) {
+      final first = versions.first;
+      if (first is Map && first['version'] != null) {
+        latest = first['version'].toString();
+      }
+    }
+    return RegistryEntry(
         id: j['id'] ?? '',
         name: j['name'] ?? '',
-        version: j['version'] ?? '0.0.0',
+        version: (j['version'] ?? '0.0.0').toString(),
+        latestVersion: latest,
+        dependencies: (j['extensionDependencies'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const [],
         author: j['author'],
         description: j['description'] ?? '',
         iconUrl: j['icon'] is Map ? j['icon']['src'] as String? : null,
@@ -55,6 +77,25 @@ class RegistryEntry {
         path: j['path'] ?? '',
         featured: j['featured'] == true,
       );
+  }
+
+  /// true si [candidate] est strictement plus récente que [installed]
+  /// (comparaison sémantique simple X.Y.Z).
+  static bool isNewer(String candidate, String installed) {
+    List<int> parse(String v) => v
+        .split('-')
+        .first
+        .split('.')
+        .map((e) => int.tryParse(e) ?? 0)
+        .toList();
+    final a = parse(candidate), b = parse(installed);
+    for (var i = 0; i < 3; i++) {
+      final x = i < a.length ? a[i] : 0;
+      final y = i < b.length ? b[i] : 0;
+      if (x != y) return x > y;
+    }
+    return false;
+  }
 }
 
 class RegistryIndex {
