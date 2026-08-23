@@ -33,7 +33,7 @@ class RegistryEntry {
     required this.id,
     required this.name,
     required this.version,
-    this.latestVersion,
+    this.latestVersion = '',
     this.dependencies = const [],
     this.author,
     this.description = '',
