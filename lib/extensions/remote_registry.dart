@@ -101,35 +101,47 @@ class RemoteExtensionRegistry {
       try {
         final body = await _getString(url);
         final doc = jsonDecode(body) as Map<String, dynamic>;
-        var list = <RegistryEntry>[
-          for (final e in (doc['extensions'] as List? ?? []))
-            RegistryEntry.fromJson(e as Map<String, dynamic>),
-        ];
-        // Shards (registres volumineux) : paginer le reste
-        final shards = doc['shards'];
-        if (shards is Map && (shards['pages'] as List? ?? []).isNotEmpty) {
-          for (final page in (shards['pages'] as List)) {
-            final shardUrl = (page as Map)['url'] as String;
-            final cdnShard =
-                shardUrl.replaceFirst(repoRawBase, cdnBase);
-            try {
-              final sBody = await _getString(shardUrl)
-                  .timeout(_timeout, onTimeout: () => throw TimeoutException('t'))
-                  .catchError((_) async => await _getString(cdnShard));
-              final sDoc = jsonDecode(sBody) as Map<String, dynamic>;
-              list.addAll([
-                for (final e in (sDoc['extensions'] as List? ?? []))
-                  RegistryEntry.fromJson(e as Map<String, dynamic>)
-              ]);
-            } catch (_) {}
+
+        // Parser tolérant : accepte TOUTES les formes d'index.
+        //  - v1 simple   : { "extensions": [...] }
+        //  - sharding    : { "inline": [...], "featured": [...],
+        //                    "shards": { "pages": [{url}] } }
+        // Dédupliqué par id — featured et inline peuvent se chevaucher.
+        final seen = <String>{};
+        final list = <RegistryEntry>[];
+        void addAllFrom(List<dynamic>? raw) {
+          if (raw == null) return;
+          for (final e in raw) {
+            if (e is! Map<String, dynamic>) continue;
+            final id = (e['id'] ?? '').toString();
+            if (id.isEmpty || !seen.add(id)) continue;
+            list.add(RegistryEntry.fromJson(e));
           }
         }
-        // Petit registre tout-inline
-        if (doc['inline'] is List) {
-          list.addAll([
-            for (final e in (doc['inline'] as List))
-              RegistryEntry.fromJson(e as Map<String, dynamic>)
-          ]);
+
+        addAllFrom(doc['extensions'] as List<dynamic>?);
+        addAllFrom(doc['inline'] as List<dynamic>?);
+        addAllFrom(doc['featured'] as List<dynamic>?);
+
+        // Shards (registres volumineux) : paginer le reste, en lazy
+        final shards = doc['shards'];
+        if (shards is Map) {
+          for (final page in (shards['pages'] as List? ?? [])) {
+            try {
+              final shardUrl =
+                  ((page as Map)['url'] ?? '') as String;
+              if (shardUrl.isEmpty) continue;
+              String sBody;
+              try {
+                sBody = await _getString(shardUrl);
+              } catch (_) {
+                sBody = await _getString(
+                    shardUrl.replaceFirst(repoRawBase, cdnBase));
+              }
+              addAllFrom((jsonDecode(sBody)
+                  as Map<String, dynamic>)['extensions'] as List<dynamic>?);
+            } catch (_) {} // un shard manquant ne casse jamais l'index
+          }
         }
 
         _cache = RegistryIndex(
