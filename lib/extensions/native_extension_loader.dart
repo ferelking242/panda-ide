@@ -156,31 +156,26 @@ class NativeExtensionLoader {
     final completer = Completer<SendPort>();
     final eventController = StreamController<Map<String, dynamic>>.broadcast();
 
-    late StreamSubscription sub;
-    sub = receivePort.listen((message) {
+    // ⚠️ ReceivePort = stream à ÉCOUTE UNIQUE. Un seul listen, jamais
+    // cancel() + re-listen (sinon "Stream has already been listened to").
+    // Les réponses/events sont routés vers l'ext une fois construite.
+    NativeExtension? extRef;
+    receivePort.listen((message) {
       if (message is SendPort && !completer.isCompleted) {
         completer.complete(message);
-      } else if (message is Map<String, dynamic>) {
-        final type = message['type'] as String?;
-        if (type == 'event') {
-          eventController.add(message);
-        } else if (type == 'response') {
-          // Handled by NativeExtension._handleMessage
-        }
+        return;
+      }
+      if (message is Map<String, dynamic>) {
+        extRef?._handleMessage(message);
       }
     });
 
-    final sendPort = await completer.future;
-    sub.cancel();
-
-    // Re-listen for all messages
-    receivePort.listen((message) {
-      if (message is Map<String, dynamic>) {
-        final type = message['type'] as String?;
-        if (type == 'event') {
-          eventController.add(message);
-        }
-      }
+    // Garde-fou : si l'isolate n'envoie jamais son port, ne pas bloquer
+    // le spinner indéfiniment.
+    final sendPort = await completer.future
+        .timeout(const Duration(seconds: 15), onTimeout: () {
+      throw StateError(
+          "L'isolate de l'extension n'a pas démarré (timeout 15s)");
     });
 
     final ext = NativeExtension(
@@ -192,6 +187,7 @@ class NativeExtensionLoader {
       eventController: eventController,
     );
 
+    extRef = ext;
     _extensions[manifest.id] = ext;
     return ext;
   }
