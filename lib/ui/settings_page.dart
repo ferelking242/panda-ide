@@ -22,7 +22,11 @@ class _SettingsPageState extends State<SettingsPage> {
   static const _sections = [
     _Section('Editor', Icons.edit_note),
     _Section('Terminal', Icons.terminal),
+    _Section('Files', Icons.folder_outlined),
+    _Section('Search', Icons.search),
     _Section('Git', Icons.git_branch),
+    _Section('Debug', Icons.bug_report),
+    _Section('SCM', Icons.source),
     _Section('Extensions', Icons.extension),
     _Section('AI', Icons.smart_toy),
     _Section('Appearance', Icons.palette),
@@ -130,7 +134,11 @@ class _SettingsPageState extends State<SettingsPage> {
     switch (name) {
       case 'Editor': return _editorSettings(cs);
       case 'Terminal': return _terminalSettings(cs);
+      case 'Files': return _filesSettings(cs);
+      case 'Search': return _searchSettings(cs);
       case 'Git': return _gitSettings(cs);
+      case 'Debug': return _debugSettings(cs);
+      case 'SCM': return _scmSettings(cs);
       case 'Extensions': return _extensionsSettings(cs);
       case 'AI': return _aiSettings(cs);
       case 'Appearance': return _appearanceSettings(cs);
@@ -203,6 +211,41 @@ class _SettingsPageState extends State<SettingsPage> {
           value: _s.editorSmoothScrolling,
           onChanged: (v) => setState(() => _s.editorSmoothScrolling = v),
         )),
+        const Divider(height: 1),
+        _sectionTitle('Editor — Additional'),
+        _tile('Format On Save', 'Auto-format on save', Switch(
+          value: _s.editorFormatOnSave,
+          onChanged: (v) => setState(() => _s.editorFormatOnSave = v),
+        )),
+        _tile('Cursor Blinking', 'Cursor animation style', _DropdownButton(
+          value: _s.editorCursorBlinking,
+          items: const ['blink', 'smooth', 'phase', 'expand', 'solid'],
+          onChanged: (v) => setState(() => _s.editorCursorBlinking = v),
+        )),
+        _tile('Line Numbers', 'Show line numbers', _DropdownButton(
+          value: _s.editorLineNumbers,
+          items: const ['on', 'off', 'relative'],
+          onChanged: (v) => setState(() => _s.editorLineNumbers = v),
+        )),
+        _tile('Render Line Highlight', 'Highlight current line', _DropdownButton(
+          value: _s.editorRenderLineHighlight,
+          items: const ['none', 'gutter', 'line', 'all'],
+          onChanged: (v) => setState(() => _s.editorRenderLineHighlight = v),
+        )),
+        _tile('Suggest Selection', 'Suggestion selection mode', _DropdownButton(
+          value: _s.editorSuggestSelection,
+          items: const ['first', 'recentlyUsed', 'recentlyUsedByPrefix'],
+          onChanged: (v) => setState(() => _s.editorSuggestSelection = v),
+        )),
+        _tile('Accept Suggestion On Enter', 'Insert suggestion on Enter', Switch(
+          value: _s.editorAcceptSuggestionOnEnter,
+          onChanged: (v) => setState(() => _s.editorAcceptSuggestionOnEnter = v),
+        )),
+        _tile('Snippet Suggestions', 'Show snippets in suggestions', _DropdownButton(
+          value: _s.editorSnippetSuggestions,
+          items: const ['inline', 'top', 'bottom', 'none'],
+          onChanged: (v) => setState(() => _s.editorSnippetSuggestions = v),
+        )),
       ],
     );
   }
@@ -274,6 +317,89 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
+  // FILES SETTINGS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _filesSettings(ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Files'),
+        _tile('Auto Save', 'Auto-save behavior', _DropdownButton(
+          value: _s.filesAutoSave,
+          items: const ['off', 'afterDelay', 'onFocusChange', 'onWindowChange'],
+          onChanged: (v) => setState(() => _s.filesAutoSave = v),
+        )),
+        _tile('Encoding', 'Default file encoding', _DropdownButton(
+          value: _s.filesEncoding,
+          items: const ['utf8', 'utf16le', 'utf16be', 'iso88591', 'windows1252'],
+          onChanged: (v) => setState(() => _s.filesEncoding = v),
+        )),
+        _tile('End of Line', 'Line ending character', _DropdownButton(
+          value: _s.filesEol,
+          items: const ['\n', '\r\n'],
+          onChanged: (v) => setState(() => _s.filesEol = v),
+        )),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SEARCH SETTINGS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _searchSettings(ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Search'),
+        _tile('Smart Case', 'Search case-insensitive unless uppercase used', Switch(
+          value: _s.searchSmartCase,
+          onChanged: (v) => setState(() => _s.searchSmartCase = v),
+        )),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // DEBUG SETTINGS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _debugSettings(ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Debug'),
+        _tile('Stop on Entry', 'Pause at first line of entry point', Switch(
+          value: _s.debugStopOnEntry,
+          onChanged: (v) => setState(() => _s.debugStopOnEntry = v),
+        )),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SCM SETTINGS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _scmSettings(ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionTitle('Source Control'),
+        _tile('Auto Refresh', 'Refresh on file changes', Switch(
+          value: _s.scmAutoRefresh,
+          onChanged: (v) => setState(() => _s.scmAutoRefresh = v),
+        )),
+        _tile('Enable Smart Commit', 'Auto-stage when all changes are in the same resource group', Switch(
+          value: _s.gitEnableSmartCommit,
+          onChanged: (v) => setState(() => _s.gitEnableSmartCommit = v),
+        )),
+      ],
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
   // EXTENSIONS SETTINGS
   // ══════════════════════════════════════════════════════════════════════════
 
@@ -283,6 +409,10 @@ class _SettingsPageState extends State<SettingsPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle('Extensions'),
+        _tile('Auto Update', 'Update extensions automatically', Switch(
+          value: _s.extensionsAutoUpdate,
+          onChanged: (v) => setState(() => _s.extensionsAutoUpdate = v),
+        )),
         Text('$count extension(s) installed', style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant)),
         const SizedBox(height: 12),
         if (count > 0)
@@ -485,6 +615,38 @@ class _NumberStepper extends StatelessWidget {
           constraints: const BoxConstraints(),
         ),
       ],
+    );
+  }
+}
+
+class _DropdownButton extends StatelessWidget {
+  final String value;
+  final List<String> items;
+  final ValueChanged<String>? onChanged;
+
+  const _DropdownButton({
+    required this.value,
+    required this.items,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButton<String>(
+      value: value,
+      isDense: true,
+      underline: const SizedBox.shrink(),
+      style: TextStyle(
+        fontSize: 13,
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
+      items: items.map((item) => DropdownMenuItem(
+        value: item,
+        child: Text(item),
+      )).toList(),
+      onChanged: (v) {
+        if (v != null) onChanged?.call(v);
+      },
     );
   }
 }

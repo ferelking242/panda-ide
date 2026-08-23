@@ -63,6 +63,73 @@ class SettingsService {
   String get editorFontFamily => _prefs.getString('editor.fontFamily') ?? 'JetBrains Mono';
   set editorFontFamily(String v) => _prefs.setString('editor.fontFamily', v);
 
+  // ── NEW: Missing settings from VS Code audit ──
+
+  bool get editorFormatOnSave => _prefs.getBool('editor.formatOnSave') ?? false;
+  set editorFormatOnSave(bool v) => _prefs.setBool('editor.formatOnSave', v);
+
+  String get editorCursorBlinking => _prefs.getString('editor.cursorBlinking') ?? 'blink';
+  set editorCursorBlinking(String v) => _prefs.setString('editor.cursorBlinking', v);
+
+  String get editorLineNumbers => _prefs.getString('editor.lineNumbers') ?? 'on';
+  set editorLineNumbers(String v) => _prefs.setString('editor.lineNumbers', v);
+
+  String get editorRenderLineHighlight => _prefs.getString('editor.renderLineHighlight') ?? 'all';
+  set editorRenderLineHighlight(String v) => _prefs.setString('editor.renderLineHighlight', v);
+
+  String get editorSuggestSelection => _prefs.getString('editor.suggestSelection') ?? 'first';
+  set editorSuggestSelection(String v) => _prefs.setString('editor.suggestSelection', v);
+
+  bool get editorAcceptSuggestionOnEnter => _prefs.getBool('editor.acceptSuggestionOnEnter') ?? true;
+  set editorAcceptSuggestionOnEnter(bool v) => _prefs.setBool('editor.acceptSuggestionOnEnter', v);
+
+  String get editorSnippetSuggestions => _prefs.getString('editor.snippetSuggestions') ?? 'inline';
+  set editorSnippetSuggestions(String v) => _prefs.setString('editor.snippetSuggestions', v);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // FILES
+  // ══════════════════════════════════════════════════════════════════════════
+
+  String get filesAutoSave => _prefs.getString('files.autoSave') ?? 'afterDelay';
+  set filesAutoSave(String v) => _prefs.setString('files.autoSave', v);
+
+  String get filesEncoding => _prefs.getString('files.encoding') ?? 'utf8';
+  set filesEncoding(String v) => _prefs.setString('files.encoding', v);
+
+  String get filesEol => _prefs.getString('files.eol') ?? '\n';
+  set filesEol(String v) => _prefs.setString('files.eol', v);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SEARCH
+  // ══════════════════════════════════════════════════════════════════════════
+
+  bool get searchSmartCase => _prefs.getBool('search.smartCase') ?? false;
+  set searchSmartCase(bool v) => _prefs.setBool('search.smartCase', v);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // DEBUG
+  // ══════════════════════════════════════════════════════════════════════════
+
+  bool get debugStopOnEntry => _prefs.getBool('debug.stopOnEntry') ?? false;
+  set debugStopOnEntry(bool v) => _prefs.setBool('debug.stopOnEntry', v);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SCM
+  // ══════════════════════════════════════════════════════════════════════════
+
+  bool get scmAutoRefresh => _prefs.getBool('scm.autoRefresh') ?? true;
+  set scmAutoRefresh(bool v) => _prefs.setBool('scm.autoRefresh', v);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // EXTENSIONS
+  // ══════════════════════════════════════════════════════════════════════════
+
+  bool get extensionsAutoUpdate => _prefs.getBool('extensions.autoUpdate') ?? true;
+  set extensionsAutoUpdate(bool v) => _prefs.setBool('extensions.autoUpdate', v);
+
+  bool get gitEnableSmartCommit => _prefs.getBool('git.enableSmartCommit') ?? false;
+  set gitEnableSmartCommit(bool v) => _prefs.setBool('git.enableSmartCommit', v);
+
   // ══════════════════════════════════════════════════════════════════════════
   // TERMINAL
   // ══════════════════════════════════════════════════════════════════════════

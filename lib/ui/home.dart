@@ -18,6 +18,7 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
+import '../utils/settings_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1574,6 +1575,142 @@ class _SelectTypeState extends State<SelectType>
                 }),
                 cursorLine: EditorStatusHub.instance.cursorLine,
                 cursorColumn: EditorStatusHub.instance.cursorColumn,
+                onCursorTap: () {
+                  // Go to line dialog
+                  final ctrl = TextEditingController();
+                  showDialog(
+                    context: ctx,
+                    builder: (d) => AlertDialog(
+                      title: const Text('Go to Line', style: TextStyle(fontSize: 14)),
+                      content: TextField(
+                        controller: ctrl,
+                        autofocus: true,
+                        keyboardType: TextInputType.number,
+                        style: const TextStyle(fontSize: 13),
+                        decoration: const InputDecoration(
+                          hintText: 'Line number',
+                          isDense: true,
+                        ),
+                        onSubmitted: (_) {
+                          final line = int.tryParse(ctrl.text);
+                          if (line != null) {
+                            Navigator.pop(d);
+                            // TODO: navigate to line in editor
+                          }
+                        },
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
+                        TextButton(
+                          onPressed: () {
+                            final line = int.tryParse(ctrl.text);
+                            if (line != null) {
+                              Navigator.pop(d);
+                              // TODO: navigate to line in editor
+                            }
+                          },
+                          child: const Text('Go'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                indentation: 'Spaces: ${SettingsService.I.editorTabSize}',
+                onIndentationTap: () {
+                  // Indentation selector
+                  showModalBottomSheet(
+                    context: ctx,
+                    builder: (d) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('Select Indentation', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          ),
+                          for (final size in [2, 4, 8])
+                            ListTile(
+                              title: Text('Spaces: $size'),
+                              trailing: SettingsService.I.editorTabSize == size
+                                  ? const Icon(Icons.check, color: Color(0xFF007ACC))
+                                  : null,
+                              onTap: () {
+                                setState(() => SettingsService.I.editorTabSize = size);
+                                Navigator.pop(d);
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                encoding: SettingsService.I.filesEncoding.toUpperCase(),
+                onEncodingTap: () {
+                  // Encoding selector
+                  showModalBottomSheet(
+                    context: ctx,
+                    builder: (d) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('Select Encoding', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          ),
+                          for (final enc in ['utf8', 'utf16le', 'utf16be', 'iso88591', 'windows1252'])
+                            ListTile(
+                              title: Text(enc.toUpperCase()),
+                              trailing: SettingsService.I.filesEncoding == enc
+                                  ? const Icon(Icons.check, color: Color(0xFF007ACC))
+                                  : null,
+                              onTap: () {
+                                setState(() => SettingsService.I.filesEncoding = enc);
+                                Navigator.pop(d);
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+                endOfLine: SettingsService.I.filesEol == '\n' ? 'LF' : 'CRLF',
+                onEndOfLineTap: () {
+                  // End of line selector
+                  showModalBottomSheet(
+                    context: ctx,
+                    builder: (d) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('Select End of Line Sequence', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          ),
+                          ListTile(
+                            title: const Text('LF'),
+                            trailing: SettingsService.I.filesEol == '\n'
+                                ? const Icon(Icons.check, color: Color(0xFF007ACC))
+                                : null,
+                            onTap: () {
+                              setState(() => SettingsService.I.filesEol = '\n');
+                              Navigator.pop(d);
+                            },
+                          ),
+                          ListTile(
+                            title: const Text('CRLF'),
+                            trailing: SettingsService.I.filesEol == '\r\n'
+                                ? const Icon(Icons.check, color: Color(0xFF007ACC))
+                                : null,
+                            onTap: () {
+                              setState(() => SettingsService.I.filesEol = '\r\n');
+                              Navigator.pop(d);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
                 language: EditorStatusHub.instance.language,
                 unreadNotifications: PandaNotifications.unreadCount,
                 onNotificationsTap: () => _showNotificationInbox(dCtx),

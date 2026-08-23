@@ -15,6 +15,22 @@ import 'package:flutter/material.dart';
 enum BottomPanelTab { problems, output, debugConsole, terminal }
 
 // ═══════════════════════════════════════════════════════════════
+// Terminal Tab Model (VS Code-style multi-terminal)
+// ═══════════════════════════════════════════════════════════════
+
+class TerminalTab {
+  final String id;
+  String name;
+  bool isActive;
+
+  TerminalTab({
+    required this.id,
+    required this.name,
+    this.isActive = false,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Diagnostic (Problem)
 // ═══════════════════════════════════════════════════════════════
 
@@ -90,12 +106,16 @@ class BottomPanelState {
   final List<Diagnostic> diagnostics;
   final bool isVisible;
   final double height;
+  final List<TerminalTab> terminalTabs;
+  final String? activeTerminalId;
 
   const BottomPanelState({
     this.activeTab = BottomPanelTab.problems,
     this.diagnostics = const [],
     this.isVisible = false,
     this.height = 200,
+    this.terminalTabs = const [],
+    this.activeTerminalId,
   });
 
   BottomPanelState copyWith({
@@ -103,12 +123,16 @@ class BottomPanelState {
     List<Diagnostic>? diagnostics,
     bool? isVisible,
     double? height,
+    List<TerminalTab>? terminalTabs,
+    String? activeTerminalId,
   }) {
     return BottomPanelState(
       activeTab: activeTab ?? this.activeTab,
       diagnostics: diagnostics ?? this.diagnostics,
       isVisible: isVisible ?? this.isVisible,
       height: height ?? this.height,
+      terminalTabs: terminalTabs ?? this.terminalTabs,
+      activeTerminalId: activeTerminalId ?? this.activeTerminalId,
     );
   }
 
@@ -126,6 +150,10 @@ class BottomPanel extends StatefulWidget {
   final ValueChanged<BottomPanelState> onUpdate;
   final ValueChanged<Diagnostic>? onDiagnosticTap;
   final Widget? terminalChild;
+  final String projectDir;
+  final void Function(String id)? onCreateTerminal;
+  final void Function(String id)? onCloseTerminal;
+  final void Function(String id)? onSwitchTerminal;
 
   const BottomPanel({
     super.key,
@@ -133,6 +161,10 @@ class BottomPanel extends StatefulWidget {
     required this.onUpdate,
     this.onDiagnosticTap,
     this.terminalChild,
+    this.projectDir = '/',
+    this.onCreateTerminal,
+    this.onCloseTerminal,
+    this.onSwitchTerminal,
   });
 
   @override
@@ -508,11 +540,180 @@ class _BottomPanelState extends State<BottomPanel> {
   // ── Terminal Tab ─────────────────────────────────────────────
 
   Widget _buildTerminalTab() {
-    return widget.terminalChild ?? const Center(
-      child: Text(
-        'Terminal not available',
-        style: TextStyle(color: Colors.white38, fontSize: 12),
+    final tabs = widget.state.terminalTabs;
+    final activeId = widget.state.activeTerminalId;
+
+    return Column(
+      children: [
+        // Terminal tab bar
+        Container(
+          height: 28,
+          decoration: const BoxDecoration(
+            color: Color(0xFF252526),
+            border: Border(
+              bottom: BorderSide(color: Color(0xFF3C3C3C), width: 0.5),
+            ),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: 4),
+              // Terminal tabs
+              for (final tab in tabs)
+                _terminalTabChip(tab, activeId == tab.id),
+              // New terminal button
+              GestureDetector(
+                onTap: () {
+                  final newId = 'terminal-${DateTime.now().millisecondsSinceEpoch}';
+                  final newTabs = [
+                    ...tabs,
+                    TerminalTab(id: newId, name: 'Terminal ${tabs.length + 1}'),
+                  ];
+                  widget.onUpdate(widget.state.copyWith(
+                    terminalTabs: newTabs,
+                    activeTerminalId: newId,
+                  ));
+                  widget.onCreateTerminal?.call(newId);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: const Icon(Icons.add, size: 14, color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Terminal content
+        Expanded(
+          child: tabs.isEmpty
+              ? const Center(
+                  child: Text(
+                    'No terminal open. Click + to create one.',
+                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                )
+              : widget.terminalChild ?? const Center(
+                  child: Text(
+                    'Terminal not available',
+                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _terminalTabChip(TerminalTab tab, bool isActive) {
+    return GestureDetector(
+      onTap: () {
+        widget.onUpdate(widget.state.copyWith(activeTerminalId: tab.id));
+        widget.onSwitchTerminal?.call(tab.id);
+      },
+      onLongPress: () {
+        // Show rename/delete menu
+        showModalBottomSheet(
+          context: context,
+          builder: (ctx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.edit, size: 18),
+                  title: const Text('Rename', style: TextStyle(fontSize: 13)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _renameTerminal(tab);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, size: 18, color: Color(0xFFF14C4C)),
+                  title: const Text('Kill Terminal', style: TextStyle(fontSize: 13, color: Color(0xFFF14C4C))),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _closeTerminalTab(tab);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFF1E1E2E) : Colors.transparent,
+          border: Border(
+            bottom: BorderSide(
+              color: isActive ? Colors.white : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              tab.name,
+              style: TextStyle(
+                color: isActive ? Colors.white : Colors.white70,
+                fontSize: 11,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+            const SizedBox(width: 4),
+            GestureDetector(
+              onTap: () => _closeTerminalTab(tab),
+              child: Icon(
+                Icons.close,
+                size: 12,
+                color: isActive ? Colors.white70 : Colors.white38,
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  void _renameTerminal(TerminalTab tab) {
+    final ctrl = TextEditingController(text: tab.name);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename Terminal', style: TextStyle(fontSize: 14)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          style: const TextStyle(fontSize: 13),
+          decoration: const InputDecoration(
+            hintText: 'Terminal name',
+            isDense: true,
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              tab.name = ctrl.text.isEmpty ? tab.name : ctrl.text;
+              widget.onUpdate(widget.state.copyWith(terminalTabs: [...widget.state.terminalTabs]));
+              Navigator.pop(ctx);
+            },
+            child: const Text('Rename'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _closeTerminalTab(TerminalTab tab) {
+    final newTabs = widget.state.terminalTabs.where((t) => t.id != tab.id).toList();
+    String? newActiveId = widget.state.activeTerminalId;
+    if (newActiveId == tab.id) {
+      newActiveId = newTabs.isNotEmpty ? newTabs.last.id : null;
+    }
+    widget.onUpdate(widget.state.copyWith(
+      terminalTabs: newTabs,
+      activeTerminalId: newActiveId,
+    ));
+    widget.onCloseTerminal?.call(tab.id);
   }
 }
