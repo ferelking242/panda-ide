@@ -2436,11 +2436,19 @@ class _SelectTypeState extends State<SelectType>
       }
       if (mounted) setState(() => _sidebarSearching = true);
       final results = <File>[];
+      // VS Code-style exclude patterns
+      const excludePatterns = {
+        '.git', 'node_modules', 'build', '.dart_tool', '.idea',
+        '.vscode', '__pycache__', '.gradle', 'Pods', '.svn',
+        'dist', '.cache', '.pub-cache', '.pub', 'coverage',
+      };
       try {
         await for (final entity in Directory(activeDir)
             .list(recursive: true, followLinks: false)) {
           if (entity is File) {
             final name = path.basename(entity.path).toLowerCase();
+            final relativePath = path.relative(entity.path, from: activeDir);
+            if (excludePatterns.any((e) => relativePath.split(path.separator).contains(e))) continue;
             if (name.contains(query.toLowerCase())) {
               results.add(entity);
               if (results.length >= 50) break;

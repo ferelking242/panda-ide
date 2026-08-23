@@ -669,6 +669,8 @@ class CodeForgeController implements DeltaTextInputClient {
 
   /// Whether inlay hints have changed and need repaint
   bool inlayHintsChanged = false;
+  bool codeLensChanged = false;
+  List<CodeLensItem> _codeLensItems = [];
 
   /// Whether document colors have changed and need repaint
   bool documentColorsChanged = false;
@@ -693,6 +695,7 @@ class CodeForgeController implements DeltaTextInputClient {
 
   /// Returns the current inlay hints
   List<InlayHint> get inlayHints => List.unmodifiable(_inlayHints);
+  List<CodeLensItem> get codeLensItems => List.unmodifiable(_codeLensItems);
 
   /// Returns whether inlay hints are currently visible
   bool get inlayHintsVisible => _inlayHintsVisible;
@@ -1382,6 +1385,33 @@ class CodeForgeController implements DeltaTextInputClient {
   void clearInlayHints() {
     _inlayHints = [];
     inlayHintsChanged = true;
+    notifyListeners();
+  }
+
+  /// Fetches CodeLens items from the LSP server.
+  Future<void> fetchCodeLens() async {
+    if (lspConfig == null || openedFile == null) return;
+    try {
+      final items = await lspConfig!.getCodeLens(openedFile!);
+      _codeLensItems = items;
+      codeLensChanged = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error fetching CodeLens: $e');
+    }
+  }
+
+  /// Sets CodeLens items directly (for custom providers).
+  void setCodeLens(List<CodeLensItem> items) {
+    _codeLensItems = items;
+    codeLensChanged = true;
+    notifyListeners();
+  }
+
+  /// Clears all CodeLens items.
+  void clearCodeLens() {
+    _codeLensItems = [];
+    codeLensChanged = true;
     notifyListeners();
   }
 

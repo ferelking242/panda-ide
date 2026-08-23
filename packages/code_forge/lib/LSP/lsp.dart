@@ -689,6 +689,41 @@ sealed class LspConfig {
     return response;
   }
 
+  /// Sends a `textDocument/codeLens` request for [filePath].
+  /// Returns a list of [CodeLensItem]s for the document.
+  Future<List<CodeLensItem>> getCodeLens(String filePath) async {
+    final response = await sendRequest(
+      method: 'textDocument/codeLens',
+      params: {
+        'textDocument': {'uri': Uri.file(filePath).toString()},
+      },
+    );
+    final List<CodeLensItem> items = [];
+    try {
+      final result = response['result'];
+      if (result == null || result is! List) return items;
+      for (final entry in result) {
+        if (entry is! Map<String, dynamic>) continue;
+        final range = entry['range'] as Map<String, dynamic>?;
+        if (range == null) continue;
+        final start = range['start'] as Map<String, dynamic>?;
+        if (start == null) continue;
+        final command = entry['command'] as Map<String, dynamic>?;
+        final title = command?['title'] as String? ?? '';
+        items.add(CodeLensItem(
+          line: start['line'] as int? ?? 0,
+          character: start['character'] as int? ?? 0,
+          commandTitle: title,
+          command: command,
+          tooltip: entry['data']?['tooltip'] as String?,
+        ));
+      }
+    } on Exception catch (e) {
+      debugPrint('CodeLens parse error: $e');
+    }
+    return items;
+  }
+
   /// Gets the definition location for a symbol at the specified position.
   ///
   /// Returns a map with location information, or an empty map if not found.
@@ -1444,6 +1479,28 @@ class LspSignatureHelps {
     required this.documentation,
     required this.label,
     required this.parameters,
+  });
+}
+
+/// A single CodeLens item returned by textDocument/codeLens.
+class CodeLensItem {
+  /// Start line (0-based) of the range this CodeLens belongs to.
+  final int line;
+  /// Start character (0-based).
+  final int character;
+  /// Display text (e.g. "3 references", "Refactor").
+  final String commandTitle;
+  /// The raw LSP command object to execute on tap.
+  final Map<String, dynamic>? command;
+  /// Tooltip shown on hover.
+  final String? tooltip;
+
+  const CodeLensItem({
+    required this.line,
+    required this.character,
+    required this.commandTitle,
+    this.command,
+    this.tooltip,
   });
 }
 

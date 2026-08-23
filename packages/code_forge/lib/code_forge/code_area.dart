@@ -7681,6 +7681,17 @@ class _CodeFieldRenderer extends RenderBox implements MouseTrackerAnnotation {
       );
     }
 
+    if (controller.codeLensItems.isNotEmpty) {
+      _drawCodeLens(
+        canvas,
+        offset,
+        firstVisibleLine,
+        lastVisibleLine,
+        firstVisibleLineY,
+        hasActiveFolds,
+      );
+    }
+
     if (controller.inlayHintsVisible && controller.inlayHints.isNotEmpty) {
       _drawInlayHints(
         canvas,
@@ -10876,6 +10887,51 @@ class _CodeFieldRenderer extends RenderBox implements MouseTrackerAnnotation {
       }
     }
   }
+
+  /// Draws CodeLens items (e.g. "3 references", "Refactor") above lines.
+  void _drawCodeLens(
+    Canvas canvas,
+    Offset offset,
+    int firstVisibleLine,
+    int lastVisibleLine,
+    double firstVisibleLineY,
+    bool hasActiveFolds,
+  ) {
+    final items = controller.codeLensItems;
+    if (items.isEmpty) return;
+
+    final TextStyle baseStyle = TextStyle(
+      fontSize: (widget.textStyle?.fontSize ?? 14) - 2,
+      color: const Color(0xFF888888),
+      fontFamily: widget.textStyle?.fontFamily,
+    );
+
+    // Group items by line
+    final byLine = <int, List<CodeLensItem>>{};
+    for (final item in items) {
+      byLine.putIfAbsent(item.line, () => []).add(item);
+    }
+
+    for (final entry in byLine.entries) {
+      final line = entry.key;
+      final lineItems = entry.value;
+      if (line < firstVisibleLine || line > lastVisibleLine) continue;
+
+      final lineY = _lineNumberToY(line, firstVisibleLine, firstVisibleLineY, hasActiveFolds);
+      // Draw CodeLens above the line
+      final y = lineY - baseStyle.fontSize! - 4;
+
+      double x = _gutterWidth + 8;
+      for (final item in lineItems) {
+        final span = TextSpan(text: item.commandTitle, style: baseStyle);
+        final tp = TextPainter(text: span, textDirection: TextDirection.ltr)..layout();
+        tp.paint(canvas, Offset(x + offset.dx, y + offset.dy));
+        x += tp.width + 16;
+        tp.dispose();
+      }
+    }
+  }
+
 
   void _drawDocumentColors(
     Canvas canvas,

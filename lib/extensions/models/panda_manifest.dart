@@ -187,6 +187,15 @@ class ContributedFeatures {
   final List<ListenerContribution> listeners;
   final List<ServiceContribution> services;
   final List<WebviewContribution> webviews;
+  // ── VS Code parity: debuggers, authentication, tasks, problems, notebooks, chat, MCP ──
+  final List<DebuggerContribution> debuggers;
+  final List<AuthContribution> authentication;
+  final List<TaskContribution> taskDefinitions;
+  final List<ProblemPatternContribution> problemPatterns;
+  final List<NotebookContribution> notebooks;
+  final List<ChatParticipantContribution> chatParticipants;
+  final List<LanguageModelToolContribution> languageModelTools;
+  final List<McpServerContribution> mcpServers;
 
   const ContributedFeatures({
     this.commands = const [],
@@ -202,6 +211,14 @@ class ContributedFeatures {
     this.listeners = const [],
     this.services = const [],
     this.webviews = const [],
+    this.debuggers = const [],
+    this.authentication = const [],
+    this.taskDefinitions = const [],
+    this.problemPatterns = const [],
+    this.notebooks = const [],
+    this.chatParticipants = const [],
+    this.languageModelTools = const [],
+    this.mcpServers = const [],
   });
 
   factory ContributedFeatures.fromMap(Map<String, dynamic> m) =>
@@ -246,6 +263,30 @@ class ContributedFeatures {
         webviews: _asList(m['webviews'])
             .map((w) => WebviewContribution.fromMap(_asMap(w)))
             .toList(),
+        debuggers: _asList(m['debuggers'])
+            .map((d) => DebuggerContribution.fromMap(_asMap(d)))
+            .toList(),
+        authentication: _asList(m['authentication'])
+            .map((a) => AuthContribution.fromMap(_asMap(a)))
+            .toList(),
+        taskDefinitions: _asList(m['taskDefinitions'])
+            .map((t) => TaskContribution.fromMap(_asMap(t)))
+            .toList(),
+        problemPatterns: _asList(m['problemPatterns'])
+            .map((p) => ProblemPatternContribution.fromMap(_asMap(p)))
+            .toList(),
+        notebooks: _asList(m['notebooks'])
+            .map((n) => NotebookContribution.fromMap(_asMap(n)))
+            .toList(),
+        chatParticipants: _asList(m['chatParticipants'])
+            .map((c) => ChatParticipantContribution.fromMap(_asMap(c)))
+            .toList(),
+        languageModelTools: _asList(m['languageModelTools'])
+            .map((t) => LanguageModelToolContribution.fromMap(_asMap(t)))
+            .toList(),
+        mcpServers: _asList(_asMap(m['mcp'])['servers'])
+            .map((s) => McpServerContribution.fromMap(_asMap(s)))
+            .toList(),
       );
 
   Map<String, dynamic> toMap() => {
@@ -264,6 +305,22 @@ class ContributedFeatures {
           'languages': languages.map((l) => l.toMap()).toList(),
         if (keybindings.isNotEmpty)
           'keybindings': keybindings.map((k) => k.toMap()).toList(),
+        if (debuggers.isNotEmpty)
+          'debuggers': debuggers.map((d) => d.toMap()).toList(),
+        if (authentication.isNotEmpty)
+          'authentication': authentication.map((a) => a.toMap()).toList(),
+        if (taskDefinitions.isNotEmpty)
+          'taskDefinitions': taskDefinitions.map((t) => t.toMap()).toList(),
+        if (problemPatterns.isNotEmpty)
+          'problemPatterns': problemPatterns.map((p) => p.toMap()).toList(),
+        if (notebooks.isNotEmpty)
+          'notebooks': notebooks.map((n) => n.toMap()).toList(),
+        if (chatParticipants.isNotEmpty)
+          'chatParticipants': chatParticipants.map((c) => c.toMap()).toList(),
+        if (languageModelTools.isNotEmpty)
+          'languageModelTools': languageModelTools.map((t) => t.toMap()).toList(),
+        if (mcpServers.isNotEmpty)
+          'mcp': {'servers': mcpServers.map((s) => s.toMap()).toList()},
       };
 }
 
@@ -618,6 +675,91 @@ class WebviewContribution {
         if (icon != null) 'icon': icon,
         'content_type': contentType,
       };
+}
+
+// ── VS Code parity contribution types ──────────────────────────────
+
+class DebuggerContribution {
+  final String type;
+  final String label;
+  final String? program;
+  final Map<String, dynamic>? configurationAttributes;
+  const DebuggerContribution({required this.type, required this.label, this.program, this.configurationAttributes});
+  factory DebuggerContribution.fromMap(Map<String, dynamic> m) => DebuggerContribution(
+    type: _asStr(m['type']) ?? '', label: _asStr(m['label']) ?? '',
+    program: _asStr(m['program']), configurationAttributes: m['configurationAttributes'] as Map<String, dynamic>?,
+  );
+  Map<String, dynamic> toMap() => {'type': type, 'label': label, if (program != null) 'program': program};
+}
+
+class AuthContribution {
+  final String id;
+  final String label;
+  const AuthContribution({required this.id, required this.label});
+  factory AuthContribution.fromMap(Map<String, dynamic> m) => AuthContribution(id: _asStr(m['id']) ?? '', label: _asStr(m['label']) ?? '');
+  Map<String, dynamic> toMap() => {'id': id, 'label': label};
+}
+
+class TaskContribution {
+  final String type;
+  final String? required;
+  const TaskContribution({required this.type, this.required});
+  factory TaskContribution.fromMap(Map<String, dynamic> m) => TaskContribution(type: _asStr(m['type']) ?? '', required: _asStr(m['required']));
+  Map<String, dynamic> toMap() => {'type': type};
+}
+
+class ProblemPatternContribution {
+  final String name;
+  final String? regex;
+  const ProblemPatternContribution({required this.name, this.regex});
+  factory ProblemPatternContribution.fromMap(Map<String, dynamic> m) => ProblemPatternContribution(name: _asStr(m['name']) ?? '', regex: _asStr(m['regex']));
+  Map<String, dynamic> toMap() => {'name': name};
+}
+
+class NotebookContribution {
+  final String type;
+  final String displayName;
+  const NotebookContribution({required this.type, required this.displayName});
+  factory NotebookContribution.fromMap(Map<String, dynamic> m) => NotebookContribution(type: _asStr(m['type']) ?? '', displayName: _asStr(m['displayName']) ?? '');
+  Map<String, dynamic> toMap() => {'type': type, 'displayName': displayName};
+}
+
+class ChatParticipantContribution {
+  final String id;
+  final String name;
+  final String? description;
+  const ChatParticipantContribution({required this.id, required this.name, this.description});
+  factory ChatParticipantContribution.fromMap(Map<String, dynamic> m) => ChatParticipantContribution(
+    id: _asStr(m['id']) ?? '', name: _asStr(m['name']) ?? '', description: _asStr(m['description']),
+  );
+  Map<String, dynamic> toMap() => {'id': id, 'name': name};
+}
+
+class LanguageModelToolContribution {
+  final String id;
+  final String name;
+  final String? description;
+  const LanguageModelToolContribution({required this.id, required this.name, this.description});
+  factory LanguageModelToolContribution.fromMap(Map<String, dynamic> m) => LanguageModelToolContribution(
+    id: _asStr(m['id']) ?? '', name: _asStr(m['name']) ?? '', description: _asStr(m['description']),
+  );
+  Map<String, dynamic> toMap() => {'id': id, 'name': name};
+}
+
+class McpServerContribution {
+  final String id;
+  final String type;
+  final String? command;
+  final List<String> args;
+  final Map<String, String>? env;
+  const McpServerContribution({required this.id, required this.type, this.command, this.args = const [], this.env});
+  factory McpServerContribution.fromMap(Map<String, dynamic> m) => McpServerContribution(
+    id: _asStr(m['id']) ?? '', type: _asStr(m['type']) ?? 'stdio',
+    command: _asStr(m['command']),
+    args: _toStringList(m['args']),
+    env: m['env'] != null ? Map<String, String>.from(m['env'] as Map) : null,
+  );
+  Map<String, dynamic> toMap() => {'id': id, 'type': type, if (command != null) 'command': command, 'args': args};
 }
 
 // ═══════════════════════════════════════════════════════════════
