@@ -1,14 +1,8 @@
 /// Registre distant des extensions — ferelking242/panda-extensions.
 ///
-/// Le marketplace ne lit QU'UN SEUL fichier (`index.json`) pour tout
-/// afficher. L'installation copie les fichiers de l'extension dans le
-/// dossier `extensions/` de l'app au RUNTIME :
-///
-///   GET /repos/…/contents/extensions/<id>?ref=main  → liste récursive
-///   GET raw.githubusercontent.com/…                 → chaque fichier
-///   → $appDir/extensions/<id>/                      → PluginManager.loadAll()
-///
-/// Désinstaller = supprimer le dossier + unload. Aucun rebuild d'APK.
+/// Résilience réseau (mobile proot, connexions instables) :
+///   - timeout court sur chaque requête (jamais de spinner infini)
+///   - fallback CDN jsdelivr si raw.githubusercontent est lent/bloqué
 library;
 
 import 'dart:async';
@@ -28,7 +22,7 @@ class RegistryEntry {
   final List<String> permissions;
   final List<String> tags;
   final String category;
-  final String path; // ex: extensions/dev.panda.device
+  final String path;
   final bool featured;
 
   const RegistryEntry({
@@ -63,14 +57,12 @@ class RegistryEntry {
       );
 }
 
-/// Le registre complet parsé.
 class RegistryIndex {
   final List<RegistryEntry> extensions;
   final DateTime updatedAt;
   RegistryIndex({required this.extensions, required this.updatedAt});
 }
 
-/// Service de registre + installation runtime.
 class RemoteExtensionRegistry {
   RemoteExtensionRegistry._();
   static final RemoteExtensionRegistry instance =
@@ -80,10 +72,14 @@ class RemoteExtensionRegistry {
       'https://raw.githubusercontent.com/ferelking242/panda-extensions/main';
   static const repoApiBase =
       'https://api.github.com/repos/ferelking242/panda-extensions/contents';
+  /// Fallback CDN : sert les fichiers du repo même si GitHub raw est lent.
+  static const cdnBase =
+      'https://cdn.jsdelivr.net/gh/ferelking242/panda-extensions@main';
   static const indexUrl = '$repoRawBase/index.json';
+  static const cdnIndexUrl = '$cdnBase/index.json';
 
-  /// Racine où sont installées les extensions (à injecter par l'app :
-  /// `$appDir/extensions`).
+  static const _timeout = Duration(seconds: 12);
+
   String installRoot = 'extensions';
 
   RegistryIndex? _cache;
@@ -92,7 +88,6 @@ class RemoteExtensionRegistry {
 
   // ── Lecture du catalogue ──────────────────────────────────────────
 
-  /// Récupère l'index (cache mémoire 30 min). [force] ignore le cache.
   Future<RegistryIndex> fetchIndex({bool force = false}) async {
     if (!force &&
         _cache != null &&
@@ -100,56 +95,75 @@ class RemoteExtensionRegistry {
       return _cache!;
     }
 
-    final client = HttpClient();
-    try {
-      final req = await client.getUrl(Uri.parse(indexUrl));
-      final res = await req.close();
-      if (res.statusCode != 200) {
-        throw HttpException('index.json HTTP ${res.statusCode}');
+    // raw d'abord, CDN en secours — avec timeout, JAMAIS de blocage infini
+    Object? lastErr;
+    for (final url in [indexUrl, cdnIndexUrl]) {
+      try {
+        final body = await _getString(url);
+        final doc = jsonDecode(body) as Map<String, dynamic>;
+        var list = <RegistryEntry>[
+          for (final e in (doc['extensions'] as List? ?? []))
+            RegistryEntry.fromJson(e as Map<String, dynamic>),
+        ];
+        // Shards (registres volumineux) : paginer le reste
+        final shards = doc['shards'];
+        if (shards is Map && (shards['pages'] as List? ?? []).isNotEmpty) {
+          for (final page in (shards['pages'] as List)) {
+            final shardUrl = (page as Map)['url'] as String;
+            final cdnShard =
+                shardUrl.replaceFirst(repoRawBase, cdnBase);
+            try {
+              final sBody = await _getString(shardUrl)
+                  .timeout(_timeout, onTimeout: () => throw TimeoutException('t'))
+                  .catchError((_) async => await _getString(cdnShard));
+              final sDoc = jsonDecode(sBody) as Map<String, dynamic>;
+              list.addAll([
+                for (final e in (sDoc['extensions'] as List? ?? []))
+                  RegistryEntry.fromJson(e as Map<String, dynamic>)
+              ]);
+            } catch (_) {}
+          }
+        }
+        // Petit registre tout-inline
+        if (doc['inline'] is List) {
+          list.addAll([
+            for (final e in (doc['inline'] as List))
+              RegistryEntry.fromJson(e as Map<String, dynamic>)
+          ]);
+        }
+
+        _cache = RegistryIndex(
+          extensions: list,
+          updatedAt:
+              DateTime.tryParse(doc['updatedAt'] ?? '') ?? DateTime.now(),
+        );
+        _cacheTime = DateTime.now();
+        return _cache!;
+      } catch (e) {
+        lastErr = e;
       }
-      final body = await res.transform(utf8.decoder).join();
-      final doc = jsonDecode(body) as Map<String, dynamic>;
-      final list = (doc['extensions'] as List? ?? [])
-          .map((e) => RegistryEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
-      _cache = RegistryIndex(
-        extensions: list,
-        updatedAt: DateTime.tryParse(doc['updatedAt'] ?? '') ?? DateTime.now(),
-      );
-      _cacheTime = DateTime.now();
-      return _cache!;
-    } finally {
-      client.close();
     }
+    throw StateError(
+        'Registre inaccessible (raw + CDN). Vérifie la connexion.\n$lastErr');
   }
 
   // ── Installation runtime ─────────────────────────────────────────
 
-  /// Installe une extension depuis le registre.
-  ///
-  /// 1. Liste tous les fichiers du dossier via l'API contents (récursif)
-  /// 2. Télécharge chaque fichier en raw
-  /// 3. Écrit dans `$installRoot/<id>/`
-  ///
-  /// Retourne le chemin installé (prêt pour PluginManager.loadAll).
   Future<String> install(RegistryEntry entry,
       {void Function(int received, int total, String file)? onProgress}) async {
     final targetDir = p.join(installRoot, entry.id);
     await Directory(targetDir).create(recursive: true);
 
-    // 1. Liste récursive via API GitHub
     final files = <_RemoteFile>[];
     await _listRecursive(entry.path, files);
     if (files.isEmpty) {
       throw StateError('Aucun fichier trouvé pour ${entry.id}');
     }
 
-    // 2+3. Téléchargement + copie
     var done = 0;
     for (final f in files) {
       onProgress?.call(done, files.length, f.relPath);
-      final relUnderExt =
-          f.relPath.substring(entry.path.length + 1); // strip "extensions/<id>/"
+      final relUnderExt = f.relPath.substring(entry.path.length + 1);
       final localPath = p.join(targetDir, relUnderExt);
       await File(localPath).parent.create(recursive: true);
       final bytes = await _download(f.rawUrl);
@@ -157,11 +171,9 @@ class RemoteExtensionRegistry {
       done++;
     }
     onProgress?.call(files.length, files.length, '');
-
     return targetDir;
   }
 
-  /// Désinstalle : unload + suppression du dossier. Sans rebuild.
   Future<bool> uninstall(String extensionId) async {
     final dir = Directory(p.join(installRoot, extensionId));
     if (!await dir.exists()) return false;
@@ -173,7 +185,6 @@ class RemoteExtensionRegistry {
     }
   }
 
-  /// IDs des extensions installées localement.
   Future<List<String>> listInstalled() async {
     final root = Directory(installRoot);
     if (!await root.exists()) return [];
@@ -192,29 +203,46 @@ class RemoteExtensionRegistry {
 
   // ── HTTP helpers ─────────────────────────────────────────────────
 
+  Future<String> _getString(String url) async {
+    final client = HttpClient()
+      ..connectionTimeout = _timeout;
+    try {
+      final req = await client.getUrl(Uri.parse(url)).timeout(_timeout);
+      final res = await req.close().timeout(_timeout);
+      if (res.statusCode != 200) {
+        throw HttpException('$url → ${res.statusCode}');
+      }
+      return await res.transform(utf8.decoder).join().timeout(_timeout);
+    } finally {
+      client.close();
+    }
+  }
+
   Future<void> _listRecursive(String apiPath, List<_RemoteFile> out,
       {int depth = 0}) async {
-    if (depth > 6) return; // garde-fou
-    final client = HttpClient();
+    if (depth > 6) return;
+    final client = HttpClient()..connectionTimeout = _timeout;
     try {
-      final req = await client.getUrl(Uri.parse('$repoApiBase/$apiPath?ref=main'));
+      final req = await client
+          .getUrl(Uri.parse('$repoApiBase/$apiPath?ref=main'))
+          .timeout(_timeout);
       req.headers.set('Accept', 'application/vnd.github+json');
-      final res = await req.close();
+      final res = await req.close().timeout(_timeout);
       if (res.statusCode != 200) return;
-      final body = await res.transform(utf8.decoder).join();
+      final body =
+          await res.transform(utf8.decoder).join().timeout(_timeout);
       final items = jsonDecode(body) as List;
       for (final item in items) {
         final m = item as Map<String, dynamic>;
-        final type = m['type'];
-        final path = m['path'] as String;
-        if (type == 'file') {
+        if (m['type'] == 'file') {
           out.add(_RemoteFile(
-            relPath: path,
-            rawUrl: '$repoRawBase/$path',
+            relPath: m['path'] as String,
+            rawUrl: m['download_url'] as String? ??
+                '$repoRawBase/${m['path']}',
             size: (m['size'] as num?)?.toInt() ?? 0,
           ));
-        } else if (type == 'dir') {
-          await _listRecursive(path, out, depth: depth + 1);
+        } else if (m['type'] == 'dir') {
+          await _listRecursive(m['path'] as String, out, depth: depth + 1);
         }
       }
     } finally {
@@ -222,19 +250,25 @@ class RemoteExtensionRegistry {
     }
   }
 
+  /// Téléchargement fichier avec fallback CDN automatique.
   Future<List<int>> _download(String url) async {
-    final client = HttpClient();
+    final client = HttpClient()..connectionTimeout = _timeout;
     try {
-      final req = await client.getUrl(Uri.parse(url));
-      final res = await req.close();
-      if (res.statusCode != 200) {
-        throw HttpException('download $url → ${res.statusCode}');
+      for (final u in [url, url.replaceFirst(repoRawBase, cdnBase)]) {
+        try {
+          final req = await client.getUrl(Uri.parse(u)).timeout(_timeout);
+          final res = await req.close().timeout(_timeout);
+          if (res.statusCode != 200) continue;
+          final builder = BytesBuilder();
+          await for (final chunk in res) {
+            builder.add(chunk);
+          }
+          return builder.takeBytes();
+        } catch (_) {
+          continue; // essai suivant (CDN)
+        }
       }
-      final builder = BytesBuilder();
-      await for (final chunk in res) {
-        builder.add(chunk);
-      }
-      return builder.takeBytes();
+      throw HttpException('download $url échoué (raw + CDN)');
     } finally {
       client.close();
     }
