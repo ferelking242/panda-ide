@@ -77,7 +77,8 @@ class FlutterDeviceService extends ChangeNotifier {
     ];
 
     final env = await AlpineSetup.prootSessionEnvironment();
-    env.remove('LD_LIBRARY_PATH');
+    // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK
+        // pour trouver libtalloc.so (sinon CANNOT LINK EXECUTABLE).;
     env.addAll(extraEnv);
 
     final process = await Process.start(
