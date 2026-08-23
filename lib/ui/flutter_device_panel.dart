@@ -253,7 +253,7 @@ class _FlutterDevicePanelState extends State<FlutterDevicePanel> {
     await _service.startRun(deviceId: dev, onLine: (line) {
       // Output → onglet terminal de l'IDE (pas de console intégrée)
     });
-    setState(() { _busy = false; _status = "Flutter en cours d excution" });
+    setState(() { _busy = false; _status = "Flutter en cours d'execution"; });
     // Ouvrir l'onglet terminal pour voir la sortie
     IdeTabOpener.instance.openTerminal();
   }

@@ -2518,23 +2518,23 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
         tapPosition & const Size(40, 40),
         Offset.zero & overlay.size,
       ),
-      items: [
+      items: <PopupMenuEntry<dynamic>>[
         // ── New ──
         if (widget.enableCreateFileOption)
-          PopupMenuItem(child: _item(Icons.add_circle_outline, 'New File...'),
+          PopupMenuItem<dynamic>(child: _item(Icons.add_circle_outline, 'New File...'),
             onTap: () => Future.delayed(Duration.zero, () => startCreating(path.dirname(file.path), false))),
         if (widget.enableCreateFolderOption)
-          PopupMenuItem(child: _item(Icons.create_new_folder_outlined, 'New Folder...'),
+          PopupMenuItem<dynamic>(child: _item(Icons.create_new_folder_outlined, 'New Folder...'),
             onTap: () => Future.delayed(Duration.zero, () => startCreating(path.dirname(file.path), true))),
         const PopupMenuDivider(),
         // ── Copy paths ──
-        PopupMenuItem(child: _item(Icons.content_copy, 'Copy Path'),
+        PopupMenuItem<dynamic>(child: _item(Icons.content_copy, 'Copy Path'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: file.path));
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Path copied'), duration: Duration(seconds: 1)));
           }),
-        PopupMenuItem(child: _item(Icons.copy_outlined, 'Copy Relative Path'),
+        PopupMenuItem<dynamic>(child: _item(Icons.copy_outlined, 'Copy Relative Path'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: path.relative(file.path, from: widget.rootPath)));
             ScaffoldMessenger.of(context).showSnackBar(
@@ -2542,13 +2542,13 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
           }),
         const PopupMenuDivider(),
         // ── Cut / Copy ──
-        PopupMenuItem(child: _item(Icons.content_cut, 'Cut'),
+        PopupMenuItem<dynamic>(child: _item(Icons.content_cut, 'Cut'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: 'cut:\${file.path}'));
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Cut \${path.basename(file.path)}'), duration: const Duration(seconds: 1)));
           }),
-        PopupMenuItem(child: _item(Icons.copy, 'Copy'),
+        PopupMenuItem<dynamic>(child: _item(Icons.copy, 'Copy'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: 'copy:\${file.path}'));
             ScaffoldMessenger.of(context).showSnackBar(
@@ -2556,14 +2556,14 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
           }),
         const PopupMenuDivider(),
         // ── Open in terminal ──
-        PopupMenuItem(child: _item(Icons.terminal, 'Open in Terminal'), enabled: false),
+        PopupMenuItem<dynamic>(child: _item(Icons.terminal, 'Open in Terminal'), enabled: false),
         const PopupMenuDivider(),
         // ── Modify ──
         if (widget.enableRenameFileOption)
-          PopupMenuItem(child: _item(Icons.edit, 'Rename (F2)'),
+          PopupMenuItem<dynamic>(child: _item(Icons.edit, 'Rename (F2)'),
             onTap: () => Future.delayed(Duration.zero, () => startRenaming(file.path))),
         if (widget.enableDeleteFileOption)
-          PopupMenuItem(child: _item(Icons.delete_outline, 'Delete (Del)', color: Colors.red[300]),
+          PopupMenuItem<dynamic>(child: _item(Icons.delete_outline, 'Delete (Del)', color: Colors.red[300]),
             onTap: () => _showDeleteFileConfirmation(context, file)),
       ],
     );
