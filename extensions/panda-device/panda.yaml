@@ -1,0 +1,90 @@
+# panda.yaml — Extension manifest for Panda IDE
+# Format: panda-v1
+
+id: dev.panda.device
+name: Panda Device
+version: "1.0.0"
+author: "Ferelking"
+description: |
+  Assistant de développement sur appareil — façon Shizuku.
+
+  1. Ouvre les Options développeur Android et guide le Débogage sans fil
+  2. Détecte le port d'appairage + capture le code à 6 chiffres
+     (notification d'aide comme Shizuku pendant la saisie)
+  3. Appaire et connecte adb automatiquement (le téléphone est sa propre machine de dev)
+  4. Vérifie le SDK Flutter ; si absent → installation avec progression dans son UI
+  5. Bouton ▶ Run : flutter run sur l'appareil détecté (hot reload r/R)
+
+license: MIT
+repository: https://github.com/ferelking242/panda-ide
+
+# Compatibility
+panda:
+  min_version: "1.0.0"
+  platforms:
+    - android
+
+# Activation
+activation:
+  events:
+    - onStartup
+
+# Permissions requises
+permissions:
+  - terminal        # exécuter adb/flutter dans le rootfs Alpine
+  - network         # télécharger le SDK Flutter
+  - storage         # cache des téléchargements ($appDir/downloads)
+  - notifications   # notifications d'aide à l'appairage
+
+# Contributions
+contributes:
+  commands:
+    - id: dev.panda.device.open
+      title: "Panda Device: Open Setup Wizard"
+      icon: "$(device-mobile)"
+      keybinding: "ctrl+shift+d"
+
+    - id: dev.panda.device.pair
+      title: "Panda Device: Pair (WiFi Debugging)"
+      icon: "$(link)"
+
+    - id: dev.panda.device.checkFlutter
+      title: "Panda Device: Check / Install Flutter SDK"
+      icon: "$(cloud-download)"
+
+    - id: dev.panda.device.run
+      title: "Panda Device: Run on Device"
+      icon: "$(play)"
+
+    - id: dev.panda.device.status
+      title: "Panda Device: Show Status"
+      icon: "$(info)"
+
+  views:
+    sidebar:
+      - id: dev.panda.device.panel
+        name: "Panda Device"
+        icon: "device-mobile"
+        widget: "views/device_panel.dart"
+        default_visible: false
+
+  configuration:
+    dev.panda.device.adbHost:
+      type: string
+      default: "127.0.0.1"
+      description: "Hôte adb (le téléphone lui-même)"
+    dev.panda.device.flutterChannel:
+      type: string
+      default: "stable"
+      values: ["stable", "beta", "master"]
+      description: "Canal du SDK Flutter à installer"
+    dev.panda.device.flutterPath:
+      type: string
+      default: "/opt/flutter"
+      description: "Chemin d'installation du SDK Flutter dans le rootfs"
+
+  icons:
+    activity_bar:
+      - id: dev.panda.device.activity
+        name: "Panda Device"
+        icon: "device-mobile"
