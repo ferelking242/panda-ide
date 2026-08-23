@@ -55,6 +55,7 @@ import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
 import '../extensions/extension_host.dart';
 import '../extensions/ui/command_palette.dart';
+import '../services/ide_tab_opener.dart';
 import '../extensions/language_feature_router.dart';
 import '../ui/gateway_panel.dart';
 import '../ui/browser/browser_panel.dart';
@@ -566,7 +567,30 @@ class _SelectTypeState extends State<SelectType>
       context.read<ChatSessionBloc>().add(LoadChatSessions());
       checkAndRequestMissingPermissions(context);
       _bootstrapExtensionHost();
+      _registerTabOpener();
     });
+  }
+
+  /// Enregistre le service global d'ouverture d'onglets IDE.
+  /// Les pages marketplace/extensions/device_panel peuvent alors ouvrir
+  /// des onglets SANS Navigator.push fullscreen.
+  void _registerTabOpener() {
+    IdeTabOpener.instance.register(
+      openFlutterDevice: _openFlutterDeviceTab,
+      openTerminal: () {
+        setState(() {
+          if (!_openTabs.any((t) => t.id == 'terminal')) {
+            _openTabs.add(const _TabDef(
+              id: 'terminal',
+              title: 'Terminal',
+              icon: Broken.terminal,
+            ));
+          }
+          _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'terminal');
+          if (_sidebarState == 2) _sidebarState = 1;
+        });
+      },
+    );
   }
 
   /// Scan les manifests des extensions natives puis active celles déclarées
