@@ -425,39 +425,17 @@ class _MarketplacePageState extends State<MarketplacePage> {
       controller: _scrollCtrl,
       padding: const EdgeInsets.only(bottom: 80),
       children: [
-        // 🐼 Registre Panda natif (install runtime sans rebuild)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: GestureDetector(
-            onTap: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const PandaRegistryPage())),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [
-                  cs.primary.withValues(alpha: .15),
-                  cs.tertiary.withValues(alpha: .10),
-                ]),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: cs.primary.withValues(alpha: .3)),
-              ),
-              child: Row(children: [
-                Text('🐼', style: const TextStyle(fontSize: 26)),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment:
-                    CrossAxisAlignment.start, children: [
-                  const Text('Extensions Panda natives',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                  Text('Installables sans redémarrer l\'app',
-                      style: TextStyle(fontSize: 12,
-                          color: cs.onSurfaceVariant)),
-                ])),
-                Icon(Icons.chevron_right_rounded, color: cs.primary),
-              ]),
-            ),
-          ),
+        // 🐼 Registre Panda natif — DANS le store (pas de nouvelle page)
+        const Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+          child: Row(children: [
+            Text('🐼', style: TextStyle(fontSize: 18)),
+            SizedBox(width: 8),
+            Text('Extensions Panda natives',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          ]),
         ),
-        const SizedBox(height: 8),
+        PandaRegistrySection(),
 
         // Categories grid
         Padding(
