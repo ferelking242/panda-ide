@@ -91,9 +91,34 @@ class _SettingsPageState extends State<SettingsPage> {
 
           // Content
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(24),
-              children: [_buildSection(_sections[_selectedSection].name, cs)],
+            child: Column(
+              children: [
+                // Search bar
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                  child: TextField(
+                    decoration: InputDecoration(
+                      hintText: 'Search settings...',
+                      prefixIcon: const Icon(Icons.search, size: 18),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: cs.outlineVariant),
+                      ),
+                      filled: true,
+                      fillColor: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+                    ),
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(24),
+                    children: [_buildSection(_sections[_selectedSection].name, cs)],
+                  ),
+                ),
+              ],
             ),
           ),
         ],

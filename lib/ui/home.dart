@@ -64,6 +64,7 @@ import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
     if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
+import 'widgets/responsive_layout.dart';
 import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
 import 'notifications.dart';
@@ -347,6 +348,7 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Split editor ─────────────────────────────────────────────
   bool _splitEditor = false;
+  int _mobileNavIndex = 2; // default to Editor
   int  _splitTabIdx = 0;
   final List<_TabDef> _splitTabs = [
     const _TabDef(id: 'welcome', title: 'Welcome', icon: Broken.global_refresh),
@@ -1355,6 +1357,23 @@ class _SelectTypeState extends State<SelectType>
                 ),
               ]),
             ),
+
+            // ── Bottom Navigation (mobile only) ──────────────────────────
+            bottomNavigationBar: Responsive.isMobile(context)
+                ? MobileBottomNav(
+                    currentIndex: _mobileNavIndex,
+                    onTap: (i) {
+                      setState(() {
+                        _mobileNavIndex = i;
+                        if (i == 0) { _sidebarState = 2; _activeRail = 1; }
+                        if (i == 1) { _sidebarState = 2; _activeRail = 2; }
+                        if (i == 2) { _sidebarState = 1; _activeRail = 0; }
+                        if (i == 3) { _openAgentTab(); }
+                        if (i == 4) { _push(context, const Settings()); }
+                      });
+                    },
+                  )
+                : null,
 
             // ── Body ─────────────────────────────────────────────────────
             body: SafeArea(

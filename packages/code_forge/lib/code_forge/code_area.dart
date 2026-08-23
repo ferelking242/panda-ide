@@ -10900,10 +10900,9 @@ class _CodeFieldRenderer extends RenderBox implements MouseTrackerAnnotation {
     final items = controller.codeLensItems;
     if (items.isEmpty) return;
 
-    final TextStyle baseStyle = TextStyle(
-      fontSize: (widget.textStyle?.fontSize ?? 14) - 2,
-      color: const Color(0xFF888888),
-      fontFamily: widget.textStyle?.fontFamily,
+    final TextStyle baseStyle = const TextStyle(
+      fontSize: 12,
+      color: Color(0xFF888888),
     );
 
     // Group items by line
@@ -10917,11 +10916,11 @@ class _CodeFieldRenderer extends RenderBox implements MouseTrackerAnnotation {
       final lineItems = entry.value;
       if (line < firstVisibleLine || line > lastVisibleLine) continue;
 
-      final lineY = _lineNumberToY(line, firstVisibleLine, firstVisibleLineY, hasActiveFolds);
+      final lineY = _getLineYOffset(line, hasActiveFolds);
       // Draw CodeLens above the line
       final y = lineY - baseStyle.fontSize! - 4;
 
-      double x = _gutterWidth + 8;
+      double x = 60;
       for (final item in lineItems) {
         final span = TextSpan(text: item.commandTitle, style: baseStyle);
         final tp = TextPainter(text: span, textDirection: TextDirection.ltr)..layout();
