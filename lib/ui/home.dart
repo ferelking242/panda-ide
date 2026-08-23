@@ -1342,6 +1342,13 @@ class _SelectTypeState extends State<SelectType>
                         if (_sidebarState >= 1)
                           _buildActivityBar(context, appTheme),
 
+                        // ── Sidebar panel — pushes editor (VS Code style) ──
+                        if (_sidebarState == 2)
+                          SizedBox(
+                            width: _sidebarWidth,
+                            child: _buildSidebarPanel(context, appTheme),
+                          ),
+
                         // ── Right side: editor stacked above bottom panel ──
                         Expanded(
                           child: Stack(
@@ -1439,19 +1446,7 @@ class _SelectTypeState extends State<SelectType>
                                 ],
                               ),
 
-                              // ── Sidebar overlay (no layout push) ────────────────
-                              if (_sidebarState == 2)
-                                Positioned(
-                                  left: 0,
-                                  // top: 35 = topBar (35 px) — sidebar aligns
-                                  // flush with the editor tab-bar bottom line.
-                                  // PhysicalShape inside _buildSidebarPanel
-                                  // already provides elevation + clip, so the
-                                  // redundant Material wrapper is removed.
-                                  top: 35,
-                                  bottom: 0,
-                                  child: _buildSidebarPanel(context, appTheme),
-                                ),
+
                             ],
                           ),
                         ),
@@ -1823,13 +1818,15 @@ class _SelectTypeState extends State<SelectType>
       final iconColor = isDark ? _kActivityIconDark  : _kActivityIconLight;
       final selColor  = isDark ? _kActivitySelDark   : _kActivitySelLight;
 
-      // Ordre : Marketplace puis Panda Agent tout en haut,
+      // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent, Gateway, Nav, Copilot
       // ensuite les panneaux classiques de l'éditeur.
       final topItems = <_RailItem>[        _RailItem(icon: Broken.element_3,          label: 'Explorateur',      idx: 1),
         _RailItem(icon: Broken.search_normal,       label: 'Rechercher',       idx: 2),
         _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',     idx: 3),
         _RailItem(icon: Broken.play_circle,         label: 'Exécuter / Debug', idx: 4),
-        _RailItem(icon: Broken.cloud_connection,    label: 'Tunnel',           idx: 5),
+        _RailItem(icon: Icons.device_hub,           label: 'Tunnel',           idx: 5),
+        _RailItem(icon: Broken.shop,                label: 'Marketplace',      idx: 6),
+        _RailItem(icon: Icons.psychology,           label: 'Panda Agent',      idx: 10),
 
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
@@ -1843,37 +1840,7 @@ class _SelectTypeState extends State<SelectType>
           children: [
             const SizedBox(height: 6),
 
-            // ── Marketplace — premier élément ──────────────────────────
-            _ActivityBtnEx(
-              item:      _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
-              selected:  false,
-              iconColor: iconColor,
-              selColor:  selColor,
-              onTap:     () {
-                setState(() {
-                  if (!_openTabs.any((t) => t.id == 'marketplace')) {
-                    _openTabs.add(const _TabDef(
-                        id:    'marketplace',
-                        title: 'Extensions',
-                        icon:  Broken.shop));
-                    _activeTabIdx = _openTabs.length - 1;
-                  } else {
-                    _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'marketplace');
-                  }
-                });
-              },
-            ),
-            _RailSeparator(isDark: isDark),
-
-            // ── Panda Agent ────────────────────────────────────────────
-            _RailPandaBtn(
-              iconColor: iconColor,
-              selColor:  selColor,
-              selected:  _openTabs.isNotEmpty &&
-                  _openTabs[_activeTabIdx.clamp(0, _openTabs.length - 1)].id == 'agent',
-              onTap:     _openAgentTab,
-            ),
-            _RailSeparator(isDark: isDark),
+            
 
 
             // ── Sidebar items (scrollable so they never overlap bottom) ───
@@ -1991,7 +1958,6 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
             const Spacer(),
-            _RailSeparator(isDark: isDark),
             const SizedBox(height: 6),
 
             // ── Detached Bottom Section (Theme, Account, Settings) ─────────
@@ -3333,15 +3299,13 @@ class _SelectTypeState extends State<SelectType>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _hdrBtn(Broken.arrow_left_2, 'Reculer', fg, () {}),
-                    const SizedBox(width: 2),
                     Builder(builder: (ctx) => GestureDetector(
                       onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
                       child: Container(
                         key: _workspaceBoxKey,
                         constraints: BoxConstraints(
                             minWidth: 110,
-                            maxWidth: MediaQuery.of(ctx).size.width * 0.40),
+                            maxWidth: MediaQuery.of(ctx).size.width * 0.42),
                         height: 26,
                         padding:
                             const EdgeInsets.symmetric(horizontal: 10),
@@ -3392,8 +3356,6 @@ class _SelectTypeState extends State<SelectType>
                         ),
                       ),
                     )),
-                    const SizedBox(width: 2),
-                    _hdrBtn(Broken.arrow_right_3, 'Avancer', fg, () {}),
                   ],
                 ),
               ),
@@ -4429,6 +4391,7 @@ class _SelectTypeState extends State<SelectType>
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
                       color: isActive ? activeTabBg : Colors.transparent,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                     ),
                     child: Row(children: [
                       _buildTabIconWidget(tab, isActive ? activeFg : inactiveFg),
@@ -4499,7 +4462,6 @@ class _SelectTypeState extends State<SelectType>
         ),
       ]),
     ),
-    Divider(height: 1, thickness: 1, color: sepColor),
     ],
     );
   }
@@ -4521,7 +4483,9 @@ class _SelectTypeState extends State<SelectType>
 
   void _showEditorMenu(BuildContext ctx, bool isDark, bool isPrimary) {
     final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final fgDim = isDark ? Colors.grey[500]! : Colors.grey[500]!;
     final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
+    final shortcutStyle = TextStyle(fontSize: 11, color: fgDim);
     showMenu<String>(
       context: ctx,
       position: const RelativeRect.fromLTRB(0, 35, 0, 0),
@@ -4530,12 +4494,40 @@ class _SelectTypeState extends State<SelectType>
       items: [
         PopupMenuItem<String>(
           value: 'close_all',
-          child: Text('Tout fermer',
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Close All', style: TextStyle(fontSize: 13, color: fg)),
+            Text('Ctrl+K W', style: shortcutStyle),
+          ])),
+        PopupMenuItem<String>(
+          value: 'close_saved',
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Close Saved', style: TextStyle(fontSize: 13, color: fg)),
+            Text('Ctrl+K U', style: shortcutStyle),
+          ])),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<String>(
+          value: 'split_editor',
+          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Split Editor Right', style: TextStyle(fontSize: 13, color: fg)),
+            Text('Ctrl+\\', style: shortcutStyle),
+          ])),
+        const PopupMenuDivider(height: 1),
+        PopupMenuItem<String>(
+          value: 'show_opened',
+          child: Text('Show Opened Editors',
               style: TextStyle(fontSize: 13, color: fg))),
         PopupMenuItem<String>(
           value: 'reopen',
-          child: Text("Réouvrir l'éditeur",
+          child: Text("Reopen Editor With...",
               style: TextStyle(fontSize: 13, color: fg))),
+        PopupMenuItem<String>(
+          value: 'enable_preview',
+          child: Row(children: [
+            Icon(Icons.check, size: 14, color: fg),
+            const SizedBox(width: 8),
+            Text('Enable Preview Editors',
+                style: TextStyle(fontSize: 13, color: fg)),
+          ])),
       ],
     ).then((value) {
       if (value == null) return;
