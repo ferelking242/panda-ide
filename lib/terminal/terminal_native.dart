@@ -342,11 +342,32 @@ class _TerminalRuntime {
   }
 }
 
+/// Store GLOBAL des sessions terminal : survit aux remounts du widget.
+///
+/// Quand le terminal passe du panneau bas au plein écran (et inversement),
+/// le StatefulWidget est recréé — sans ce store, un NOUVEAU PTY était
+/// lancé et la session en cours (apk install, flutter run…) mourait.
+class TerminalSessionStore {
+  TerminalSessionStore._();
+  static final TerminalSessionStore instance = TerminalSessionStore._();
+
+  /// Sessions vivantes (PTY inclus). Vidé uniquement à la fermeture
+  /// explicite de chaque onglet, jamais au remount du widget.
+  final Map<String, _TerminalRuntime> runtimes = {};
+
+  /// Bloc partagé : police, sessions, onglet actif restent cohérents
+  /// entre la vue embarquée et la vue étendue.
+  TerminalSessionBloc? bloc;
+}
+
 class _SetupTerminalState extends State<SetupTerminal> {
-  late final TerminalSessionBloc _sessionBloc;
+  late TerminalSessionBloc _sessionBloc;
   late final List<SSHInfo> sshServerList;
   late final SSHPrivateKey? termuxInfo;
-  final Map<String, _TerminalRuntime> _sessionRuntimes = {};
+  // Pointe vers le store global : les références existantes continuent
+  // de fonctionner, mais les sessions survivent aux remounts.
+  Map<String, _TerminalRuntime> get _sessionRuntimes =>
+      TerminalSessionStore.instance.runtimes;
   AnimationStatus _terminalSelectionStatus = AnimationStatus.dismissed;
   String _sharedPath = '';
   late final PageController _pageController;
@@ -398,7 +419,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
   @override
   void initState() {
     super.initState();
-    _sessionBloc = TerminalSessionBloc(
+    // Réutilise le bloc global si une vue précédente existe (expand/collapse)
+    _sessionBloc = TerminalSessionStore.instance.bloc ??= TerminalSessionBloc(
       initialFontSize: _terminalFontSizeFromConfig(),
     );
     sshServerList = context.read<SSHServersCubit>().state.serverList.where((server) => server.isConnected).toList();
@@ -415,6 +437,16 @@ class _SetupTerminalState extends State<SetupTerminal> {
       await workDir.create(recursive: true);
     }
     if (!mounted) return;
+    // Sessions déjà vivantes (remount expand/collapse) → on ne relance PAS
+    // un PTY : on rebranche simplement l'onglet actif sur la session existante.
+    final live = TerminalSessionStore.instance.runtimes.values
+        .where((r) => r.isProot)
+        .toList();
+    if (live.isNotEmpty && _sessionBloc.state.sessions.isNotEmpty) {
+      _sessionBloc.add(SetActiveTerminalSession(
+          _sessionBloc.state.activeSessionId ?? live.first.sessionId));
+      return;
+    }
     await _createSession(
       args: widget.args,
       makeActive: true,
@@ -1373,11 +1405,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _suggestionsNotifier.dispose();
     _suggestionScrollController.dispose();
     _pageController.dispose();
+    // Les sessions/PTY vivent dans TerminalSessionStore : elles survivent
+    // au dispose (remount plein écran ↔ panneau). Détache juste les
+    // listeners d'UI propres à cette vue.
     for (final runtime in _sessionRuntimes.values) {
-      runtime.dispose();
+      runtime.terminal.onOutput = null;
     }
-    _sessionRuntimes.clear();
-    _sessionBloc.close();
     _exitBannerTimer?.cancel();
     _exitBannerNotifier.dispose();
     super.dispose();
