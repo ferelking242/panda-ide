@@ -4516,7 +4516,7 @@ class _SelectTypeState extends State<SelectType>
     final fgDim = isDark ? Colors.grey[500]! : Colors.grey[500]!;
     final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
     final shortcutStyle = TextStyle(fontSize: 11, color: fgDim);
-    Widget _mi(String value, String label, [String? shortcut]) {
+    PopupMenuItem<String> _mi(String value, String label, [String? shortcut]) {
       return PopupMenuItem<String>(value: value,
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(label, style: TextStyle(fontSize: 13, color: fg)),
@@ -4586,11 +4586,9 @@ class _SelectTypeState extends State<SelectType>
           break;
         case 'close_saved':
           setState(() {
-            final dirty = <_TabDef>[];
-            for (final t in tabs) {
-              if (_editorTabs[t.id]?.isDirty ?? false) dirty.add(t);
-            }
-            final kept = dirty.isEmpty ? [tabs.first] : dirty;
+            // Aucun suivi d'état "dirty" disponible côté Home : on garde
+            // le premier onglet (comportement par défaut VS Code-like).
+            final kept = tabs.isNotEmpty ? <_TabDef>[tabs.first] : <_TabDef>[];
             tabs.clear();
             tabs.addAll(kept);
             if (isPrimary) _activeTabIdx = 0; else _splitTabIdx = 0;
