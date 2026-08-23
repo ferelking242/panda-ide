@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import androidx.core.app.ActivityCompat
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.provider.OpenableColumns
 import android.util.Log
@@ -302,6 +303,133 @@ class MainActivity : FlutterActivity() {
                     } catch (e: Exception) {
                         result.error("COPY_FAILED", e.message, null)
                     }
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+
+        // ── Pairing Notification Listener channel ──────────────────────────────
+        val PAIRING_CHANNEL = "panda.ide/pairing"
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PAIRING_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isNotificationListenerEnabled" -> {
+                    val enabledListeners = android.provider.Settings.Secure.getString(
+                        contentResolver,
+                        "enabled_notification_listeners"
+                    ) ?: ""
+                    result.success(enabledListeners.contains(packageName))
+                }
+
+                "openNotificationListenerSettings" -> {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    } catch (_: Exception) {
+                        startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+                    }
+                    result.success(true)
+                }
+
+                "openDeveloperSettings" -> {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                    } catch (_: Exception) {
+                        startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+                    }
+                    result.success(true)
+                }
+
+                "openWirelessDebugging" -> {
+                    try {
+                        // Android 11+ : tentative d'ouverture directe de la page débogage sans fil
+                        val intent = Intent()
+                        intent.setClassName(
+                            "com.android.settings",
+                            "com.android.settings.Settings\$WirelessDebuggingActivity"
+                        )
+                        startActivity(intent)
+                    } catch (_: Exception) {
+                        // Fallback : options développeur
+                        try {
+                            startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                        } catch (_: Exception) {
+                            startActivity(Intent(android.provider.Settings.ACTION_SETTINGS))
+                        }
+                    }
+                    result.success(true)
+                }
+
+                "getLatestPairingData" -> {
+                    val data = PairingNotificationListener.latestPairing
+                    if (data != null) {
+                        val map = mapOf(
+                            "ip" to data.ip,
+                            "port" to data.port,
+                            "code" to data.code,
+                            "timestamp" to data.timestamp,
+                        )
+                        result.success(map)
+                    } else {
+                        result.success(null)
+                    }
+                }
+
+                "requestIgnoreBatteryOptimization" -> {
+                    try {
+                        val intent = Intent(
+                            android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            Uri.parse("package:$packageName")
+                        )
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (_: Exception) {
+                        result.success(false)
+                    }
+                }
+
+                "isIgnoringBatteryOptimization" -> {
+                    val pm = getSystemService(POWER_SERVICE) as android.os.PowerManager
+                    result.success(pm.isIgnoringBatteryOptimizations(packageName))
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+
+        // ── Permissions channel (POST_NOTIFICATIONS, SDK version) ──────────────
+        val PERMISSIONS_CHANNEL = "panda.ide/permissions"
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            PERMISSIONS_CHANNEL,
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isPostNotificationsGranted" -> {
+                    if (android.os.Build.VERSION.SDK_INT < 33) {
+                        result.success(true)
+                    } else {
+                        val granted = androidx.core.app.ActivityCompat.checkSelfPermission(
+                            this, android.Manifest.permission.POST_NOTIFICATIONS
+                        ) == PackageManager.PERMISSION_GRANTED
+                        result.success(granted)
+                    }
+                }
+
+                "requestPostNotificationsPermission" -> {
+                    if (android.os.Build.VERSION.SDK_INT >= 33) {
+                        ActivityCompat.requestPermissions(
+                            this,
+                            arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                            PERMISSION_REQUEST_CODE
+                        )
+                    }
+                    result.success(true)
+                }
+
+                "getSdkVersion" -> {
+                    result.success(android.os.Build.VERSION.SDK_INT)
                 }
 
                 else -> result.notImplemented()
