@@ -10,7 +10,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'dart:async';
+
 import '../command_registry.dart';
+import '../extension_host.dart';
 
 class CommandPalette extends StatefulWidget {
   const CommandPalette({super.key});
@@ -55,6 +58,7 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
   void initState() {
     super.initState();
     _results = CommandRegistry.instance.all;
+    _loadNativeCommands();
     _ctrl.addListener(_onQuery);
     // Focus automatique sur le champ de recherche
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
@@ -68,6 +72,37 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
     super.dispose();
   }
 
+  /// Fusionne les commandes des extensions natives (.panda) dans la
+  /// palette. Activation paresseuse façon VS Code : on liste les
+  /// contributes.commands SANS charger le code des extensions.
+  Future<void> _loadNativeCommands() async {
+    try {
+      await ExtensionHost.instance.scanInstalled();
+      final native = <RegisteredCommand>[];
+      for (final m in ExtensionHost.instance.knownManifests) {
+        for (final c in m.contributes.commands) {
+          native.add(RegisteredCommand(
+            command: c.id,
+            extensionId: m.id,
+            title: c.title.isNotEmpty ? c.title : c.id,
+            category: c.category ?? m.name,
+            description: m.description,
+          ));
+        }
+      }
+      if (!mounted || native.isEmpty) return;
+      setState(() {
+        final ids = _results.map((c) => c.command).toSet();
+        _results = [
+          ..._results,
+          ...native.where((c) => !ids.contains(c.command)),
+        ];
+      });
+    } catch (_) {
+      // Registre indisponible : la palette garde les commandes builtin.
+    }
+  }
+
   void _onQuery() {
     final filtered = CommandRegistry.instance.search(_ctrl.text);
     setState(() {
@@ -78,6 +113,15 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
 
   void _execute(RegisteredCommand cmd) {
     Navigator.of(context).pop();
+    // Extension native (.panda) : activation paresseuse via l'ExtensionHost
+    // (charge le code seulement maintenant, comme onCommand: de VS Code).
+    final owner = ExtensionHost.instance.manifestOf(cmd.extensionId);
+    if (owner != null &&
+        owner.contributes.commands.any((c) => c.id == cmd.command)) {
+      unawaited(
+          ExtensionHost.instance.executeCommand(cmd.command).catchError((_) {}));
+      return;
+    }
     CommandRegistry.instance.execute(cmd.command, []);
   }
 
