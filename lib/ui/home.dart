@@ -11629,6 +11629,8 @@ class _SidebarClipper extends CustomClipper<Path> {
   }
 
   @override
+  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+}
 
 /// VS Code-style sidebar section card — rounded corners, subtle bg, spacing.
 class _SidebarCard extends StatelessWidget {
