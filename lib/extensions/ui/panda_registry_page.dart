@@ -14,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../native_extension_loader.dart';
 import '../remote_registry.dart';
+import '../../ui/flutter_device_panel.dart';
 
 class PandaRegistryPage extends StatefulWidget {
   const PandaRegistryPage({super.key});
@@ -191,7 +192,16 @@ class _PandaRegistryPageState extends State<PandaRegistryPage> {
           ]),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            if (isBusy)
+            if (isInstalled && e.id == 'dev.panda.device')
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.play_arrow_rounded, size: 17),
+                  label: const Text('Ouvrir'),
+                  onPressed: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const FlutterDevicePanel())),
+                ),
+              ),            if (isBusy)
               const SizedBox(width: 18, height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2))
             else
