@@ -15,6 +15,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 import '../utils/alpine_setup.dart';
 import '../utils/apk_service.dart';
@@ -277,4 +278,81 @@ class FlutterDeviceService extends ChangeNotifier {
 
   Future<bool> shizukuInstallApk(String apkPathOnAndroid) =>
       ShizukuService.instance.pmInstall(apkPathOnAndroid).then((r) => r.ok);
+
+  // ── Vérification et installation automatique de packages ─────────────────
+
+  /// Vérifie si un binaire est disponible dans le rootfs Alpine.
+  Future<bool> checkPackage(String bin) async {
+    final out = await _collectInRootfs(['which $bin 2>/dev/null && echo OK'],
+        timeout: const Duration(seconds: 10));
+    return out.any((l) => l.trim() == 'OK');
+  }
+
+  /// Installe une liste de packages manquants via apk add.
+  Future<void> installPackages(List<String> packages,
+      {void Function(String line)? onLine}) async {
+    if (packages.isEmpty) return;
+    await ApkService.run(['add', '--no-cache', ...packages],
+        onLine: onLine);
+  }
+
+  // ── Découverte automatique du port de débogage (mDNS) ─────────────────────
+
+  /// Tente de découvrir le port de débogage via adb mdns services.
+  /// Retourne le port de connexion (pas le port d'appairage).
+  Future<String?> discoverDebugPort() async {
+    if (!_adbReady) return null;
+    try {
+      final lines = await _collectInRootfs(
+        ['$_adbBin mdns services 2>/dev/null'],
+        timeout: const Duration(seconds: 10),
+      );
+      for (final line in lines) {
+        // Chercher _adb-tls-connect._tcp → contient le port de connexion
+        if (line.contains('_adb-tls-connect')) {
+          final portMatch = RegExp(r':(\d{4,5})').firstMatch(line);
+          if (portMatch != null) return portMatch.group(1);
+        }
+      }
+      // Fallback : chercher n'importe quel port dans le résultat
+      for (final line in lines) {
+        final portMatch = RegExp(r':(\d{4,5})').firstMatch(line);
+        if (portMatch != null) return portMatch.group(1);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // ── Permissions ───────────────────────────────────────────────────────────
+
+  /// Vérifie si la permission POST_NOTIFICATIONS est accordée.
+  Future<bool> isPostNotificationsGranted() async {
+    // Sur Android < 13, toujours accordé
+    if (await _getSdkVersion() < 33) return true;
+    try {
+      final result = await MethodChannel('panda.ide/permissions')
+          .invokeMethod<bool>('isPostNotificationsGranted');
+      return result ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Demande la permission POST_NOTIFICATIONS.
+  Future<void> requestPostNotificationsPermission() async {
+    try {
+      await MethodChannel('panda.ide/permissions')
+          .invokeMethod('requestPostNotificationsPermission');
+    } catch (_) {}
+  }
+
+  Future<int> _getSdkVersion() async {
+    try {
+      final result = await MethodChannel('panda.ide/permissions')
+          .invokeMethod<int>('getSdkVersion');
+      return result ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
 }
