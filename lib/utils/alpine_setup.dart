@@ -61,6 +61,11 @@ class AlpineSetup {
       if (dir.isNotEmpty) 'LD_LIBRARY_PATH': dir,
       if (File(loader).existsSync()) 'PROOT_LOADER': loader,
       'PROOT_TMP_DIR': tempDir,
+      // Android 12+ kernels (Samsung notamment): le filtre seccomp de PRoot
+      // fait echouer aleatoirement des syscalls du tracee sur les gros
+      // fichiers -> apk: "Failed to create ...: I/O error" puis cascade de
+      // "temporary error (try again later)". Desactiver seccomp corrige.
+      'PROOT_NO_SECCOMP': '1',
     };
   }
 

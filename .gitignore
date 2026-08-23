@@ -54,3 +54,6 @@ app.apks
 app-debug.apks
 .prebuilt/
 output.apksattached_assets/
+
+# VS Code source clone used for UI analysis (microsoft/vscode, MIT)
+/reference/

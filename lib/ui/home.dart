@@ -64,6 +64,9 @@ import 'widgets.dart';
 import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
 import 'notifications.dart';
+import 'editor/status_bar.dart';
+import '../services/flutter_device_service.dart';
+import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'logs_ui/logs_explorer_page.dart';
 
@@ -1472,123 +1475,52 @@ class _SelectTypeState extends State<SelectType>
     AppTheme appTheme, {
     bool sidebarActive = false,
   }) {
-    final isDark  = appTheme.isDark;
-    final actBg   = isDark ? _kActivityBgDark : _kActivityBgLight;
-    final editorBg = isDark ? appTheme.scaffoldBg : appTheme.scaffoldBg;
-    final fg      = isDark ? _kActivitySelDark : _kActivitySelLight;
+    final isDark = appTheme.isDark;
+    final actBg = isDark ? _kActivityBgDark : _kActivityBgLight;
 
     return BlocBuilder<RepoStatusBloc, RepoStatusState>(
       builder: (ctx, repoState) {
-        final hasProject = repoState is RepoStatusLoaded &&
-            (repoState.currentBranch?.isNotEmpty ?? false);
-        final branch = hasProject ? repoState.currentBranch! : null;
-
-        // Errors / warnings are 0 for now (will be wired to language diagnostics)
-        const int errors   = 0;
-        const int warnings = 0;
+        final loaded = repoState is RepoStatusLoaded ? repoState : null;
+        final branch = (loaded?.currentBranch?.isNotEmpty ?? false)
+            ? loaded!.currentBranch
+            : null;
 
         // ── Editor portion of the bar (right of activity bar) ─────────
+        // Faithful VS Code port (microsoft/vscode statusbarPart + markers
+        // contribution + notificationsStatus) — see editor/status_bar.dart.
         final editorBar = ClipRRect(
           borderRadius: sidebarActive
               ? const BorderRadius.only(topLeft: Radius.circular(20))
               : BorderRadius.zero,
-          child: Container(
-            height: 22,
-            color: actBg,
-            padding: EdgeInsets.only(left: sidebarActive ? 14 : 6, right: 6),
-            child: Row(children: [
-              // ── Left: remote / branch ───────────────────────────────
-              if (branch != null)
-                _StatusBarItem(
-                  icon: Icons.call_split_rounded,
-                  label: branch,
-                  fg: fg,
-                  onTap: () => _showBranchPicker(ctx, isDark, appTheme,
-                      repoState as RepoStatusLoaded),
-                )
-              else
-                // Folder icon → opens workspace menu when no project / no git
-                Builder(builder: (bCtx) => InkWell(
-                  onTap: () => _showWorkspaceMenu(bCtx, isDark, appTheme),
-                  borderRadius: BorderRadius.circular(3),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    child: _currentWorkspaceDir != null
-                        ? Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(Icons.folder_open_outlined, size: 13, color: fg),
-                            const SizedBox(width: 4),
-                            Text(
-                              _currentWorkspaceName ?? '',
-                              style: TextStyle(fontSize: 11, color: fg),
-                            ),
-                          ])
-                        : Icon(Icons.folder_outlined, size: 13, color: fg),
-                  ),
-                )),
-
-              const SizedBox(width: 6),
-
-              // ── Left: problems ──────────────────────────────────────
-              _StatusBarItem(
-                icon: Icons.cancel_outlined,
-                label: '$errors',
-                fg: errors > 0 ? Colors.red[300]! : fg,
-                onTap: () => setState(() {
+          child: ListenableBuilder(
+            listenable: EditorStatusHub.instance,
+            builder: (_, __) => WorkspaceDiagnosticsListener(
+              builder: (dCtx, errors, warnings, infos) => PandaStatusBar(
+                branchName: branch,
+                hasUpstream: loaded?.hasUpstream ?? false,
+                unpushedCount: loaded?.unpushedCount ?? 0,
+                unpulledCount: loaded?.unpulledCount ?? 0,
+                onBranchTap: branch != null
+                    ? () => _showBranchPicker(ctx, isDark, appTheme, loaded!)
+                    : null,
+                workspaceName: branch == null ? _currentWorkspaceName : null,
+                onWorkspaceTap: branch == null
+                    ? () => _showWorkspaceMenu(ctx, isDark, appTheme)
+                    : null,
+                errorCount: errors,
+                warningCount: warnings,
+                infoCount: infos,
+                onProblemsTap: () => setState(() {
                   _bottomPanelOpen = true;
-                  _bottomPanelTab  = 1;
+                  _bottomPanelTab = 1;
                 }),
+                cursorLine: EditorStatusHub.instance.cursorLine,
+                cursorColumn: EditorStatusHub.instance.cursorColumn,
+                language: EditorStatusHub.instance.language,
+                unreadNotifications: PandaNotifications.unreadCount,
+                onNotificationsTap: () => _showNotificationInbox(dCtx),
               ),
-              const SizedBox(width: 2),
-
-              // ── Left: warnings ──────────────────────────────────────
-              _StatusBarItem(
-                icon: Icons.warning_amber_outlined,
-                label: '$warnings',
-                fg: warnings > 0 ? Colors.orange[300]! : fg,
-                onTap: () => setState(() {
-                  _bottomPanelOpen = true;
-                  _bottomPanelTab  = 1;
-                }),
-              ),
-
-              const Spacer(),
-
-              // ── Right: notifications ────────────────────────────────
-              GestureDetector(
-                onTap: () => _showNotificationInbox(context),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(Icons.notifications_none, size: 14, color: fg),
-                    if (PandaNotifications.unreadCount > 0)
-                      Positioned(
-                        right: -3,
-                        top: -3,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 10,
-                            minHeight: 10,
-                          ),
-                          child: Text(
-                            '${PandaNotifications.unreadCount}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 7,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ]),
+            ),
           ),
         );
 
@@ -1814,6 +1746,66 @@ class _SelectTypeState extends State<SelectType>
   }
 
 
+  /// Ouvre un fichier choisi depuis un contexte workspace (explorateur de la
+  /// page d'accueil, arborescence latérale) dans son propre onglet éditeur.
+  /// Le projet/workspace reste ouvert.
+  void _openFileFromWorkspace(File file, String rootDir) {
+    final lang = languages.firstWhere(
+      (l) => l.extension
+          .contains(path.extension(file.path).replaceFirst('.', '')),
+      orElse: () => languages[0],
+    );
+    _openEditorTab(
+      file:            file,
+      rootDir:         rootDir,
+      languageDetails: lang,
+      isProject:       false,
+    );
+  }
+
+  /// Ferme le workspace actif : nettoie l'état et supprime l'onglet projet
+  /// ainsi que tous les onglets fichiers racinés dedans. C'est le SEUL moyen
+  /// de fermer un projet — fermer des onglets ne ferme jamais le projet.
+  void _closeWorkspace() {
+    setState(() {
+      final dir = _currentWorkspaceDir;
+      _currentWorkspaceDir  = null;
+      _currentWorkspaceName = null;
+      if (dir == null || dir.isEmpty) return;
+
+      final doomed = _editorTabs.entries
+          .where((e) =>
+              e.value.rootDir == dir || e.value.rootDir.startsWith('$dir/'))
+          .map((e) => e.key)
+          .toList();
+      for (final id in doomed) {
+        _editorTabs.remove(id);
+      }
+      _openTabs.removeWhere((t) => doomed.contains(t.id));
+
+      if (_openTabs.isEmpty) {
+        _activeTabIdx = 0;
+      } else {
+        _activeTabIdx = _activeTabIdx.clamp(0, _openTabs.length - 1);
+      }
+    });
+  }
+
+  /// Ouvre l'onglet Flutter Device (adb wireless + preview run).
+  void _openFlutterDeviceTab() {
+    setState(() {
+      if (!_openTabs.any((t) => t.id == 'flutter-device')) {
+        _openTabs.add(const _TabDef(
+          id:    'flutter-device',
+          title: 'Flutter Device',
+          icon:  Broken.mobile,
+        ));
+      }
+      _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'flutter-device');
+      if (_sidebarState == 2) _sidebarState = 1;
+    });
+  }
+
   // ── Activity bar ──────────────────────────────────────────────────────────
   Widget _buildActivityBar(BuildContext context, AppTheme appTheme) {
       final isDark    = appTheme.isDark;
@@ -1823,8 +1815,7 @@ class _SelectTypeState extends State<SelectType>
 
       // Ordre : Marketplace puis Panda Agent tout en haut,
       // ensuite les panneaux classiques de l'éditeur.
-      final topItems = <_RailItem>[
-        _RailItem(icon: Broken.element_3,          label: 'Explorateur',      idx: 1),
+      final topItems = <_RailItem>[        _RailItem(icon: Broken.element_3,          label: 'Explorateur',      idx: 1),
         _RailItem(icon: Broken.search_normal,       label: 'Rechercher',       idx: 2),
         _RailItem(icon: Broken.programming_arrows,  label: 'Contrôle Git',     idx: 3),
         _RailItem(icon: Broken.play_circle,         label: 'Exécuter / Debug', idx: 4),
@@ -3381,6 +3372,21 @@ class _SelectTypeState extends State<SelectType>
                                         : Colors.grey[700]!),
                               ),
                             ),
+                            if (_currentWorkspaceName != null) ...[
+                              const SizedBox(width: 5),
+                              GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTap: _closeWorkspace,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(3),
+                                  child: Tooltip(
+                                    message: 'Fermer le projet',
+                                    child: Icon(Broken.close_circle,
+                                        size: 15, color: Colors.red[400]),
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(width: 3),
                             Icon(Icons.keyboard_arrow_down,
                                 size: 14, color: fg),
@@ -3715,6 +3721,14 @@ class _SelectTypeState extends State<SelectType>
                   )),
                 ]),
               ),
+              PopupMenuItem<String>(value: 'flutter_device', height: 30,
+                child: Row(children: [
+                  Icon(Icons.smartphone, size: 14,
+                      color: isDark ? Colors.blue[300]! : Colors.blue[700]!),
+                  const SizedBox(width: 8),
+                  Text('Flutter Device (preview)',
+                      style: TextStyle(fontSize: 12, color: fg)),
+                ])),
               PopupMenuItem<String>(value: 'close_workspace', height: 30,
                 child: Row(children: [
                   Icon(Broken.close_circle, size: 14, color: Colors.red[400]),
@@ -3832,10 +3846,9 @@ class _SelectTypeState extends State<SelectType>
               builder: (_) => const PackageManagerPage(),
             ));
           } else if (value == 'close_workspace') {
-            setState(() {
-              _currentWorkspaceDir  = null;
-              _currentWorkspaceName = null;
-            });
+            _closeWorkspace();
+          } else if (value == 'flutter_device') {
+            _openFlutterDeviceTab();
           } else if (value == 'open_folder') {
             _doOpenFolder(ctx, appTheme);
           } else if (value == 'open_file') {
@@ -4434,6 +4447,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'update') {
       return _buildUpdatePage(appTheme);
     }
+    if (tab.id == 'flutter-device') {
+      return const FlutterDevicePanel();
+    }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];
     if (editorCfg != null) {
@@ -4444,6 +4460,8 @@ class _SelectTypeState extends State<SelectType>
         languageDetails: editorCfg.languageDetails,
         isProject:       editorCfg.isProject,
         isCloned:        editorCfg.isCloned,
+        embedded:        true,
+        onOpenFile: (file) => _openFileFromWorkspace(file, editorCfg.rootDir),
       );
     }
     return _buildWelcomePage(context, appTheme, appThemestate);
@@ -4458,13 +4476,9 @@ class _SelectTypeState extends State<SelectType>
       _editorTabs.remove(removedId);
       _agentToolTabs.remove(removedId);
 
-      // If the closed tab was the persistent workspace project tab, clear it.
-      if (removedCfg != null &&
-          removedCfg.isProject &&
-          removedCfg.rootDir == _currentWorkspaceDir) {
-        _currentWorkspaceDir  = null;
-        _currentWorkspaceName = null;
-      }
+      // NOTE: closing a tab (even the project tab) NEVER closes the
+      // workspace. The only way to close a project is _closeWorkspace(),
+      // triggered from the workspace box in the top bar.
 
       if (_openTabs.isEmpty) {
         _activeTabIdx = 0;
@@ -4529,6 +4543,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'terminal') {
       return _buildTerminalTabPage(appTheme);
     }
+    if (tab.id == 'flutter-device') {
+      return const FlutterDevicePanel();
+    }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];
     if (editorCfg != null) {
@@ -4539,6 +4556,8 @@ class _SelectTypeState extends State<SelectType>
         languageDetails: editorCfg.languageDetails,
         isProject:       editorCfg.isProject,
         isCloned:        editorCfg.isCloned,
+        embedded:        true,
+        onOpenFile: (file) => _openFileFromWorkspace(file, editorCfg.rootDir),
       );
     }
     return _buildWelcomePage(context, appTheme, appThemestate);

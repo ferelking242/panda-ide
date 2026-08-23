@@ -19,6 +19,7 @@ import '../terminal/terminal.dart';
 import '../utils/languages.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
+import 'editor/status_bar.dart';
 import 'widgets.dart';
 
 class DiagnosticsTickBloc extends Cubit<int> {
@@ -32,6 +33,15 @@ class EditorPage extends StatefulWidget {
   final String rootDir;
   final File? file;
   final bool isProject, isCloned;
+
+  /// True when rendered inside home's tab system: the Android back button
+  /// must never pop/tear down the host route from here.
+  final bool embedded;
+
+  /// Called when the user taps a file in the built-in project explorer of
+  /// the welcome (no-file) page. Home opens it in its own editor tab.
+  final void Function(File file)? onOpenFile;
+
   const EditorPage({
     super.key,
     required this.languageDetails,
@@ -39,6 +49,8 @@ class EditorPage extends StatefulWidget {
     required this.isProject,
     this.file,
     this.isCloned = false,
+    this.embedded = false,
+    this.onOpenFile,
   });
 
   @override
@@ -50,6 +62,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
   final trasnformationController = TransformationController();
   final Map<CodeForgeController, String> _savedSnapshotByController = {};
   final Map<CodeForgeController, VoidCallback> _editorListeners = {};
+  final Map<CodeForgeController, VoidCallback> _cursorListeners = {};
   final Map<CodeForgeController, VoidCallback> _diagnosticListeners = {};
   final Set<CodeForgeController> _dirtyControllers = {};
   final Map<CodeForgeController, int> _lastErrorCountByController = {};
@@ -62,6 +75,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
   late final SSHPrivateKey? termuxInfo;
   late List<int> mruOrder;
   bool _allowImmediatePop = false, _didInitializeEditors = false;
+  bool _welcomeExplorerOpen = false; // welcome page: inline project explorer (v2)
   bool _viteUseHttps = false, _isOpeningVitePreview = false, _hasViteProject = false;
   Map<String, String> params = {}, headers = {};
   TabController? tabController;
@@ -587,8 +601,13 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
     for (final entry in _diagnosticListeners.entries) {
       entry.key.diagnosticsNotifier.removeListener(entry.value);
     }
+    for (final entry in _cursorListeners.entries) {
+      entry.key.removeListener(entry.value);
+    }
     _editorListeners.clear();
     _diagnosticListeners.clear();
+    _cursorListeners.clear();
+    EditorStatusHub.instance.clear();
     _savedSnapshotByController.clear();
     _dirtyControllers.clear();
     _lastErrorCountByController.clear();
@@ -631,8 +650,12 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
     for (final entry in _diagnosticListeners.entries) {
       entry.key.diagnosticsNotifier.removeListener(entry.value);
     }
+    for (final entry in _cursorListeners.entries) {
+      entry.key.removeListener(entry.value);
+    }
     _diagnosticListeners.clear();
     _lastErrorCountByController.clear();
+    _cursorListeners.clear();
   }
 
   void _updateTabController(int tabCount) {
@@ -919,6 +942,14 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
         controller.diagnosticsNotifier.removeListener(listener);
       }
       _lastErrorCountByController.remove(controller);
+
+      final cursorListener = _cursorListeners.remove(controller);
+      if (cursorListener != null) {
+        controller.removeListener(cursorListener);
+      }
+    }
+    if (currentControllers.isEmpty) {
+      EditorStatusHub.instance.clear();
     }
 
     for (final editor in editors) {
@@ -1023,6 +1054,212 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
     return offset > text.length ? text.length : offset;
   }
 
+  // ── Welcome / empty state ("Open a file to Edit" page) ────────────────────
+  Widget _buildWelcomeEmptyState(
+    BuildContext context,
+    AppTheme appTheme,
+    bool isRepoThere,
+  ) {
+    final isDark = appTheme.isDark;
+    final fg = appTheme.selectScreenCardTextColor;
+    final muted = Colors.grey[isDark ? 500 : 600]!;
+    final cardBg = isDark ? const Color(0xff1e1e1e) : const Color(0xfff6f6f6);
+    final cardBorder =
+        isDark ? const Color(0xff2d2d2d) : const Color(0xffe4e4e4);
+
+    return Container(
+      color: appTheme.editorPageDrawerBg,
+      width: double.infinity,
+      height: double.infinity,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    'assets/icons/about-512.png',
+                    width: 64,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) =>
+                        const Text('\u{1F43C}', style: TextStyle(fontSize: 44)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Panda IDE',
+                  style: TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.w700, color: fg),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  path.basename(widget.rootDir),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13, color: muted),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Quick actions ──
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    if (widget.isProject || Directory(widget.rootDir).existsSync())
+                      _welcomeAction(
+                        icon: Icons.folder_open_outlined,
+                        label: _welcomeExplorerOpen
+                            ? 'Masquer l\u2019explorateur'
+                            : 'Explorer le projet',
+                        fg: fg,
+                        muted: muted,
+                        onTap: () => setState(() {
+                          _welcomeExplorerOpen = !_welcomeExplorerOpen;
+                        }),
+                      ),
+                    if (widget.onOpenFile != null)
+                      _welcomeAction(
+                        icon: Icons.description_outlined,
+                        label: 'Ouvrir un fichier',
+                        fg: fg,
+                        muted: muted,
+                        onTap: () async {
+                          final file = await pickFile();
+                          if (file != null) widget.onOpenFile?.call(file);
+                        },
+                      ),
+                  ],
+                ),
+
+                // ── Inline project explorer ──
+                if (_welcomeExplorerOpen)
+                  Container(
+                    height: 360,
+                    margin: const EdgeInsets.only(top: 14),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: cardBorder),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: DirectoryTreeViewerCustom(
+                      key: ValueKey('welcome-tree-${widget.rootDir}'),
+                      rootPath: widget.rootDir,
+                      appTheme: appTheme,
+                      onFileTap: (file) => widget.onOpenFile?.call(file),
+                    ),
+                  ),
+
+                const SizedBox(height: 18),
+
+                // ── Info cards ──
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _welcomeInfoCard(
+                      bg: cardBg,
+                      border: cardBorder,
+                      icon: isRepoThere
+                          ? Icons.check_circle_outline
+                          : Icons.info_outline,
+                      iconColor:
+                          isRepoThere ? Colors.green[400] : Colors.amber[600],
+                      text: isRepoThere
+                          ? 'Version control (.git) detecte'
+                          : 'Aucun depot Git (.git) dans ce projet',
+                      muted: muted,
+                    ),
+                    if (widget.isCloned)
+                      _welcomeInfoCard(
+                        bg: cardBg,
+                        border: cardBorder,
+                        icon: Icons.copy_outlined,
+                        iconColor: Colors.blueGrey[400],
+                        text:
+                            'Clone prive Panda \u2014 les modifications n\u2019affectent pas le dossier d\u2019origine.',
+                        muted: muted,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _welcomeAction({
+    required IconData icon,
+    required String label,
+    required Color fg,
+    required Color muted,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFF007ACC).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: const Color(0xFF007ACC).withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: fg),
+              const SizedBox(width: 7),
+              Text(label, style: TextStyle(fontSize: 13, color: fg)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _welcomeInfoCard({
+    required Color bg,
+    required Color border,
+    required IconData icon,
+    required Color? iconColor,
+    required String text,
+    required Color muted,
+  }) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 420),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: iconColor ?? muted),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 12, color: muted),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _attachDiagnosticListener(ActiveEditor editor) {
     final controller = editor.controller;
     final existingListener = _diagnosticListeners.remove(controller);
@@ -1046,6 +1283,25 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
 
     controller.diagnosticsNotifier.addListener(listener);
     _diagnosticListeners[controller] = listener;
+
+    // Push cursor position + language to the status bar hub
+    // (TextEditingController notifies on selection changes too).
+    void cursorListener() {
+      final text = controller.text;
+      final selection = controller.selection;
+      if (text.isEmpty || !selection.isValid) return;
+      var offset = selection.extentOffset;
+      if (offset < 0) offset = 0;
+      if (offset > text.length) offset = text.length;
+      EditorStatusHub.instance.updateCursor(
+        text,
+        offset,
+        editor.languageDetails.name,
+      );
+    }
+
+    controller.addListener(cursorListener);
+    _cursorListeners[controller] = cursorListener;
   }
 
   Widget _buildBadgedIcon({
@@ -2042,6 +2298,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                 }
                 return PopScope(
                   canPop:
+                      widget.embedded ||
                       _allowImmediatePop ||
                       !_hasUnsavedEditors(editorState.activeEditors),
                   onPopInvokedWithResult: (didPop, result) async {
@@ -2050,6 +2307,9 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                       context.read<ActiveEditorBloc>().add(CloseActiveEditor());
                       return;
                     }
+                    // Embedded mode: back must stay inside home — at most
+                    // show the unsaved-changes prompt, never pop the host.
+                    if (widget.embedded) return;
 
                     final shouldExit = await _handleExitWithUnsavedPrompt(
                       context,
@@ -2086,54 +2346,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                         );
                       }).toList(),
                     )
-                  : SingleChildScrollView(
-                      child: Center(
-                        child: Column(
-                          children: [
-                            const SizedBox(height: 10),
-                            Text(
-                              "Open a file to Edit",
-                              style: TextStyle(
-                                color: appTheme.selectScreenCardTextColor,
-                                fontSize: 20,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 15),
-                              child: Column(
-                                children: [
-                                  Text(
-                                    isRepoThere
-                                      ? "Version control (.git) found \u2713"
-                                      : "No version control (.git) found on this folder/project",
-                                    style: TextStyle(
-                                      color: Colors.grey[appTheme.isDark ? 500 : 600],
-                                    ),
-                                  ),
-                                  if (!widget.isCloned)
-                                    Card(
-                                      child: Wrap(
-                                        children: [
-                                          Padding(
-                                            padding:
-                                              const EdgeInsets.only(left: 15,top: 8, bottom: 8),
-                                            child: Text(
-                                              "Note: This is a clone of the selected folder in Panda's private directory. Modifications here will not affect the original folder.",
-                                              style: TextStyle(
-                                                color: Colors.grey[appTheme.isDark ? 500 : 600],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                  : _buildWelcomeEmptyState(context, appTheme, isRepoThere),
                         ),
                       ],
                     ),
