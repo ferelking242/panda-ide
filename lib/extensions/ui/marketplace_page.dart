@@ -17,6 +17,7 @@ import 'package:percent_indicator/percent_indicator.dart';
 import '../models/marketplace_extension.dart';
 import '../open_vsx_client.dart';
 import '../extension_registry.dart';
+import 'panda_registry_page.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
 import '../../bloc/ui_bloc/ui_bloc.dart';
@@ -424,6 +425,40 @@ class _MarketplacePageState extends State<MarketplacePage> {
       controller: _scrollCtrl,
       padding: const EdgeInsets.only(bottom: 80),
       children: [
+        // 🐼 Registre Panda natif (install runtime sans rebuild)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: GestureDetector(
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const PandaRegistryPage())),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [
+                  cs.primary.withValues(alpha: .15),
+                  cs.tertiary.withValues(alpha: .10),
+                ]),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.primary.withValues(alpha: .3)),
+              ),
+              child: Row(children: [
+                Text('🐼', style: const TextStyle(fontSize: 26)),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment:
+                    CrossAxisAlignment.start, children: [
+                  const Text('Extensions Panda natives',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                  Text('Installables sans redémarrer l\'app',
+                      style: TextStyle(fontSize: 12,
+                          color: cs.onSurfaceVariant)),
+                ])),
+                Icon(Icons.chevron_right_rounded, color: cs.primary),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+
         // Categories grid
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
