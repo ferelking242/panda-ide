@@ -117,7 +117,7 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
           Expanded(
             child: Text('Registre inaccessible — ${_error!.split('\n').first}',
                 style:
-                    TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                    TextStyle(fontSize: 13, color: cs.error)),
           ),
           IconButton(
             icon: const Icon(Icons.refresh, size: 18),
@@ -137,10 +137,43 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
             child: CircularProgressIndicator(strokeWidth: 2))),
       );
     }
+    final exts = _index!.extensions;
+    if (exts.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Card(
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: cs.outlineVariant.withValues(alpha: .4)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: [
+              Icon(Icons.inbox_outlined, size: 32, color: cs.onSurfaceVariant),
+              const SizedBox(height: 8),
+              Text('Le registre est vide pour le moment',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: cs.onSurface)),
+              const SizedBox(height: 4),
+              Text('Vérifie ta connexion puis réessaie.',
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Réessayer'),
+                onPressed: () {
+                  setState(() { _index = null; _error = null; });
+                  _bootstrap();
+                },
+              ),
+            ]),
+          ),
+        ),
+      );
+    }
     return Column(
       children: [
-        for (final e in _index!.extensions)
-          _buildCard(e, Theme.of(context).colorScheme),
+        for (final e in exts) _buildCard(e, Theme.of(context).colorScheme),
       ],
     );
   }
@@ -190,7 +223,7 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
                       Icon(Icons.star_rounded, size: 15, color: Colors.amber),
                     ],
                   ]),
-                  Text('$e.version · ${e.author ?? 'anonyme'}',
+                  Text('${e.version} · ${e.author ?? 'anonyme'}',
                       style: TextStyle(
                           fontSize: 12, color: cs.onSurfaceVariant)),
                 ])),
