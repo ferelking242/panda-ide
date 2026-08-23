@@ -583,7 +583,7 @@ class _SelectTypeState extends State<SelectType>
             _openTabs.add(const _TabDef(
               id: 'terminal',
               title: 'Terminal',
-              icon: Broken.terminal,
+              icon: Broken.command_square,
             ));
           }
           _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'terminal');
