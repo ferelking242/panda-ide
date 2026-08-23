@@ -27,6 +27,9 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage"/>
 
+    <!-- Battery optimization exemption (keep service alive when app is backgrounded) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+
     <!-- Foreground service (build / agent tasks) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
@@ -61,6 +64,16 @@
             android:exported="false"
             android:foregroundServiceType="dataSync"
         />
+
+        <!-- NotificationListenerService — auto-detect wireless debugging pairing code -->
+        <service
+            android:name=".PairingNotificationListener"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"
