@@ -3,6 +3,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
+import 'dart:ui' show ImageFilter;
 import 'dart:io';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
@@ -549,6 +550,11 @@ class _SelectTypeState extends State<SelectType>
     _sendAnimCtrl.stop();
     // Rebuild send button colour when text changes
     _agentInputCtrl.addListener(() => setState(() {}));
+    // Workspace dropdown : reagit au focus de la recherche (blur iOS)
+    _wsSearchFocus.addListener(() {
+      _wsSearchFocused = _wsSearchFocus.hasFocus;
+      _wsMenuOverlay?.markNeedsBuild();
+    });
     // Bridge: terminal → agent
     TerminalBridge.instance.onSendToAgent = _sendToAgentFromBridge;
     // Load chat sessions
@@ -602,6 +608,10 @@ class _SelectTypeState extends State<SelectType>
     _splitViewController.dispose();
     _sendAnimCtrl.dispose();
     _problemsSearchCtrl.dispose();
+    _wsMenuOverlay?.remove();
+    _wsMenuOverlay = null;
+    _wsSearchFocus.dispose();
+    _wsSearchCtrl.dispose();
     super.dispose();
   }
 
@@ -3317,18 +3327,6 @@ class _SelectTypeState extends State<SelectType>
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Row(
           children: [
-            // ── LEFT: logo + "Panda" ─────────────────────────
-            ClipOval(
-              child: Image.asset(
-                'assets/icons/app-icon.png',
-                width: 18, height: 18, fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) =>
-                    const Text('🐼', style: TextStyle(fontSize: 14)),
-              ),
-            ),
-            const SizedBox(width: 5),
-            // (texte Panda retire : l'icone est l'identite visuelle)
-
             // ── CENTER: ← [workspace box] → ──────────────────────────────
             Expanded(
               child: Center(
@@ -3342,8 +3340,8 @@ class _SelectTypeState extends State<SelectType>
                       child: Container(
                         key: _workspaceBoxKey,
                         constraints: BoxConstraints(
-                            minWidth: 150,
-                            maxWidth: MediaQuery.of(ctx).size.width * 0.52),
+                            minWidth: 110,
+                            maxWidth: MediaQuery.of(ctx).size.width * 0.40),
                         height: 26,
                         padding:
                             const EdgeInsets.symmetric(horizontal: 10),
@@ -3428,24 +3426,30 @@ class _SelectTypeState extends State<SelectType>
                 () => _showLayoutMenu(ctx, isDark),
               ),
             ),
-            // 3 — terminal / bottom panel
+            // 3 — panneau bas (style « sidebar down » comme le panneau gauche)
             _hdrBtn(
-              Icons.terminal,
-              'Terminal',
+              Broken.sidebar_bottom,
+              _bottomPanelOpen
+                  ? 'Fermer le panneau inferieur'
+                  : 'Ouvrir le panneau inferieur (Terminal)',
               _bottomPanelOpen ? _kAccent : fg,
               () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
             ),
-            // 4 — full screen mode
+            // 4 — panneau droit (style « sidebar right » ; plein écran
+            // reste accessible dans le menu workspace)
             _hdrBtn(
-              _fullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
-              _fullScreen ? 'Quitter le plein écran' : 'Plein écran',
-              _fullScreen ? _kAccent : fg,
+              Broken.sidebar_right,
+              _rightPanelOpen
+                  ? 'Fermer le panneau droit'
+                  : 'Ouvrir le panneau droit',
+              _rightPanelOpen ? _kAccent : fg,
               () => setState(() {
-                _fullScreen = !_fullScreen;
-                if (_fullScreen) {
-                  _sidebarState = 0;
-                  _rightPanelOpen = false;
-                  _bottomPanelOpen = false;
+                final bool isMobile =
+                    MediaQuery.of(context).size.width < 600;
+                if (isMobile) {
+                  _openAgentTab();
+                } else {
+                  _rightPanelOpen = !_rightPanelOpen;
                 }
               }),
             ),
@@ -3689,174 +3693,338 @@ class _SelectTypeState extends State<SelectType>
       }
 
       // ── Workspace picker ─────────────────────────────────────────────────────
+      // ═══════════════════════════════════════════════════════════════════
+      // Workspace dropdown : ancré SOUS la box (jamais décalé), translucide
+      // façon iOS, avec recherche qui s'élargit au focus + léger blur.
+      // ═══════════════════════════════════════════════════════════════════
+      OverlayEntry? _wsMenuOverlay;
+      final FocusNode             _wsSearchFocus = FocusNode();
+      final TextEditingController _wsSearchCtrl  = TextEditingController();
+      bool _wsSearchFocused = false;
+
+      void _hideWorkspaceMenu() {
+        _wsMenuOverlay?.remove();
+        _wsMenuOverlay = null;
+        _wsSearchFocused = false;
+        _wsSearchCtrl.clear();
+        if (_wsSearchFocus.hasFocus) _wsSearchFocus.unfocus();
+      }
+
       void _showWorkspaceMenu(BuildContext ctx, bool isDark, AppTheme appTheme) {
-        final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
-        final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
-        final RenderBox box = ctx.findRenderObject()! as RenderBox;
-        final Offset off = box.localToGlobal(Offset.zero);
-        final screenW = MediaQuery.of(ctx).size.width;
-        final pos = RelativeRect.fromLTRB(
-            off.dx.clamp(0.0, screenW - 8), off.dy + box.size.height, 12, 0);
+        if (_wsMenuOverlay != null) {
+          _hideWorkspaceMenu(); // re-tap sur la box = toggle
+          return;
+        }
+        _wsSearchCtrl.clear();
+        _wsSearchFocused = false;
+        late final OverlayEntry entry;
+        entry = OverlayEntry(
+          builder: (_) => _buildWorkspaceDropdown(ctx, isDark, appTheme, entry),
+        );
+        _wsMenuOverlay = entry;
+        Overlay.of(ctx, rootOverlay: true).insert(entry);
+      }
 
-        showMenu<String>(
-          context: ctx,
-          position: pos,
-          color: bg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          items: [
-            // ── Current workspace header ────────────────────────────────
-            if (_currentWorkspaceName != null) ...[
-              PopupMenuItem<String>(
-                enabled: false, height: 28,
-                child: Row(children: [
-                  Icon(Broken.folder_open, size: 14,
-                      color: isDark ? Colors.blue[300]! : Colors.blue[700]!),
-                  const SizedBox(width: 8),
-                  Flexible(child: Text(
-                    _currentWorkspaceName!,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.blue[200]! : Colors.blue[800]!),
-                  )),
-                ]),
-              ),
-              PopupMenuItem<String>(value: 'flutter_device', height: 30,
-                child: Row(children: [
-                  Icon(Icons.smartphone, size: 14,
-                      color: isDark ? Colors.blue[300]! : Colors.blue[700]!),
-                  const SizedBox(width: 8),
-                  Text('Flutter Device (preview)',
-                      style: TextStyle(fontSize: 12, color: fg)),
-                ])),
-              PopupMenuItem<String>(value: 'close_workspace', height: 30,
-                child: Row(children: [
-                  Icon(Broken.close_circle, size: 14, color: Colors.red[400]),
-                  const SizedBox(width: 8),
-                  Text('Fermer le projet',
-                      style: TextStyle(fontSize: 12, color: Colors.red[400])),
-                ])),
-              const PopupMenuDivider(height: 6),
-            ],
+      Widget _buildWorkspaceDropdown(BuildContext ctx, bool isDark,
+          AppTheme appTheme, OverlayEntry entry) {
+        final fg     = isDark ? Colors.grey[200]! : Colors.grey[800]!;
+        final subFg  = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+        final screen = MediaQuery.of(ctx).size;
 
-            // ── VSCode-Style Command Palette & Core Actions ───────────
-            PopupMenuItem<String>(
-              enabled: false, height: 24,
-              child: Text('COMMANDE & RACCOURCIS',
-                  style: TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                      color: isDark ? Colors.grey[500]! : Colors.grey[600]!)),
-            ),
-            PopupMenuItem<String>(value: 'command_palette', height: 36,
-              child: Row(children: [
-                Icon(Icons.terminal, size: 16, color: Colors.amber[400]),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Palette de commandes...',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg)),
-                      Text('Exécuter actions & extensions (">")',
-                          style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                    ],
-                  ),
-                ),
-              ])),
-            PopupMenuItem<String>(value: 'run_debug', height: 34,
-              child: Row(children: [
-                const Icon(Icons.play_circle_fill, size: 16, color: Colors.greenAccent),
-                const SizedBox(width: 10),
-                Text('Exécuter / Déboguer (▶ / ⚡)', style: TextStyle(fontSize: 12, color: fg)),
-              ])),
-            PopupMenuItem<String>(value: 'global_search', height: 34,
-              child: Row(children: [
-                Icon(Broken.search_normal_1, size: 16, color: fg),
-                const SizedBox(width: 10),
-                Text('Recherche Globale (Ctrl+Shift+F)', style: TextStyle(fontSize: 12, color: fg)),
-              ])),
-            PopupMenuItem<String>(value: 'marketplace', height: 34,
-              child: Row(children: [
-                Icon(Broken.category, size: 16, color: fg),
-                const SizedBox(width: 10),
-                Text('Extensions & Marketplace', style: TextStyle(fontSize: 12, color: fg)),
-              ])),
-            PopupMenuItem<String>(value: 'package_manager', height: 34,
-              child: Row(children: [
-                Icon(Icons.inventory_2_outlined, size: 16,
-                    color: isDark ? Colors.tealAccent[200] : Colors.teal[700]),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Gestionnaire de paquets (apk)',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: fg)),
-                      Text('Installer / supprimer des paquets Alpine',
-                          style: TextStyle(fontSize: 10, color: Colors.grey[500])),
-                    ],
-                  ),
-                ),
-              ])),
-            const PopupMenuDivider(height: 6),
+        // ── Ancrage : juste sous la box workspace, centré sur elle ──
+        double left = 12, top = 40, boxW = 220;
+        final wctx = _workspaceBoxKey.currentContext;
+        if (wctx != null) {
+          final box = wctx.findRenderObject()! as RenderBox;
+          final off = box.localToGlobal(Offset.zero);
+          boxW = box.size.width;
+          left = off.dx;
+          top  = off.dy + box.size.height + 4;
+        }
+        final panelW =
+            ((boxW < 270) ? 270.0 : boxW).clamp(0.0, screen.width - 16);
+        left = (left - (panelW - boxW) / 2)
+            .clamp(8.0, math.max(8.0, screen.width - panelW - 8));
 
-            // ── File & Project Operations ─────────────────────────────
-            PopupMenuItem<String>(
-              enabled: false, height: 24,
-              child: Text('PROJET & FICHIERS',
-                  style: TextStyle(
-                      fontSize: 10, fontWeight: FontWeight.w700,
-                      letterSpacing: 1.1,
-                      color: isDark ? Colors.grey[500]! : Colors.grey[600]!)),
-            ),
-            PopupMenuItem<String>(value: 'open_folder', height: 32,
-              child: Row(children: [
-                Icon(Broken.folder_open, size: 15, color: fg),
-                const SizedBox(width: 10),
-                Text('Ouvrir un dossier…', style: TextStyle(fontSize: 12, color: fg)),
-              ])),
-            PopupMenuItem<String>(value: 'open_file', height: 32,
-              child: Row(children: [
-                Icon(Broken.document, size: 15, color: fg),
-                const SizedBox(width: 10),
-                Text('Ouvrir un fichier…', style: TextStyle(fontSize: 12, color: fg)),
-              ])),
-            PopupMenuItem<String>(value: 'new_project', height: 32,
-              child: Row(children: [
-                Icon(Broken.folder_add, size: 15, color: fg),
-                const SizedBox(width: 10),
-                Text('Nouveau projet…', style: TextStyle(fontSize: 12, color: fg)),
-              ])),
+        // ── Contenu filtré par la recherche ──
+        final q = _wsSearchCtrl.text.trim().toLowerCase();
+        final items = <Map<String, Object>>[
+          if (_currentWorkspaceName != null) ...[
+            {'type': 'header', 'label': 'ESPACE DE TRAVAIL'},
+            {'type': 'item', 'value': 'flutter_device',
+             'icon': Icons.smartphone, 'label': 'Flutter Device (preview)'},
+            {'type': 'item', 'value': 'close_workspace',
+             'icon': Broken.close_circle, 'label': 'Fermer le projet',
+             'color': Colors.red[400]},
           ],
-        ).then((value) {
-          if (value == null) return;
-          if (value == 'command_palette') {
-            CommandPalette.show(ctx);
-          } else if (value == 'run_debug') {
-            setState(() { _activeRail = 4; _sidebarState = 2; });
-          } else if (value == 'global_search') {
-            setState(() { _activeRail = 2; _sidebarState = 2; });
-          } else if (value == 'marketplace') {
-            setState(() { _activeRail = 6; _sidebarState = 2; });
-          } else if (value == 'package_manager') {
-            Navigator.of(ctx).push(MaterialPageRoute(
-              builder: (_) => const PackageManagerPage(),
-            ));
-          } else if (value == 'close_workspace') {
-            _closeWorkspace();
-          } else if (value == 'flutter_device') {
-            _openFlutterDeviceTab();
-          } else if (value == 'open_folder') {
-            _doOpenFolder(ctx, appTheme);
-          } else if (value == 'open_file') {
-            _doOpenFile(ctx);
-          } else if (value == 'new_project') {
-            _doOpenFolder(ctx, appTheme);
+          {'type': 'header', 'label': 'COMMANDE & RACCOURCIS'},
+          {'type': 'item', 'value': 'command_palette', 'icon': Icons.terminal,
+           'label': 'Palette de commandes…',
+           'sub': 'Exécuter actions & extensions (">")'},
+          {'type': 'item', 'value': 'run_debug',
+           'icon': Icons.play_circle_fill,
+           'label': 'Exécuter / Déboguer (▶ / ⚡)'},
+          {'type': 'item', 'value': 'global_search',
+           'icon': Broken.search_normal_1,
+           'label': 'Recherche Globale (Ctrl+Shift+F)'},
+          {'type': 'item', 'value': 'marketplace', 'icon': Broken.category,
+           'label': 'Extensions & Marketplace'},
+          {'type': 'item', 'value': 'package_manager',
+           'icon': Icons.inventory_2_outlined,
+           'label': 'Gestionnaire de paquets (apk)',
+           'sub': 'Installer / supprimer des paquets Alpine'},
+          {'type': 'item', 'value': 'full_screen',
+           'icon': _fullScreen ? Icons.fullscreen_exit : Icons.fullscreen,
+           'label': _fullScreen ? 'Quitter le plein écran' : 'Plein écran'},
+          {'type': 'header', 'label': 'PROJET & FICHIERS'},
+          {'type': 'item', 'value': 'open_folder', 'icon': Broken.folder_open,
+           'label': 'Ouvrir un dossier…'},
+          {'type': 'item', 'value': 'open_file', 'icon': Broken.document,
+           'label': 'Ouvrir un fichier…'},
+          {'type': 'item', 'value': 'new_project', 'icon': Broken.folder_add,
+           'label': 'Nouveau projet…'},
+        ];
+        final visible = q.isEmpty
+            ? items
+            : items
+                .where((it) =>
+                    it['type'] == 'item' &&
+                    (it['label'] as String).toLowerCase().contains(q))
+                .toList();
+
+        void onAction(String value) {
+          _hideWorkspaceMenu();
+          switch (value) {
+            case 'command_palette':
+              CommandPalette.show(ctx);
+              break;
+            case 'run_debug':
+              setState(() { _activeRail = 4; _sidebarState = 2; });
+              break;
+            case 'global_search':
+              setState(() { _activeRail = 2; _sidebarState = 2; });
+              break;
+            case 'marketplace':
+              setState(() { _activeRail = 6; _sidebarState = 2; });
+              break;
+            case 'package_manager':
+              Navigator.of(ctx).push(MaterialPageRoute(
+                builder: (_) => const PackageManagerPage(),
+              ));
+              break;
+            case 'close_workspace':
+              _closeWorkspace();
+              break;
+            case 'flutter_device':
+              _openFlutterDeviceTab();
+              break;
+            case 'full_screen':
+              setState(() {
+                _fullScreen = !_fullScreen;
+                if (_fullScreen) {
+                  _sidebarState = 0;
+                  _rightPanelOpen = false;
+                  _bottomPanelOpen = false;
+                }
+              });
+              break;
+            case 'open_folder':
+            case 'new_project':
+              _doOpenFolder(ctx, appTheme);
+              break;
+            case 'open_file':
+              _doOpenFile(ctx);
+              break;
           }
-        });
+        }
+
+        return Stack(children: [
+          // ── Barrière : tap dehors = ferme · petit blur quand la recherche est focus ──
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: _hideWorkspaceMenu,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(end: _wsSearchFocused ? 1.0 : 0.0),
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                builder: (_, t, child) {
+                  if (t <= 0.01) return child!;
+                  return BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 4 * t, sigmaY: 4 * t),
+                    child: ColoredBox(
+                      color: Colors.black.withOpacity(0.25 * t),
+                      child: child!,
+                    ),
+                  );
+                },
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+          // ── Panneau « frosted glass » déplié sous la box ──
+          Positioned(
+            left: left,
+            top: top,
+            width: panelW,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xB3222224)
+                        : const Color(0xCCF7F7F9),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: isDark ? Colors.white12 : Colors.black12),
+                  ),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      // Recherche : compacte → pleine largeur au focus (iOS)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 9, 10, 7),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: TweenAnimationBuilder<double>(
+                            tween:
+                                Tween<double>(end: _wsSearchFocused ? 1.0 : 0.55),
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOut,
+                            builder: (_, f, child) => FractionallySizedBox(
+                              widthFactor: f,
+                              alignment: Alignment.centerLeft,
+                              child: child!,
+                            ),
+                            child: Container(
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.08)
+                                    : Colors.black.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(9),
+                                border: Border.all(
+                                    color: _wsSearchFocused
+                                        ? _kAccent
+                                        : Colors.transparent),
+                              ),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
+                              child: Row(children: [
+                                Icon(Broken.search_normal_1,
+                                    size: 14,
+                                    color: _wsSearchFocused
+                                        ? _kAccent
+                                        : subFg),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _wsSearchCtrl,
+                                    focusNode: _wsSearchFocus,
+                                    style: TextStyle(fontSize: 12, color: fg),
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: InputBorder.none,
+                                      hintText: 'Rechercher…',
+                                      hintStyle: TextStyle(
+                                          fontSize: 12, color: subFg),
+                                    ),
+                                    onChanged: (_) => entry.markNeedsBuild(),
+                                  ),
+                                ),
+                                if (_wsSearchCtrl.text.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () {
+                                      _wsSearchCtrl.clear();
+                                      entry.markNeedsBuild();
+                                    },
+                                    child: Icon(Broken.close_circle,
+                                        size: 14, color: subFg),
+                                  ),
+                              ]),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Divider(height: 1,
+                          color: isDark ? Colors.white10 : Colors.black12),
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                            maxHeight:
+                                math.max(120, screen.height - top - 24)),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                for (final it in visible)
+                                  _wsMenuRow(it, isDark, fg, subFg, onAction),
+                                if (visible.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.all(14),
+                                    child: Text('Aucun résultat',
+                                        style: TextStyle(
+                                            fontSize: 12, color: subFg)),
+                                  ),
+                              ]),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ]);
+      }
+
+      Widget _wsMenuRow(Map<String, Object> it, bool isDark, Color fg,
+          Color subFg, void Function(String) onAction) {
+        if (it['type'] == 'header') {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 3),
+            child: Text(it['label'] as String,
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.1,
+                    color: subFg)),
+          );
+        }
+        final color = (it['color'] as Color?) ?? fg;
+        final sub   = it['sub'] as String?;
+        return SizedBox(
+          width: double.infinity,
+          child: InkWell(
+            onTap: () => onAction(it['value'] as String),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              child: Row(children: [
+                Icon(it['icon'] as IconData, size: 16, color: color),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(it['label'] as String,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: fg)),
+                      if (sub != null)
+                        Text(sub,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 10, color: subFg)),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        );
       }
 
       void _showBranchPicker(BuildContext ctx, bool isDark, AppTheme appTheme,
