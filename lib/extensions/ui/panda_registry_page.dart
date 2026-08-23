@@ -105,6 +105,18 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
         await NativeExtensionLoader.instance.unload(entry.id);
         await RemoteExtensionRegistry.instance.uninstall(entry.id);
       }
+      // extensionDependencies (façon VS Code) : installer les dépendances
+      // d'abord, récursivement mais sans boucle infinie.
+      for (final depId in entry.dependencies) {
+        if (_installed.contains(depId)) continue;
+        RegistryEntry? dep;
+        for (final x in _index?.extensions ?? const <RegistryEntry>[]) {
+          if (x.id == depId) dep = x;
+        }
+        if (dep != null) {
+          await RemoteExtensionRegistry.instance.install(dep);
+        }
+      }
       final path = await RemoteExtensionRegistry.instance.install(entry);
       await NativeExtensionLoader.instance.load(path);
       if (!mounted) return;
