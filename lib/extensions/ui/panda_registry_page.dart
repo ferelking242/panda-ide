@@ -14,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../native_extension_loader.dart';
 import '../remote_registry.dart';
+import '../../ui/flutter_device_panel.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION EMBARQUÉE (dans le store)
@@ -89,6 +90,15 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
     } finally {
       if (mounted) setState(() => _busy.remove(entry.id));
     }
+  }
+
+  void _openDevicePanel() {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: const Text('🐼 Panda Device')),
+        body: const FlutterDevicePanel(),
+      ),
+    ));
   }
 
   Future<void> _uninstall(RegistryEntry entry) async {
@@ -247,6 +257,14 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
           ]),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            if (!isBusy && isInstalled) ...[
+              FilledButton.tonalIcon(
+                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                label: const Text('Ouvrir'),
+                onPressed: _openDevicePanel,
+              ),
+              const SizedBox(width: 8),
+            ],
             if (isBusy)
               const SizedBox(width: 18, height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2))
