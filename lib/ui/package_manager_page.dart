@@ -29,10 +29,25 @@ class _PackageManagerPageState extends State<PackageManagerPage> {
   // Compatibility alias so the enum reads naturally below.
   static const _Filter _filter_all = _Filter.all;
 
+  /// Un seul auto-update par session d'app — l'utilisateur n'a RIEN à
+  /// presser : les dépôts se rafraîchissent en silence à l'ouverture.
+  static bool _autoUpdatedThisSession = false;
+
   @override
   void initState() {
     super.initState();
-    _refreshInstalled();
+    _refreshInstalled(); // instantané (lecture directe de la DB apk)
+    _autoUpdateReposIfNeeded();
+  }
+
+  /// `apk update` silencieux en arrière-plan à la première ouverture du
+  /// store. Pas de bottom-sheet, pas d'attente visible : quand il termine,
+  /// les métadonnées sont simplement déjà à jour.
+  Future<void> _autoUpdateReposIfNeeded() async {
+    if (_autoUpdatedThisSession) return;
+    _autoUpdatedThisSession = true;
+    if (!AlpineSetup.isRootfsComplete()) return;
+    unawaited(ApkService.updateRepos().catchError((_) {}));
   }
 
   @override
