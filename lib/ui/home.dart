@@ -1493,11 +1493,7 @@ class _SelectTypeState extends State<SelectType>
         // ── Editor portion of the bar (right of activity bar) ─────────
         // Faithful VS Code port (microsoft/vscode statusbarPart + markers
         // contribution + notificationsStatus) — see editor/status_bar.dart.
-        final editorBar = ClipRRect(
-          borderRadius: sidebarActive
-              ? const BorderRadius.only(topLeft: Radius.circular(20))
-              : BorderRadius.zero,
-          child: ListenableBuilder(
+        final editorBar = ListenableBuilder(
             listenable: EditorStatusHub.instance,
             builder: (_, __) => WorkspaceDiagnosticsListener(
               builder: (dCtx, errors, warnings, infos) => PandaStatusBar(
@@ -1526,24 +1522,9 @@ class _SelectTypeState extends State<SelectType>
                 onNotificationsTap: () => _showNotificationInbox(dCtx),
               ),
             ),
-          ),
         );
 
-        if (!sidebarActive) return SizedBox(height: 22, child: editorBar);
-
-        // Two-tone: activity-bar block | rounded editor bar
-        // Wrap in actBg so the topLeft clip on editorBar reveals the
-        // same colour as the activity bar — no colour artefact at the junction.
-        return Container(
-          height: 22,
-          color: actBg,
-          child: Row(children: [
-            // Activity bar segment (flat, same bg, no radius)
-            const SizedBox(width: 48),
-            // Editor bar with rounded top-left corner
-            Expanded(child: editorBar),
-          ]),
-        );
+        return SizedBox(height: 22, child: editorBar);
       },
     );
   }
@@ -2264,7 +2245,16 @@ class _SelectTypeState extends State<SelectType>
                 ],
               ),
             ),
-            Expanded(child: panelBody),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: _SidebarCard(
+                  isFirst: true,
+                  isLast: true,
+                  child: panelBody,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -2308,7 +2298,7 @@ class _SelectTypeState extends State<SelectType>
 
     // No active project → show open/clone actions + recent projects
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
       children: [
         _panelItem(ctx, t, Broken.document_text, 'Nouveau fichier…',
             () => _doNewFile(ctx, t)),
@@ -11623,7 +11613,35 @@ class _SidebarClipper extends CustomClipper<Path> {
   }
 
   @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+
+/// VS Code-style sidebar section card — rounded corners, subtle bg, spacing.
+class _SidebarCard extends StatelessWidget {
+  final Widget child;
+  final bool isFirst;
+  final bool isLast;
+
+  const _SidebarCard({
+    required this.child,
+    this.isFirst = false,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: EdgeInsets.fromLTRB(
+          6, isFirst ? 4 : 4, 6, isLast ? 8 : 4),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xff2a2a2a)
+            : const Color(0xffe8e8e8),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
 }
 
 /// Minimal clickable item for the VSCode-style status bar.

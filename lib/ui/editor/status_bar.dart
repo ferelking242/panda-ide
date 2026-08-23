@@ -36,7 +36,7 @@ import '../../extensions/ui/status_bar_manager.dart';
 
 abstract final class StatusBarColors {
   /// statusBar.background (dark & light).
-  static const Color background = Color(0xFF007ACC);
+  static const Color background = Color(0xff1e1e1e); // dark theme (no blue)
 
   /// statusBar.noFolderBackground.
   static const Color noFolderBackground = Color(0xFF68217A);
@@ -62,7 +62,7 @@ abstract final class StatusBarColors {
   static const Color prominentKindBackground = Color(0x80000000);
 
   /// statusBarItem.remoteBackground = activityBarBadge.background.
-  static const Color remoteKindBackground = Color(0xFF007ACC);
+  static const Color remoteKindBackground = Color(0xff2d2d2d);
 
   /// statusBarItem.offlineBackground.
   static const Color offlineKindBackground = Color(0xFF6C1717);
