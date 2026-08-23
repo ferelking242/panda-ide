@@ -2501,6 +2501,16 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
   ) {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
+    final tc = widget.appTheme.selectScreenCardTextColor;
+
+    Widget _item(IconData icon, String label, {Color? color, bool enabled = true}) {
+      final c = color ?? tc;
+      return Row(children: [
+        Icon(icon, size: 18, color: c),
+        const SizedBox(width: 8),
+        Text(label, style: TextStyle(fontSize: 13, color: c)),
+      ]);
+    }
 
     showMenu(
       context: context,
@@ -2509,47 +2519,66 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
         Offset.zero & overlay.size,
       ),
       items: [
+        // ── New ──
+        if (widget.enableCreateFileOption)
+          PopupMenuItem(child: _item(Icons.add_circle_outline, 'New File...'),
+            onTap: () => Future.delayed(Duration.zero, () => startCreating(path.dirname(file.path), false))),
+        if (widget.enableCreateFolderOption)
+          PopupMenuItem(child: _item(Icons.create_new_folder_outlined, 'New Folder...'),
+            onTap: () => Future.delayed(Duration.zero, () => startCreating(path.dirname(file.path), true))),
+        const PopupMenuDivider(),
+        // ── Copy paths ──
+        PopupMenuItem(child: _item(Icons.content_copy, 'Copy Path'),
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: file.path));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Path copied'), duration: Duration(seconds: 1)));
+          }),
+        PopupMenuItem(child: _item(Icons.copy_outlined, 'Copy Relative Path'),
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: path.relative(file.path, from: widget.rootPath)));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Relative path copied'), duration: Duration(seconds: 1)));
+          }),
+        const PopupMenuDivider(),
+        // ── Cut / Copy ──
+        PopupMenuItem(child: _item(Icons.content_cut, 'Cut'),
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: 'cut:\${file.path}'));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Cut \${path.basename(file.path)}'), duration: const Duration(seconds: 1)));
+          }),
+        PopupMenuItem(child: _item(Icons.copy, 'Copy'),
+          onTap: () {
+            Clipboard.setData(ClipboardData(text: 'copy:\${file.path}'));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Copied \${path.basename(file.path)}'), duration: const Duration(seconds: 1)));
+          }),
+        const PopupMenuDivider(),
+        // ── Open in terminal ──
+        PopupMenuItem(child: _item(Icons.terminal, 'Open in Terminal'), enabled: false),
+        const PopupMenuDivider(),
+        // ── Modify ──
         if (widget.enableRenameFileOption)
-          PopupMenuItem(
-            child: Row(
-              children: [
-                Icon(
-                  Icons.edit,
-                  size: 25,
-                  color: widget.appTheme.selectScreenCardTextColor,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Rename File',
-                  style: TextStyle(
-                    color: widget.appTheme.selectScreenCardTextColor,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-            onTap: () =>
-                Future.delayed(Duration.zero, () => startRenaming(file.path)),
-          ),
+          PopupMenuItem(child: _item(Icons.edit, 'Rename (F2)'),
+            onTap: () => Future.delayed(Duration.zero, () => startRenaming(file.path))),
         if (widget.enableDeleteFileOption)
-          PopupMenuItem(
-            child: Row(
-              children: [
-                widget.fileStyle?.iconForDeleteFile ?? FileStyle().iconForDeleteFile,
-                const SizedBox(width: 8),
-                Text(
-                  'Delete File',
-                  style: TextStyle(
-                    color: widget.appTheme.selectScreenCardTextColor,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-            onTap: () => _showDeleteFileConfirmation(context, file),
-          ),
+          PopupMenuItem(child: _item(Icons.delete_outline, 'Delete (Del)', color: Colors.red[300]),
+            onTap: () => _showDeleteFileConfirmation(context, file)),
       ],
     );
+  }
+
+
+  /// Helper for consistent context menu item styling.
+  Widget _ctxItem(IconData icon, String label, {Color? color}) {
+    final tc = widget.appTheme.selectScreenCardTextColor;
+    final c = color ?? tc;
+    return Row(children: [
+      Icon(icon, size: 18, color: c),
+      const SizedBox(width: 8),
+      Text(label, style: TextStyle(fontSize: 13, color: c)),
+    ]);
   }
 
   Widget _buildDirectoryTree(
