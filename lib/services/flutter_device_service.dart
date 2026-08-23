@@ -117,7 +117,7 @@ class FlutterDeviceService extends ChangeNotifier {
         .transform(utf8.decoder)
         .transform(const LineSplitter())
         .listen(out.add);
-    await process.exit.timeout(timeout, onTimeout: () {
+    await process.exitCode.timeout(timeout, onTimeout: () {
       process.kill(ProcessSignal.sigterm);
       return -1;
     });
@@ -178,7 +178,7 @@ class FlutterDeviceService extends ChangeNotifier {
       ['$_adbBin pair 127.0.0.1:$port ${pairingCode.trim()}'],
       onLine: onLine,
     );
-    final code = await proc.exit;
+    final code = await proc.exitCode;
     notifyListeners();
     return code == 0;
   }
@@ -190,7 +190,7 @@ class FlutterDeviceService extends ChangeNotifier {
       ['$_adbBin connect 127.0.0.1:$port'],
       onLine: onLine,
     );
-    final code = await proc.exit;
+    final code = await proc.exitCode;
     await refreshDevices();
     return code == 0;
   }
@@ -245,7 +245,7 @@ class FlutterDeviceService extends ChangeNotifier {
           extraBinds: _flutterBinds());
       _running = true;
       notifyListeners();
-      unawaited(_runProcess!.exit.whenComplete(() {
+      unawaited(_runProcess!.exitCode.whenComplete(() {
         _running = false;
         _runProcess = null;
         notifyListeners();
