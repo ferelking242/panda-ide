@@ -15,6 +15,7 @@ import 'extensions/extension_registry.dart';
 import 'ui/start_screen.dart';
 import 'ui/widgets/panda_theme_switch.dart';
 import 'utils/functions.dart';
+import 'utils/settings_service.dart';
 import 'utils/themes.dart';
 import 'logging/logging.dart';
 
@@ -67,6 +68,13 @@ Future<void> main() async {
   final sshServerList =
       await _safe(SSHInfo.getSavedSSHServers, () => <SSHInfo>[]);
   final termuxInfo = await TermuxCubit.getSavedTermuxInfo();
+
+  // Initialize settings persistence (non-blocking, wrapped for safety)
+  try {
+    await SettingsService.instance;
+  } catch (e) {
+    debugPrint('[Main] SettingsService init failed: $e');
+  }
 
   runApp(
     MainApp(
