@@ -69,9 +69,14 @@ class AlpineSetup {
     };
   }
 
+  static Map<String, String>? _cachedSessionEnv;
+
   static Future<Map<String, String>> prootSessionEnvironment({
     Map<String, String> extra = const {},
   }) async {
+    if (_cachedSessionEnv != null) {
+      return <String, String>{..._cachedSessionEnv!, ...extra};
+    }
     final env = <String, String>{
       'HOME': '/root',
       'USER': 'root',
@@ -86,6 +91,7 @@ class AlpineSetup {
       'TMPDIR': '/tmp',
     };
     env.addAll(await prootLinkEnvironment());
+    _cachedSessionEnv = Map.of(env);
     env.addAll(extra);
     return env;
   }
@@ -441,6 +447,14 @@ PS1='\$(__panda_ps)'
 
   static Future<void> _ensureRuntimeFilesIn(String dir) async {
     if (!Directory(dir).existsSync()) return;
+    // ⚡ One-shot : le batch chmod de tout l'arbre coûte des secondes.
+    // Un marqueur daté évite de le refaire à CHAQUE ouverture de terminal
+    // (c'était LA cause de la lenteur au démarrage des sessions).
+    final readyMarker = File('$dir/.panda-runtime-ready');
+    if (readyMarker.existsSync() &&
+        readyMarker.readAsStringSync().trim() == rootfsVersion) {
+      return;
+    }
     for (final name in const [
       'root', 'root/workspace', 'tmp', 'var/tmp', 'dev', 'proc', 'sys',
       'etc/apk', 'etc/profile.d', 'usr/local/bin',
@@ -478,6 +492,10 @@ PS1='\$(__panda_ps)'
         '-c',
         'chmod 755 "$dir/usr/local/bin/pkg" "$dir/usr/local/bin/apt" "$dir/usr/local/bin/apt-get"',
       ]);
+    } catch (_) {}
+    try {
+      readyMarker.writeAsStringSync(rootfsVersion);
+      PandaLog.i('AlpineSetup', 'Runtime files prêts (marqueur écrit)');
     } catch (_) {}
   }
 }
