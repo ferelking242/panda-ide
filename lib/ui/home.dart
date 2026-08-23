@@ -53,6 +53,7 @@ import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_webview.dart';
+import '../extensions/extension_host.dart';
 import '../extensions/ui/command_palette.dart';
 import '../extensions/language_feature_router.dart';
 import '../ui/gateway_panel.dart';
@@ -564,7 +565,20 @@ class _SelectTypeState extends State<SelectType>
       _checkForAndroidUpdate();
       context.read<ChatSessionBloc>().add(LoadChatSessions());
       checkAndRequestMissingPermissions(context);
+      _bootstrapExtensionHost();
     });
+  }
+
+  /// Scan les manifests des extensions natives puis active celles déclarées
+  /// en eager (* / onStartup / onStartupFinished). Le code des autres
+  /// extensions reste INCHARGÉ jusqu'à un événement d'activation.
+  Future<void> _bootstrapExtensionHost() async {
+    try {
+      await ExtensionHost.instance.scanInstalled();
+      await ExtensionHost.instance.activateEagerExtensions();
+    } catch (e) {
+      PandaLog.w('PandaAgent', 'ExtensionHost bootstrap failed: $e');
+    }
   }
 
   Future<void> _checkForAndroidUpdate() async {
@@ -1721,6 +1735,8 @@ class _SelectTypeState extends State<SelectType>
       if (isProject) {
         _currentWorkspaceDir  = rootDir;
         _currentWorkspaceName = path.basename(rootDir);
+        // Activation paresseuse : workspaceContains:<pattern> façon VS Code.
+        unawaited(ExtensionHost.instance.onWorkspaceOpened(rootDir));
         // Refresh the global RepoStatusBloc for the new workspace.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
