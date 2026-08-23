@@ -3755,7 +3755,7 @@ class _SelectTypeState extends State<SelectType>
              'icon': Icons.smartphone, 'label': 'Flutter Device (preview)'},
             {'type': 'item', 'value': 'close_workspace',
              'icon': Broken.close_circle, 'label': 'Fermer le projet',
-             'color': Colors.red[400]},
+             'color': Colors.red.shade400},
           ],
           {'type': 'header', 'label': 'COMMANDE & RACCOURCIS'},
           {'type': 'item', 'value': 'command_palette', 'icon': Icons.terminal,
