@@ -1581,7 +1581,10 @@ class _SelectTypeState extends State<SelectType>
             ),
         );
 
-        return SizedBox(height: 22, child: editorBar);
+        return Semantics(
+      label: 'Status Bar',
+      child: SizedBox(height: 22, child: editorBar),
+    );
       },
     );
   }
@@ -1673,6 +1676,56 @@ class _SelectTypeState extends State<SelectType>
   /// Ouvre le terminal comme onglet plein écran de l'éditeur (mode étendu).
   /// Le panneau du bas est refermé pour éviter deux terminaux simultanés.
   void _openTerminalTab() {
+    if (Responsive.isMobile(context)) {
+      // Mobile: open terminal as bottom sheet
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          builder: (ctx, controller) => Container(
+            decoration: BoxDecoration(
+              color: Theme.of(ctx).brightness == Brightness.dark
+                  ? const Color(0xff1e1e1e)
+                  : Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  width: 36, height: 4, margin: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[600],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Icon(Icons.terminal, size: 18),
+                      SizedBox(width: 8),
+                      Text('Terminal', style: TextStyle(fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: EmbeddedTerminal(
+                    projectDir: _activeProjectDir() ?? _currentWorkspaceDir ?? '/',
+                    showKeyboardMenu: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     setState(() {
       final existing = _openTabs.indexWhere((t) => t.id == 'terminal');
       if (existing == -1) {
@@ -3358,8 +3411,11 @@ class _SelectTypeState extends State<SelectType>
                   children: [
                     Builder(builder: (ctx) => GestureDetector(
                       onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
-                      child: Container(
-                        key: _workspaceBoxKey,
+                      child: Semantics(
+                        label: 'Workspace: ${_currentWorkspaceName ?? 'No workspace'}',
+                        button: true,
+                        child: Container(
+                          key: _workspaceBoxKey,
                         constraints: BoxConstraints(
                             minWidth: 110,
                             maxWidth: MediaQuery.of(ctx).size.width * 0.42),
