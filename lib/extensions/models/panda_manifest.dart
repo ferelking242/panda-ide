@@ -152,6 +152,24 @@ class ActivationConfig {
     if (eager || onStartup) return true;
     return events.any((e) => e == event || event.startsWith('$e:'));
   }
+  // ── Événements d'activation façon VS Code ────────────────────────────
+  /// `*` / onStartup / onStartupFinished : l'extension démarre avec l'IDE.
+  bool get wantsStartup =>
+      events.contains('*') ||
+      events.contains('onStartup') ||
+      events.contains('onStartupFinished');
+
+  /// `onCommand:<id>` — palette, keybinding, menus, status bar…
+  bool matchesCommand(String commandId) =>
+      wantsStartup || events.contains('onCommand:$commandId');
+
+  /// `onLanguage:<id>` — ouverture d'un fichier de ce langage.
+  bool matchesLanguage(String languageId) =>
+      wantsStartup || events.contains('onLanguage:$languageId');
+
+  /// `onView:<id>` — la vue sidebar/panel devient visible.
+  bool matchesView(String viewId) =>
+      wantsStartup || events.contains('onView:$viewId');
 }
 
 /// All contribution points.
