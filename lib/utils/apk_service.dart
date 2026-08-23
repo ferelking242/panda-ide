@@ -85,6 +85,15 @@ class ApkService {
     // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK
         // pour trouver libtalloc.so (sinon CANNOT LINK EXECUTABLE).;
 
+    // ⚠️ Verrou stale : si l'app a été tuée pendant une opération apk,
+    // lib/apk/db/lock reste sur disque et le prochain `apk` attend INDÉFINIMENT
+    // ("ça tourne des minutes, rien ne sort"). Le flag _running garantit
+    // qu'aucun autre apk de l'app ne tourne → suppression sûre.
+    try {
+      final lock = File('$rootfsDir/lib/apk/db/lock');
+      if (await lock.exists()) await lock.delete();
+    } catch (_) {}
+
     final lines = <String>[];
     try {
       _running = true;
@@ -152,12 +161,30 @@ class ApkService {
     return pkgs;
   }
 
-  /// Names of installed packages (`apk info -v`), sorted.
+  /// Names of installed packages, sorted.
+  ///
+  /// Lecture DIRECTE de la DB apk (`lib/apk/db/installed`) au lieu de spawn
+  /// proot : instantané (<50ms) contre plusieurs secondes, et ça ne peut
+  /// jamais rester bloquée. Format : enregistrements séparés par lignes
+  /// vides, champ nom = ligne `P:<name>`.
   static Future<List<String>> listInstalled() async {
+    try {
+      final db = File('\${AlpineSetup.alpineDir}/lib/apk/db/installed');
+      if (!await db.exists()) return [];
+      final names = <String>[];
+      await for (final line in db
+          .openRead()
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .transform(const LineSplitter())) {
+        if (line.startsWith('P:')) names.add(line.substring(2));
+      }
+      if (names.isNotEmpty) return names..sort();
+    } catch (_) {}
+    // Fallback : ancienne méthode via proot.
     final res = await run(['info', '-v']);
-    final names = res.lines.map((l) => l.trim()).where((l) => l.isNotEmpty).toList()
-      ..sort();
-    return names;
+    final names2 =
+        res.lines.map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
+    return names2..sort();
   }
 
   /// Everything installed, with metadata from `apk info` (verbose blocks).
