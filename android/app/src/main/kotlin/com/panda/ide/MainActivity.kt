@@ -5,6 +5,8 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.core.app.ActivityCompat
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
@@ -46,6 +48,8 @@ class MainActivity : FlutterActivity() {
     private val PICK_DIR_REQUEST = 9001
 
     private var pendingSafResult: MethodChannel.Result? = null
+    private var pendingPermissionResult: MethodChannel.Result? = null
+    private val PERMISSION_REQUEST_CODE = 4711
     private var pfdEventSink: EventChannel.EventSink? = null
     private val pendingOpenFiles = Collections.synchronizedList(mutableListOf<String>())
     private lateinit var splitInstallService: SplitInstallService
@@ -94,6 +98,21 @@ class MainActivity : FlutterActivity() {
                 "getExtMediaPath" -> {
                     val mediaDir = context.getExternalMediaDirs().firstOrNull()
                     result.success(mediaDir?.absolutePath ?: "")
+                }
+                "startKeepAlive" -> {
+                    KeepAliveService.start(applicationContext)
+                    result.success(true)
+                }
+                "stopKeepAlive" -> {
+                    KeepAliveService.stop(applicationContext)
+                    result.success(true)
+                }
+                "requestPermission" -> {
+                    // Permissions téléphone pour extensions (camera, micro…)
+                    val perm = call.argument<String>("permission")!!
+                    ActivityCompat.requestPermissions(
+                        this, arrayOf(perm), PERMISSION_REQUEST_CODE)
+                    pendingPermissionResult = result
                 }
                 else ->
                     result.notImplemented()
@@ -875,5 +894,17 @@ class MainActivity : FlutterActivity() {
             i++
         }
         return candidate
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int, permissions: Array<out String>, grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            pendingPermissionResult?.success(
+                grantResults.isNotEmpty() &&
+                    grantResults[0] == PackageManager.PERMISSION_GRANTED)
+            pendingPermissionResult = null
+        }
     }
 }
