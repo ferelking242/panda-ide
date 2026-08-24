@@ -630,10 +630,10 @@ class GitStashEntry {
   GitStashEntry({required this.ref, required this.message, required this.branch, required this.date});
 }
 
-Future<ProcessResult> gitStash(String workspacePath, {String message = '', bool includeUntracked = false, bool stagedOnly = false}) async {
+Future<ProcessResult> gitStash(String workspacePath, {String? message, bool includeUntracked = false, bool stagedOnly = false}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final args = ['stash', 'push'];
-  if (message.isNotEmpty) {
+  if (message != null && message.isNotEmpty) {
     args.addAll(['-m', message]);
   }
   return await Process.run(

@@ -3419,5 +3419,3 @@ const List<Color> _gitGraphColors = [
 Color _getGraphColor(int index) {
   return _gitGraphColors[index % _gitGraphColors.length];
 }
-
-class VSCodeGitGraphPainter extends CustomPainter {

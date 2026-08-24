@@ -597,5 +597,3 @@ class _GgufDownloadManagerState extends State<GgufDownloadManager>
     );
   }
 }
-
-class FlutterSwitch extends StatefulWidget {
