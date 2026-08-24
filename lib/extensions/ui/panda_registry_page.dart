@@ -3,19 +3,20 @@
 /// [PandaRegistrySection] s'affiche directement dans l'onglet Home du store
 /// (pas de navigation vers une nouvelle page). [PandaRegistryPage] reste
 /// dispo comme vue autonome (route dédiée).
-library;
-
 import 'dart:async';
-
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-
 import '../models/panda_manifest.dart';
 import '../native_extension_loader.dart';
 import '../remote_registry.dart';
 import '../../services/ide_tab_opener.dart';
+
+library;
+
+
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // SECTION EMBARQUÉE (dans le store)
