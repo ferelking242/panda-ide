@@ -1126,11 +1126,19 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
         builder: (context, repoState) {
           return BlocBuilder<FolderBloc, FolderState>(
             builder: (context, folderState) {
-              return SingleChildScrollView(
-                child: _buildDirectoryTree(
-                  rootDirectory,
-                  repoState,
-                  folderState,
+              return RefreshIndicator(
+                onRefresh: () async {
+                  context.read<RepoStatusBloc>().add(
+                    LoadRepoStatus(widget.rootPath),
+                  );
+                },
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: _buildDirectoryTree(
+                    rootDirectory,
+                    repoState,
+                    folderState,
+                  ),
                 ),
               );
             },
@@ -1140,11 +1148,15 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
     } else {
       return BlocBuilder<FolderBloc, FolderState>(
         builder: (context, folderState) {
-          return SingleChildScrollView(
-            child: _buildDirectoryTree(
-              rootDirectory,
-              const RepoStatusInitial(),
-              folderState,
+          return RefreshIndicator(
+            onRefresh: () async {},
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: _buildDirectoryTree(
+                rootDirectory,
+                const RepoStatusInitial(),
+                folderState,
+              ),
             ),
           );
         },

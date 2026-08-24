@@ -77,6 +77,7 @@ class EditorTabBar extends StatelessWidget {
                           Text(tab.title,
                               style: TextStyle(
                                   fontSize: 12,
+                                  fontStyle: tab.isPreview ? FontStyle.italic : FontStyle.normal,
                                   color: isActive
                                       ? activeFg
                                       : inactiveFg)),

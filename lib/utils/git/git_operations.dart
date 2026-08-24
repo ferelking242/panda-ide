@@ -617,3 +617,92 @@ Future<void> gitRestoreFile(String fileName, String workspacePath) async {
   );
 }
 
+// ── Git Stash ─────────────────────────────────────────────────────────────
+
+class GitStashEntry {
+  final String ref;
+  final String message;
+  final String branch;
+  final String date;
+  GitStashEntry({required this.ref, required this.message, required this.branch, required this.date});
+}
+
+Future<void> gitStash(String workspacePath, {String message = ''}) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final args = ['stash', 'push'];
+  if (message.isNotEmpty) {
+    args.addAll(['-m', message]);
+  }
+  await Process.run(
+    "$binDir/git",
+    args,
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+}
+
+Future<void> gitStashPop(String workspacePath) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  await Process.run(
+    "$binDir/git",
+    ['stash', 'pop'],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+}
+
+Future<void> gitStashApply(String workspacePath, {String ref = 'stash@{0}'}) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  await Process.run(
+    "$binDir/git",
+    ['stash', 'apply', ref],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+}
+
+Future<void> gitStashDrop(String workspacePath, {String ref = 'stash@{0}'}) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  await Process.run(
+    "$binDir/git",
+    ['stash', 'drop', ref],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+}
+
+Future<void> gitStashClear(String workspacePath) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  await Process.run(
+    "$binDir/git",
+    ['stash', 'clear'],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+}
+
+Future<List<GitStashEntry>> gitStashList(String workspacePath) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ['stash', 'list', '--pretty=format:%gd%x01%gs%x01%gd%x01%ci'],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  if (result.exitCode != 0) return [];
+  final entries = <GitStashEntry>[];
+  for (final line in (result.stdout as String).split('\n')) {
+    if (line.trim().isEmpty) continue;
+    final parts = line.split('\x01');
+    if (parts.length >= 4) {
+      entries.add(GitStashEntry(
+        ref: parts[0].trim(),
+        message: parts[1].trim(),
+        branch: parts[2].trim(),
+        date: parts[3].trim(),
+      ));
+    }
+  }
+  return entries;
+}
+

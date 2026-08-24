@@ -15,7 +15,8 @@ class TabDef {
   final String   id;
   final String   title;
   final IconData icon;
-  const TabDef({required this.id, required this.title, required this.icon});
+  final bool     isPreview;
+  const TabDef({required this.id, required this.title, required this.icon, this.isPreview = false});
 }
 
 /// Holds the data needed to render an EditorPage inside a tab.

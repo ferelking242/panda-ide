@@ -9,6 +9,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import '../utils/git/git_operations.dart' show gitStash, gitStashPop, gitStashDrop, gitStashList, GitStashEntry;
 
 // ═══════════════════════════════════════════════════════════════
 // Git Operations
@@ -295,6 +296,7 @@ class GitPanel extends StatefulWidget {
 class _GitPanelState extends State<GitPanel> {
   late GitOperations _git;
   List<GitFileChange> _changes = [];
+  List<GitStashEntry> _stashEntries = [];
   String? _currentBranch;
   bool _loading = true;
   final _commitCtrl = TextEditingController();
@@ -317,10 +319,12 @@ class _GitPanelState extends State<GitPanel> {
     try {
       final changes = await _git.getStatus();
       final branch = await _git.getCurrentBranch();
+      final stash = await gitStashList(widget.workspacePath);
       if (!mounted) return;
       setState(() {
         _changes = changes;
         _currentBranch = branch;
+        _stashEntries = stash;
         _loading = false;
       });
     } catch (e) {
@@ -363,6 +367,54 @@ class _GitPanelState extends State<GitPanel> {
     }
   }
 
+  // ── Stash operations ─────────────────────────────────────────────────────
+  Future<void> _stash() async {
+    try {
+      await gitStash(widget.workspacePath);
+      _showSnack('Changes stashed');
+      await _refresh();
+      await _loadStash();
+    } catch (e) {
+      _showStash('Stash failed: $e', isError: true);
+    }
+  }
+
+  Future<void> _stashPop() async {
+    try {
+      await gitStashPop(widget.workspacePath);
+      _showSnack('Stash applied');
+      await _refresh();
+      await _loadStash();
+    } catch (e) {
+      _showStash('Stash pop failed: $e', isError: true);
+    }
+  }
+
+  Future<void> _stashDrop(int index) async {
+    try {
+      await gitStashDrop(widget.workspacePath, ref: 'stash@{$index}');
+      _showSnack('Stash dropped');
+      await _loadStash();
+    } catch (e) {
+      _showStash('Stash drop failed: $e', isError: true);
+    }
+  }
+
+  Future<void> _loadStash() async {
+    try {
+      final entries = await gitStashList(widget.workspacePath);
+      if (!mounted) return;
+      setState(() => _stashEntries = entries);
+    } catch (_) {}
+  }
+
+  void _showStash(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: isError ? Colors.red : null),
+    );
+  }
+
   void _showSnack(String msg, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -390,6 +442,11 @@ class _GitPanelState extends State<GitPanel> {
             icon: const Icon(Icons.refresh, size: 18),
             tooltip: 'Refresh',
             onPressed: _refresh,
+          ),
+          IconButton(
+            icon: const Icon(Icons.archive, size: 18),
+            tooltip: 'Stash Changes',
+            onPressed: _stash,
           ),
           IconButton(
             icon: const Icon(Icons.pull, size: 18),
@@ -459,15 +516,26 @@ class _GitPanelState extends State<GitPanel> {
                 // File list
                 Expanded(
                   child: _changes.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.check_circle, size: 48, color: Colors.green.withValues(alpha: 0.5)),
-                              const SizedBox(height: 12),
-                              Text('Working tree clean', style: TextStyle(color: cs.onSurfaceVariant)),
+                      ? ListView(
+                          children: [
+                            Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const SizedBox(height: 40),
+                                  Icon(Icons.check_circle, size: 48, color: Colors.green.withValues(alpha: 0.5)),
+                                  const SizedBox(height: 12),
+                                  Text('Working tree clean', style: TextStyle(color: cs.onSurfaceVariant)),
+                                ],
+                              ),
+                            ),
+                            // Stash section always visible
+                            if (_stashEntries.isNotEmpty) ...[
+                              _sectionHeader('Stash', _stashEntries.length, cs),
+                              ..._stashEntries.asMap().entries.map((entry) =>
+                                _buildStashTile(entry.value, entry.key, cs)),
                             ],
-                          ),
+                          ],
                         )
                       : ListView(
                           children: [
@@ -478,6 +546,12 @@ class _GitPanelState extends State<GitPanel> {
                             if (unstaged.isNotEmpty) ...[
                               _sectionHeader('Changes', unstaged.length, cs),
                               ...unstaged.map((c) => _buildChangeTile(c, cs, staged: false)),
+                            ],
+                            // Stash section
+                            if (_stashEntries.isNotEmpty) ...[
+                              _sectionHeader('Stash', _stashEntries.length, cs),
+                              ..._stashEntries.asMap().entries.map((entry) =>
+                                _buildStashTile(entry.value, entry.key, cs)),
                             ],
                           ],
                         ),
@@ -544,6 +618,35 @@ class _GitPanelState extends State<GitPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
       child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+
+  Widget _buildStashTile(GitStashEntry entry, int index, ColorScheme cs) {
+    return ListTile(
+      dense: true,
+      leading: Icon(Icons.archive, size: 16, color: cs.primary),
+      title: Text(entry.message, style: TextStyle(fontSize: 12, color: cs.onSurface), maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: Text('${entry.branch} • ${entry.date}', style: TextStyle(fontSize: 10, color: cs.onSurfaceVariant)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.play_arrow, size: 16),
+            tooltip: 'Apply Stash',
+            onPressed: () async {
+              await gitStashPop(widget.workspacePath);
+              _showSnack('Stash applied');
+              await _refresh();
+              await _loadStash();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 16),
+            tooltip: 'Drop Stash',
+            onPressed: () => _stashDrop(index),
+          ),
+        ],
+      ),
     );
   }
 }
