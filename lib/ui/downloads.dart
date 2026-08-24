@@ -1489,16 +1489,8 @@ class _DownloadManagerState extends State<DownloadManager> {
         ),
         body: TabBarView(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 20),
-              child: runtimeItems.isEmpty
-                  ? _buildCatalogStateView(
-                      title: 'No runtimes available in this build',
-                      actionLabel: 'Refresh',
-                      onRetry: () => context.read<PackageCatalogCubit>().refreshCatalog(),
-                    )
-                  : ListView.builder(
-                itemCount: runtimeItems.length + _comingSoonRuntimes.length,
+            // ── Runtimes tab: Alpine Linux instructions ──
+            _buildAlpineRuntimesTab(),
                 itemBuilder: (_, index) {
                   if (index >= runtimeItems.length) {
                     final comingSoonRuntime = _comingSoonRuntimes[index - runtimeItems.length];
@@ -2135,6 +2127,126 @@ class _DownloadManagerState extends State<DownloadManager> {
           ],
         ),
       ),
+    );
+  }
+
+
+  Widget _buildAlpineRuntimesTab() {
+    final cs = Theme.of(context).colorScheme;
+    final textColor = appThemeState.appTheme.selectScreenCardTextColor;
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cs.primaryContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.terminal, size: 20, color: cs.primary),
+                  const SizedBox(width: 8),
+                  Text('Alpine Linux', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: textColor)),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                    child: const Text('Recommande', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.green)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Installez tous vos runtimes via le terminal Alpine.\n\nAlpine Linux est un mini-systeme Linux integre a Panda IDE.\nIl gere automatiquement les dependances et les mises a jour.',
+                style: TextStyle(fontSize: 12, color: textColor.withValues(alpha: 0.8)),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text('RUNTIMES DISPONIBLES', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textColor.withValues(alpha: 0.6), letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        _runtimeTile('Node.js', 'Extensions VS Code, Live Server, ESLint', 'apk add nodejs npm', Icons.javascript, Colors.green),
+        _runtimeTile('Python', 'Scripts Python, Flask, Django', 'apk add python3 py3-pip', Icons.python, Colors.amber),
+        _runtimeTile('Dart', 'Compilation Dart, packages', 'apk add dart', Icons.code, Colors.cyan),
+        _runtimeTile('Go', 'Compilation Go', 'apk add go', Icons.terminal, Colors.blue),
+        _runtimeTile('Rust', 'Compilation Rust, Cargo', 'apk add rust cargo', Icons.build, Colors.orange),
+        _runtimeTile('Ruby', 'Scripts Ruby, Gems', 'apk add ruby', Icons.diamond, Colors.red),
+        _runtimeTile('Java', 'Compilation Java, Maven', 'apk add openjdk17-jdk', Icons.coffee, Colors.brown),
+        _runtimeTile('Kotlin', 'Compilation Kotlin', 'apk add kotlin', Icons.code, Colors.purple),
+        _runtimeTile('Clang', 'Compilation C/C++', 'apk add clang llvm', Icons.memory, Colors.teal),
+        _runtimeTile('Lua', 'Scripts Lua', 'apk add lua5.4', Icons.terminal, Colors.indigo),
+        const SizedBox(height: 16),
+        Text('OUTILS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textColor.withValues(alpha: 0.6), letterSpacing: 0.5)),
+        const SizedBox(height: 8),
+        _runtimeTile('Git', 'Controle de version', 'apk add git', Icons.commit, Colors.grey),
+        _runtimeTile('curl', 'Telechargement HTTP', 'apk add curl', Icons.download, Colors.grey),
+        _runtimeTile('npm', 'Gestionnaire de paquets Node.js', 'apk add npm', Icons.inventory_2, Colors.grey),
+        _runtimeTile('pip', 'Gestionnaire de paquets Python', 'apk add py3-pip', Icons.inventory_2, Colors.grey),
+        const SizedBox(height: 24),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Comment installer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
+              const SizedBox(height: 8),
+              _codeBlock('apk update'),
+              const SizedBox(height: 4),
+              _codeBlock('apk add nodejs npm'),
+              const SizedBox(height: 4),
+              _codeBlock('node --version'),
+              const SizedBox(height: 12),
+              Text(
+                'Ouvrez le terminal Panda et tapez ces commandes.\nAlpine gere automatiquement les dependances.',
+                style: TextStyle(fontSize: 11, color: textColor.withValues(alpha: 0.7)),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _runtimeTile(String name, String description, String command, IconData icon, Color color) {
+    final textColor = appThemeState.appTheme.selectScreenCardTextColor;
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+          child: Icon(icon, size: 18, color: color),
+        ),
+        title: Text(name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor)),
+        subtitle: Text(description, style: TextStyle(fontSize: 11, color: textColor.withValues(alpha: 0.7))),
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(6)),
+          child: Text(command, style: TextStyle(fontSize: 10, fontFamily: 'monospace', color: textColor)),
+        ),
+      ),
+    );
+  }
+
+  Widget _codeBlock(String code) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(code, style: TextStyle(fontSize: 12, fontFamily: 'monospace', color: Colors.green[300])),
     );
   }
 
