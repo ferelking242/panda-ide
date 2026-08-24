@@ -29,6 +29,7 @@ import '../../utils/functions.dart';
 import '../../utils/languages.dart';
 import '../../utils/themes.dart';
 import '../../utils/constants.dart';
+import 'find_panel.dart';
 
 // Code editor widget
 // Extracted from widgets.dart
@@ -80,7 +81,7 @@ class CodeEditor extends StatefulWidget {
   });
 
   @override
-  State<CodeEditor> createState() => _CodeEditorState();
+  State<CodeEditor> createState() => CodeEditorState();
 }
 
 class CodeEditorState extends State<CodeEditor> with AutomaticKeepAliveClientMixin {

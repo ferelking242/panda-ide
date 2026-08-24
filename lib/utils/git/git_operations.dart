@@ -43,12 +43,48 @@ Future<bool> configureStorageRoots() async {
     // Go up to the app root.
     final parent = docsDir.parent;
     final basePath = parent.path;
-    print('[StorageRoots] path_provider docs: ${docsDir.path}');
+    print('[StorageRoots] path_provider docs: ${docsDir.path}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+');
     print('[StorageRoots] resolved basePath: $basePath');
     resolveAppDir(basePath);
-  } catch (e) {
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ catch (e) {
     print('[StorageRoots] path_provider failed, using default appDir: $e');
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   usePrivateStorageRoots();
   for (final root in [
     Directory(pandaRootDir),
@@ -59,6 +95,18 @@ Future<bool> configureStorageRoots() async {
   ]) {
     await root.create(recursive: true);
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   final publicRoot = Directory(publicPandaRootDir);
   try {
     if (!await publicRoot.exists()) return false;
@@ -66,45 +114,189 @@ Future<bool> configureStorageRoots() async {
     await probe.writeAsString('ok', flush: true);
     await probe.delete();
     return true;
-  } on FileSystemException {
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ on FileSystemException {
     return false;
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
 }
+
+}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<Directory> setupProjectDir() async {
   for (final candidate in [Directory(projectDir)]) {
     try {
       await candidate.create(recursive: true);
       return candidate;
-    } on FileSystemException {
+    }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ on FileSystemException {
       continue;
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   throw FileSystemException(
     'Unable to create Panda IDE projects directory',
     projectDir,
   );
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<Directory> setupTempDir() async {
   final target = Directory(tempDir);
   if (!target.existsSync()) {
     await target.create(recursive: true);
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   return target;
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<Directory> setupFilesDir() async {
   // On web, dart:io paths like /data/data/... don't exist.
   // Use path_provider which returns an IDBFS-backed virtual path on web.
   if (kIsWeb) {
     final appDir = await getApplicationDocumentsDirectory();
-    final webFilesDir = Directory('${appDir.path}/panda_files');
+    final webFilesDir = Directory('${appDir.path}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+/panda_files');
     if (!webFilesDir.existsSync()) {
       await webFilesDir.create(recursive: true);
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
     return webFilesDir;
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
   // The active root is always private. Shared storage is never a startup
   // dependency and is only used by explicit import/export flows.
@@ -115,15 +307,63 @@ Future<Directory> setupFilesDir() async {
       if (!candidate.existsSync()) {
         await candidate.create(recursive: true);
       }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
       final probe = File(path.join(candidate.path, '.panda_write_probe'));
       await probe.writeAsString('ok', flush: true);
       await probe.delete();
       target = candidate;
       break;
-    } on FileSystemException {
+    }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ on FileSystemException {
       continue;
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   if (target == null) {
     throw FileSystemException(
       'Unable to create Panda IDE files directory',
@@ -131,67 +371,367 @@ Future<Directory> setupFilesDir() async {
     );
   }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
   final ggufDir = Directory(path.join(target.path, 'gguf'));
   await ggufDir.create(recursive: true);
   final currentFiles = File(path.join(target.path, '.current_files.json'));
 
   try {
     if (!await currentFiles.exists()) {
-      await currentFiles.writeAsString(jsonEncode({}), flush: true);
+      await currentFiles.writeAsString(jsonEncode({}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+), flush: true);
       return target;
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
     final raw = await currentFiles.readAsString();
     if (raw.trim().isEmpty) {
-      await currentFiles.writeAsString(jsonEncode({}), flush: true);
+      await currentFiles.writeAsString(jsonEncode({}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+), flush: true);
       return target;
     }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
     final decoded = jsonDecode(raw);
-    final data = decoded is Map ? decoded : const <dynamic, dynamic>{};
-    final cleaned = <String, String>{};
+    final data = decoded is Map ? decoded : const <dynamic, dynamic>{}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+;
+    final cleaned = <String, String>{}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+;
     for (final entry in data.entries) {
       final relativePath = entry.key.toString();
       if (await File(path.join(target.path, relativePath)).exists()) {
         cleaned[relativePath] = entry.value.toString();
       }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
     await currentFiles.writeAsString(jsonEncode(cleaned), flush: true);
-  } catch (_) {
-    await currentFiles.writeAsString(jsonEncode({}), flush: true);
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ catch (_) {
+    await currentFiles.writeAsString(jsonEncode({}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+), flush: true);
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
   return target;
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<Directory> setupTemplateDir() async {
   for (final candidate in [Directory(templateDir)]) {
     try {
       await candidate.create(recursive: true);
       return candidate;
-    } on FileSystemException {
+    }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ on FileSystemException {
       continue;
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   throw FileSystemException(
     'Unable to create Panda IDE templates directory',
     templateDir,
   );
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<File> setTempFile(String extension) async {
   final dir = await setupTemplateDir();
 
   File target;
   if (extension == 'html') {
-    target = File('${dir.path}/index.html');
-  } else if (extension == 'css') {
-    target = File('${dir.path}/style.css');
-  } else if (extension == 'js') {
-    target = File('${dir.path}/script.js');
-  } else {
-    target = File('${dir.path}/tempCode.$extension');
+    target = File('${dir.path}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+/index.html');
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ else if (extension == 'css') {
+    target = File('${dir.path}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+/style.css');
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ else if (extension == 'js') {
+    target = File('${dir.path}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+/script.js');
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ else {
+    target = File('${dir.path}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+/tempCode.$extension');
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
   if (!target.existsSync() || target.readAsStringSync().isEmpty) {
     await target.create(recursive: true);
@@ -203,8 +743,32 @@ Future<File> setTempFile(String extension) async {
     );
   }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
   return target;
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Map<String, String> gitEnvs(String sharedPath) => {
   'PATH': '$binDir:/bin:/usr/bin',
@@ -213,7 +777,19 @@ Map<String, String> gitEnvs(String sharedPath) => {
   'GIT_SSL_CAINFO': '$certDir/cacert.pem',
   'LD_LIBRARY_PATH': "$sharedPath:$libDir",
   'ROXUM_SHARED_PATH': sharedPath,
-};
+}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+;
 
 Future<void> cloneRepo(
   String location,
@@ -225,6 +801,18 @@ Future<void> cloneRepo(
   String? targetDirectory,
   bool recursive = false,
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 ) async {
   final sharedPath = await NativeChannel.getLibraryPath();
 
@@ -232,16 +820,64 @@ Future<void> cloneRepo(
   if (branch != null && branch.trim().isNotEmpty) {
     cloneArgs.addAll(['--branch', branch.trim()]);
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   if (depth != null && depth > 0) {
     cloneArgs.addAll(['--depth', '$depth']);
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   if (recursive) {
     cloneArgs.add('--recurse-submodules');
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   cloneArgs.add(url);
   if (targetDirectory != null && targetDirectory.trim().isNotEmpty) {
     cloneArgs.add(targetDirectory.trim());
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
   final process = await Process.start(
     '$binDir/git',
@@ -262,16 +898,88 @@ Future<void> cloneRepo(
       final percent = double.parse(match.group(2)!);
       onProgress(percent / 100);
     }
-  });
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+);
 
   final exitCode = await process.exitCode;
   if (exitCode != 0) {
     throw Exception(
       'git clone failed with exit code $exitCode'
-      '${branch != null && branch.trim().isNotEmpty ? ' for branch "${branch.trim()}"' : ''}',
+      '${branch != null && branch.trim().isNotEmpty ? ' for branch "${branch.trim()}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+"' : ''}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+',
     );
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
 }
+
+}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<void> initRepo(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
@@ -299,6 +1007,18 @@ Future<void> initRepo(String workspacePath) async {
   await createGitignoreIfNeeded(workspacePath);
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<void> createGitignoreIfNeeded(String workspacePath) async {
   final gitignoreFile = File('$workspacePath/.gitignore');
   final patterns = _getGitignorePatterns();
@@ -318,18 +1038,114 @@ Future<void> createGitignoreIfNeeded(String workspacePath) async {
           !existingLines.contains(trimmedPattern)) {
         patternsToAdd.add(pattern);
       }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
     if (patternsToAdd.isNotEmpty) {
       await gitignoreFile.writeAsString(
-        '$existingContent\n\n# Auto-added by Panda\n${patternsToAdd.join('\n')}\n',
+        '$existingContent\n\n# Auto-added by Panda\n${patternsToAdd.join('\n')}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+\n',
         mode: FileMode.append,
       );
     }
-  } else {
-    await gitignoreFile.writeAsString('${patterns.join('\n')}\n');
-  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
 }
+
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+ else {
+    await gitignoreFile.writeAsString('${patterns.join('\n')}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+\n');
+  }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 List<String> _getGitignorePatterns() {
   return [
@@ -447,6 +1263,18 @@ List<String> _getGitignorePatterns() {
   ];
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<ProcessResult> getRepoStatus(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
@@ -456,6 +1284,18 @@ Future<ProcessResult> getRepoStatus(String workspacePath) async {
     environment: gitEnvs(sharedPath),
   );
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<void> stageChange(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
@@ -467,6 +1307,18 @@ Future<void> stageChange(String fileName, String workspacePath) async {
   );
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<void> stageAll(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
@@ -476,6 +1328,18 @@ Future<void> stageAll(String workspacePath) async {
     environment: gitEnvs(sharedPath),
   );
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<void> unstageChange(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
@@ -495,6 +1359,18 @@ Future<void> unstageChange(String fileName, String workspacePath) async {
   );
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<void> unstageAll(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final env = gitEnvs(sharedPath);
@@ -511,6 +1387,18 @@ Future<void> unstageAll(String workspacePath) async {
   );
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<bool> _hasInitialCommit(
   String workspacePath,
   Map<String, String> env,
@@ -525,12 +1413,36 @@ Future<bool> _hasInitialCommit(
   return result.exitCode == 0;
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 Future<ProcessResult> gitCommit(
   String workspacePath,
   String message, {
   bool all = false,
   bool amend = false,
-}) async {
+}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final args = <String>['commit'];
   if (amend) args.add('--amend');
@@ -546,6 +1458,18 @@ Future<ProcessResult> gitCommit(
 
   return result;
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<List<CommitNode>> getGraph(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
@@ -569,15 +1493,51 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
     headHash = (headResult.stdout as String).trim();
   }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
   final upstreamResult = await Process.run(
     "$binDir/git",
-    ["rev-parse", "--verify", "@{u}"],
+    ["rev-parse", "--verify", "@{u}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
   if (upstreamResult.exitCode == 0) {
     upstreamHash = (upstreamResult.stdout as String).trim();
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
   final List<CommitNode> commits = [];
   final lines = result.stdout.toString().split('\n');
@@ -605,10 +1565,46 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
         ),
       );
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
   return commits;
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<void> gitRestoreFile(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
@@ -620,6 +1616,18 @@ Future<void> gitRestoreFile(String fileName, String workspacePath) async {
   );
 }
 
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
 // ── Git Stash ─────────────────────────────────────────────────────────────
 
 class GitStashEntry {
@@ -627,15 +1635,63 @@ class GitStashEntry {
   final String message;
   final String branch;
   final String date;
-  GitStashEntry({required this.ref, required this.message, required this.branch, required this.date});
+  GitStashEntry({required this.ref, required this.message, required this.branch, required this.date}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+);
 }
 
-Future<void> gitStash(String workspacePath, {String message = ''}) async {
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
+Future<void> gitStash(String workspacePath, {String message = ''}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final args = ['stash', 'push'];
   if (message.isNotEmpty) {
     args.addAll(['-m', message]);
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   await Process.run(
     "$binDir/git",
     args,
@@ -644,7 +1700,31 @@ Future<void> gitStash(String workspacePath, {String message = ''}) async {
   );
 }
 
-Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}) async {
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
+Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
     "$binDir/git",
@@ -654,7 +1734,31 @@ Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}) asyn
   );
 }
 
-Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}) async {
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
+Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
     "$binDir/git",
@@ -664,7 +1768,31 @@ Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}) as
   );
 }
 
-Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}) async {
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
+
+Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
     "$binDir/git",
@@ -673,6 +1801,18 @@ Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}) asy
     environment: gitEnvs(sharedPath),
   );
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<ProcessResult> gitStashClear(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
@@ -683,6 +1823,18 @@ Future<ProcessResult> gitStashClear(String workspacePath) async {
     environment: gitEnvs(sharedPath),
   );
 }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
 
 Future<List<GitStashEntry>> gitStashList(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
@@ -705,7 +1857,31 @@ Future<List<GitStashEntry>> gitStashList(String workspacePath) async {
         date: parts[3].trim(),
       ));
     }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   }
+
+Future<String> gitStashShow(String workspacePath, String stashRef) async {
+  final sharedPath = await NativeChannel.getLibraryPath();
+  final result = await Process.run(
+    "$binDir/git",
+    ["stash", "show", "-p", stashRef],
+    workingDirectory: workspacePath,
+    environment: gitEnvs(sharedPath),
+  );
+  return result.stdout as String;
+}
+
   return entries;
 }
 

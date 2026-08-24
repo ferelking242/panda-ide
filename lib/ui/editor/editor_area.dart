@@ -29,6 +29,7 @@ import '../../utils/functions.dart';
 import '../../utils/languages.dart';
 import '../../utils/themes.dart';
 import '../../utils/constants.dart';
+import 'code_editor.dart';
 import '../../utils/editors/edit_hunks.dart';
 
 // Helper functions extracted from monolithic widgets.dart
