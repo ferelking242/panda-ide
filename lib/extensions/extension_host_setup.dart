@@ -18,6 +18,7 @@ import 'contributes/icon_theme_loader.dart';
 import 'contributes/snippet_loader.dart';
 import 'contributes/theme_loader.dart';
 import 'extension_host_manager.dart';
+import 'node_runtime.dart';
 import 'tasks_bridge.dart';
 
 /// Fichiers JS à extraire de assets/ vers le filesystem Android.
@@ -55,9 +56,17 @@ class ExtensionHostSetup {
     // 1. Extraire les fichiers JS sur le filesystem.
     await _extractAssets();
 
-    // 2. Configurer le manager avec les chemins corrects.
+    // 2. Initialize Node.js runtime.
+    final nodeReady = await NodeRuntimeManager.instance.init();
+    if (!nodeReady) {
+      print('[ExtensionHostSetup] ⚠️ Node.js runtime not found. Extensions requiring Node.js will not work.');
+      print('[ExtensionHostSetup] Download Node.js from Settings → Runtimes to enable extension support.');
+    }
+
+    // 3. Configurer le manager avec les chemins corrects.
+    final effectiveNodePath = NodeRuntimeManager.instance.nodePath ?? nodeBinPath;
     ExtensionHostManager.instance.configure(
-      nodeBinPath: nodeBinPath,
+      nodeBinPath: effectiveNodePath,
       hostJsPath: hostJsPath,
     );
 
