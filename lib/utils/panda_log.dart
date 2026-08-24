@@ -1,9 +1,10 @@
 /// PandaLog — backward-compatible logging API.
 ///
 /// Delegates to the new PandaLogger system. Existing code continues to work.
+import 'panda_log_bridge.dart';
+
 library;
 
-import 'panda_log_bridge.dart';
 
 /// Niveaux de log (kept for backward compatibility).
 enum PandaLevel { verbose, debug, info, warning, error }
