@@ -3,12 +3,13 @@
 /// Lit /proc/cpuinfo et /proc/meminfo (toujours disponibles sur Android),
 /// examine le stockage via dart:io, et calcule un score de performance global.
 /// Le résultat est mis en cache dans SharedPreferences.
-library;
-
 import 'dart:io';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/device_profile.dart';
+
+library;
+
 
 class DeviceProfiler {
   static const _kPrefsKey = 'panda_device_profile_v1';
