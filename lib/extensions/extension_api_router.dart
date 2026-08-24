@@ -2,15 +2,10 @@
 ///
 /// Chaque namespace est délégué à un handler spécialisé.
 /// Ce routeur est enregistré dans ExtensionHostManager.apiCallHandler.
-library;
-
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'command_registry.dart';
 import 'config_store.dart';
 import 'debug_bridge.dart';
@@ -27,6 +22,12 @@ import 'ui/progress_overlay.dart';
 import 'ui/status_bar_manager.dart';
 import 'ui/window_api_handler.dart';
 import 'workspace_bridge.dart';
+
+library;
+
+
+
+
 
 /// Route un appel vscode.* reçu d'une extension vers le handler Flutter approprié.
 ///
