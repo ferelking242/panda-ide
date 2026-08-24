@@ -2,16 +2,17 @@
 ///
 /// Loads .panda extensions as Dart libraries via `dart:isolate`.
 /// Extensions run in their own isolate for isolation.
-library;
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
-
 import 'package:path/path.dart' as p;
-
 import 'models/panda_manifest.dart';
+
+library;
+
+
+
 
 /// A loaded native Dart extension.
 class NativeExtension {
