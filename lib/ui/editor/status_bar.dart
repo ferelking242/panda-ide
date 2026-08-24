@@ -21,14 +21,15 @@
 ///     first-left / last-right edge paddings, max-width 40vw truncation.
 ///   * Entry kinds (error/warning/prominent/remote/offline) use the
 ///     darkened backgrounds computed from theme.ts.
-library;
-
 import 'dart:ui' show FontFeature;
-
 import 'package:flutter/material.dart';
-
 import '../../extensions/language_feature_router.dart';
 import '../../extensions/ui/status_bar_manager.dart';
+
+library;
+
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // Theme tokens — src/vs/workbench/common/theme.ts
