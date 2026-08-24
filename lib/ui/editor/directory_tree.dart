@@ -33,6 +33,14 @@ import '../../utils/constants.dart';
 // File tree viewer
 // Extracted from widgets.dart
 
+String _extractGitFilename(String gitStatusLine) {
+  String fileName = gitStatusLine.substring(2).trim();
+  if (fileName.startsWith('"') && fileName.endsWith('"')) {
+    fileName = fileName.substring(1, fileName.length - 1);
+  }
+  return fileName;
+}
+
 class DirectoryTreeViewerCustom extends StatefulWidget {
   final String rootPath;
   final bool isUnfoldedFirst;

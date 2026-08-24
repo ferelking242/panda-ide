@@ -33,6 +33,22 @@ import '../../utils/constants.dart';
 // Git commit graph
 // Extracted from widgets.dart
 
+const List<Color> _gitGraphColors = [
+  Color(0xFF007ACC),
+  Color(0xFFD14B4B),
+  Color(0xFF4EC9B0),
+  Color(0xFFCE9178),
+  Color(0xFFC586C0),
+  Color(0xFF9CDCFE),
+  Color(0xFFB5CEA8),
+  Color(0xFFDCDCAA),
+  Color(0xFF4FC1FF),
+];
+
+Color _getGraphColor(int index) {
+  return _gitGraphColors[index % _gitGraphColors.length];
+}
+
 class VSCodeGitGraphPainter extends CustomPainter {
   final CommitRowInfo rowInfo;
   final double laneWidth;

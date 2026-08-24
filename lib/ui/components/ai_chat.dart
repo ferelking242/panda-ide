@@ -30,6 +30,60 @@ import '../../utils/languages.dart';
 import '../../utils/themes.dart';
 import '../../utils/constants.dart';
 
+import '../../utils/editors/edit_hunks.dart';
+
+// Helper functions extracted from monolithic widgets.dart
+
+int _lineCount(String? text) {
+  if (text == null || text.isEmpty) return 0;
+  return text.split('\n').length;
+}
+
+({int added, int removed}) _pendingDiffCounts(PendingEditFile? pending) {
+  if (pending == null) return (added: 0, removed: 0);
+  var added = 0;
+  var removed = 0;
+  for (final hunk in pending.editHunks) {
+    if (hunk.type == 'added') {
+      added += _lineCount(hunk.addedText ?? hunk.newText);
+      continue;
+    }
+    if (hunk.type == 'removed') {
+      removed += _lineCount(hunk.removedText ?? hunk.oldText);
+      continue;
+    }
+    added += _lineCount(hunk.addedText);
+    removed += _lineCount(hunk.removedText);
+  }
+  return (added: added, removed: removed);
+}
+
+int _lineAtOffset(String text, int offset) {
+  if (text.isEmpty) return 0;
+  final safeOffset = offset.clamp(0, text.length);
+  return '\n'.allMatches(text.substring(0, safeOffset)).length;
+}
+
+({int start, int end}) _resolveDisplayLineRange(
+  PendingEditFile pending,
+  EditHunk hunk,
+) {
+  final needle = hunk.oldText;
+  if (needle.isNotEmpty) {
+    final first = pending.oldText.indexOf(needle);
+    if (first >= 0) {
+      final second = pending.oldText.indexOf(needle, first + 1);
+      if (second == -1) {
+        final start = _lineAtOffset(pending.oldText, first);
+        final endOffset = (first + needle.length - 1).clamp(first, pending.oldText.length);
+        final end = _lineAtOffset(pending.oldText, endOffset);
+        return (start: start, end: end);
+      }
+    }
+  }
+  return (start: hunk.sourceStartLine, end: hunk.sourceEndLine);
+}
+
 // AI chat interface
 // Extracted from widgets.dart
 

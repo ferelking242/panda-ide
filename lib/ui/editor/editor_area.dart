@@ -29,9 +29,119 @@ import '../../utils/functions.dart';
 import '../../utils/languages.dart';
 import '../../utils/themes.dart';
 import '../../utils/constants.dart';
+import '../../utils/editors/edit_hunks.dart';
+
+// Helper functions extracted from monolithic widgets.dart
+
+int _lineCount(String? text) {
+  if (text == null || text.isEmpty) return 0;
+  return text.split('\n').length;
+}
+
+({int added, int removed}) _pendingDiffCounts(PendingEditFile? pending) {
+  if (pending == null) return (added: 0, removed: 0);
+  var added = 0;
+  var removed = 0;
+  for (final hunk in pending.editHunks) {
+    if (hunk.type == 'added') {
+      added += _lineCount(hunk.addedText ?? hunk.newText);
+      continue;
+    }
+    if (hunk.type == 'removed') {
+      removed += _lineCount(hunk.removedText ?? hunk.oldText);
+      continue;
+    }
+    added += _lineCount(hunk.addedText);
+    removed += _lineCount(hunk.removedText);
+  }
+  return (added: added, removed: removed);
+}
+
+int _lineAtOffset(String text, int offset) {
+  if (text.isEmpty) return 0;
+  final safeOffset = offset.clamp(0, text.length);
+  return '\n'.allMatches(text.substring(0, safeOffset)).length;
+}
+
+({int start, int end}) _resolveDisplayLineRange(
+  PendingEditFile pending,
+  EditHunk hunk,
+) {
+  final needle = hunk.oldText;
+  if (needle.isNotEmpty) {
+    final first = pending.oldText.indexOf(needle);
+    if (first >= 0) {
+      final second = pending.oldText.indexOf(needle, first + 1);
+      if (second == -1) {
+        final start = _lineAtOffset(pending.oldText, first);
+        final endOffset = (first + needle.length - 1).clamp(first, pending.oldText.length);
+        final end = _lineAtOffset(pending.oldText, endOffset);
+        return (start: start, end: end);
+      }
+    }
+  }
+  return (start: hunk.sourceStartLine, end: hunk.sourceEndLine);
+}
 
 // Editor area container
 // Extracted from widgets.dart
+
+Widget bottomTool(
+  bool isDark,
+  dynamic iconData,
+  VoidCallback? onPressed, [
+  VoidCallback? onLongPress,
+  bool isEnabled = true,
+]) {
+  final effectiveEnabled = isEnabled && onPressed != null;
+  final iconColor = !isDark
+      ? const Color.fromARGB(255, 40, 40, 40)
+      : const Color.fromARGB(255, 194, 194, 194);
+  final disabledColor = isDark
+      ? Colors.grey.shade700
+      : Colors.grey.shade500;
+  return SizedBox(
+    height: 37,
+    width: 50,
+    child: IconButton(
+      highlightColor: Colors.lightBlue.withAlpha(160),
+      style: ButtonStyle(
+        shape: WidgetStateProperty.all(
+          const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+          ),
+        ),
+      ),
+      padding: EdgeInsets.zero,
+      onPressed: effectiveEnabled
+          ? () { try { onPressed.call(); } catch (_) {} }
+          : null,
+      icon: iconData is IconData
+          ? Icon(iconData, color: effectiveEnabled ? iconColor : disabledColor)
+          : Container(
+              padding: const EdgeInsets.all(5.5),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: effectiveEnabled
+                      ? (isDark ? Colors.grey[400]! : Colors.grey)
+                      : disabledColor,
+                  width: 0.5,
+                ),
+              ),
+              child: Text(
+                iconData,
+                style: TextStyle(
+                  color: effectiveEnabled
+                      ? (isDark ? Colors.grey[400]! : Colors.grey)
+                      : disabledColor,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+    ),
+  );
+}
 
 class EditorArea extends StatefulWidget {
   final ActiveEditor editor;

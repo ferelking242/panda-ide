@@ -33,6 +33,16 @@ import '../../utils/constants.dart';
 // Git source control panel
 // Extracted from widgets.dart
 
+import '../components/git_graph.dart';
+
+String _extractGitFilename(String gitStatusLine) {
+  String fileName = gitStatusLine.substring(2).trim();
+  if (fileName.startsWith('"') && fileName.endsWith('"')) {
+    fileName = fileName.substring(1, fileName.length - 1);
+  }
+  return fileName;
+}
+
 class SourceControl extends StatefulWidget {
   final AppTheme appTheme;
   final String workSpace;
