@@ -1,12 +1,13 @@
 /// Panda YAML manifest parser for .panda extensions.
 ///
 /// Parses `panda.yaml` — the manifest format for native Dart extensions.
-library;
-
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:yaml/yaml.dart';
+
+library;
+
+
 
 /// Parsed panda.yaml manifest.
 class PandaManifest {
