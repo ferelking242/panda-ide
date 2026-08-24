@@ -33,6 +33,29 @@ import '../../utils/constants.dart';
 // Code editor widget
 // Extracted from widgets.dart
 
+import '../../utils/constants.dart';
+
+Directory? _findRepoRoot(File file) {
+  try {
+    Directory dir = file.parent;
+    while (true) {
+      if (Directory(path.join(dir.path, '.git')).existsSync()) return dir;
+      if (dir.parent.path == dir.path) break;
+      dir = dir.parent;
+    }
+  } catch (_) {}
+  return null;
+}
+
+void _refreshRepoStatusForFile(BuildContext context, File file) {
+  try {
+    final root = _findRepoRoot(file);
+    if (root != null) {
+      context.read<RepoStatusBloc>().add(LoadRepoStatus(root.path));
+    }
+  } catch (_) {}
+}
+
 class CodeEditor extends StatefulWidget {
   final File filePath;
   final CodeForgeController codeController;
