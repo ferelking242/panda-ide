@@ -12,21 +12,7 @@ import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 
-class _PfdRuntimeConfig {
-  final String moduleName;
-  final String? assetArchiveName;
-  final bool requiresExtraction;
-  final double weight;
-  final String displayName;
-
-  const _PfdRuntimeConfig({
-    required this.moduleName,
-    this.assetArchiveName,
-    this.requiresExtraction = true,
-    required this.weight,
-    required this.displayName,
-  });
-}
+// Runtimes are now installed via Alpine Linux.
 
 class DownloadManager extends StatefulWidget {
   final String? preselectedPackageParentName;
@@ -49,125 +35,8 @@ class _DownloadManagerState extends State<DownloadManager> {
   Future<void> _pfdInstallChain = Future<void>.value();
   final Set<StreamSubscription<Map<String, dynamic>>> _activePfdSubscriptions = {};
 
-  static const Map<String, _PfdRuntimeConfig> _pfdRuntimes = {
-    'node': _PfdRuntimeConfig(
-      moduleName: 'node_feature',
-      assetArchiveName: 'node.zip',
-      weight: 80.0,
-      displayName: 'Node',
-    ),
-    'python': _PfdRuntimeConfig(
-      moduleName: 'python_feature',
-      assetArchiveName: 'python.zip',
-      weight: 80.0,
-      displayName: 'Python',
-    ),
-    'java': _PfdRuntimeConfig(
-      moduleName: 'java_feature',
-      assetArchiveName: 'java-21-openjdk.zip',
-      weight: 80.0,
-      displayName: 'Java',
-    ),
-    'java-21-openjdk': _PfdRuntimeConfig(
-      moduleName: 'java_feature',
-      assetArchiveName: 'java-21-openjdk.zip',
-      weight: 80.0,
-      displayName: 'Java',
-    ),
-    'kotlin': _PfdRuntimeConfig(
-      moduleName: 'kotlin_feature',
-      assetArchiveName: 'kotlin.zip',
-      weight: 80.0,
-      displayName: 'Kotlin',
-    ),
-    'clang': _PfdRuntimeConfig(
-      moduleName: 'clang_feature',
-      assetArchiveName: 'clang.zip',
-      weight: 80.0,
-      displayName: 'Clang',
-    ),
-    'dart': _PfdRuntimeConfig(
-      moduleName: 'dart_feature',
-      assetArchiveName: 'dart.zip',
-      weight: 80.0,
-      displayName: 'Dart',
-    ),
-    'rust': _PfdRuntimeConfig(
-      moduleName: 'rust_feature',
-      assetArchiveName: 'rust.zip',
-      weight: 80.0,
-      displayName: 'Rust',
-    ),
-    'go': _PfdRuntimeConfig(
-      moduleName: 'go_feature',
-      assetArchiveName: 'go.zip',
-      weight: 80.0,
-      displayName: 'Go',
-    ),
-    'ruby': _PfdRuntimeConfig(
-      moduleName: 'ruby_feature',
-      assetArchiveName: 'ruby.zip',
-      weight: 80.0,
-      displayName: 'Ruby',
-    ),
-    'lua': _PfdRuntimeConfig(
-      moduleName: 'lua_feature',
-      assetArchiveName: 'lua.zip',
-      weight: 80.0,
-      displayName: 'Lua',
-    ),
-  };
-  static const Map<String, _PfdRuntimeConfig> _pfdExtensions = {
-    'ty': _PfdRuntimeConfig(
-      moduleName: 'ty_feature',
-      requiresExtraction: false,
-      weight: 80.0,
-      displayName: 'Ty',
-    ),
-    'rust-analyzer': _PfdRuntimeConfig(
-      moduleName: 'rust_analyzer_feature',
-      requiresExtraction: false,
-      weight: 80.0,
-      displayName: 'rust-analyzer',
-    ),
-    'gopls': _PfdRuntimeConfig(
-      moduleName: 'gopls_feature',
-      requiresExtraction: false,
-      weight: 80.0,
-      displayName: 'gopls',
-    ),
-    'emmyluals': _PfdRuntimeConfig(
-      moduleName: 'emmylua_feature',
-      requiresExtraction: false,
-      weight: 80.0,
-      displayName: 'EmmyLuaLs',
-    ),
-    
-    'bash-language-server': _PfdRuntimeConfig(
-      moduleName: 'bash_language_server_feature',
-      assetArchiveName: 'bash-language-server.zip',
-      weight: 80.0,
-      displayName: 'bash-language-server',
-    ),
-    'copilot-language-server': _PfdRuntimeConfig(
-      moduleName: 'copilot_language_server_feature',
-      assetArchiveName: 'copilot-language-server.zip',
-      weight: 80.0,
-      displayName: 'Github Copilot',
-    ),
-    'kmp-lsp': _PfdRuntimeConfig(
-      moduleName: 'kmp_lsp_feature',
-      requiresExtraction: false,
-      weight: 80.0,
-      displayName: 'Kmp LSP',
-    ),
-    'vscode-langservers-extracted': _PfdRuntimeConfig(
-      moduleName: 'vscode_langservers_extracted_feature',
-      assetArchiveName: 'vscode-langservers-extracted.zip',
-      weight: 80.0,
-      displayName: 'VSCode Extracted LSP Servers',
-    ),
-  };
+  // Runtimes are now installed via Alpine Linux.
+  // Extensions are downloaded from Open VSX marketplace.
 
   static const List<String> _pythonDynloadModules = [
     'array.cpython-313-aarch64-linux-android.so',

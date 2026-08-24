@@ -15,19 +15,5 @@ import '../utils/languages.dart';
 // Runtime configuration for downloads
 // Extracted from downloads.dart
 
-class _PfdRuntimeConfig {
-  final String moduleName;
-  final String? assetArchiveName;
-  final bool requiresExtraction;
-  final double weight;
-  final String displayName;
-
-  const _PfdRuntimeConfig({
-    required this.moduleName,
-    this.assetArchiveName,
-    this.requiresExtraction = true,
-    required this.weight,
-    required this.displayName,
-  });
-}
+// Runtimes are now installed via Alpine Linux.
 

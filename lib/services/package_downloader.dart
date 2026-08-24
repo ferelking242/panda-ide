@@ -41,19 +41,9 @@ class PfdRuntimeConfig {
 
 // ─── Pfd maps (mirrors _DownloadManagerState) ────────────────────────────────
 
-const Map<String, PfdRuntimeConfig> kPfdRuntimes = {
-  'node': PfdRuntimeConfig(moduleName: 'node_feature',   assetArchiveName: 'node.zip',   weight: 80, displayName: 'Node'),
-  'python': PfdRuntimeConfig(moduleName: 'python_feature', assetArchiveName: 'python.zip', weight: 80, displayName: 'Python'),
-  'java': PfdRuntimeConfig(moduleName: 'java_feature',   assetArchiveName: 'java-21-openjdk.zip', weight: 80, displayName: 'Java'),
-  'java-21-openjdk': PfdRuntimeConfig(moduleName: 'java_feature', assetArchiveName: 'java-21-openjdk.zip', weight: 80, displayName: 'Java'),
-  'kotlin': PfdRuntimeConfig(moduleName: 'kotlin_feature', assetArchiveName: 'kotlin.zip', weight: 80, displayName: 'Kotlin'),
-  'clang': PfdRuntimeConfig(moduleName: 'clang_feature',  assetArchiveName: 'clang.zip',  weight: 80, displayName: 'Clang'),
-  'dart': PfdRuntimeConfig(moduleName: 'dart_feature',   assetArchiveName: 'dart.zip',   weight: 80, displayName: 'Dart'),
-  'rust': PfdRuntimeConfig(moduleName: 'rust_feature',   assetArchiveName: 'rust.zip',   weight: 80, displayName: 'Rust'),
-  'go': PfdRuntimeConfig(moduleName: 'go_feature',     assetArchiveName: 'go.zip',     weight: 80, displayName: 'Go'),
-  'ruby': PfdRuntimeConfig(moduleName: 'ruby_feature',   assetArchiveName: 'ruby.zip',   weight: 80, displayName: 'Ruby'),
-  'lua': PfdRuntimeConfig(moduleName: 'lua_feature',    assetArchiveName: 'lua.zip',    weight: 80, displayName: 'Lua'),
-};
+// Runtimes are now installed via Alpine Linux (apk add nodejs npm, etc.)
+// See Settings → Downloads → Runtimes tab for available runtimes.
+const Map<String, PfdRuntimeConfig> kPfdRuntimes = {};
 
 const Map<String, PfdRuntimeConfig> kPfdExtensions = {
   'ty': PfdRuntimeConfig(moduleName: 'ty_feature', requiresExtraction: false, weight: 80, displayName: 'Ty'),
