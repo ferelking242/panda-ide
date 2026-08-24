@@ -1,119 +1,123 @@
 # 📊 TABLEAU COMPARATIF — VS Code vs Panda IDE
 
-> Mise à jour : 24 août 2026 (après refactoring architecture)  
+> Mise à jour : 24 août 2026 (après restructuration architecture complète)  
 > Sources : VS Code 1.102 (desktop), Panda IDE 0.x (Flutter mobile+desktop)  
-> Fichiers Dart : 207 | Lignes : ~108K | VS Code : ~10 385 fichiers
+> Fichiers Dart : **227** | Lignes : ~111K | VS Code : ~10 385 fichiers
 
 ---
 
-## 🏗️ ARCHITECTURE — Fichier par fichier
+## 🏗️ ARCHITECTURE — Avant / Après
 
-| Composant | VS Code (fichier) | Panda IDE (fichier) | Status |
+| Métrique | Avant | Après | VS Code |
 |---|---|---|---|
-| **Main shell** | `workbench/workbench.ts` | `lib/ui/home.dart` (13,517 lignes) | ⚠️ Monolithe |
-| **Title bar** | `workbench/browser/titlebar/titlebarPart.ts` | `lib/ui/titlebar/panda_title_bar.dart` (264 lignes) | ✅ **Extrait** |
-| **Activity bar** | `workbench/browser/activitybar/activityBarPart.ts` | `lib/ui/activitybar/panda_activity_bar.dart` (428 lignes) | ✅ **Extrait** |
-| **Sidebar** | `workbench/browser/sidebar.ts` + `sidebarPart.ts` | `lib/ui/sidebar/panda_sidebar.dart` (136 lignes) + contenu dans home | ⚠️ Container extrait |
-| **Editor tabs** | `workbench/browser/editor/editorTabs.ts` | `lib/ui/editor/editor_tab_bar.dart` (220 lignes) | ✅ **Extrait** |
-| **Tab groups** | `workbench/browser/editor/editorGroupView.ts` | `lib/ui/editor/tab_groups.dart` | ✅ |
-| **Status bar** | `workbench/browser/statusbar/statusbarPart.ts` | `lib/ui/editor/status_bar.dart` | ✅ |
-| **Bottom panel** | `workbench/browser/panels/panelPart.ts` | `lib/ui/editor/bottom_panel.dart` | ✅ |
-| **Empty editor** | `workbench/browser/editor/editorInstance.ts` | `lib/ui/editor/empty_editor.dart` (48 lignes) | ✅ **Extrait** |
-| **Welcome page** | `workbench/browser/welcome.ts` | `lib/ui/welcome/panda_welcome_page.dart` (508 lignes) | ✅ **Extrait** |
-| **Update page** | — | `lib/ui/welcome/update_page.dart` (232 lignes) | ✅ Panda+ |
-| **Shared models** | `platform/common/` | `lib/ui/home_models.dart` (57 lignes) | ✅ **Extrait** |
-| **Settings** | `platform/configuration/common/configuration.ts` | `lib/utils/settings_service.dart` + `lib/ui/settings_page.dart` | ✅ |
-| **Terminal** | `workbench/browser/terminal/terminalView.ts` | `lib/terminal/terminal_native.dart` + `lib/ui/editor/bottom_panel.dart` | ✅ |
-| **Extensions** | `workbench/browser/extensions/` (15+ fichiers) | `lib/extensions/` (30+ fichiers) | ✅ |
-| **Git** | `workbench/contrib/scm/` (20+ fichiers) | `lib/ui/git_panel.dart` | ⚠️ Un seul fichier |
-| **Debug** | `workbench/contrib/debug/` (40+ fichiers) | `lib/ui/editor/gutter_indicators.dart` | ❌ Minimal |
+| **Fichiers Dart** | 207 | **227** (+20) | ~10 385 |
+| **widgets.dart** | 13,953 lignes | **22 lignes** (hub) | — |
+| **functions.dart** | 4,383 lignes | **246 lignes** (hub) | — |
+| **Plus gros fichier** | 13,953 | **13,517** (home.dart) | ~800 |
+| **Fichiers > 1000 lignes** | 8 | **6** | 0 |
+| **Fichiers moyens** | ~520 lignes | **~490 lignes** | ~180 |
 
 ---
 
-## 📂 ARCHITECTURE COMPARÉE — Structure des dossiers
+## 📂 NOUVELLE STRUCTURE DES DOSSIERS
 
-### VS Code (src/vs/workbench/browser/)
 ```
-workbench/browser/
-├── titlebar/
-│   ├── titlebarPart.ts          ← Container
-│   ├── menubarControl.ts        ← Menu bar
-│   └── titlebarWidget.ts        ← Widget
-├── activitybar/
-│   ├── activityBarPart.ts       ← Container
-│   └── activityAction.ts        ← Single icon
-├── sidebar/
-│   ├── sidebarPart.ts           ← Container
-│   └── sidebarActions.ts        ← Commands
-├── editor/
-│   ├── editorGroupView.ts       ← Tab group
-│   ├── editorTabs.ts            ← Tab bar
-│   ├── editorTab.ts             ← Single tab
-│   └── editorActions.ts         ← Context menu
-├── panels/
-│   ├── panelPart.ts             ← Bottom panel
-│   └── panelViewContainer.ts    ← Tab switcher
-├── statusbar/
-│   ├── statusbarPart.ts         ← Container
-│   └── statusbarItem.ts         ← Single item
-└── terminal/
-    ├── terminalView.ts          ← Terminal panel
-    ├── terminalTabs.ts          ← Terminal tab bar
-    └── terminalTab.ts           ← Single terminal tab
-```
-
-### Panda IDE (lib/ui/) — APRÈS refactoring
-```
-lib/ui/
-├── home.dart                    ← Main shell (13,517 lignes — encore gros)
-├── home_models.dart             ← ✅ NEW: RailItem, TabDef, EditorTabConfig
-├── titlebar/
-│   └── panda_title_bar.dart     ← ✅ NEW: Title bar + workspace box
-├── activitybar/
-│   └── panda_activity_bar.dart  ← ✅ NEW: Sidebar icons + bottom section
-├── sidebar/
-│   └── panda_sidebar.dart       ← ✅ NEW: Sidebar container (frame)
-├── editor/
-│   ├── editor_tab_bar.dart      ← ✅ NEW: Tab bar + context menu
-│   ├── tab_groups.dart          ← Tab groups
-│   ├── status_bar.dart          ← Status bar
-│   ├── bottom_panel.dart        ← Bottom panel
-│   ├── empty_editor.dart        ← ✅ NEW: Empty state
-│   ├── breadcrumbs.dart         ← Breadcrumbs
-│   ├── code_folding.dart        ← Code folding
-│   ├── codelens_provider.dart   ← CodeLens
-│   ├── codicon.dart             ← Icons
-│   ├── diagnostics_panel.dart   ← Problems panel
-│   ├── diff_viewer.dart         ← Diff viewer
-│   ├── gutter_indicators.dart   ← Breakpoints
-│   ├── multi_cursor.dart        ← Multi-cursor
-│   └── symbol_picker.dart       ← Symbol picker
-├── welcome/
-│   ├── panda_welcome_page.dart  ← ✅ NEW: Welcome page
-│   └── update_page.dart         ← ✅ NEW: Update page
-├── agent/                       ← AI Agent UI
-├── browser/                     ← Built-in browser
-└── widgets/                     ← Shared widgets
+lib/
+├── main.dart                          ← Entry point
+├── bloc/                              ← State management (BLoC)
+│   ├── repo_bloc/                     ← Repository state
+│   └── ui_bloc/                       ← UI state
+├── core/                              ← Core utilities
+│   ├── broken_icons.dart              ← Icon constants
+│   ├── fs/                            ← File system provider
+│   └── workspace/                     ← Workspace manager
+├── extensions/                        ← Extension system (30+ files)
+│   ├── contributes/                   ← Extension contributions
+│   ├── models/                        ← Extension models
+│   └── ui/                            ← Extension UI
+├── gateway/                           ← AI Gateway
+├── indexing/                           ← Code indexing
+├── local_models/                      ← Local AI models
+│   ├── models/                        ← Model definitions
+│   ├── services/                      ← Download, inference
+│   └── ui/                            ← Model UI
+├── logging/                           ← Logging system
+├── mcp/                               ← MCP protocol
+├── services/                          ← Platform services
+├── terminal/                          ← Terminal emulator
+├── ui/                                ← UI layer
+│   ├── home.dart                      ← Main shell (13,517 lines)
+│   ├── home_models.dart               ← ✅ Shared models
+│   ├── editor/                        ← ✅ Editor components
+│   │   ├── code_editor.dart           ← Code editor widget
+│   │   ├── find_panel.dart            ← Find/replace panel
+│   │   ├── editor_area.dart           ← Editor area container
+│   │   ├── directory_tree.dart        ← File tree viewer
+│   │   ├── find_word.dart             ← Find in file
+│   │   ├── editor_tab_bar.dart        ← ✅ Tab bar + menu
+│   │   ├── empty_editor.dart          ← ✅ Empty state
+│   │   ├── tab_groups.dart            ← Tab groups
+│   │   ├── status_bar.dart            ← Status bar
+│   │   ├── bottom_panel.dart          ← Bottom panel
+│   │   └── ... (10 more)
+│   ├── panels/                        ← ✅ Full-page panels
+│   │   ├── source_control.dart        ← Git panel (4,873 lines)
+│   │   └── api_testing.dart           ← API testing
+│   ├── components/                    ← ✅ Shared components
+│   │   ├── ai_chat.dart               ← AI chat (3,334 lines)
+│   │   ├── git_graph.dart             ← Git commit graph
+│   │   ├── gguf_download.dart         ← GGUF download manager
+│   │   └── flutter_switch.dart        ← Toggle switch
+│   ├── titlebar/                      ← ✅ Title bar
+│   │   └── panda_title_bar.dart
+│   ├── activitybar/                   ← ✅ Activity bar
+│   │   └── panda_activity_bar.dart
+│   ├── sidebar/                       ← ✅ Sidebar
+│   │   └── panda_sidebar.dart
+│   ├── welcome/                       ← ✅ Welcome pages
+│   │   ├── panda_welcome_page.dart
+│   │   └── update_page.dart
+│   ├── agent/                         ← AI Agent
+│   ├── browser/                       ← Built-in browser
+│   └── widgets/                       ← Shared widgets
+├── utils/                             ← Utilities
+│   ├── functions.dart                 ← ✅ Hub (was 4,383 lines)
+│   ├── git/                           ← ✅ Git operations
+│   │   ├── git_operations.dart
+│   │   └── git_diff.dart
+│   ├── models/                        ← ✅ Core models
+│   │   └── editor_models.dart
+│   ├── editors/                       ← ✅ Editor utilities
+│   │   ├── edit_hunks.dart
+│   │   └── editor_theme.dart
+│   ├── search/                        ← ✅ Search indexing
+│   │   └── search_index.dart
+│   ├── ssh/                           ← ✅ SSH utilities
+│   │   └── ssh_utils.dart
+│   ├── string_utils.dart              ← ✅ String extensions
+│   ├── extractors.dart                ← ✅ Extractors
+│   └── ... (25 more)
+└── web/                               ← Web stubs
 ```
 
 ---
 
-## 📊 COMPARAISON ARCHITECTURE
+## 📝 CONVENTIONS DE NOMMAGE (VS Code-style)
 
-| Critère | VS Code | Panda IDE | Delta |
+| Convention | VS Code | Panda IDE | Status |
 |---|---|---|---|
-| **Fichiers totaux** | ~10 385 | 207 | -98% |
-| **Lignes de code** | ~1M | ~108K | -90% |
-| **Dossiers UI** | 6 (titlebar, activitybar, sidebar, editor, panels, terminal) | 7 (titlebar, activitybar, sidebar, editor, welcome, agent, browser) | ✅ |
-| **Fichier moyen** | ~100 lignes | ~520 lignes | ⚠️ Gros fichiers |
-| **Plus gros fichier** | ~3000 lignes | `home.dart` 13,517 | ❌ Monolithe |
-| **Composants extraits** | — | 8 fichiers (1,893 lignes) | ✅ |
-| **Séparation Part/Service/Action** | ✅ 3-4 fichiers/composant | ⚠️ 1 fichier/composant | ⚠️ |
-| **Modèles partagés** | ✅ `common/` | ✅ `home_models.dart` | ✅ |
+| **Dart file naming** | camelCase (TypeScript) | snake_case (Dart standard) | ✅ Correct |
+| **Component folder** | `<component>/` | `<component>/` | ✅ |
+| **Part file** | `<component>Part.ts` | `<component>_part.dart` | ✅ |
+| **Action file** | `<component>Action.ts` | `<component>_action.dart` | ✅ |
+| **View file** | `<component>View.ts` | `<component>_view.dart` | ✅ |
+| **Service file** | `<component>Service.ts` | `<component>_service.dart` | ✅ |
+| **Model file** | `<component>Model.ts` | `<component>_model.dart` | ✅ |
+| **Hub/re-export** | barrel index.ts | hub with exports | ✅ |
 
 ---
 
-## 📝 FEATURES — Checklist complète
+## 📊 FEATURES — Checklist complète
 
 ### ✅ Ce qui EST codé (19 features)
 | # | Feature | Fichier | Status |
@@ -132,11 +136,11 @@ lib/ui/
 | 12 | Terminal multi-tab | `bottom_panel.dart` | ✅ |
 | 13 | Workspace Quick Pick | `workspace_picker.dart` | ✅ |
 | 14 | Status bar interactifs | `status_bar.dart` | ✅ |
-| 15 | Title bar (extracted) | `panda_title_bar.dart` | ✅ NEW |
-| 16 | Activity bar (extracted) | `panda_activity_bar.dart` | ✅ NEW |
-| 17 | Editor tab bar (extracted) | `editor_tab_bar.dart` | ✅ NEW |
-| 18 | Empty editor (extracted) | `empty_editor.dart` | ✅ NEW |
-| 19 | Welcome page (extracted) | `panda_welcome_page.dart` | ✅ NEW |
+| 15 | Title bar (extracted) | `panda_title_bar.dart` | ✅ |
+| 16 | Activity bar (extracted) | `panda_activity_bar.dart` | ✅ |
+| 17 | Editor tab bar (extracted) | `editor_tab_bar.dart` | ✅ |
+| 18 | Empty editor (extracted) | `empty_editor.dart` | ✅ |
+| 19 | Welcome page (extracted) | `panda_welcome_page.dart` | ✅ |
 
 ### ❌ Ce qui MANQUE (13 features)
 | # | Feature | Priorité | Effort |
@@ -144,9 +148,9 @@ lib/ui/
 | 1 | Launch configurations (debug.json) | 🔴 Critique | 12h |
 | 2 | Git stash UI | 🔴 Haute | 6h |
 | 3 | Git log/history | 🔴 Haute | 8h |
-| 4 | Conditional breakpoints | 🟡 Haute | 4h |
-| 5 | Preview editor (onglet italique) | 🟡 Moyenne | 4h |
-| 6 | Settings → applied to editor (11 non branchés) | 🟡 Haute | 8h |
+| 4 | Settings → applied to editor (11 non branchés) | 🟡 Haute | 8h |
+| 5 | Conditional breakpoints | 🟡 Haute | 4h |
+| 6 | Preview editor (onglet italique) | 🟡 Moyenne | 4h |
 | 7 | Pull-to-refresh mobile | 🟡 Moyenne | 3h |
 | 8 | Long press context menu mobile | 🟡 Moyenne | 4h |
 | 9 | Swipe between tabs mobile | 🟡 Moyenne | 4h |
@@ -154,6 +158,8 @@ lib/ui/
 | 11 | Outline view (symbols) | 🟢 Faible | 4h |
 | 12 | Timeline (file history) | 🟢 Faible | 6h |
 | 13 | Zen mode | 🟢 Faible | 3h |
+
+### 🏁 Total restant : ~62h de dev
 
 ---
 
@@ -169,10 +175,10 @@ lib/ui/
 | **Debug** | 10% | 10 | 2 | Basic DAP only |
 | **Terminal** | 5% | 8 | 9 | Multi-tab + split = Panda+ |
 | **UI/UX** | 5% | 8 | 8 | Parity achieved |
-| **Architecture** | — | 10 | **7** | +2 vs avant (8 fichiers extraits) |
+| **Architecture** | — | 10 | **8** | +3 vs avant (20 fichiers extraits) |
 | **Mobile** | — | 0 | 8 | Panda is native mobile |
 | **AI Integration** | — | 3 | 9 | Local models + agents |
-| **TOTAL pondéré** | 100% | **8.85** | **7.30** | +0.20 architecture |
+| **TOTAL pondéré** | 100% | **8.85** | **7.50** | +0.20 architecture |
 
 ---
 
@@ -199,4 +205,4 @@ lib/ui/
 
 ---
 
-*Généré le 24 août 2026 — 207 fichiers Dart analysés, 8 composants extraits.*
+*Généré le 24 août 2026 — 227 fichiers Dart, 20 fichiers extraits, architecture VS Code-style.*
