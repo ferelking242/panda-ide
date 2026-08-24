@@ -1,9 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart'
-    show ValueNotifier, defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+
+    show ValueNotifier, defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 const appVersion = String.fromEnvironment(
   'APP_VERSION',
