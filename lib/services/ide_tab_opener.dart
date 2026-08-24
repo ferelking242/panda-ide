@@ -13,9 +13,10 @@
 ///
 ///   // Dans panda_registry_page.dart / device_panel / etc :
 ///   IdeTabOpener.instance.openFlutterDevice();
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 class IdeTabOpener extends ChangeNotifier {
   IdeTabOpener._();
