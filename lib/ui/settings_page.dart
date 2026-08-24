@@ -1,11 +1,12 @@
 /// Complete settings UI — Editor, Terminal, Git, Extensions, AI, Keybindings.
 /// All switches, steppers, and dropdowns are wired to SettingsService for persistence.
-library;
-
 import 'package:flutter/material.dart';
-
 import '../utils/settings_service.dart';
 import '../extensions/extension_registry.dart';
+
+library;
+
+
 
 /// Settings page with sections.
 class SettingsPage extends StatefulWidget {
