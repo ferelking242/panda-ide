@@ -1,7 +1,8 @@
 /// Diagnostics Panel — shows errors, warnings, infos from LSP diagnostics.
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 /// Severity levels matching LSP protocol.
 enum DiagnosticSeverity { error, warning, info, hint }
