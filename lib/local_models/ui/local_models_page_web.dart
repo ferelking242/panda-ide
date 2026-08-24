@@ -1,7 +1,8 @@
 /// LocalModelsPage — Stub web (Android uniquement).
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 /// Stub affiché sur web — les modèles locaux nécessitent Android.
 class LocalModelsPage extends StatelessWidget {
