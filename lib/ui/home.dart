@@ -10544,7 +10544,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 // Agent Activity Feed — UI widgets
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Light wave painter for active text.
+class _ReflectionBox extends StatefulWidget {
   final String content;
   final bool isActive;
   final bool isDark;
