@@ -6,12 +6,13 @@
 /// - "files" section (recently opened files)
 /// - Each entry has a × button to remove from recently opened
 /// - Search/filter at the top
-library;
-
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+
+library;
+
+
 
 /// A recently opened item (folder or file).
 class RecentItem {
