@@ -1,14 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../ui/home.dart';
 import '../ui/permission_screen.dart';
 import '../ui/splash_screen.dart';
 import 'setup_screen.dart';
+
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
 
 /// Splash → PermissionScreen (first time) → SetupScreen → Home.
 /// No background init. No heavy work. Just navigation.
