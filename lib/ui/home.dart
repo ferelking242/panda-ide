@@ -6,7 +6,6 @@ import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 import 'dart:io';
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -30,9 +29,7 @@ import 'file_manager.dart';
 import 'editor_page.dart';
 import 'menu_screen.dart';
 import 'package:path_provider/path_provider.dart';
-
 import 'package_manager_page.dart';
-// downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
 import 'downloads.dart';
 import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
@@ -45,7 +42,6 @@ import '../ui/contribute.dart';
 import '../ui/github_page.dart';
 import '../utils/constants.dart';
 import '../utils/agentic_tools.dart';
-
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 import '../utils/panda_log.dart';
@@ -63,7 +59,6 @@ import '../ui/browser/browser_panel.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
-    if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
 import 'widgets/responsive_layout.dart';
 import 'panda_ai_ui/components.dart';
@@ -74,8 +69,6 @@ import '../services/flutter_device_service.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'logs_ui/logs_explorer_page.dart';
-
-// ── Extracted components (VS Code-style architecture) ──
 import 'home_models.dart';
 import 'editor/empty_editor.dart';
 import 'editor/editor_tab_bar.dart';
@@ -84,6 +77,14 @@ import 'welcome/panda_welcome_page.dart';
 import 'titlebar/panda_title_bar.dart';
 import 'activitybar/panda_activity_bar.dart';
 import 'sidebar/panda_sidebar.dart';
+
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
+// downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
+
+    if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
+
+// ── Extracted components (VS Code-style architecture) ──
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3621,7 +3622,7 @@ class _SelectTypeState extends State<SelectType>
                           ],
                         ),
                       ),
-                    )),
+                    ))),
                   ],
                 ),
               ),
