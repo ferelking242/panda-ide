@@ -6,10 +6,11 @@
 ///   - Alt+Click: Add cursor at position
 ///   - Ctrl+Alt+Up/Down: Add cursor above/below
 ///   - Multiple cursors for simultaneous editing
-library;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+library;
+
 
 /// Represents a single cursor position in the editor.
 class CursorPosition {
