@@ -1,8 +1,9 @@
 /// Gestionnaire du progress overlay pour vscode.window.withProgress().
 /// Supporte les 3 locations : Notification (overlay), Window (titre), SourceControl.
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 // ── Modèle ────────────────────────────────────────────────────────────────
 
