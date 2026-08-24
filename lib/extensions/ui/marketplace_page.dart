@@ -5,15 +5,11 @@
 ///   - Search: Full-text search with category chips
 ///   - Installed: Manage installed extensions
 ///   - Detail: VS Code-style extension detail page
-library;
-
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:percent_indicator/percent_indicator.dart';
-
 import '../models/marketplace_extension.dart';
 import '../open_vsx_client.dart';
 import '../extension_registry.dart';
@@ -24,6 +20,11 @@ import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../utils/constants.dart';
 import '../../utils/languages.dart' as lang;
 import '../../local_models/ui/local_models_page.dart';
+
+library;
+
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // Categories (Play Store style)
