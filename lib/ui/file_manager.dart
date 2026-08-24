@@ -8,6 +8,7 @@
 ///   - Rename, copy, paste, delete, share
 ///   - File size + date display
 ///   - Quick access sidebar
+library;
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -23,7 +24,6 @@ import '../utils/languages.dart';
 import '../utils/themes.dart';
 import 'editor_page.dart';
 
-library;
 
 
 

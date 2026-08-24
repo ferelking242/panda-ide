@@ -1,6 +1,7 @@
 /// Git Panel — commit, push, pull, staging, branch management.
 ///
 /// Full Git integration for Panda IDE.
+library;
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -8,7 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import '../utils/git/git_operations.dart' show gitStash, gitStashPop, gitStashDrop, gitStashList, GitStashEntry;
 
-library;
 
 
 

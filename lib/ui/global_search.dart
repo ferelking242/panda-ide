@@ -6,13 +6,13 @@
 ///   - File type filter
 ///   - Results grouped by file
 ///   - Jump to result in editor
+library;
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
-library;
 
 
 

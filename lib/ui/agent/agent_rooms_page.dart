@@ -2,6 +2,7 @@
 ///  • [ConferenceRoomView] — salle de conférence (agent principal ↔ sous-agents)
 ///  • [MultiAgentRoomsView] — rooms multi-agents (agent + pairs, chacun peut
 ///    avoir ses propres sous-agents).
+library;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -10,7 +11,6 @@ import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../core/broken_icons.dart';
 import '../../utils/subagent_orchestrator.dart';
 
-library;
 
 
 

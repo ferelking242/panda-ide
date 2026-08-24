@@ -2,6 +2,7 @@
 ///
 /// This is the single entry point for loading, activating, and managing
 /// all types of extensions in Panda IDE.
+library;
 import 'dart:async';
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -11,7 +12,6 @@ import 'models/extension_manifest.dart';
 import 'models/panda_manifest.dart';
 import 'native_extension_loader.dart';
 
-library;
 
 
 

@@ -3,6 +3,7 @@
 /// Un process Node.js est spawné par extension active.
 /// Chaque process charge host.js avec le chemin de l'extension en argument.
 /// La communication passe par IpcBridge (stdin/stdout JSON-RPC).
+library;
 import 'dart:async';
 import 'dart:io';
 import 'package:path/path.dart' as p;
@@ -12,7 +13,6 @@ import 'command_registry.dart';
 import 'models/extension_manifest.dart';
 import 'models/extension_message.dart';
 
-library;
 
 
 

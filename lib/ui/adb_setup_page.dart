@@ -7,13 +7,13 @@
 ///
 /// After setup the terminal already has `adb` in PATH (platform-tools runtime)
 /// so `flutter run` just works.
+library;
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/shizuku_service.dart';
 
-library;
 
 
 

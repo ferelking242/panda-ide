@@ -9,11 +9,11 @@
 ///
 /// Toutes les demandes passent par [ExtensionPermissionManager] :
 /// les extensions n'obtiennent JAMAIS un accès direct aux APIs sensibles.
+library;
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 
-library;
 
 
 

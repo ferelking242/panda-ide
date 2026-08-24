@@ -2,6 +2,7 @@
 ///
 /// Chaque namespace est délégué à un handler spécialisé.
 /// Ce routeur est enregistré dans ExtensionHostManager.apiCallHandler.
+library;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -23,7 +24,6 @@ import 'ui/status_bar_manager.dart';
 import 'ui/window_api_handler.dart';
 import 'workspace_bridge.dart';
 
-library;
 
 
 

@@ -1,5 +1,7 @@
 library;
 
+part 'agent/agent_settings_widgets.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -25,9 +27,12 @@ import '../utils/agent_history_service.dart';
 import 'agent_runner.dart';
 import 'agent/agent_diff_viewer.dart';
 import 'agent/agent_rooms_page.dart';
-import 'agent/agent_settings_widgets.dart';
 import 'agent/provider_models.dart';
 import 'widgets.dart';
+
+const _kAccent  = Color(0xff6366f1);
+const _kDanger  = Color(0xffe05252);
+const _kSuccess = Color(0xff4caf7d);
 
 // Agent settings main page
 // Extracted from agent_settings.dart

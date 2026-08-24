@@ -7,10 +7,10 @@
 ///
 /// This service checks installation state and provides the env-var map
 /// that the terminal PTY must inject.
+library;
 import 'dart:io';
 import '../utils/constants.dart';
 
-library;
 
 
 /// All env vars the PTY should inject when Flutter SDK is present.

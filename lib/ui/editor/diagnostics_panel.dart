@@ -1,7 +1,7 @@
 /// Diagnostics Panel — shows errors, warnings, infos from LSP diagnostics.
+library;
 import 'package:flutter/material.dart';
 
-library;
 
 
 /// Severity levels matching LSP protocol.

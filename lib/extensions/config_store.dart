@@ -2,10 +2,10 @@
 ///
 /// Stocke la config par extension (section = ID extension ou namespace VSCode).
 /// Persisté via SharedPreferences sous la clé "ext_config_<section>".
+library;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
-library;
 
 
 

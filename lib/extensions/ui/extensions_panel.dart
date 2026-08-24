@@ -8,6 +8,7 @@
 ///
 /// Usage :
 ///   Navigator.push(context, MaterialPageRoute(builder: (_) => const ExtensionsPanel()));
+library;
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
@@ -17,7 +18,6 @@ import '../open_vsx_client.dart';
 import '../vsix_installer.dart';
 import 'marketplace_page.dart';
 
-library;
 
 
 

@@ -1,7 +1,7 @@
 /// LocalModelsPage — Stub web (Android uniquement).
+library;
 import 'package:flutter/material.dart';
 
-library;
 
 
 /// Stub affiché sur web — les modèles locaux nécessitent Android.

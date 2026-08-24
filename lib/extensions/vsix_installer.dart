@@ -6,6 +6,7 @@
 ///   extension/<main>         ← entry point JS
 ///   extension/...            ← reste de l'extension
 ///   [Content_Types].xml      ← metadata ZIP (ignoré)
+library;
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_archive/flutter_archive.dart';
@@ -14,7 +15,6 @@ import 'package:path/path.dart' as p;
 import 'extension_registry.dart';
 import 'models/extension_manifest.dart';
 
-library;
 
 
 

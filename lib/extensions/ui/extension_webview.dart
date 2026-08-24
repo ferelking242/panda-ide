@@ -8,12 +8,12 @@
 ///
 /// Usage :
 ///   WebviewPanelManager.instance.createPanel(id, viewType, title, html, options)
+library;
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
-library;
 
 
 

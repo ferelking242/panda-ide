@@ -4,10 +4,10 @@
 /// cloned locally under `reference/codicons/src/icons/`.
 /// Rendered with flutter_svg and tinted via ColorFilter (the source files
 /// use fill="currentColor").
+library;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
-library;
 
 
 // ── Exact SVG payloads (verbatim from microsoft/vscode-codicons) ────────────

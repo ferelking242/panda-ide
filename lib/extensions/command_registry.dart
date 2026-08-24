@@ -6,10 +6,10 @@
 ///   - D'autres extensions via vscode.commands.executeCommand()
 ///   - Des boutons de la status bar (command:xxx)
 ///   - Des menu items de context (Phase 13)
+library;
 import 'dart:async';
 import 'extension_host_manager.dart';
 
-library;
 
 
 

@@ -5,6 +5,7 @@
 ///   - Search: Full-text search with category chips
 ///   - Installed: Manage installed extensions
 ///   - Detail: VS Code-style extension detail page
+library;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -21,7 +22,6 @@ import '../../utils/constants.dart';
 import '../../utils/languages.dart' as lang;
 import '../../local_models/ui/local_models_page.dart';
 
-library;
 
 
 

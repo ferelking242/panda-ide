@@ -2,6 +2,7 @@
 ///
 /// VS Code-style: type to filter, arrow keys to navigate, Enter to open.
 /// Shows recent files, matches by filename and path.
+library;
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -9,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import '../utils/constants.dart';
 
-library;
 
 
 

@@ -1,9 +1,9 @@
 /// Symbol picker — navigate to symbols in the current file (Ctrl+Shift+O).
+library;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-library;
 
 
 

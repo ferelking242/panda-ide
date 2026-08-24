@@ -2,10 +2,10 @@
 ///
 /// Pattern Google Play : expliquer POURQUOI avant la vraie permission
 /// système, avec le nom de l'extension et ce qu'elle veut faire.
+library;
 import 'package:flutter/material.dart';
 import 'extension_permissions.dart';
 
-library;
 
 
 

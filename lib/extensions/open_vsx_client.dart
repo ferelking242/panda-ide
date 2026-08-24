@@ -2,11 +2,11 @@
 /// Utilisé pour chercher, lire les métadonnées et récupérer les .vsix.
 ///
 /// API docs : https://open-vsx.org/swagger-ui/index.html
+library;
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'models/marketplace_extension.dart';
 
-library;
 
 
 

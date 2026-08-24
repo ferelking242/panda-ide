@@ -6,6 +6,7 @@
 ///   2. Configurer ExtensionHostManager (chemins node + host.js)
 ///   3. Brancher TasksBridge.launchInTerminal sur le shell Android
 ///   4. Charger tous les contributes statiques (thèmes, snippets, grammars, icônes)
+library;
 import 'dart:io';
 import 'package:flutter/services.dart';
 import '../utils/constants.dart';
@@ -17,7 +18,6 @@ import 'extension_host_manager.dart';
 import 'node_runtime.dart';
 import 'tasks_bridge.dart';
 
-library;
 
 
 

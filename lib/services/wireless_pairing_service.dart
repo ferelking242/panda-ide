@@ -12,10 +12,10 @@
 ///   - POST_NOTIFICATIONS (Android 13+) — pour la notification de guide
 ///   - Notification Listener — pour lire les notifications système
 ///   - Ignorer optimisation batterie — pour que le service survive
+library;
 import 'dart:async';
 import 'package:flutter/services.dart';
 
-library;
 
 
 

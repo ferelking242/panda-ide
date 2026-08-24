@@ -10,12 +10,12 @@
 ///   Flutter UI ← DebugBridge : breakpoints, variables, call stack, console
 ///
 /// DAP spec : https://microsoft.github.io/debug-adapter-protocol/
+library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 
-library;
 
 
 

@@ -6,6 +6,7 @@
 ///
 /// Après l'activation, le modèle apparaît dans l'agent Panda et peut être
 /// sélectionné comme modèle actif de chat / complétion.
+library;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_model_entry.dart';
@@ -13,7 +14,6 @@ import '../models/device_profile.dart';
 import '../services/model_download_manager.dart';
 import 'inference_config_service.dart';
 
-library;
 
 
 // ── Résultat de l'activation ──────────────────────────────────────────────────

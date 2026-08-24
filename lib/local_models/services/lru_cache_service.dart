@@ -5,13 +5,13 @@
 ///   • Seuil de nettoyage configurable (max storage GB + jours non-utilisés).
 ///   • Candidates LRU triées pour libérer de l'espace intelligemment.
 ///   • Nettoyage auto déclenché au démarrage et à chaque téléchargement terminé.
+library;
 import 'dart:convert';
 import 'dart:io';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_model_entry.dart';
 import 'model_download_manager.dart';
 
-library;
 
 
 // ── Constantes ────────────────────────────────────────────────────────────────

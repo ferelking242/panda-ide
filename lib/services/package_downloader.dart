@@ -6,6 +6,7 @@
 ///   • Global active-index registry: no duplicate concurrent downloads.
 ///   • PFD subscriptions kept alive in a global map (not tied to widget).
 ///   • Snackbar feedback is best-effort (silently skipped if context gone).
+library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -18,7 +19,6 @@ import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 
-library;
 
 
 // ─── Play Feature Delivery config ────────────────────────────────────────────

@@ -8,6 +8,7 @@
 ///   • general_chat     → modèle généraliste, taille équilibrée
 ///
 /// Fallback : si aucun modèle installé n'est parfait, retourne le meilleur disponible.
+library;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_model_entry.dart';
@@ -15,7 +16,6 @@ import '../services/catalog_service.dart';
 import '../services/model_download_manager.dart';
 import 'lru_cache_service.dart';
 
-library;
 
 
 // ── Types de tâches IDE ───────────────────────────────────────────────────────

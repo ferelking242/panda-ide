@@ -1,7 +1,7 @@
 /// Editor decorations — indent guides, bracket colorization, word wrap.
+library;
 import 'package:flutter/material.dart';
 
-library;
 
 
 // ═══════════════════════════════════════════════════════════════

@@ -9,6 +9,7 @@
 ///   • mmap           : memory-mapped loading
 ///
 /// Un bouton "Reset auto" recalcule les valeurs depuis InferenceConfigService.
+library;
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -17,7 +18,6 @@ import '../models/ai_model_entry.dart';
 import '../models/device_profile.dart';
 import '../services/inference_config_service.dart';
 
-library;
 
 
 // ── Page principale ───────────────────────────────────────────────────────────

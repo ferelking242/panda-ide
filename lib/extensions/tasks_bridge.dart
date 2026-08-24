@@ -7,9 +7,9 @@
 ///   Extension → vscode.tasks.registerTaskProvider → TasksBridge.registerProvider()
 ///   Extension → vscode.tasks.executeTask(task) → lance dans flutter_pty
 ///   Flutter UI → affiche les tâches disponibles / en cours
+library;
 import 'package:flutter/foundation.dart';
 
-library;
 
 
 // ── Modèles ─────────────────────────────────────────────────────────────────

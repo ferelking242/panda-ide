@@ -3,12 +3,12 @@
 /// Résilience réseau (mobile proot, connexions instables) :
 ///   - timeout court sur chaque requête (jamais de spinner infini)
 ///   - fallback CDN jsdelivr si raw.githubusercontent est lent/bloqué
+library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 
-library;
 
 
 

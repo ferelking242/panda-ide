@@ -2,9 +2,9 @@
 ///
 /// Supports: classes, functions, if/else, for, while, switch, try/catch,
 /// comments, regions, and indentation-based folding.
+library;
 import 'package:flutter/material.dart';
 
-library;
 
 
 /// Represents a foldable region in the code.

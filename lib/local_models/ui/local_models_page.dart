@@ -2,6 +2,7 @@
 ///
 /// Affiche des piles (stacks) horizontales de tuiles par catégorie.
 /// Chaque tuile ouvre la page de détail du modèle.
+library;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/ai_model_entry.dart';
@@ -11,7 +12,6 @@ import '../services/device_profiler.dart';
 import '../services/model_download_manager.dart';
 import 'local_model_detail_page.dart';
 
-library;
 
 
 // ── Définition des piles ──────────────────────────────────────────────────────

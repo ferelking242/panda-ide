@@ -8,10 +8,10 @@
 ///   • contextSize → basé sur la RAM disponible et la taille du modèle
 ///   • gpuLayers  → 0 (déclenche l'auto-détection GPU du LocalLlamaBloc)
 ///   • flashAttention → true si ARM SVE2 ou GPU Vulkan disponible
+library;
 import '../models/ai_model_entry.dart';
 import '../models/device_profile.dart';
 
-library;
 
 
 // ── Config calculée ───────────────────────────────────────────────────────────

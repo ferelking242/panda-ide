@@ -7,9 +7,9 @@
 ///   Extension appelle vscode.scm.createSourceControl(id, label, rootUri)
 ///   → SourceControl.dart gère les resourceGroups
 ///   → Flutter UI reflète les groupes / resources
+library;
 import 'package:flutter/foundation.dart';
 
-library;
 
 
 // ── Modèles ────────────────────────────────────────────────────────────────

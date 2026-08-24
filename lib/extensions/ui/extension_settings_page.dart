@@ -8,11 +8,11 @@
 ///   Navigator.push(context, MaterialPageRoute(
 ///     builder: (_) => ExtensionSettingsPage(extension: installedExt),
 ///   ));
+library;
 import 'package:flutter/material.dart';
 import '../config_store.dart';
 import '../extension_registry.dart';
 
-library;
 
 
 
