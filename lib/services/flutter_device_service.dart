@@ -8,19 +8,20 @@
 ///
 /// Fallback : Shizuku (`ShizukuService`) exécute pm install / am start avec
 /// l'identité shell localement, sans réseau.
-library;
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-
 import '../utils/alpine_setup.dart';
 import '../utils/apk_service.dart';
 import '../utils/constants.dart';
 import 'shizuku_service.dart';
+
+library;
+
+
+
 
 class AdbDevice {
   final String serial;
