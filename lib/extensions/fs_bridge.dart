@@ -3,12 +3,13 @@
 /// Implémente l'interface vscode.FileSystemProvider côté Flutter pour que
 /// les extensions puissent lire/écrire/déplacer/supprimer des fichiers via
 /// des apiCall IPC sans accès direct au FS Android.
-library;
-
 import 'dart:io';
 import 'dart:typed_data';
-
 import 'package:path/path.dart' as p;
+
+library;
+
+
 
 // ── FileStat model ────────────────────────────────────────────────────────
 
