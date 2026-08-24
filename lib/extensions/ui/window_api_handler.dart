@@ -1,7 +1,8 @@
 /// Handlers Flutter pour vscode.window.showMessage / showInputBox / showQuickPick.
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 enum WindowMessageType { information, warning, error }
 
