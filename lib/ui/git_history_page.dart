@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import '../utils/git/git_operations.dart';
+import '../utils/git/git_diff.dart';
 import '../utils/models/editor_models.dart';
 
 /// VS Code-style Git log/history page with commit graph.

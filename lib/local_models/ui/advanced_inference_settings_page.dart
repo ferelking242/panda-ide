@@ -24,19 +24,19 @@ import '../services/inference_config_service.dart';
 
 class AdvancedInferenceSettingsPage extends StatefulWidget {
   /// La fiche du modèle concerné (pour Reset auto).
-  final AiModelEntry   modelEntry;
-  final ModelQuant     quant;
-  final DeviceProfile  profile;
+  final AiModelEntry?  modelEntry;
+  final ModelQuant?     quant;
+  final DeviceProfile?  profile;
 
   /// L'ID aiConfig de ce modèle (pour sauvegarder dans SharedPrefs).
   final String         aiConfigId;
 
   const AdvancedInferenceSettingsPage({
     super.key,
-    required this.modelEntry,
-    required this.quant,
-    required this.profile,
-    required this.aiConfigId,
+    this.modelEntry,
+    this.quant,
+    this.profile,
+    this.aiConfigId = '',
   });
 
   @override

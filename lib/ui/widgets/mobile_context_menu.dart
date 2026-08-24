@@ -47,7 +47,7 @@ class MobileContextMenu extends StatelessWidget {
 
     if (result != null) {
       final action = actions.firstWhere((a) => a.label == result);
-      action.onTap();
+      action.onTap?.call();
     }
   }
 
@@ -78,7 +78,7 @@ class ContextMenuAction {
   const ContextMenuAction({
     required this.label,
     required this.icon,
-    required this.onTap,
+    this.onTap,
     this.shortcut,
     this.isDestructive = false,
   });
