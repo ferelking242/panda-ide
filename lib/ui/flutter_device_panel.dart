@@ -11,19 +11,20 @@
 ///
 /// Aucun terminal intégré : la sortie des commandes va dans l'onglet terminal
 /// de l'IDE.
-library;
-
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../services/flutter_device_service.dart';
 import '../services/ide_tab_opener.dart';
 import '../services/wireless_pairing_service.dart';
 import '../utils/themes.dart';
+
+library;
+
+
+
 
 class FlutterDevicePanel extends StatefulWidget {
   const FlutterDevicePanel({super.key});
