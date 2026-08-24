@@ -10,7 +10,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_json/flutter_json.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:http/http.dart' as http;
-import '../utils/llama_wrapper.dart';
+import '../../utils/llama_wrapper.dart';
 import 'package:markdown_widget/config/configs.dart';
 import 'package:markdown_widget/widget/all.dart';
 import 'package:path/path.dart' as path;
@@ -20,15 +20,15 @@ import 'package:re_highlight/re_highlight.dart' show Mode;
 import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:panda/utils/agentic_tools.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../bloc/repo_bloc/repo_bloc.dart';
-import '../bloc/ui_bloc/ui_bloc.dart';
-import '../terminal/terminal.dart';
-import '../utils/ai.dart';
-import '../utils/copilot_chat.dart';
-import '../utils/functions.dart';
-import '../utils/languages.dart';
-import '../utils/themes.dart';
-import '../utils/constants.dart';
+import '../../bloc/repo_bloc/repo_bloc.dart';
+import '../../bloc/ui_bloc/ui_bloc.dart';
+import '../../terminal/terminal.dart';
+import '../../utils/ai.dart';
+import '../../utils/copilot_chat.dart';
+import '../../utils/functions.dart';
+import '../../utils/languages.dart';
+import '../../utils/themes.dart';
+import '../../utils/constants.dart';
 
 // Find in file widget
 // Extracted from widgets.dart
