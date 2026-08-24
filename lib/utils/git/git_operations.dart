@@ -636,7 +636,7 @@ Future<ProcessResult> gitStash(String workspacePath, {String message = '', bool 
   if (message.isNotEmpty) {
     args.addAll(['-m', message]);
   }
-  await Process.run(
+  return await Process.run(
     "$binDir/git",
     args,
     workingDirectory: workspacePath,
@@ -656,9 +656,9 @@ Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}) asyn
 
 Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
-  await Process.run(
+  return await Process.run(
     "$binDir/git",
-    ['stash', 'apply', ref],
+    ['stash', 'apply'] + (stashRef != null ? [stashRef] : []),
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
@@ -666,9 +666,9 @@ Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}) as
 
 Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
-  await Process.run(
+  return await Process.run(
     "$binDir/git",
-    ['stash', 'drop', ref],
+    ['stash', 'drop'] + (stashRef != null ? [stashRef] : []),
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );

@@ -2,8 +2,6 @@ part of 'package:panda/ui/agent_settings.dart';
 
 
 
-const Color _kAccent = Color(0xff6366f1);
-const Color _kDanger = Color(0xffef4444);
 
 // Agent settings helper widgets
 // Extracted from agent_settings.dart
