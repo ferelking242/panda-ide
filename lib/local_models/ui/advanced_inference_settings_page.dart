@@ -64,9 +64,9 @@ class _AdvancedInferenceSettingsPageState
   void initState() {
     super.initState();
     _auto = InferenceConfigService.compute(
-      model:   widget.modelEntry,
-      quant:   widget.quant,
-      profile: widget.profile,
+      model:   widget.modelEntry!,
+      quant:   widget.quant!,
+      profile: widget.profile!,
     );
     _resetToAuto();
     _loadExisting();
@@ -238,7 +238,7 @@ class _AdvancedInferenceSettingsPageState
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.modelEntry.name,
+                widget.modelEntry!.name,
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -247,7 +247,7 @@ class _AdvancedInferenceSettingsPageState
               ),
               const SizedBox(height: 2),
               Text(
-                '${widget.quant.level}  ·  ${widget.quant.sizeLabel}',
+                '${widget.quant!.level}  ·  ${widget.quant!.sizeLabel}',
                 style: TextStyle(
                   fontSize: 11,
                   color: cs.onSurfaceVariant,
@@ -305,7 +305,7 @@ class _AdvancedInferenceSettingsPageState
   );
 
   Widget _buildAutoSummary(ColorScheme cs, bool dark) {
-    final summary = InferenceConfigService.summary(_auto, widget.profile);
+    final summary = InferenceConfigService.summary(_auto, widget.profile!);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
