@@ -496,7 +496,7 @@ class _DownloadManagerState extends State<DownloadManager> {
     required BuildContext context,
     required int index,
     required DownloadManagerBloc downloadBloc,
-    required _PfdRuntimeConfig config,
+    required dynamic config,
     required String? packageParentName,
     required Extension? extensionMetadata,
     required bool isExtension,
@@ -627,7 +627,7 @@ class _DownloadManagerState extends State<DownloadManager> {
 
   Future<bool> _stagePackageArchiveFromPfd({
     required BuildContext context,
-    required _PfdRuntimeConfig config,
+    required dynamic config,
     required String archivePath,
   }) async {
     final assetName = config.assetArchiveName;
@@ -772,7 +772,7 @@ class _DownloadManagerState extends State<DownloadManager> {
     int index,
     DownloadManagerBloc downloadBloc,
     {
-    required _PfdRuntimeConfig config,
+    required dynamic config,
     }
   ) async {
     return _runPfdInstallSerial(() async {

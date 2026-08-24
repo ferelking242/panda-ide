@@ -1,7 +1,5 @@
 library;
 
-part 'agent/agent_settings_widgets.dart';
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -29,6 +27,8 @@ import 'agent/agent_diff_viewer.dart';
 import 'agent/agent_rooms_page.dart';
 import 'agent/provider_models.dart';
 import 'widgets.dart';
+
+part 'agent/agent_settings_widgets.dart';
 
 const _kAccent  = Color(0xff6366f1);
 const _kDanger  = Color(0xffe05252);
@@ -972,7 +972,7 @@ class _AgentSettingsState extends State<AgentSettings>
   // ══════════════════════════════════════════════════════════════════════════
 
   Future<void> _testApiKey() async {
-    final provider = _providers.firstWhere((p) => p.id == _selectedProviderId, orElse: () => _providers.first);
+    final provider = providerDefs.firstWhere((p) => p.id == _selectedProviderId, orElse: () => providerDefs.first);
     final apiKey   = _apiKeyCtrl.text.trim();
 
     if (_selectedProviderId == 'copilot') {
@@ -2298,9 +2298,9 @@ class _AgentSettingsState extends State<AgentSettings>
                     : <String, dynamic>{};
                 final name = cfg['modelName']?.toString() ?? id;
                 final provider = cfg['provider']?.toString() ?? '';
-                final pDef = _providers.firstWhere(
+                final pDef = providerDefs.firstWhere(
                     (p) => p.id == provider,
-                    orElse: () => _providers.last);
+                    orElse: () => providerDefs.last);
                 return _ProviderRowCompact(
                   name: pDef.name,
                   model: name,
@@ -2325,7 +2325,7 @@ class _AgentSettingsState extends State<AgentSettings>
               spacing: 6,
               runSpacing: 6,
               children: [
-                for (final p in _providers)
+                for (final p in providerDefs)
                   GestureDetector(
                     onTap: () => setState(() {
                       _selectedProviderId = p.id;
@@ -2370,9 +2370,9 @@ class _AgentSettingsState extends State<AgentSettings>
             const SizedBox(height: 12),
 
             Builder(builder: (_) {
-              final pDef = _providers.firstWhere(
+              final pDef = providerDefs.firstWhere(
                   (p) => p.id == _selectedProviderId,
-                  orElse: () => _providers.first);
+                  orElse: () => providerDefs.first);
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

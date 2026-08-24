@@ -436,7 +436,7 @@ class PendingEditFile {
   }
 }
 
-sealed class SSHInfo {
+class SSHInfo {
   final String url, name;
   final int id;
 

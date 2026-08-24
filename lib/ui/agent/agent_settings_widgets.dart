@@ -1,16 +1,6 @@
 part of '../../agent_settings.dart';
 
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/broken_icons.dart';
-import '../../utils/constants.dart';
-import '../../utils/subagent_orchestrator.dart';
-import '../../utils/api_key_rotation.dart';
-import '../agent_runner.dart';
-import 'provider_models.dart';
 
 const Color _kAccent = Color(0xff6366f1);
 const Color _kDanger = Color(0xffef4444);
@@ -1611,7 +1601,7 @@ class _RotationMonitorState extends State<_RotationMonitor> {
       animation: brain,
       builder: (context, _) {
         final snapshot = brain.snapshotSync();
-        final pDefs = _providers
+        final pDefs = providerDefs
             .where((p) => snapshot.containsKey(p.id))
             .toList();
 

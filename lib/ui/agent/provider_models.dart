@@ -31,7 +31,7 @@ class ProviderDef {
   });
 }
 
-const _providers = <ProviderDef>[
+const providerDefs = <ProviderDef>[
   ProviderDef(
     id: 'openai',
     name: 'OpenAI',

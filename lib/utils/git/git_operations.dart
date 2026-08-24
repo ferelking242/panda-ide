@@ -644,7 +644,7 @@ Future<void> gitStash(String workspacePath, {String message = ''}) async {
   );
 }
 
-Future<void> gitStashPop(String workspacePath) async {
+Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
     "$binDir/git",
@@ -654,7 +654,7 @@ Future<void> gitStashPop(String workspacePath) async {
   );
 }
 
-Future<void> gitStashApply(String workspacePath, {String ref = 'stash@{0}'}) async {
+Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
     "$binDir/git",
@@ -664,7 +664,7 @@ Future<void> gitStashApply(String workspacePath, {String ref = 'stash@{0}'}) asy
   );
 }
 
-Future<void> gitStashDrop(String workspacePath, {String ref = 'stash@{0}'}) async {
+Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
     "$binDir/git",
@@ -674,7 +674,7 @@ Future<void> gitStashDrop(String workspacePath, {String ref = 'stash@{0}'}) asyn
   );
 }
 
-Future<void> gitStashClear(String workspacePath) async {
+Future<ProcessResult> gitStashClear(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
     "$binDir/git",

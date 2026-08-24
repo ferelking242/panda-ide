@@ -323,6 +323,10 @@ class SelectType extends StatefulWidget {
   State<SelectType> createState() => _SelectTypeState();
 }
 
+Widget drawerTile(VoidCallback onPressed, String title, dynamic icon) {
+  return ListTile(onTap: onPressed, title: Text(title), leading: icon);
+}
+
 class _SelectTypeState extends State<SelectType>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   // ── State ──────────────────────────────────────────────────────────────────
