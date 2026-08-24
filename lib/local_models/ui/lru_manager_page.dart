@@ -2,14 +2,15 @@
 ///
 /// Affiche les modèles installés triés par dernière utilisation,
 /// permet de voir l'espace utilisé, et de lancer un nettoyage manuel ou auto.
-library;
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/ai_model_entry.dart';
 import '../services/catalog_service.dart';
 import '../services/lru_cache_service.dart';
 import '../services/model_download_manager.dart';
+
+library;
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // LruManagerPage
