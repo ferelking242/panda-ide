@@ -1,7 +1,8 @@
 /// Inline diff viewer — shows Git diffs with added/removed highlighting.
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 /// A single line in a diff.
 class DiffLine {
