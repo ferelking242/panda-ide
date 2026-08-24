@@ -6,13 +6,14 @@
 ///   - Recent commands (most used first)
 ///   - Keyboard navigation (arrows, Enter, Esc)
 ///   - Workspace actions (new file, new folder, save, etc.)
-library;
-
 import 'dart:async';
 import 'dart:collection';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+library;
+
+
 
 /// A command that can be executed from the palette.
 class PaletteCommand {
