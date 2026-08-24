@@ -15,8 +15,141 @@ export 'editor/find_word.dart';
 export 'panels/source_control.dart';
 export 'panels/api_testing.dart';
 
+// ── Editor sub-components ──
+export 'editor/zen_mode.dart';
+export 'editor/inlay_hints.dart';
+export 'editor/outline_view.dart';
+export 'editor/timeline_view.dart';
+export 'editor/codelens_provider.dart';
+export 'editor/gutter_indicators.dart';
+export 'editor/editor_decorations.dart';
+export 'editor/tab_groups.dart';
+export 'editor/conditional_breakpoints.dart';
+export 'editor/ghost_text_engine.dart';
+export 'editor/multi_cursor.dart';
+export 'editor/mobile_touch_toolbar.dart';
+export 'editor/symbol_picker.dart';
+export 'editor/side_by_side_diff_viewer.dart';
+export 'editor/global_search_dialog.dart';
+export 'editor/bottom_panel.dart';
+export 'editor/editor_tab_bar.dart';
+export 'editor/empty_editor.dart';
+export 'editor/preview_panes.dart';
+export 'editor/diagnostics_panel.dart';
+
+// ── Navigation pages ──
+export 'quick_open.dart';
+export 'global_search.dart';
+export 'git_panel.dart';
+export 'git_history_page.dart';
+
+// ── Extracted widgets ──
+export 'widgets/workspace_picker.dart';
+export 'widgets/swipe_tab_view.dart';
+export 'widgets/mobile_context_menu.dart';
+
 // ── Shared components ──
 export 'components/ai_chat.dart';
 export 'components/git_graph.dart';
 export 'components/gguf_download.dart';
 export 'components/flutter_switch.dart';
+
+// ── Editor sub-components (additional) ──
+export 'editor/breadcrumbs.dart';
+export 'editor/editor_breadcrumbs.dart';
+export 'editor/code_folding.dart';
+export 'editor/codicon.dart';
+export 'editor/diagnostics_pane.dart';
+
+// ── Navigation pages (additional) ──
+export 'keybindings_manager.dart';
+export 'settings_page.dart';
+
+// ── Welcome pages ──
+export 'welcome/panda_welcome_page.dart';
+export 'welcome/update_page.dart';
+
+// ── Agent UI ──
+export 'agent/agent_rooms_page.dart';
+export 'agent/agent_diff_viewer.dart';
+export 'agent/agent_slash_mentions_overlay.dart';
+export 'agent/provider_models.dart';
+
+// ── Agent BEUI ──
+export 'agent/beui/approval/beui_approval_card.dart';
+export 'agent/beui/approval/beui_tool_approval.dart';
+export 'agent/beui/conversation/beui_message.dart';
+export 'agent/beui/conversation/beui_message_bubble.dart';
+export 'agent/beui/conversation/beui_message_scroller.dart';
+export 'agent/beui/conversation/beui_prompt_input.dart';
+export 'agent/beui/progress/beui_agent_activity.dart';
+export 'agent/beui/progress/beui_agent_loading_states.dart';
+export 'agent/beui/progress/beui_todo_list.dart';
+export 'agent/beui/response/beui_citations.dart';
+export 'agent/beui/response/beui_image_generation.dart';
+export 'agent/beui/response/beui_streaming_response.dart';
+export 'agent/beui/tools/beui_code_block.dart';
+export 'agent/beui/tools/beui_file_diff.dart';
+export 'agent/beui/tools/beui_tool_result.dart';
+export 'agent/beui/beui_theme.dart';
+
+// ── Browser ──
+export 'browser/browser_panel.dart';
+export 'browser/settings/browser_settings_page.dart';
+
+// ── Activity bar / Sidebar / Titlebar ──
+export 'activitybar/panda_activity_bar.dart';
+export 'sidebar/panda_sidebar.dart';
+export 'titlebar/panda_title_bar.dart';
+
+// ── Logs ──
+export 'logs_ui/logs_explorer_page.dart';
+
+// ── Services (re-exported for availability) ──
+export '../services/flutter_sdk_service.dart';
+export '../services/package_downloader.dart';
+export '../utils/ollama_service.dart';
+export '../utils/runtime_config.dart';
+export '../utils/proj_temps.dart';
+export '../utils/subagent_runner.dart';
+export '../utils/agent_block.dart';
+export '../utils/agent_checkpoint_service.dart';
+export '../utils/agent_checkpoint_manager.dart';
+export '../utils/agent_approval_rules.dart';
+export '../utils/agent_history_service.dart';
+export '../utils/agent_export_service.dart';
+export '../utils/agent_settings_service.dart';
+
+// ── Extensions (additional) ──
+export '../extensions/extension_host_isolate.dart';
+export '../extensions/lsp_bridge.dart';
+export '../extensions/open_vsx_marketplace.dart';
+export '../extensions/ui/command_palette_v2.dart';
+export '../extensions/ui/extension_host_status_page.dart';
+export '../extensions/ui/launch_config_page.dart';
+export '../extensions/permission_dialog.dart';
+export '../extensions/plugin_manager.dart';
+
+// ── Gateway ──
+export '../gateway/panda_remote_gateway.dart';
+
+// ── Indexing ──
+export '../indexing/codebase_indexer.dart';
+export '../indexing/semantic_workspace_indexer.dart';
+
+// ── Local models (additional) ──
+export '../local_models/services/model_notification_service.dart';
+export '../local_models/services/model_selector_service.dart';
+export '../local_models/ui/advanced_inference_settings_page.dart';
+export '../local_models/ui/local_models_page_web.dart';
+export '../local_models/ui/lru_manager_page.dart';
+
+// ── MCP ──
+export '../mcp/mcp_registry.dart';
+export '../mcp/mcp_tool_catalog.dart';
+
+// ── Terminal (additional) ──
+export '../terminal/terminal_keyboard_menu.dart';
+
+// ── Web stub ──
+export '../web/io_stub.dart';

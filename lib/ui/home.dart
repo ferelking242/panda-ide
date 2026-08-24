@@ -1325,6 +1325,27 @@ class _SelectTypeState extends State<SelectType>
               statusBarIconBrightness:
                   appTheme.isDark ? Brightness.light : Brightness.dark,
             ),
+            child: CallbackShortcuts(
+            bindings: <ShortcutActivator, VoidCallback>{
+              // Ctrl+P → Quick Open
+              const SingleActivator(LogicalKeyboardKey.keyP, control: true): () {
+                showDialog(context: context, builder: (_) => const QuickOpen());
+              },
+              // Ctrl+Shift+F → Global Search
+              const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): () {
+                _push(context, const GlobalSearch());
+              },
+              // Ctrl+Shift+G → Git Panel
+              const SingleActivator(LogicalKeyboardKey.keyG, control: true, shift: true): () {
+                _push(context, const GitPanel());
+              },
+              // Ctrl+K → Keybindings
+              const SingleActivator(LogicalKeyboardKey.keyK, control: true): () {
+                _push(context, const KeybindingsPage());
+              },
+            },
+            child: Focus(
+            autofocus: true,
             child: Scaffold(
             key: _scaffoldKey,
             resizeToAvoidBottomInset: false,
@@ -1527,7 +1548,9 @@ class _SelectTypeState extends State<SelectType>
                 ],
               ),
             ),
-          ),
+          )
+              )
+            ),
             ),
           ),
         );

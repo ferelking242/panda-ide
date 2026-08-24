@@ -148,6 +148,24 @@ class _LocalModelsPageState extends State<LocalModelsPage> {
           ),
           const Spacer(),
           IconButton(
+            icon: Icon(Icons.speed, size: 17, color: cs.onSurfaceVariant),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const LruManagerPage(),
+            )),
+            tooltip: 'Cache LRU',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+          IconButton(
+            icon: Icon(Icons.tune, size: 17, color: cs.onSurfaceVariant),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const AdvancedInferenceSettingsPage(),
+            )),
+            tooltip: 'Paramètres avancés d\'inférence',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          ),
+          IconButton(
             icon: Icon(Icons.refresh, size: 17, color: cs.onSurfaceVariant),
             onPressed: _load,
             tooltip: 'Actualiser le catalogue',
