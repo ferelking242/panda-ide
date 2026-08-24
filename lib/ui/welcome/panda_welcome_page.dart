@@ -8,6 +8,7 @@ import '../../core/broken_icons.dart';
 import '../../core/workspace/panda_workspace.dart';
 import '../../utils/themes.dart';
 import '../../utils/languages.dart';
+import '../../extensions/ui/marketplace_page.dart';
 import '../panda_surface.dart';
 import '../menu_screen.dart';
 import '../github_page.dart';

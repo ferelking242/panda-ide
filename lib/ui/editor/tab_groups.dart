@@ -5,8 +5,8 @@ class EditorTab {
   final String id;
   final String filePath;
   final String fileName;
-  final bool isDirty;
-  final bool isPinned;
+  bool isDirty;
+  bool isPinned;
   final String? language;
   final DateTime openedAt;
   DateTime lastAccessed;
@@ -122,7 +122,7 @@ class TabManager extends ChangeNotifier {
         // Remove empty groups (keep at least one)
         if (group.tabs.isEmpty && _groups.length > 1) {
           final groupIdx = _groups.indexOf(group);
-          _groups.removeAt(group);
+          _groups.remove(group);
           if (_activeGroupIndex >= _groups.length) {
             _activeGroupIndex = _groups.length - 1;
           }
@@ -584,7 +584,7 @@ class _EditorTabBarState extends State<EditorTabBar> {
       context: context,
       position: RelativeRect.fromLTRB(
           position.dx, position.dy, position.dx + 1, position.dy + 1),
-      items: [
+      items: <PopupMenuEntry<dynamic>>[
         const PopupMenuItem(value: 'close', child: Text('Close')),
         const PopupMenuItem(value: 'close_others', child: Text('Close Others')),
         const PopupMenuItem(value: 'close_right', child: Text('Close to the Right')),

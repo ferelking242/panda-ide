@@ -45,7 +45,7 @@ class GitFileChange {
       case 'M': return Icons.edit;
       case 'A': return Icons.add_circle;
       case 'D': return Icons.remove_circle;
-      case 'R': return Icons.rename;
+      case 'R': return Icons.drive_file_rename_outline;
       case 'U': case '?': return Icons.help_outline;
       default: return Icons.insert_drive_file;
     }

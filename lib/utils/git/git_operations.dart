@@ -548,17 +548,6 @@ Future<ProcessResult> gitCommit(
 }
 
 
-/// Get the current branch name.
-Future<String> gitCurrentBranch(String workspacePath) async {
-  try {
-    final result = await Process.run('git', ['branch', '--show-current'],
-        workingDirectory: workspacePath);
-    return (result.stdout as String).trim();
-  } catch (_) {
-    return 'main';
-  }
-}
-
 Future<List<CommitNode>> getGraph(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(

@@ -71,7 +71,7 @@ class MobileContextMenu extends StatelessWidget {
 class ContextMenuAction {
   final String label;
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final String? shortcut;
   final bool isDestructive;
 
@@ -114,7 +114,7 @@ class FileActions {
       ContextMenuAction(label: 'Close', icon: Icons.close, onTap: onClose, shortcut: 'Ctrl+W'),
       ContextMenuAction(label: 'Close Others', icon: Icons.close_fullscreen, onTap: onCloseOthers),
       ContextMenuAction(label: 'Close All', icon: Icons.clear_all, onTap: onCloseAll),
-      const ContextMenuAction(label: '', icon: Icons.maximize, onTap: null), // separator
+      const ContextMenuAction(label: '', icon: Icons.maximize), // separator
       ContextMenuAction(label: 'Copy Path', icon: Icons.route, onTap: onCopyPath),
       ContextMenuAction(label: 'Split Right', icon: Icons.vertical_split, onTap: onSplitRight),
     ];

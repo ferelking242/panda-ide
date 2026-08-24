@@ -11,6 +11,8 @@ import '../services/catalog_service.dart';
 import '../services/device_profiler.dart';
 import '../services/model_download_manager.dart';
 import 'local_model_detail_page.dart';
+import 'lru_manager_page.dart';
+import 'advanced_inference_settings_page.dart';
 
 
 
