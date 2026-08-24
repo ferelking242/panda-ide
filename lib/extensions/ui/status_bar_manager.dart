@@ -1,8 +1,9 @@
 /// Gestionnaire des StatusBarItems des extensions.
 /// Chaque extension peut créer des items dans la barre de statut.
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 // ── Modèle ────────────────────────────────────────────────────────────────
 
