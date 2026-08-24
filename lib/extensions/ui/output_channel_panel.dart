@@ -1,10 +1,11 @@
 /// Gestionnaire des Output Channels des extensions.
 /// Chaque extension peut créer un canal (ex: "ESLint", "Prettier") et y écrire du texte.
 /// Le contenu est affiché dans un panneau dédié (style VSCode Output panel).
-library;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+library;
+
 
 // ── Modèle ────────────────────────────────────────────────────────────────
 
