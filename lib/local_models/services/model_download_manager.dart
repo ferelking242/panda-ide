@@ -6,8 +6,6 @@
 ///   • Vérification SHA256 en fin de téléchargement (si hash fourni).
 ///   • File d'attente : plusieurs modèles peuvent être mis en file.
 ///   • Annulation instantanée par modèle.
-library;
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -17,6 +15,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/constants.dart';
 import '../models/ai_model_entry.dart';
 import '../models/device_profile.dart';
+
+library;
+
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
