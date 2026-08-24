@@ -128,6 +128,10 @@ class SelectType extends StatefulWidget {
   State<SelectType> createState() => _SelectTypeState();
 }
 
+Widget drawerTile(VoidCallback onPressed, String title, dynamic icon) {
+  return ListTile(onTap: onPressed, title: Text(title), leading: icon);
+}
+
 class _SelectTypeState extends State<SelectType>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   // ── State ──────────────────────────────────────────────────────────────────
@@ -10478,7 +10482,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 // Agent Activity Feed — UI widgets
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// Light wave painter for active text.
+class _ReflectionBox extends StatefulWidget {
   final String content;
   final bool isActive;
   final bool isDark;

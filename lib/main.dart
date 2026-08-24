@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:code_forge/code_forge.dart';
 import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'utils/llama_wrapper.dart';
