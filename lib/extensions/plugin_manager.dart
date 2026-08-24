@@ -2,18 +2,19 @@
 ///
 /// This is the single entry point for loading, activating, and managing
 /// all types of extensions in Panda IDE.
-library;
-
 import 'dart:async';
 import 'dart:io';
-
 import 'package:path/path.dart' as p;
-
 import 'extension_host_manager.dart';
 import 'extension_registry.dart';
 import 'models/extension_manifest.dart';
 import 'models/panda_manifest.dart';
 import 'native_extension_loader.dart';
+
+library;
+
+
+
 
 /// The unified type that wraps either a Node.js or Dart extension.
 enum ExtensionType { vscode, native }
