@@ -3,10 +3,11 @@
 /// Tabs: Problems | Output | Debug Console | Terminal
 /// The Problems tab shows errors, warnings, infos with file:line:col.
 /// Clicking an error navigates to that location.
-library;
-
 import 'dart:math';
 import 'package:flutter/material.dart';
+
+library;
+
 
 // ═══════════════════════════════════════════════════════════════
 // Bottom Panel Tab
