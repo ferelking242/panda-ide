@@ -5,12 +5,13 @@
 ///   • Notification de succès avec action "Charger le modèle".
 ///   • Notification d'erreur avec bouton "Réessayer".
 ///   • Canal Android dédié : panda_models (importance HIGH).
-library;
-
 import 'dart:async';
 import 'dart:ui' show Color;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../services/model_download_manager.dart';
+
+library;
+
 
 // ── IDs de notifications ──────────────────────────────────────────────────────
 
