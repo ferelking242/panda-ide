@@ -5,15 +5,16 @@
 ///
 /// Format : contributes.snippets[].path → fichier JSON VSCode snippets
 /// Référence : https://code.visualstudio.com/docs/editor/userdefinedsnippets
-library;
-
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-
 import '../extension_registry.dart';
+
+library;
+
+
+
 
 // ── Modèles ────────────────────────────────────────────────────────────────
 
