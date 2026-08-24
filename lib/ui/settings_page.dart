@@ -25,7 +25,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _Section('Terminal', Icons.terminal),
     _Section('Files', Icons.folder_outlined),
     _Section('Search', Icons.search),
-    _Section('Git', Icons.git_branch),
+    _Section('Git', Icons.account_tree),
     _Section('Debug', Icons.bug_report),
     _Section('SCM', Icons.source),
     _Section('Extensions', Icons.extension),
