@@ -24,6 +24,7 @@ import 'package:path/path.dart' as path;
 import '../../terminal/terminal.dart';
 import '../constants.dart';
 import '../languages.dart';
+import '../editors/edit_hunks.dart';
 
 // SSH utilities: login, key management, keygen
 // Extracted from functions.dart

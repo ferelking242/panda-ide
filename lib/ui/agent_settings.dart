@@ -1,3 +1,29 @@
+library;
+
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+
+import '../bloc/ui_bloc/ui_bloc.dart';
+import '../bloc/repo_bloc/repo_bloc.dart';
+import '../core/broken_icons.dart';
+import '../utils/ai.dart';
+import '../utils/constants.dart';
+import '../utils/agentic_tool_catalog.dart';
+import '../utils/copilot_chat.dart';
+import '../utils/panda_log.dart';
+import 'agent_runner.dart';
+import 'agent/agent_diff_viewer.dart';
+import 'agent/agent_rooms_page.dart';
+import 'agent/agent_settings_widgets.dart';
+import 'agent/provider_models.dart';
+import 'widgets.dart';
 
 // Agent settings main page
 // Extracted from agent_settings.dart

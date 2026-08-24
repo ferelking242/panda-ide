@@ -33,6 +33,11 @@ import '../../utils/constants.dart';
 // Find/replace panel
 // Extracted from widgets.dart
 
+const double _kFindPanelWidth = 380, _kFindPanelHeight = 36;
+const double _kReplacePanelHeight = _kFindPanelHeight * 2;
+const double _kFindIconSize = 18;
+const double _kFindInputFontSize = 13, _kFindResultFontSize = 11;
+
 class FindPanelWidget extends StatelessWidget implements PreferredSizeWidget {
   final FindController controller;
   final VoidCallback? onClose;

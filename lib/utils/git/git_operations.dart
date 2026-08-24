@@ -24,6 +24,9 @@ import 'package:path/path.dart' as path;
 import '../../terminal/terminal.dart';
 import '../constants.dart';
 import '../languages.dart';
+import '../extractors.dart';
+import '../models/editor_models.dart';
+import '../editors/editor_theme.dart';
 
 // Git operations — clone, commit, push, pull, branch, etc.
 // Extracted from functions.dart

@@ -24,6 +24,10 @@ import 'package:path/path.dart' as path;
 import '../../terminal/terminal.dart';
 import '../constants.dart';
 import '../languages.dart';
+import '../extractors.dart';
+import 'git_operations.dart';
+import '../editors/editor_theme.dart';
+import '../models/editor_models.dart';
 
 // Git diff parsing and result model
 // Extracted from functions.dart
