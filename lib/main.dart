@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:code_forge/code_forge.dart';
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'utils/llama_wrapper.dart';
@@ -18,6 +17,8 @@ import 'utils/functions.dart';
 import 'utils/settings_service.dart';
 import 'utils/themes.dart';
 import 'logging/logging.dart';
+
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
