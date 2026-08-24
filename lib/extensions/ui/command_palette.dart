@@ -5,15 +5,16 @@
 ///
 /// Usage :
 ///   CommandPalette.show(context);
-library;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import 'dart:async';
-
 import '../command_registry.dart';
 import '../extension_host.dart';
+
+library;
+
+
+
 
 class CommandPalette extends StatefulWidget {
   const CommandPalette({super.key});
