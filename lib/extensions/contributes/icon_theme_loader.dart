@@ -5,15 +5,16 @@
 ///
 /// Format : contributes.iconThemes[].path → fichier JSON
 /// Référence : https://code.visualstudio.com/api/extension-guides/file-icon-theme
-library;
-
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-
 import '../extension_registry.dart';
+
+library;
+
+
+
 
 // ── Modèles ────────────────────────────────────────────────────────────────
 
