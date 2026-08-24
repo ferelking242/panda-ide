@@ -12,15 +12,16 @@
 ///   onViewShown(viewId)    → `onView:<id>`      (vue sidebar/panel visible)
 ///   onWorkspaceOpened(dir) → `workspaceContains:<pattern>`
 ///   handleUri(uri)         → `panda://<extId>/<command>` (lien externe)
-library;
-
 import 'dart:io';
-
 import 'package:path/path.dart' as p;
-
 import 'models/panda_manifest.dart';
 import 'native_extension_loader.dart';
 import 'remote_registry.dart';
+
+library;
+
+
+
 
 class ExtensionHost {
   ExtensionHost._();
