@@ -75,8 +75,24 @@ import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'logs_ui/logs_explorer_page.dart';
 
+// ── Extracted components (VS Code-style architecture) ──
+import 'home_models.dart';
+import 'editor/empty_editor.dart';
+import 'editor/editor_tab_bar.dart';
+import 'welcome/update_page.dart';
+import 'welcome/panda_welcome_page.dart';
+import 'titlebar/panda_title_bar.dart';
+import 'activitybar/panda_activity_bar.dart';
+import 'sidebar/panda_sidebar.dart';
+
 
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Aliases for models extracted to home_models.dart ──
+typedef _RailItem = RailItem;
+typedef _TabDef = TabDef;
+typedef _EditorTabConfig = EditorTabConfig;
+
 // Agent Activity Feed — model + state machine controller
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2457,7 +2473,7 @@ class _SelectTypeState extends State<SelectType>
       color: bg,
       elevation: 6,
       shadowColor: Colors.black38,
-      clipper: _SidebarClipper(),
+      clipper: SidebarClipper(),
       child: SizedBox(
         width: _kSidebarWidth,
         child: Column(
@@ -10221,38 +10237,15 @@ class _SelectTypeState extends State<SelectType>
 // Sub-widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _RailItem {
-  final IconData icon;
-  final String   label;
-  final int      idx;
-  const _RailItem({required this.icon, required this.label, required this.idx});
-}
+// _RailItem extracted to home_models.dart
+// (typedef alias below)
 
 // ── _TabDef ───────────────────────────────────────────────────────────────────
-    class _TabDef {
-    final String   id;
-    final String   title;
-    final IconData icon;
-    const _TabDef({required this.id, required this.title, required this.icon});
-    }
+// _TabDef extracted to home_models.dart
 
 // ── _EditorTabConfig ──────────────────────────────────────────────────────────
 // Holds the data needed to render an EditorPage inside a tab.
-class _EditorTabConfig {
-  final File?     file;
-  final String    rootDir;
-  final Language? languageDetails;
-  final bool      isProject;
-  final bool      isCloned;
-
-  _EditorTabConfig({
-    this.file,
-    required this.rootDir,
-    this.languageDetails,
-    this.isProject = false,
-    this.isCloned  = false,
-  });
-}
+// _EditorTabConfig extracted to home_models.dart
 
     // ── _ActivityBtnEx (theme-aware) ──────────────────────────────────────────────
     class _ActivityBtnEx extends StatelessWidget {
