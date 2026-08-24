@@ -2,16 +2,17 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import '../utils/alpine_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import 'home.dart';
 import '../terminal/panda_bridge.dart';
+
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+
 
 // ── Tool lists (shared with start_screen) ──────────────────────────────────────
 const List<String> _javaTools = [
