@@ -34,6 +34,7 @@ import 'package_manager_page.dart';
 // downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
 import 'downloads.dart';
 import 'settings.dart';
+import 'settings_page.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
 import '../terminal/terminal_bridge.dart';
@@ -4875,7 +4876,7 @@ class _SelectTypeState extends State<SelectType>
                     : _agentPanelTab == 2
                         ? _buildTasksTabContent(context, appTheme)
                         : _agentPanelTab == 3
-                            ? _buildUserSettingsPage(context, appTheme)
+                            ? const Settings(embedded: true)
                             : _agentPanelTab == 4
                                 ? _buildAgentProvidersPage(context, appTheme)
                             : _buildChatTabContent(context, appTheme, asPage),
