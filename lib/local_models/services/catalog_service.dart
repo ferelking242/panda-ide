@@ -5,13 +5,14 @@
 ///   2. Tente de mettre à jour depuis l'URL distante (GitHub raw).
 ///   3. Met en cache le catalogue distant dans SharedPreferences.
 ///   4. Expose le catalogue final (distant si dispo, bundlé sinon).
-library;
-
 import 'dart:convert';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_model_entry.dart';
+
+library;
+
 
 class CatalogService {
   static const _kPrefsKey    = 'panda_model_catalog_v1';
