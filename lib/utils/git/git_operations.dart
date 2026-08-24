@@ -676,7 +676,7 @@ Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}) asy
 
 Future<ProcessResult> gitStashClear(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
-  await Process.run(
+  return await Process.run(
     "$binDir/git",
     ['stash', 'clear'],
     workingDirectory: workspacePath,
