@@ -60,7 +60,7 @@ class CodeEditor extends StatefulWidget {
   State<CodeEditor> createState() => _CodeEditorState();
 }
 
-class _CodeEditorState extends State<CodeEditor> with AutomaticKeepAliveClientMixin {
+class CodeEditorState extends State<CodeEditor> with AutomaticKeepAliveClientMixin {
   double _initialFontSize = 10.0;
   double _currentScale = 1.0;
   Timer? _saveTimer, _statusRefreshTimer;
@@ -341,5 +341,3 @@ const double _kFindPanelWidth = 380, _kFindPanelHeight = 36;
 const double _kReplacePanelHeight = _kFindPanelHeight * 2;
 const double _kFindIconSize = 18;
 const double _kFindInputFontSize = 13, _kFindResultFontSize = 11;
-
-class FindPanelWidget extends StatelessWidget implements PreferredSizeWidget {

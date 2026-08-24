@@ -379,5 +379,3 @@ class FindPanelWidget extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 }
-
-class EditorArea extends StatefulWidget {

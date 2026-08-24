@@ -168,7 +168,7 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
   late Language language;
   late final File file;
   late final String ext;
-  final GlobalKey<_CodeEditorState> _editorKey = GlobalKey();
+  final GlobalKey<CodeEditorState> _editorKey = GlobalKey();
   final cursor = ValueNotifier<({int line, int col})>((line: 0, col: 0));
   final isGeneratingCompletion = ValueNotifier<bool>(false);
   PendingEditFile? _pendingEdits;
@@ -1280,5 +1280,3 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
   @override
   bool get wantKeepAlive => true;
 }
-
-class DirectoryTreeViewerCustom extends StatefulWidget {

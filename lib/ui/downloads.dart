@@ -288,18 +288,12 @@ class _DownloadManagerState extends State<DownloadManager> {
     return aliases[parentName] ?? parentName;
   }
 
-  _PfdRuntimeConfig? _runtimePfdConfig(
+  // PFD runtimes removed — Alpine Linux is now the only installation method.
+  dynamic _runtimePfdConfig(
     String? packageParentName, {
     required bool isExtension,
   }) {
-    if (!Platform.isAndroid || packageParentName == null) {
-      return null;
-    }
-    final normalizedParentName = packageParentName.toLowerCase();
-    if (isExtension) {
-      return _pfdExtensions[normalizedParentName];
-    }
-    return _pfdRuntimes[normalizedParentName];
+    return null;
   }
 
   bool _isClangRuntimeInstalled() {

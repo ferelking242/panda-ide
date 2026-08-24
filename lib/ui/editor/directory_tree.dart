@@ -1252,5 +1252,3 @@ class _GuideSegmentPainter extends CustomPainter {
         oldDelegate.isLast != isLast;
   }
 }
-
-class FindWordWidget extends StatefulWidget {

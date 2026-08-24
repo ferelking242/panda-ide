@@ -12,7 +12,8 @@ import '../panda_surface.dart';
 import '../menu_screen.dart';
 import '../github_page.dart';
 import '../package_manager_page.dart';
-import '../home.dart' show RecentBloc, RecentState, GithubAuthCubit, GithubAuthState;
+import '../../bloc/ui_bloc/ui_bloc.dart';
+import '../../bloc/repo_bloc/repo_bloc.dart';
 
 /// VS Code-style welcome page: Hero, Start section, Recent projects, Walkthroughs.
 class PandaWelcomePage extends StatelessWidget {

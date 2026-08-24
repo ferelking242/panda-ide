@@ -24,6 +24,7 @@ import 'package:path/path.dart' as path;
 import '../../terminal/terminal.dart';
 import '../constants.dart';
 import '../languages.dart';
+import '../ssh/ssh_utils.dart';
 
 // Search indexing: Boyer-Moore, inverted index, GGUF models
 // Extracted from functions.dart

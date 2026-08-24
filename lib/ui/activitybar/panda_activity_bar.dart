@@ -6,7 +6,7 @@ import '../../core/broken_icons.dart';
 import '../../services/android_update_service.dart';
 import '../../ui/home_models.dart';
 import '../../utils/themes.dart';
-import '../github_page.dart' show GithubAuthCubit, GithubAuthState;
+import '../../bloc/repo_bloc/repo_bloc.dart';
 import '../widgets/panda_theme_switch.dart';
 
 /// VS Code-style activity bar: sidebar icons on left, bottom section

@@ -815,5 +815,3 @@ class _FindWordWidgetState extends State<FindWordWidget> {
     );
   }
 }
-
-class SourceControl extends StatefulWidget {

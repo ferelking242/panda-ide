@@ -1,3 +1,19 @@
+library;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/broken_icons.dart';
+import '../../utils/constants.dart';
+import '../../utils/subagent_orchestrator.dart';
+import '../../utils/api_key_rotation.dart';
+import '../agent_runner.dart';
+import 'provider_models.dart';
+
+const Color _kAccent = Color(0xff6366f1);
+const Color _kDanger = Color(0xffef4444);
 
 // Agent settings helper widgets
 // Extracted from agent_settings.dart
@@ -504,7 +520,7 @@ class _ChatActionGroupState extends State<_ChatActionGroup> {
 }
 
 class _ProviderPicker extends StatelessWidget {
-  final List<_ProviderDef> providers;
+  final List<ProviderDef> providers;
   final String selected;
   final bool isDark;
   final Color card, fg, muted, border;
@@ -559,7 +575,7 @@ class _ProviderPicker extends StatelessWidget {
 
 class _ModelCard extends StatelessWidget {
   final String id, name, provider;
-  final _ProviderDef pDef;
+  final ProviderDef pDef;
   final bool isDark;
   final Color card, fg, muted, border;
   final VoidCallback onRemove;
@@ -1645,7 +1661,7 @@ class _RotationMonitorState extends State<_RotationMonitor> {
   }
 
   Widget _providerSection(
-      _ProviderDef pDef, List<KeyProfile> profiles, KeyRotationBrain brain) {
+      ProviderDef pDef, List<KeyProfile> profiles, KeyRotationBrain brain) {
     return Container(
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.all(8),

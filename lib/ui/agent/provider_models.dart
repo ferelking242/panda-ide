@@ -1,8 +1,15 @@
+library;
+
+import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:http/http.dart' as http;
+
+import '../../core/broken_icons.dart';
 
 // Provider definitions for agent settings
 // Extracted from agent_settings.dart
 
-class _ProviderDef {
+class ProviderDef {
   final String id;
   final String name;
   final String description;
@@ -12,7 +19,7 @@ class _ProviderDef {
   final bool hasApiKey;
   final String apiKeyHint;
 
-  const _ProviderDef({
+  const ProviderDef({
     required this.id,
     required this.name,
     required this.description,
@@ -24,8 +31,8 @@ class _ProviderDef {
   });
 }
 
-const _providers = <_ProviderDef>[
-  _ProviderDef(
+const _providers = <ProviderDef>[
+  ProviderDef(
     id: 'openai',
     name: 'OpenAI',
     description: 'GPT-4o, o1, o3 — le plus utilisé',
@@ -34,7 +41,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://platform.openai.com/api-keys',
     apiKeyHint: 'sk-...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'claude',
     name: 'Anthropic (Claude)',
     description: 'Claude 3.5 Sonnet, Haiku, Opus',
@@ -43,7 +50,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://console.anthropic.com/settings/keys',
     apiKeyHint: 'sk-ant-...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'gemini',
     name: 'Google Gemini',
     description: 'Gemini 2.5 Flash, 2.5 Pro',
@@ -52,7 +59,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://aistudio.google.com/app/apikey',
     apiKeyHint: 'AIza...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'deepseek',
     name: 'DeepSeek',
     description: 'DeepSeek-V3, R1 — très bon rapport qualité/coût',
@@ -61,7 +68,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://platform.deepseek.com/api_keys',
     apiKeyHint: 'sk-...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'grok',
     name: 'Grok (xAI)',
     description: 'Grok-2, Grok Beta',
@@ -70,7 +77,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://console.x.ai/',
     apiKeyHint: 'xai-...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'openrouter',
     name: 'OpenRouter',
     description: 'Accès unifié à 200+ modèles',
@@ -79,7 +86,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://openrouter.ai/keys',
     apiKeyHint: 'sk-or-...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'mistral',
     name: 'Mistral AI',
     description: 'Mistral Large, Codestral',
@@ -88,7 +95,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://console.mistral.ai/api-keys',
     apiKeyHint: '...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'togetherai',
     name: 'Together AI',
     description: 'Llama, Mixtral et autres open-source',
@@ -97,7 +104,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://api.together.xyz/settings/api-keys',
     apiKeyHint: '...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'perplexity',
     name: 'Perplexity',
     description: 'Sonar — recherche web intégrée',
@@ -106,7 +113,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://www.perplexity.ai/settings/api',
     apiKeyHint: 'pplx-...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'pandagateway',
     name: 'Panda Gateway',
     description: 'Accès unifié sans clé API (abonnement Panda)',
@@ -116,7 +123,7 @@ const _providers = <_ProviderDef>[
     hasApiKey: false,
     apiKeyHint: 'optionnel',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'copilot',
     name: 'GitHub Copilot',
     description: 'GPT-4o via votre abonnement GitHub Copilot',
@@ -126,7 +133,7 @@ const _providers = <_ProviderDef>[
     hasApiKey: false,
     apiKeyHint: 'optionnel',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'groq',
     name: 'Groq',
     description: 'Llama 3, Mixtral — ultra-rapide (inference cloud)',
@@ -135,7 +142,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://console.groq.com/keys',
     apiKeyHint: 'gsk_...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'fireworks',
     name: 'Fireworks AI',
     description: 'Llama, Mistral, DeepSeek — inference rapide',
@@ -144,7 +151,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://fireworks.ai/account/api-keys',
     apiKeyHint: 'fw_...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'cohere',
     name: 'Cohere',
     description: 'Command R+, Command A — spécialisé RAG',
@@ -153,7 +160,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://dashboard.cohere.com/api-keys',
     apiKeyHint: '...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'cerebras',
     name: 'Cerebras',
     description: 'Llama sur wafer silicon — le plus rapide du marché',
@@ -162,7 +169,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://cloud.cerebras.ai/',
     apiKeyHint: 'csk-...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'novita',
     name: 'Novita AI',
     description: 'Llama, Mistral, DeepSeek — 200+ modèles',
@@ -171,7 +178,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://novita.ai/settings#key-management',
     apiKeyHint: '...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'hyperbolic',
     name: 'Hyperbolic',
     description: 'Llama, DeepSeek — inference GPU économique',
@@ -180,7 +187,7 @@ const _providers = <_ProviderDef>[
     docsUrl: 'https://app.hyperbolic.xyz/settings',
     apiKeyHint: 'eyJ...',
   ),
-  _ProviderDef(
+  ProviderDef(
     id: 'custom',
     name: 'Custom / Local',
     description: 'Endpoint OpenAI-compatible (Ollama, LM Studio…)',

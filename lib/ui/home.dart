@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 import 'dart:io';
 import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -59,10 +60,10 @@ import '../ui/browser/browser_panel.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
+    if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
 import 'widgets/responsive_layout.dart';
 import 'panda_ai_ui/components.dart';
-import 'notifications.dart';
 import 'notifications.dart';
 import 'editor/status_bar.dart';
 import '../services/flutter_device_service.dart';
@@ -78,14 +79,7 @@ import 'titlebar/panda_title_bar.dart';
 import 'activitybar/panda_activity_bar.dart';
 import 'sidebar/panda_sidebar.dart';
 
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
-
-// downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
-
-    if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
-
 // ── Extracted components (VS Code-style architecture) ──
-
 
 // ═══════════════════════════════════════════════════════════════════════════════
 

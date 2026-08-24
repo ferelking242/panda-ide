@@ -9,6 +9,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../bloc/repo_bloc/repo_bloc.dart';
@@ -18,6 +19,9 @@ import '../utils/constants.dart';
 import '../utils/agentic_tool_catalog.dart';
 import '../utils/copilot_chat.dart';
 import '../utils/panda_log.dart';
+import '../utils/subagent_orchestrator.dart';
+import '../utils/api_key_rotation.dart';
+import '../utils/agent_history_service.dart';
 import 'agent_runner.dart';
 import 'agent/agent_diff_viewer.dart';
 import 'agent/agent_rooms_page.dart';
@@ -1165,7 +1169,7 @@ class _AgentSettingsState extends State<AgentSettings>
   }
 
   Future<void> _saveProviderConfig(BuildContext context, {
-    required _ProviderDef provider,
+    required ProviderDef provider,
     required String apiKey,
     required List<Map<String, dynamic>> models,
   }) async {
