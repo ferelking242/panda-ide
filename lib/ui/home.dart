@@ -5,7 +5,8 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 import 'dart:io';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -128,10 +129,6 @@ class SelectType extends StatefulWidget {
   State<SelectType> createState() => _SelectTypeState();
 }
 
-Widget drawerTile(VoidCallback onPressed, String title, dynamic icon) {
-  return ListTile(onTap: onPressed, title: Text(title), leading: icon);
-}
-
 class _SelectTypeState extends State<SelectType>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   // ── State ──────────────────────────────────────────────────────────────────
@@ -202,6 +199,7 @@ class _SelectTypeState extends State<SelectType>
   AgentPhase _agentPhase        = AgentPhase.idle;
   bool       _agentGenerating   = false;
   bool       _agentActivityDrawerOpen = false;
+  bool       _agentFollowingEdge   = true;
   String     _agentThinkingBuf  = '';
   String     _agentStreamBuf    = '';
   String     _agentCurrentTool  = '';
@@ -248,6 +246,7 @@ class _SelectTypeState extends State<SelectType>
 
       setState(() {
         _agentMessages[agentIdx]['blocks'] = blocks;
+                  _agentScrollFollowEdge();
         _agentMessages[agentIdx]['toolCalls'] = toolCalls;
       });
     }
@@ -365,6 +364,7 @@ class _SelectTypeState extends State<SelectType>
   void initState() {
     super.initState();
     _activityCtrl.setOnUpdate(() { if (mounted) setState(() {}); });
+    _agentScrollCtrl.addListener(_onAgentScroll);
     WidgetsBinding.instance.addObserver(this);
     _splitViewController = MultiSplitViewController(areas: [Area(), Area()]);
     // Send button pulse animation
@@ -7263,7 +7263,9 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Widget _buildAgentMessages(bool isDark, Color fg, Color muted) {
-    return ListView.builder(
+    return Stack(
+      children: [
+        ListView.builder(
       controller: _agentScrollCtrl,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       itemCount: _agentMessages.length,
@@ -7420,8 +7422,43 @@ class _SelectTypeState extends State<SelectType>
         );
       },
     );
-  }
+      },
+    ),
 
+    // ── Follow-edge "Live" pill ──────────────────────────
+    if (!_agentFollowingEdge)
+      Positioned(
+        bottom: 8,
+        left: 0,
+        right: 0,
+        child: Center(
+          child: GestureDetector(
+            onTap: () {
+              _agentFollowingEdge = true;
+              _agentScrollToBottom();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF6366F1) : const Color(0xFF4F46E5),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.25), blurRadius: 8)],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.white),
+                  SizedBox(width: 2),
+                  Text('Live', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.white)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+  ],
+);
+  }
   /// Rend UN evenement de la timeline agent comme un bloc independant.
   /// Les freres s'empilent dans l'ordre chronologique : une nouvelle
   /// reflexion apres des outils cree une NOUVELLE box, jamais fusionnee,
@@ -7852,6 +7889,7 @@ class _SelectTypeState extends State<SelectType>
       );
 
   void _agentScrollToBottom() {
+    _agentFollowingEdge = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_agentScrollCtrl.hasClients) {
         _agentScrollCtrl.animateTo(
@@ -7861,6 +7899,30 @@ class _SelectTypeState extends State<SelectType>
         );
       }
     });
+  }
+
+  void _agentScrollFollowEdge() {
+    if (!_agentFollowingEdge) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_agentScrollCtrl.hasClients && _agentFollowingEdge) {
+        _agentScrollCtrl.animateTo(
+          _agentScrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _onAgentScroll() {
+    if (!_agentScrollCtrl.hasClients) return;
+    final pos = _agentScrollCtrl.position;
+    final atBottom = pos.pixels >= pos.maxScrollExtent - 80;
+    if (atBottom && !_agentFollowingEdge) {
+      _agentFollowingEdge = true;
+    } else if (!atBottom && _agentFollowingEdge) {
+      _agentFollowingEdge = false;
+    }
   }
 
   /// Builds a [Models] instance from a raw AI config map (mirrors ui_state.dart logic).
@@ -10482,7 +10544,7 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 // Agent Activity Feed — UI widgets
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _ReflectionBox extends StatefulWidget {
+/// Light wave painter for active text.
   final String content;
   final bool isActive;
   final bool isDark;
