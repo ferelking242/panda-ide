@@ -18,7 +18,6 @@ import 'package:percent_indicator/percent_indicator.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
-import '../utils/settings_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -30,19 +29,25 @@ import 'file_manager.dart';
 import 'editor_page.dart';
 import 'menu_screen.dart';
 import 'package:path_provider/path_provider.dart';
+
 import 'package_manager_page.dart';
+// downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
 import 'downloads.dart';
 import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
 import '../terminal/terminal_bridge.dart';
 import '../utils/ai.dart';
+
+// ── beUI Agent Activity (ticker + drawer) ────────────────────────────────
+import 'agent/beui/progress/beui_agent_activity.dart';
 import '../utils/agent_history_service.dart';
 import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
 import '../ui/github_page.dart';
 import '../utils/constants.dart';
 import '../utils/agentic_tools.dart';
+
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 import '../utils/panda_log.dart';
@@ -65,216 +70,17 @@ import 'widgets.dart';
 import 'widgets/responsive_layout.dart';
 import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
+import 'notifications.dart';
 import 'editor/status_bar.dart';
 import '../services/flutter_device_service.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'logs_ui/logs_explorer_page.dart';
-import 'home_models.dart';
-import 'editor/empty_editor.dart';
-import 'editor/editor_tab_bar.dart';
-import 'welcome/update_page.dart';
-import 'welcome/panda_welcome_page.dart';
-import 'titlebar/panda_title_bar.dart';
-import 'activitybar/panda_activity_bar.dart';
-import 'sidebar/panda_sidebar.dart';
 
-// ── Extracted components (VS Code-style architecture) ──
 
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// ── Aliases for models extracted to home_models.dart ──
-typedef _RailItem = RailItem;
-typedef _TabDef = TabDef;
-typedef _EditorTabConfig = EditorTabConfig;
-
 // Agent Activity Feed — model + state machine controller
 // ═══════════════════════════════════════════════════════════════════════════════
-
-enum AgentActivityStatus { pending, running, completed, error }
-enum AgentActivityType { thinking, tool, status, output }
-
-class AgentActivityEvent {
-  final String id;
-  final DateTime timestamp;
-  AgentActivityType type;
-  AgentActivityStatus status;
-  String label;
-  String? toolName;
-  Map<String, dynamic>? toolArgs;
-  String? toolResult;
-  String? outputText;
-  Duration? duration;
-  bool isExpanded;
-
-  AgentActivityEvent({
-    required this.id, required this.timestamp,
-    required this.type, required this.status, required this.label,
-    this.toolName, this.toolArgs, this.toolResult, this.outputText,
-    this.duration, this.isExpanded = false,
-  });
-}
-
-/// Map raw tool names + args → human-readable French labels.
-/// NEVER returns "runShellCommand" or raw tool names.
-String toolHumanLabel(String toolName, Map<String, dynamic> args) {
-  final n = toolName.toLowerCase();
-  if (n.contains('shell') || n.contains('command') || n.contains('bash')) {
-    final cmd = (args['command'] ?? args['cmd'] ?? '').toString();
-    if (cmd.contains('git clone')) return 'Cloning\u2026';
-    if (cmd.contains('git push')) return 'Push vers GitHub\u2026';
-    if (cmd.contains('git commit')) return 'Cr\u00e9ation du commit\u2026';
-    if (cmd.contains('git pull')) return 'Pull en cours\u2026';
-    if (cmd.contains('npm install') || cmd.contains('bun install') || cmd.contains('pip install'))
-      return 'Installation des d\u00e9pendances\u2026';
-    if (cmd.contains('flutter build')) return 'Build en cours\u2026';
-    if (cmd.contains('flutter test') || cmd.contains('dart test')) return 'Tests en cours\u2026';
-    if (cmd.contains('flutter pub get') || cmd.contains('dart pub get'))
-      return 'R\u00e9solution des d\u00e9pendances\u2026';
-    if (cmd.contains('rm ') || cmd.contains('del ')) return 'Suppression\u2026';
-    if (cmd.contains('mkdir')) return 'Cr\u00e9ation de dossier\u2026';
-    if (cmd.contains('cp ') || cmd.contains('mv ')) return 'D\u00e9placement\u2026';
-    if (cmd.contains('curl') || cmd.contains('wget')) return 'T\u00e9l\u00e9chargement\u2026';
-    if (cmd.contains('git ')) return 'Commande Git\u2026';
-    final preview = cmd.length > 35 ? '${cmd.substring(0, 35)}\u2026' : cmd;
-    return preview.isEmpty ? 'Ex\u00e9cution\u2026' : 'Ex\u00e9cution: $preview';
-  }
-  if (n.contains('read') || n.contains('open') || n.contains('view')) return 'Lecture du fichier\u2026';
-  if (n.contains('write') || n.contains('edit') || n.contains('save') || n.contains('multi'))
-    return '\u00c9dition du fichier\u2026';
-  if (n.contains('search') || n.contains('grep') || n.contains('glob') || n.contains('find'))
-    return 'Recherche\u2026';
-  if (n.contains('list') || n.contains('dir')) return 'Exploration du dossier\u2026';
-  if (n.contains('web') || n.contains('fetch') || n.contains('http') || n.contains('url'))
-    return 'Recherche sur internet\u2026';
-  if (n.contains('git')) return 'Commande Git\u2026';
-  if (n.contains('delete') || n.contains('remove')) return 'Suppression\u2026';
-  if (n.contains('agent') || n.contains('task') || n.contains('delegate'))
-    return 'D\u00e9l\u00e9gation\u2026';
-  return 'Action en cours\u2026';
-}
-
-/// State machine for the activity feed.
-///
-/// Priority: ACTIVE REAL TOOL > Narrative update > "Running"
-/// A real tool is NEVER interrupted by thinking/text chunks.
-/// Only completeTool(toolId) can end a running tool.
-class AgentActivityController {
-  final List<AgentActivityEvent> history = [];
-  AgentActivityEvent? activeActivity;
-  VoidCallback? _onUpdate;
-
-  bool isToolRunning = false;
-  String? activeToolId;
-
-  void setOnUpdate(VoidCallback cb) => _onUpdate = cb;
-  void _notify() => _onUpdate?.call();
-  String _nextId() => 'act_${DateTime.now().microsecondsSinceEpoch}';
-
-  /// Called once when the agent turn begins. Creates "Running" card.
-  void startRun() {
-    reset();
-    activeActivity = AgentActivityEvent(
-      id: _nextId(), timestamp: DateTime.now(),
-      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Generating...',
-    );
-    _notify();
-  }
-
-  /// Update label of active card. Ignored if a real tool is running.
-  void updateNarrative(String label) {
-    if (isToolRunning) return;
-    if (activeActivity == null) return;
-    activeActivity!.label = label;
-    _notify();
-  }
-
-  /// Start a real tool. Moves current narrative to history.
-  void startTool({required String toolId, required String toolName, required Map<String, dynamic> args}) {
-    if (activeActivity != null) {
-      activeActivity!.status = AgentActivityStatus.completed;
-      activeActivity!.isExpanded = false;
-      history.add(activeActivity!);
-    }
-    final label = toolHumanLabel(toolName, args);
-    activeActivity = AgentActivityEvent(
-      id: toolId, timestamp: DateTime.now(),
-      type: AgentActivityType.tool, status: AgentActivityStatus.running,
-      label: label, toolName: toolName, toolArgs: args,
-    );
-    isToolRunning = true;
-    activeToolId = toolId;
-    _notify();
-  }
-
-  /// Complete a tool. ONLY if toolId matches.
-  void completeTool({required String toolId, String? result}) {
-    if (activeToolId != toolId) return;
-    final a = activeActivity;
-    if (a == null) return;
-    a.status = AgentActivityStatus.completed;
-    a.toolResult = result;
-    a.isExpanded = false;
-    history.add(a);
-    activeActivity = null;
-    isToolRunning = false;
-    activeToolId = null;
-    // Create new "Running" card for next activity
-    activeActivity = AgentActivityEvent(
-      id: _nextId(), timestamp: DateTime.now(),
-      type: AgentActivityType.status, status: AgentActivityStatus.running, label: 'Generating...',
-    );
-    _notify();
-  }
-
-  /// Fail a tool.
-  void failTool({required String toolId, String? error}) {
-    if (activeToolId != toolId) return;
-    final a = activeActivity;
-    if (a == null) return;
-    a.status = AgentActivityStatus.error;
-    a.toolResult = error;
-    a.isExpanded = false;
-    history.add(a);
-    activeActivity = null;
-    isToolRunning = false;
-    activeToolId = null;
-    _notify();
-  }
-
-  /// Finish the entire run.
-  void finishRun({String? error}) {
-    if (activeActivity != null) {
-      if (error != null) {
-        activeActivity!.status = AgentActivityStatus.error;
-        activeActivity!.label = error;
-      } else {
-        activeActivity!.status = AgentActivityStatus.completed;
-      }
-      activeActivity!.isExpanded = false;
-      history.add(activeActivity!);
-      activeActivity = null;
-    }
-    isToolRunning = false;
-    activeToolId = null;
-    _notify();
-  }
-
-  void toggleExpand(String id) {
-    for (final e in history) {
-      if (e.id == id) { e.isExpanded = !e.isExpanded; _notify(); return; }
-    }
-  }
-
-  void reset() {
-    history.clear();
-    activeActivity = null;
-    isToolRunning = false;
-    activeToolId = null;
-    _notify();
-  }
-}
-
 
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
   final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
@@ -321,10 +127,6 @@ class SelectType extends StatefulWidget {
   const SelectType({super.key});
   @override
   State<SelectType> createState() => _SelectTypeState();
-}
-
-Widget drawerTile(VoidCallback onPressed, String title, dynamic icon) {
-  return ListTile(onTap: onPressed, title: Text(title), leading: icon);
 }
 
 class _SelectTypeState extends State<SelectType>
@@ -396,11 +198,12 @@ class _SelectTypeState extends State<SelectType>
   // ── Agent AI state ────────────────────────────────────────────────
   AgentPhase _agentPhase        = AgentPhase.idle;
   bool       _agentGenerating   = false;
+  bool       _agentActivityDrawerOpen = false;
   String     _agentThinkingBuf  = '';
   String     _agentStreamBuf    = '';
   String     _agentCurrentTool  = '';
   final      _agentRunner       = AgentRunner();
-  final      _activityCtrl      = AgentActivityController();
+  final      _activityCtrl      = BeUIAgentActivityController();
   int        _agentRequestSerial = 0;
   Completer<bool>? _pendingApprovalCompleter;
   int        _agentToolTabSeq   = 0;
@@ -1590,142 +1393,6 @@ class _SelectTypeState extends State<SelectType>
                 }),
                 cursorLine: EditorStatusHub.instance.cursorLine,
                 cursorColumn: EditorStatusHub.instance.cursorColumn,
-                onCursorTap: () {
-                  // Go to line dialog
-                  final ctrl = TextEditingController();
-                  showDialog(
-                    context: ctx,
-                    builder: (d) => AlertDialog(
-                      title: const Text('Go to Line', style: TextStyle(fontSize: 14)),
-                      content: TextField(
-                        controller: ctrl,
-                        autofocus: true,
-                        keyboardType: TextInputType.number,
-                        style: const TextStyle(fontSize: 13),
-                        decoration: const InputDecoration(
-                          hintText: 'Line number',
-                          isDense: true,
-                        ),
-                        onSubmitted: (_) {
-                          final line = int.tryParse(ctrl.text);
-                          if (line != null) {
-                            Navigator.pop(d);
-                            // TODO: navigate to line in editor
-                          }
-                        },
-                      ),
-                      actions: [
-                        TextButton(onPressed: () => Navigator.pop(d), child: const Text('Cancel')),
-                        TextButton(
-                          onPressed: () {
-                            final line = int.tryParse(ctrl.text);
-                            if (line != null) {
-                              Navigator.pop(d);
-                              // TODO: navigate to line in editor
-                            }
-                          },
-                          child: const Text('Go'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                indentation: 'Spaces: ${SettingsService.I.editorTabSize}',
-                onIndentationTap: () {
-                  // Indentation selector
-                  showModalBottomSheet(
-                    context: ctx,
-                    builder: (d) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('Select Indentation', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                          ),
-                          for (final size in [2, 4, 8])
-                            ListTile(
-                              title: Text('Spaces: $size'),
-                              trailing: SettingsService.I.editorTabSize == size
-                                  ? const Icon(Icons.check, color: Color(0xFF007ACC))
-                                  : null,
-                              onTap: () {
-                                setState(() => SettingsService.I.editorTabSize = size);
-                                Navigator.pop(d);
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-                encoding: SettingsService.I.filesEncoding.toUpperCase(),
-                onEncodingTap: () {
-                  // Encoding selector
-                  showModalBottomSheet(
-                    context: ctx,
-                    builder: (d) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('Select Encoding', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                          ),
-                          for (final enc in ['utf8', 'utf16le', 'utf16be', 'iso88591', 'windows1252'])
-                            ListTile(
-                              title: Text(enc.toUpperCase()),
-                              trailing: SettingsService.I.filesEncoding == enc
-                                  ? const Icon(Icons.check, color: Color(0xFF007ACC))
-                                  : null,
-                              onTap: () {
-                                setState(() => SettingsService.I.filesEncoding = enc);
-                                Navigator.pop(d);
-                              },
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-                endOfLine: SettingsService.I.filesEol == '\n' ? 'LF' : 'CRLF',
-                onEndOfLineTap: () {
-                  // End of line selector
-                  showModalBottomSheet(
-                    context: ctx,
-                    builder: (d) => SafeArea(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('Select End of Line Sequence', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                          ),
-                          ListTile(
-                            title: const Text('LF'),
-                            trailing: SettingsService.I.filesEol == '\n'
-                                ? const Icon(Icons.check, color: Color(0xFF007ACC))
-                                : null,
-                            onTap: () {
-                              setState(() => SettingsService.I.filesEol = '\n');
-                              Navigator.pop(d);
-                            },
-                          ),
-                          ListTile(
-                            title: const Text('CRLF'),
-                            trailing: SettingsService.I.filesEol == '\r\n'
-                                ? const Icon(Icons.check, color: Color(0xFF007ACC))
-                                : null,
-                            onTap: () {
-                              setState(() => SettingsService.I.filesEol = '\r\n');
-                              Navigator.pop(d);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
                 language: EditorStatusHub.instance.language,
                 unreadNotifications: PandaNotifications.unreadCount,
                 onNotificationsTap: () => _showNotificationInbox(dCtx),
@@ -1733,10 +1400,7 @@ class _SelectTypeState extends State<SelectType>
             ),
         );
 
-        return Semantics(
-      label: 'Status Bar',
-      child: SizedBox(height: 22, child: editorBar),
-    );
+        return SizedBox(height: 22, child: editorBar);
       },
     );
   }
@@ -1828,56 +1492,6 @@ class _SelectTypeState extends State<SelectType>
   /// Ouvre le terminal comme onglet plein écran de l'éditeur (mode étendu).
   /// Le panneau du bas est refermé pour éviter deux terminaux simultanés.
   void _openTerminalTab() {
-    if (Responsive.isMobile(context)) {
-      // Mobile: open terminal as bottom sheet
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          minChildSize: 0.3,
-          maxChildSize: 0.9,
-          builder: (ctx, controller) => Container(
-            decoration: BoxDecoration(
-              color: Theme.of(ctx).brightness == Brightness.dark
-                  ? const Color(0xff1e1e1e)
-                  : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  width: 36, height: 4, margin: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[600],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    children: [
-                      Icon(Icons.terminal, size: 18),
-                      SizedBox(width: 8),
-                      Text('Terminal', style: TextStyle(fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: EmbeddedTerminal(
-                    projectDir: _activeProjectDir() ?? _currentWorkspaceDir ?? '/',
-                    showKeyboardMenu: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-      return;
-    }
     setState(() {
       final existing = _openTabs.indexWhere((t) => t.id == 'terminal');
       if (existing == -1) {
@@ -2472,7 +2086,7 @@ class _SelectTypeState extends State<SelectType>
       color: bg,
       elevation: 6,
       shadowColor: Colors.black38,
-      clipper: SidebarClipper(),
+      clipper: _SidebarClipper(),
       child: SizedBox(
         width: _kSidebarWidth,
         child: Column(
@@ -3563,11 +3177,8 @@ class _SelectTypeState extends State<SelectType>
                   children: [
                     Builder(builder: (ctx) => GestureDetector(
                       onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
-                      child: Semantics(
-                        label: 'Workspace: ${_currentWorkspaceName ?? 'No workspace'}',
-                        button: true,
-                        child: Container(
-                          key: _workspaceBoxKey,
+                      child: Container(
+                        key: _workspaceBoxKey,
                         constraints: BoxConstraints(
                             minWidth: 110,
                             maxWidth: MediaQuery.of(ctx).size.width * 0.42),
@@ -3620,7 +3231,7 @@ class _SelectTypeState extends State<SelectType>
                           ],
                         ),
                       ),
-                    ))),
+                    )),
                   ],
                 ),
               ),
@@ -5292,6 +4903,16 @@ class _SelectTypeState extends State<SelectType>
               : (_agentMessages.isEmpty
                   ? _buildAgentEmptyState(isDark, muted, fg)
                   : _buildAgentMessages(isDark, fg, muted)),
+        ),
+
+        // ── beUI Agent Activity (ticker épinglé au bas, rien en dessous) ──
+        BeUIAgentActivity(
+          controller: _activityCtrl,
+          isExpanded: _agentActivityDrawerOpen,
+          onToggleExpanded: () => setState(() => _agentActivityDrawerOpen = !_agentActivityDrawerOpen),
+          isDark: isDark,
+          fg: fg,
+          muted: muted,
         ),
 
         // ── Integrated PromptBar with Docked layout ────────────────────
@@ -7722,9 +7343,6 @@ class _SelectTypeState extends State<SelectType>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Activity feed: history + active card
-              if (_activityCtrl.history.isNotEmpty || _activityCtrl.activeActivity != null)
-                _AgentActivityFeed(controller: _activityCtrl, isDark: isDark, fg: fg, muted: muted),
               if (!isStreaming && msg['checkpoint'] != null)
                 _AgentCheckpointCard(
                   data: (msg['checkpoint'] as Map).cast<String, dynamic>(),
@@ -7746,19 +7364,6 @@ class _SelectTypeState extends State<SelectType>
                   ),
                 ),
 
-              // Loader chip tant qu'aucun evenement visible n'est affiche.
-              // Masqué si l'activity feed gère déjà l'affichage.
-              if (isActiveMsg && !hasVisibleTimeline && _activityCtrl.activeActivity == null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: _AgentPhaseChip(
-                    phase: _agentPhase,
-                    isDark: isDark,
-                    toolName: _agentCurrentTool,
-                    fg: fg,
-                    muted: muted,
-                  ),
-                ),
 
               // Action row (copy + retry) — shown after generation
               if (!isStreaming && (text.isNotEmpty || isError))
@@ -9579,7 +9184,7 @@ class _SelectTypeState extends State<SelectType>
                 case AgentPhase.thinking:
                   _agentPhase = AgentPhase.thinking;
                   _agentThinkingBuf += chunk.text;
-                  _activityCtrl.updateNarrative('Réflexion…');
+                  _activityCtrl.pushReasoning(chunk.text);
                   _agentMessages[agentIdx]['thinking'] = _agentThinkingBuf;
                   if (blocks.isNotEmpty && blocks.last['type'] == 'thinking') {
                     blocks.last['thinking'] = (blocks.last['thinking'] as String? ?? '') + chunk.text;
@@ -10236,15 +9841,38 @@ class _SelectTypeState extends State<SelectType>
 // Sub-widgets
 // ─────────────────────────────────────────────────────────────────────────────
 
-// _RailItem extracted to home_models.dart
-// (typedef alias below)
+class _RailItem {
+  final IconData icon;
+  final String   label;
+  final int      idx;
+  const _RailItem({required this.icon, required this.label, required this.idx});
+}
 
 // ── _TabDef ───────────────────────────────────────────────────────────────────
-// _TabDef extracted to home_models.dart
+    class _TabDef {
+    final String   id;
+    final String   title;
+    final IconData icon;
+    const _TabDef({required this.id, required this.title, required this.icon});
+    }
 
 // ── _EditorTabConfig ──────────────────────────────────────────────────────────
 // Holds the data needed to render an EditorPage inside a tab.
-// _EditorTabConfig extracted to home_models.dart
+class _EditorTabConfig {
+  final File?     file;
+  final String    rootDir;
+  final Language? languageDetails;
+  final bool      isProject;
+  final bool      isCloned;
+
+  _EditorTabConfig({
+    this.file,
+    required this.rootDir,
+    this.languageDetails,
+    this.isProject = false,
+    this.isCloned  = false,
+  });
+}
 
     // ── _ActivityBtnEx (theme-aware) ──────────────────────────────────────────────
     class _ActivityBtnEx extends StatelessWidget {
@@ -10852,200 +10480,6 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Light wave painter for active text.
-class _LightWavePainter extends CustomPainter {
-  final Animation<double> animation;
-  final Color color;
-  _LightWavePainter({required this.animation, required this.color}) : super(repaint: animation);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment(-1.0 + 2.0 * animation.value, 0),
-        end: Alignment(-0.5 + 2.0 * animation.value, 0),
-        colors: [color.withValues(alpha: 0.0), color.withValues(alpha: 0.3), color.withValues(alpha: 0.0)],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
-  }
-  @override
-  bool shouldRepaint(_LightWavePainter old) => old.animation.value != animation.value;
-}
-
-/// The single active activity card — always at the bottom.
-class _ActiveActivityCard extends StatefulWidget {
-  final AgentActivityEvent activity;
-  final bool isDark;
-  final Color fg;
-  final Color muted;
-  const _ActiveActivityCard({required this.activity, required this.isDark, required this.fg, required this.muted});
-  @override
-  State<_ActiveActivityCard> createState() => _ActiveActivityCardState();
-}
-
-class _ActiveActivityCardState extends State<_ActiveActivityCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _waveCtrl;
-  @override
-  void initState() {
-    super.initState();
-    _waveCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 2))..repeat();
-  }
-  @override
-  void dispose() { _waveCtrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) {
-    final a = widget.activity;
-    final isError = a.status == AgentActivityStatus.error;
-    final accent = isError ? Colors.redAccent : widget.isDark ? const Color(0xff8b5cf6) : const Color(0xff6366f1);
-    // Compact line-style: same height as history entries, with light wave
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, anim) => FadeTransition(
-          opacity: anim,
-          child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-            child: child,
-          ),
-        ),
-        child: Row(
-          key: ValueKey(a.label),
-          children: [
-            if (isError)
-              Icon(Icons.error_outline, size: 13, color: Colors.redAccent)
-            else
-              SizedBox(
-                width: 13, height: 13,
-                child: CircularProgressIndicator(strokeWidth: 1.5, color: accent),
-              ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ClipRect(
-                child: CustomPaint(
-                  painter: _LightWavePainter(animation: _waveCtrl, color: accent),
-                  child: Text(
-                    a.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: widget.fg.withValues(alpha: 0.8),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Compact history entry — expandable.
-class _ActivityHistoryEntry extends StatelessWidget {
-  final AgentActivityEvent event;
-  final bool isDark;
-  final Color fg;
-  final Color muted;
-  final VoidCallback onToggle;
-  const _ActivityHistoryEntry({required this.event, required this.isDark, required this.fg, required this.muted, required this.onToggle});
-
-  @override
-  Widget build(BuildContext context) {
-    final e = event;
-    final isError = e.status == AgentActivityStatus.error;
-    final checkColor = isError ? Colors.redAccent : const Color(0xff22c55e);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      InkWell(
-        onTap: (e.toolName != null || e.outputText != null) ? onToggle : null,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(children: [
-            Icon(Icons.check_circle, size: 13, color: checkColor),
-            const SizedBox(width: 8),
-            Expanded(child: Text(e.label, style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.8)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-            if (e.toolName != null || e.outputText != null)
-              Icon(e.isExpanded ? Icons.expand_less : Icons.expand_more, size: 14, color: muted),
-          ]),
-        ),
-      ),
-      if (e.isExpanded) _buildDetails(e),
-    ]);
-  }
-
-  Widget _buildDetails(AgentActivityEvent e) {
-    final lines = <Widget>[];
-    if (e.toolName != null) lines.add(_detailRow('Tool', e.toolName!));
-    if (e.toolArgs != null && e.toolArgs!.isNotEmpty) {
-      for (final entry in e.toolArgs!.entries) {
-        final v = entry.value?.toString() ?? '';
-        if (v.isNotEmpty && v.length < 200) lines.add(_detailRow(entry.key, v.length > 100 ? '${v.substring(0, 100)}\u2026' : v));
-      }
-    }
-    if (e.toolResult != null && e.toolResult!.isNotEmpty) {
-      final r = e.toolResult!;
-      lines.add(_detailRow('Output', r.length > 300 ? '${r.substring(0, 300)}\u2026' : r));
-    }
-    if (lines.isEmpty) return const SizedBox.shrink();
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(33, 0, 12, 4),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xff1a1a1a).withValues(alpha: 0.4) : const Color(0xfff5f5f5).withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: lines),
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 3),
-      child: RichText(text: TextSpan(children: [
-        TextSpan(text: '$label: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg.withValues(alpha: 0.7))),
-        TextSpan(text: value, style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: fg.withValues(alpha: 0.6), height: 1.4)),
-      ])),
-    );
-  }
-}
-
-/// Complete activity feed: history + active card.
-class _AgentActivityFeed extends StatelessWidget {
-  final AgentActivityController controller;
-  final bool isDark;
-  final Color fg;
-  final Color muted;
-  const _AgentActivityFeed({required this.controller, required this.isDark, required this.fg, required this.muted});
-
-  @override
-  Widget build(BuildContext context) {
-    final history = controller.history;
-    final active = controller.activeActivity;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final event in history)
-          _ActivityHistoryEntry(event: event, isDark: isDark, fg: fg, muted: muted, onToggle: () => controller.toggleExpand(event.id)),
-        if (active != null)
-          _ActiveActivityCard(activity: active, isDark: isDark, fg: fg, muted: muted),
-      ],
-    );
-  }
-}
-
-/// Chaque phase de réflexion crée SA propre box dans la timeline. Les tool
-/// calls ne sont JAMAIS des enfants de la réflexion : ils sont des blocs
-/// frères rendus avant/après, et une nouvelle réflexion après des outils
-/// ouvre une nouvelle [_ReflectionBox] (jamais de fusion).
-class _ReflectionBox extends StatefulWidget {
   final String content;
   final bool isActive;
   final bool isDark;
@@ -11707,109 +11141,6 @@ class _OrbPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _OrbPainter oldDelegate) =>
       oldDelegate.progress != progress || oldDelegate.phase != phase || oldDelegate.color != color;
-}
-
-class _AgentPhaseChip extends StatefulWidget {
-  final AgentPhase phase;
-  final bool       isDark;
-  final String     toolName;
-  final Color      fg;
-  final Color      muted;
-
-  const _AgentPhaseChip({
-    required this.phase,
-    required this.isDark,
-    this.toolName = '',
-    required this.fg,
-    required this.muted,
-  });
-
-  @override
-  State<_AgentPhaseChip> createState() => _AgentPhaseChipState();
-}
-
-class _AgentPhaseChipState extends State<_AgentPhaseChip> {
-  bool _isFrench = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _detectLanguage();
-  }
-
-  Future<void> _detectLanguage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedLang = prefs.getString('app_language') ?? '';
-      if (savedLang.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _isFrench = savedLang.toLowerCase().contains('fran');
-          });
-        }
-        return;
-      }
-    } catch (_) {}
-
-    if (mounted) {
-      final locale = Localizations.maybeLocaleOf(context)?.languageCode ?? 'fr';
-      setState(() {
-        _isFrench = locale.startsWith('fr');
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.phase == AgentPhase.idle || widget.phase == AgentPhase.done) {
-      return const SizedBox.shrink();
-    }
-
-    final String label;
-    final String variant;
-
-    switch (widget.phase) {
-      case AgentPhase.thinking:
-        label = _isFrench ? 'Réflexion en cours\u2026' : 'Thinking\u2026';
-        variant = 'Orbit';
-        break;
-      case AgentPhase.streaming:
-        label = _isFrench ? 'Génération de la réponse\u2026' : 'Generating\u2026';
-        variant = 'Dots';
-        break;
-      case AgentPhase.error:
-        label = _isFrench ? 'Erreur' : 'Error';
-        variant = 'Drive';
-        break;
-      case AgentPhase.toolRunning:
-        variant = 'Drive';
-        final tName = widget.toolName;
-        if (tName.contains('runShellCommand') || tName.contains('run_command')) {
-          label = _isFrench ? 'Exécution d\'une commande\u2026' : 'Running command\u2026';
-        } else if (tName.contains('codeEditorWrite') || tName.contains('create_file') || tName.contains('edit_file') || tName.contains('multi_edit_file')) {
-          label = _isFrench ? 'Écriture de code\u2026' : 'Coding\u2026';
-        } else if (tName.contains('gitClone') || tName.contains('clone')) {
-          label = _isFrench ? 'Clonage du dépôt\u2026' : 'Cloning repository\u2026';
-        } else if (tName.contains('compileApplet') || tName.contains('compile_applet')) {
-          label = _isFrench ? 'Compilation de l\'applet\u2026' : 'Compiling applet\u2026';
-        } else {
-          label = _isFrench ? 'Travail en cours\u2026' : 'Working\u2026';
-        }
-        break;
-      default:
-        label = _isFrench ? 'Traitement\u2026' : 'Working\u2026';
-        variant = 'Drive';
-    }
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 2, bottom: 6),
-      child: LoadingStateWidget(
-        label: label,
-        variant: variant,
-        color: widget.muted,
-      ),
-    );
-  }
 }
 
 /// Curseur clignotant animé pendant le streaming.
