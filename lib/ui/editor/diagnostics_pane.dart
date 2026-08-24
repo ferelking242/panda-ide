@@ -15,12 +15,12 @@ import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
 import 'package:panda/ui/mdview.dart';
 import 'package:panda/utils/constants.dart';
 import 'webview.dart';
-import '../bloc/ui_bloc/ui_bloc.dart';
-import '../extensions/extension_host.dart';
-import '../terminal/terminal.dart';
-import '../utils/languages.dart';
-import '../utils/functions.dart';
-import '../utils/themes.dart';
+import '../../bloc/ui_bloc/ui_bloc.dart';
+import '../../extensions/extension_host.dart';
+import '../../terminal/terminal.dart';
+import '../../utils/languages.dart';
+import '../../utils/functions.dart';
+import '../../utils/themes.dart';
 import 'editor/status_bar.dart';
 import 'widgets.dart';
 
