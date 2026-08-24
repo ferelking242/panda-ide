@@ -5,13 +5,14 @@
 ///
 /// Flutter → Node.js :  call (activate, events éditeur)
 /// Node.js → Flutter :  apiCall (vscode.window.show..., etc.)
-library;
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'models/extension_message.dart';
+
+library;
+
+
 
 typedef ApiCallHandler = Future<dynamic> Function(IpcMessage msg);
 
