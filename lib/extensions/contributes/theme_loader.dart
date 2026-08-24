@@ -8,15 +8,16 @@
 ///   Le fichier JSON est au format VSCode color theme (tokenColors, colors, etc.)
 ///
 /// Référence : https://code.visualstudio.com/api/extension-guides/color-theme
-library;
-
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
-
 import '../extension_registry.dart';
+
+library;
+
+
+
 
 // ── Modèles ────────────────────────────────────────────────────────────────
 
