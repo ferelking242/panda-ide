@@ -13,13 +13,14 @@
 ///     → envoie une 'apiCall' au host.js de l'extension
 ///     → reçoit la réponse
 ///     → convertit + injecte dans CodeForgeController
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'ipc_bridge.dart';
+
 library;
 
-import 'dart:async';
 
-import 'package:flutter/material.dart';
 
-import 'ipc_bridge.dart';
 
 // ── Provider registration models ─────────────────────────────────────────
 
