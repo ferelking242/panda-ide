@@ -33,6 +33,16 @@ import '../terminal/terminal.dart';
 import '../utils/constants.dart';
 import '../utils/languages.dart';
 
+export 'git/git_operations.dart';
+export 'git/git_diff.dart';
+export 'string_utils.dart';
+export 'extractors.dart';
+export 'models/editor_models.dart';
+export 'editors/edit_hunks.dart';
+export 'ssh/ssh_utils.dart';
+export 'search/search_index.dart';
+export 'editors/editor_theme.dart';
+
 const Set<String> supportedImageExtensions = {
   '.png',
   '.jpg',
@@ -235,12 +245,3 @@ Future<bool> importPublicProjectsToPrivate() async {
 
 
 // ── Re-exports for backward compatibility ──
-export 'git/git_operations.dart';
-export 'git/git_diff.dart';
-export 'string_utils.dart';
-export 'extractors.dart';
-export 'models/editor_models.dart';
-export 'editors/edit_hunks.dart';
-export 'ssh/ssh_utils.dart';
-export 'search/search_index.dart';
-export 'editors/editor_theme.dart';
