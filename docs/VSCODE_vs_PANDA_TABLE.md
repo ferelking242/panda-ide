@@ -1,302 +1,182 @@
 # 📊 TABLEAU COMPARATIF — VS Code vs Panda IDE
 
-> Mise à jour : 24 août 2026  
+> Mise à jour : 24 août 2026 (après refactoring architecture)  
 > Sources : VS Code 1.102 (desktop), Panda IDE 0.x (Flutter mobile+desktop)  
-> Fichiers Dart : 199 | Lignes : ~106K | VS Code : ~10 385 fichiers
+> Fichiers Dart : 207 | Lignes : ~108K | VS Code : ~10 385 fichiers
 
 ---
 
-## 🏗️ ARCHITECTURE
+## 🏗️ ARCHITECTURE — Fichier par fichier
 
-| Composant | VS Code | Panda IDE | Status |
+| Composant | VS Code (fichier) | Panda IDE (fichier) | Status |
 |---|---|---|---|
-| **Stack** | TypeScript/Electron | Dart/Flutter | ⚡ Mobile natif |
-| **Backend** | Node.js single-process | Dart isolates | ✅ |
-| **Base de données** | JSON local (stateDB, keybindingsDB) | SharedPreferences | ✅ |
-| **Extension host** | Child process Node.js | Dart isolate | ✅ |
-| **UI framework** | Custom DOM | Flutter widgets | ✅ |
-| **LSP** | Processus externe | Dart LSP bridge | ✅ |
-| **Debug adapter** | DAP (Debug Adapter Protocol) | Dart Debug Bridge (partiel) | ⚠️ |
-| **Extension marketplace** | Marketplace API (Microsoft) | Open VSX | ✅ |
+| **Main shell** | `workbench/workbench.ts` | `lib/ui/home.dart` (13,517 lignes) | ⚠️ Monolithe |
+| **Title bar** | `workbench/browser/titlebar/titlebarPart.ts` | `lib/ui/titlebar/panda_title_bar.dart` (264 lignes) | ✅ **Extrait** |
+| **Activity bar** | `workbench/browser/activitybar/activityBarPart.ts` | `lib/ui/activitybar/panda_activity_bar.dart` (428 lignes) | ✅ **Extrait** |
+| **Sidebar** | `workbench/browser/sidebar.ts` + `sidebarPart.ts` | `lib/ui/sidebar/panda_sidebar.dart` (136 lignes) + contenu dans home | ⚠️ Container extrait |
+| **Editor tabs** | `workbench/browser/editor/editorTabs.ts` | `lib/ui/editor/editor_tab_bar.dart` (220 lignes) | ✅ **Extrait** |
+| **Tab groups** | `workbench/browser/editor/editorGroupView.ts` | `lib/ui/editor/tab_groups.dart` | ✅ |
+| **Status bar** | `workbench/browser/statusbar/statusbarPart.ts` | `lib/ui/editor/status_bar.dart` | ✅ |
+| **Bottom panel** | `workbench/browser/panels/panelPart.ts` | `lib/ui/editor/bottom_panel.dart` | ✅ |
+| **Empty editor** | `workbench/browser/editor/editorInstance.ts` | `lib/ui/editor/empty_editor.dart` (48 lignes) | ✅ **Extrait** |
+| **Welcome page** | `workbench/browser/welcome.ts` | `lib/ui/welcome/panda_welcome_page.dart` (508 lignes) | ✅ **Extrait** |
+| **Update page** | — | `lib/ui/welcome/update_page.dart` (232 lignes) | ✅ Panda+ |
+| **Shared models** | `platform/common/` | `lib/ui/home_models.dart` (57 lignes) | ✅ **Extrait** |
+| **Settings** | `platform/configuration/common/configuration.ts` | `lib/utils/settings_service.dart` + `lib/ui/settings_page.dart` | ✅ |
+| **Terminal** | `workbench/browser/terminal/terminalView.ts` | `lib/terminal/terminal_native.dart` + `lib/ui/editor/bottom_panel.dart` | ✅ |
+| **Extensions** | `workbench/browser/extensions/` (15+ fichiers) | `lib/extensions/` (30+ fichiers) | ✅ |
+| **Git** | `workbench/contrib/scm/` (20+ fichiers) | `lib/ui/git_panel.dart` | ⚠️ Un seul fichier |
+| **Debug** | `workbench/contrib/debug/` (40+ fichiers) | `lib/ui/editor/gutter_indicators.dart` | ❌ Minimal |
 
 ---
 
-## 📝 ÉDITEUR DE TEXTE
+## 📂 ARCHITECTURE COMPARÉE — Structure des dossiers
 
-| Fonctionnalité | VS Code | Panda IDE | Status |
+### VS Code (src/vs/workbench/browser/)
+```
+workbench/browser/
+├── titlebar/
+│   ├── titlebarPart.ts          ← Container
+│   ├── menubarControl.ts        ← Menu bar
+│   └── titlebarWidget.ts        ← Widget
+├── activitybar/
+│   ├── activityBarPart.ts       ← Container
+│   └── activityAction.ts        ← Single icon
+├── sidebar/
+│   ├── sidebarPart.ts           ← Container
+│   └── sidebarActions.ts        ← Commands
+├── editor/
+│   ├── editorGroupView.ts       ← Tab group
+│   ├── editorTabs.ts            ← Tab bar
+│   ├── editorTab.ts             ← Single tab
+│   └── editorActions.ts         ← Context menu
+├── panels/
+│   ├── panelPart.ts             ← Bottom panel
+│   └── panelViewContainer.ts    ← Tab switcher
+├── statusbar/
+│   ├── statusbarPart.ts         ← Container
+│   └── statusbarItem.ts         ← Single item
+└── terminal/
+    ├── terminalView.ts          ← Terminal panel
+    ├── terminalTabs.ts          ← Terminal tab bar
+    └── terminalTab.ts           ← Single terminal tab
+```
+
+### Panda IDE (lib/ui/) — APRÈS refactoring
+```
+lib/ui/
+├── home.dart                    ← Main shell (13,517 lignes — encore gros)
+├── home_models.dart             ← ✅ NEW: RailItem, TabDef, EditorTabConfig
+├── titlebar/
+│   └── panda_title_bar.dart     ← ✅ NEW: Title bar + workspace box
+├── activitybar/
+│   └── panda_activity_bar.dart  ← ✅ NEW: Sidebar icons + bottom section
+├── sidebar/
+│   └── panda_sidebar.dart       ← ✅ NEW: Sidebar container (frame)
+├── editor/
+│   ├── editor_tab_bar.dart      ← ✅ NEW: Tab bar + context menu
+│   ├── tab_groups.dart          ← Tab groups
+│   ├── status_bar.dart          ← Status bar
+│   ├── bottom_panel.dart        ← Bottom panel
+│   ├── empty_editor.dart        ← ✅ NEW: Empty state
+│   ├── breadcrumbs.dart         ← Breadcrumbs
+│   ├── code_folding.dart        ← Code folding
+│   ├── codelens_provider.dart   ← CodeLens
+│   ├── codicon.dart             ← Icons
+│   ├── diagnostics_panel.dart   ← Problems panel
+│   ├── diff_viewer.dart         ← Diff viewer
+│   ├── gutter_indicators.dart   ← Breakpoints
+│   ├── multi_cursor.dart        ← Multi-cursor
+│   └── symbol_picker.dart       ← Symbol picker
+├── welcome/
+│   ├── panda_welcome_page.dart  ← ✅ NEW: Welcome page
+│   └── update_page.dart         ← ✅ NEW: Update page
+├── agent/                       ← AI Agent UI
+├── browser/                     ← Built-in browser
+└── widgets/                     ← Shared widgets
+```
+
+---
+
+## 📊 COMPARAISON ARCHITECTURE
+
+| Critère | VS Code | Panda IDE | Delta |
 |---|---|---|---|
-| **Syntax highlighting** | TextMate grammars | Dart syntax_service | ✅ |
-| **Autocomplete** | IntelliSense | Copilot LSP | ✅ |
-| **Multi-curseur** | ⌥+Click, ⌃⌥↑↓ | `multi_cursor.dart` | ✅ |
-| **Code folding** | ✅ Minimap + gutter | `code_folding.dart` | ✅ |
-| **Breadcrumbs** | ✅ Navigation hierarchique | `breadcrumbs.dart` | ✅ |
-| **Indent guides** | ✅ With colorization | `editorDecorations.dart` | ✅ |
-| **Bracket matching** | ✅ Colorized | ✅ | ✅ |
-| **Bracket colorization** | ✅ (since 1.67) | ✅ `editorBracketColorization` | ✅ |
-| **Sticky scroll** | ✅ Header sticking | ✅ `editorStickyScroll` | ✅ |
-| **Whitespace rendering** | ✅ Configurable | ✅ `editorRenderWhitespace` | ✅ |
-| **Active line highlight** | ✅ `renderLineHighlight` | ✅ `editorHighlightActiveLine` | ✅ |
-| **Ghost text / Inline** | ✅ Copilot suggestions | ✅ `ghost_text_engine.dart` | ✅ |
-| **Inlay hints** | ✅ LSP inlay hints | ❌ | ❌ **Manque** |
-| **CodeLens** | ✅ (LSP-provided) | ✅ `codelens_provider.dart` | ✅ |
-| **Gutter indicators** | ✅ Breakpoints, errors | ✅ `gutter_indicators.dart` | ✅ |
-| **Diff viewer** | ✅ Side-by-side | ✅ `diff_viewer.dart` + `side_by_side_diff_viewer.dart` | ✅ |
-| **Symbol picker** | ✅ Ctrl+Shift+O | ✅ `symbol_picker.dart` | ✅ |
-| **Snippets** | ✅ Extension-provided | ✅ `snippet_loader.dart` | ✅ |
+| **Fichiers totaux** | ~10 385 | 207 | -98% |
+| **Lignes de code** | ~1M | ~108K | -90% |
+| **Dossiers UI** | 6 (titlebar, activitybar, sidebar, editor, panels, terminal) | 7 (titlebar, activitybar, sidebar, editor, welcome, agent, browser) | ✅ |
+| **Fichier moyen** | ~100 lignes | ~520 lignes | ⚠️ Gros fichiers |
+| **Plus gros fichier** | ~3000 lignes | `home.dart` 13,517 | ❌ Monolithe |
+| **Composants extraits** | — | 8 fichiers (1,893 lignes) | ✅ |
+| **Séparation Part/Service/Action** | ✅ 3-4 fichiers/composant | ⚠️ 1 fichier/composant | ⚠️ |
+| **Modèles partagés** | ✅ `common/` | ✅ `home_models.dart` | ✅ |
 
 ---
 
-## 🎛️ SETTINGS (endpoints persistés)
+## 📝 FEATURES — Checklist complète
 
-| Setting | VS Code | Panda | Persisted | Applied |
-|---|---|---|---|---|
-| `editor.fontSize` | ✅ | ✅ | ✅ SharedPreferences | ⚠️ |
-| `editor.tabSize` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.wordWrap` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.indentGuides` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.bracketColorization` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.minimap` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.stickyScroll` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.renderWhitespace` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.highlightActiveLine` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.smoothScrolling` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.fontFamily` | ✅ | ✅ | ✅ | ⚠️ |
-| `editor.formatOnSave` | ✅ | ✅ | ✅ | ❌ |
-| `editor.cursorBlinking` | ✅ | ✅ | ✅ | ❌ |
-| `editor.lineNumbers` | ✅ | ✅ | ✅ | ❌ |
-| `editor.renderLineHighlight` | ✅ | ✅ | ✅ | ❌ |
-| `editor.suggestSelection` | ✅ | ✅ | ✅ | ❌ |
-| `editor.acceptSuggestionOnEnter` | ✅ | ✅ | ✅ | ❌ |
-| `editor.snippetSuggestions` | ✅ | ✅ | ✅ | ❌ |
-| `files.autoSave` | ✅ | ✅ | ✅ | ❌ |
-| `files.encoding` | ✅ | ✅ | ✅ | ❌ |
-| `files.eol` | ✅ | ✅ | ✅ | ❌ |
-| `search.smartCase` | ✅ | ✅ | ✅ | ❌ |
-| `debug.stopOnEntry` | ✅ | ✅ | ✅ | ❌ |
-| `scm.autoRefresh` | ✅ | ✅ | ✅ | ❌ |
-| `extensions.autoUpdate` | ✅ | ✅ | ✅ | ❌ |
-| `git.enableSmartCommit` | ✅ | ✅ | ✅ | ❌ |
-| `terminal.shell` | ✅ | ✅ | ✅ | ⚠️ |
-| `terminal.fontSize` | ✅ | ✅ | ✅ | ⚠️ |
-| `terminal.cursorStyle` | ✅ | ✅ | ✅ | ⚠️ |
-| `terminal.scrollback` | ✅ | ✅ | ✅ | ⚠️ |
-| `workbench.colorTheme` | ✅ | ✅ | ✅ | ✅ |
-| `ai.defaultProvider` | — | ✅ | ✅ | ✅ |
-| `ai.inlineCompletions` | — | ✅ | ✅ | ✅ |
-| **Total persistés** | **~40** | **33** | — | — |
-
-**Légende** : ✅ = fait | ⚠️ = persisté mais pas branché à l'éditeur | ❌ = persisté mais pas appliqué
-
----
-
-## 🖥️ UI & LAYOUT
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
+### ✅ Ce qui EST codé (19 features)
+| # | Feature | Fichier | Status |
 |---|---|---|---|
-| **Title bar** | Menu title (File, Edit...) | Panda menu | ✅ |
-| **Sidebar icons** | Activity bar (6 icons) | 5 icons (Explorer, Search, Git, Extensions, Agent) | ✅ |
-| **Sidebar panels** | Explorer, Search, Git, Debug, Extensions | Explorer, Search, Git, Extensions, Agent, Browser | ✅ |
-| **Sidebar toggle** | ✅ Ctrl+B | ✅ Drawer mobile + toggle | ✅ |
-| **Tab bar** | ✅ Drag, close, context menu | ✅ Drag, close, 12 actions menu | ✅ |
-| **Tab context menu** | ✅ Close All, Close Saved, Close Others | ✅ 12 actions (Close All, Close Saved, Split, etc.) | ✅ |
-| **Editor groups** | ✅ Split horizontal/vertical | ✅ `tab_groups.dart` | ✅ |
-| **Status bar** | ✅ 15+ clickable items | ✅ Branch, errors, encoding, indentation, Ln/Col, AI | ✅ Status bar interactif |
-| **Status bar → Branch** | ✅ Click → menu | ✅ `onBranchTap` → branch picker | ✅ |
-| **Status bar → Indentation** | ✅ Click → selector | ✅ `onIndentationTap` → 2/4/8 | ✅ |
-| **Status bar → Encoding** | ✅ Click → selector | ✅ `onEncodingTap` → UTF-8 etc. | ✅ |
-| **Status bar → Ln/Col** | ✅ Click → Go to Line | ✅ `onCursorTap` → dialog | ✅ |
-| **Status bar → EOL** | ✅ LF/CRLF | ✅ `filesEol` | ✅ |
-| **Bottom panel** | ✅ Terminal, Output, Debug Console, Problems | ✅ Terminal, Output, Problems, Debug | ✅ |
-| **Bottom panel tabs** | ✅ Tab switcher | ✅ `BottomPanelTab` enum | ✅ |
-| **Breadcrumbs** | ✅ | ✅ `editor_breadcrumbs.dart` | ✅ |
-| **Minimap** | ✅ | ✅ Settings available | ✅ |
-| **Command palette** | ✅ Ctrl+Shift+P | ✅ `command_palette.dart` + `command_palette_v2.dart` | ✅ |
-| **Quick Open** | ✅ Ctrl+P (files) | ✅ `quick_open.dart` | ✅ |
-| **Workspace Quick Pick** | ✅ Folder/files separators | ✅ `workspace_picker.dart` (FOLDERS & WORKSPACES / FILES) | ✅ |
-| **Settings UI** | ✅ JSON + GUI editor | ✅ GUI `settings_page.dart` + search | ✅ |
-| **Settings search** | ✅ Filter by keyword | ✅ Search bar in settings | ✅ |
+| 1 | Settings persistence (33 endpoints) | `settings_service.dart` | ✅ |
+| 2 | Explorer context menu | `home.dart` | ✅ |
+| 3 | Tab menu (12 actions VS Code) | `editor_tab_bar.dart` | ✅ |
+| 4 | CodeLens provider | `codelens_provider.dart` | ✅ |
+| 5 | Settings search bar | `settings_page.dart` | ✅ |
+| 6 | Responsive breakpoints | `responsive_layout.dart` | ✅ |
+| 7 | Mobile bottom navigation | `responsive_layout.dart` | ✅ |
+| 8 | Sidebar drawer (mobile) | `home.dart` | ✅ |
+| 9 | Terminal bottom sheet | `terminal_native.dart` | ✅ |
+| 10 | Accessibility semantics | `home.dart` | ✅ |
+| 11 | Branch create/checkout | `git_panel.dart` | ✅ |
+| 12 | Terminal multi-tab | `bottom_panel.dart` | ✅ |
+| 13 | Workspace Quick Pick | `workspace_picker.dart` | ✅ |
+| 14 | Status bar interactifs | `status_bar.dart` | ✅ |
+| 15 | Title bar (extracted) | `panda_title_bar.dart` | ✅ NEW |
+| 16 | Activity bar (extracted) | `panda_activity_bar.dart` | ✅ NEW |
+| 17 | Editor tab bar (extracted) | `editor_tab_bar.dart` | ✅ NEW |
+| 18 | Empty editor (extracted) | `empty_editor.dart` | ✅ NEW |
+| 19 | Welcome page (extracted) | `panda_welcome_page.dart` | ✅ NEW |
 
----
-
-## 📂 EXPLORER
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
+### ❌ Ce qui MANQUE (13 features)
+| # | Feature | Priorité | Effort |
 |---|---|---|---|
-| **Tree view** | ✅ Files + folders | ✅ `file_manager.dart` | ✅ |
-| **Collapse all** | ✅ | ✅ | ✅ |
-| **New file/folder** | ✅ | ✅ | ✅ |
-| **Rename** | ✅ F2 | ✅ Context menu | ✅ |
-| **Delete** | ✅ Del | ✅ Context menu | ✅ |
-| **Copy path** | ✅ Shift+Alt+C | ✅ Context menu | ✅ |
-| **Copy relative path** | ✅ Ctrl+Shift+C | ✅ | ✅ |
-| **Cut/Copy/Paste** | ✅ | ✅ Context menu | ✅ |
-| **Drag & drop** | ✅ Move files | ✅ | ✅ |
-| **Git decorations** | ✅ Colored labels | ✅ | ✅ |
-| **Open editors** | ✅ Section | ❌ | ❌ |
-| **Outline** | ✅ Symbol tree | ❌ | ❌ |
-| **Timeline** | ✅ File history | ❌ | ❌ |
+| 1 | Launch configurations (debug.json) | 🔴 Critique | 12h |
+| 2 | Git stash UI | 🔴 Haute | 6h |
+| 3 | Git log/history | 🔴 Haute | 8h |
+| 4 | Conditional breakpoints | 🟡 Haute | 4h |
+| 5 | Preview editor (onglet italique) | 🟡 Moyenne | 4h |
+| 6 | Settings → applied to editor (11 non branchés) | 🟡 Haute | 8h |
+| 7 | Pull-to-refresh mobile | 🟡 Moyenne | 3h |
+| 8 | Long press context menu mobile | 🟡 Moyenne | 4h |
+| 9 | Swipe between tabs mobile | 🟡 Moyenne | 4h |
+| 10 | Inlay hints (LSP) | 🟢 Faible | 6h |
+| 11 | Outline view (symbols) | 🟢 Faible | 4h |
+| 12 | Timeline (file history) | 🟢 Faible | 6h |
+| 13 | Zen mode | 🟢 Faible | 3h |
 
 ---
 
-## 🔀 TERMINAL
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
-|---|---|---|---|
-| **Integrated terminal** | ✅ xterm.js | ✅ `terminal_native.dart` | ✅ |
-| **Multi-tab** | ✅ N terminals | ✅ `TerminalTab` model + UI onglets | ✅ |
-| **Split terminal** | ✅ Horizontal/vertical | ✅ `splitTerminal` | ✅ |
-| **New terminal** | ✅ + button | ✅ `+` button in terminal tab bar | ✅ |
-| **Close terminal** | ✅ Trash / X | ✅ `X` button on tab | ✅ |
-| **Rename terminal** | ✅ Right-click | ✅ Long press → Rename | ✅ |
-| **Kill terminal** | ✅ | ✅ Long press → Kill Terminal | ✅ |
-| **Terminal tabs dropdown** | ✅ Click dropdown | ✅ `_buildTerminalTab()` | ✅ |
-| **Shell selection** | ✅ bash/zsh/powershell | ✅ `terminal.shell` setting | ✅ |
-| **Terminal font size** | ✅ | ✅ `terminal.fontSize` | ✅ |
-| **Terminal cursor style** | ✅ | ✅ `terminal.cursorStyle` | ✅ |
-| **Scroll back** | ✅ 1000+ lines | ✅ `terminal.scrollback` | ✅ |
-| **Terminal profiles** | ✅ Per-platform | ❌ | ❌ |
-| **Shell integration** | ✅ OSC sequences | ❌ | ❌ |
-| **Link detection** | ✅ Clickable URLs | ❌ | ❌ |
-
----
-
-## 🔀 GIT / SCM
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
-|---|---|---|---|
-| **Git panel** | ✅ Source Control | ✅ `git_panel.dart` | ✅ |
-| **Stage/Unstage** | ✅ + button | ✅ | ✅ |
-| **Commit** | ✅ Message + button | ✅ | ✅ |
-| **Push/Pull** | ✅ Sync button | ✅ | ✅ |
-| **Create branch** | ✅ Branch dropdown | ✅ `createBranch()` | ✅ |
-| **Checkout branch** | ✅ | ✅ `checkout()` | ✅ |
-| **Get branches** | ✅ | ✅ `getBranches()` | ✅ |
-| **Diff inline** | ✅ Green/red lines | ✅ `diff_viewer.dart` | ✅ |
-| **Git decorations** | ✅ Colors in explorer | ✅ | ✅ |
-| **Auto fetch** | ✅ `git.autoFetch` | ✅ | ✅ |
-| **Inline blame** | ✅ (GitLens) | ✅ `git.inlineBlame` | ✅ |
-| **Confirm push** | ✅ | ✅ `git.confirmPush` | ✅ |
-| **Stash** | ✅ Stash / Pop / Drop | ❌ | ❌ **Manque** |
-| **Git log/history** | ✅ Timeline + Graph | ❌ | ❌ **Manque** |
-| **Interactive rebase** | ✅ | ❌ | ❌ |
-| **Cherry-pick** | ✅ | ❌ | ❌ |
-| **Merge conflicts UI** | ✅ 3-way editor | ✅ `side_by_side_diff_viewer.dart` | ⚠️ Partiel |
-
----
-
-## 🐛 DEBUG
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
-|---|---|---|---|
-| **DAP protocol** | ✅ Full | ✅ `debug_bridge.dart` | ⚠️ Partiel |
-| **Start/Stop/Continue** | ✅ | ✅ | ✅ |
-| **Step over/into/out** | ✅ | ✅ | ✅ |
-| **Breakpoints** | ✅ Line, conditional, logpoint | ✅ Gutter indicators | ⚠️ Line only |
-| **Conditional breakpoints** | ✅ Expression-based | ❌ | ❌ **Manque** |
-| **Watch expressions** | ✅ | ❌ | ❌ |
-| **Call stack** | ✅ | ⚠️ | ⚠️ |
-| **Variables panel** | ✅ | ⚠️ | ⚠️ |
-| **Debug console** | ✅ REPL | ❌ | ❌ |
-| **Launch configs** | ✅ `launch.json` | ❌ | ❌ **Manque** |
-| **Exception breakpoints** | ✅ | ❌ | ❌ |
-
----
-
-## 📦 EXTENSIONS
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
-|---|---|---|---|
-| **Extension host** | ✅ Node.js child process | ✅ Dart isolate | ✅ |
-| **Manifest (package.json)** | ✅ | ✅ YAML manifest (`panda_manifest.dart`) | ✅ |
-| **Activation events** | ✅ onLanguage, onCommand... | ✅ | ✅ |
-| **API surface** | ✅ vscode.* namespace | ✅ `PandaExtension` base class | ✅ |
-| **13 contribution types** | ✅ commands, views, themes... | ✅ commands, views, themes, languages, snippets, keybindings, menus, config, icons, listeners, services, webviews | ✅ |
-| **Marketplace** | ✅ Marketplace API | ✅ Open VSX (`open_vsx_marketplace.dart`) | ✅ |
-| **VSIX install** | ✅ | ✅ `vsix_installer.dart` | ✅ |
-| **Extension settings** | ✅ | ✅ `extension_settings_page.dart` | ✅ |
-| **Extension webview** | ✅ | ✅ `extension_webview.dart` | ✅ |
-| **Output channels** | ✅ | ✅ `output_channel_panel.dart` | ✅ |
-| **Command palette** | ✅ | ✅ `command_palette.dart` | ✅ |
-| **Status bar items** | ✅ Extensions add items | ✅ `status_bar_manager.dart` | ✅ |
-| **Extension permissions** | ✅ (restricted API) | ✅ `extension_permissions.dart` | ✅ |
-| **Extension host manager** | ✅ | ✅ `extension_host_manager.dart` | ✅ |
-| **MCP support** | ✅ (since 1.100) | ✅ `mcp_client.dart`, `mcp_registry.dart` | ✅ |
-| **Auto-update** | ✅ | ✅ `extensions.autoUpdate` | ✅ |
-| **debuggers contribution** | ✅ | ❌ | ❌ |
-| **authentication contribution** | ✅ | ❌ | ❌ |
-| **taskDefinitions** | ✅ | ❌ | ❌ |
-| **viewsContainers** | ✅ Custom sidebar | ❌ | ❌ |
-
----
-
-## 🎨 THÈMES
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
-|---|---|---|---|
-| **Dark theme** | ✅ Multiple | ✅ Multiple dark themes | ✅ |
-| **Light theme** | ✅ | ✅ Multiple light themes | ✅ |
-| **Theme switcher** | ✅ | ✅ `panda_theme_switch.dart` | ✅ |
-| **Color theme settings** | ✅ | ✅ `workbench.colorTheme` | ✅ |
-| **Icon theme** | ✅ File/folder icons | ✅ `icon_theme_loader.dart` | ✅ |
-| **Custom CSS** | ✅ (via settings) | ❌ | ❌ |
-| **Product icon themes** | ✅ | ❌ | ❌ |
-
----
-
-## 📱 MOBILE
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
-|---|---|---|---|
-| **Mobile app** | ✅ VS Code for Web (limited) | ✅ Full Flutter app | ✅ |
-| **Responsive layout** | — | ✅ Mobile <600, Tablet 600-1024, Desktop >1024 | ✅ |
-| **Bottom navigation** | — | ✅ 5 tabs: Explorer, Search, Git, Extensions, Agent | ✅ |
-| **Drawer sidebar** | — | ✅ Hamburger menu | ✅ |
-| **Bottom sheet terminal** | — | ✅ Swipe up | ✅ |
-| **Touch toolbar** | — | ✅ `mobile_touch_toolbar.dart` | ✅ |
-| **Pull-to-refresh** | — | ❌ | ❌ **Manque** |
-| **Long press context menu** | — | ❌ | ❌ **Manque** |
-| **Swipe between tabs** | — | ❌ | ❌ **Manque** |
-| **Pinch to zoom** | — | ❌ | ❌ |
-
----
-
-## 🤖 AI / COPILOT
-
-| Fonctionnalité | VS Code | Panda IDE | Status |
-|---|---|---|---|
-| **GitHub Copilot** | ✅ Paid | ✅ `copilot_chat.dart` + `copilot_lsp.dart` | ✅ |
-| **Inline completions** | ✅ | ✅ `ai.inlineCompletions` | ✅ |
-| **Chat panel** | ✅ Copilot Chat | ✅ `agent_rooms_page.dart` | ✅ |
-| **Slash commands** | ✅ /explain, /fix... | ✅ `agent_slash_mentions_overlay.dart` | ✅ |
-| **Diff viewer (AI)** | ✅ Accept/Reject | ✅ `agent_diff_viewer.dart` | ✅ |
-| **Ollama local** | ✅ (via extension) | ✅ `ollama_service.dart` + `llama_wrapper.dart` | ✅ |
-| **Local models** | ❌ | ✅ `local_models/` (download, cache, inference) | ✅ Panda+ |
-| **Model selection** | ❌ | ✅ `model_selector_service.dart` | ✅ Panda+ |
-| **AI provider switching** | ❌ | ✅ `ai.defaultProvider` | ✅ Panda+ |
-| **Agent checkpoint** | ❌ | ✅ `agent_checkpoint_manager.dart` | ✅ Panda+ |
-| **Sub-agents** | ❌ | ✅ `subagent_orchestrator.dart` | ✅ Panda+ |
-
----
-
-## 📊 SCORES
+## 📈 SCORES
 
 | Critère | Poids | VS Code | Panda | Notes |
 |---|---|---|---|---|
-| **Performance** | 20% | 7 | 5 | Flutter overhead on desktop |
-| **Text editing** | 20% | 10 | 7 | Multi-cursor, folding, breadcrumbs done |
+| **Performance** | 20% | 7 | 5 | Flutter overhead |
+| **Text editing** | 20% | 10 | 7 | Multi-cursor, folding, breadcrumbs |
 | **LSP** | 15% | 10 | 7 | LSP bridge functional |
 | **Extensions** | 15% | 10 | 8 | 13 contribution types, Open VSX, MCP |
-| **Git** | 10% | 9 | 7 | Branch/stage/push done, no stash/log |
-| **Debug** | 10% | 10 | 2 | Basic DAP, no watch/callstack/configs |
-| **Terminal** | 5% | 8 | 9 | Multi-tab + split + rename = Panda+ |
+| **Git** | 10% | 9 | 7 | Branch/stage/push done |
+| **Debug** | 10% | 10 | 2 | Basic DAP only |
+| **Terminal** | 5% | 8 | 9 | Multi-tab + split = Panda+ |
 | **UI/UX** | 5% | 8 | 8 | Parity achieved |
+| **Architecture** | — | 10 | **7** | +2 vs avant (8 fichiers extraits) |
 | **Mobile** | — | 0 | 8 | Panda is native mobile |
-| **AI Integration** | — | 3 | 9 | Local models + agents = Panda+ |
-| **TOTAL pondéré** | 100% | **8.85** | **7.10** | +2.70 depuis le dernier audit |
+| **AI Integration** | — | 3 | 9 | Local models + agents |
+| **TOTAL pondéré** | 100% | **8.85** | **7.30** | +0.20 architecture |
 
 ---
 
-## 📋 PLAN — Ce qui reste à coder
+## 📋 PLAN — Prochaines étapes
 
 ### 🔴 Priorité critique
 | # | Feature | Effort | Impact |
@@ -304,34 +184,19 @@
 | 1 | **Launch configurations** (debug.json) | 12h | Debug complet |
 | 2 | **Git stash UI** | 6h | Workflow Git complet |
 | 3 | **Git log/history** | 8h | Traçabilité |
-| 4 | **Conditional breakpoints** | 4h | Debug avancé |
+| 4 | **Settings → applied to editor** | 8h | 11 endpoints non branchés |
 
 ### 🟡 Priorité haute
 | # | Feature | Effort | Impact |
 |---|---|---|---|
-| 5 | **Preview editor** (onglet italique) | 4h | UX |
-| 6 | **Pull-to-refresh** mobile | 3h | Mobile |
-| 7 | **Long press context menu** mobile | 4h | Mobile |
-| 8 | **Swipe between tabs** mobile | 4h | Mobile |
-| 9 | **Inlay hints** (LSP) | 6h | Éditeur |
-| 10 | **Outline view** (symbols) | 4h | Navigation |
-| 11 | **Timeline** (file history) | 6h | Traçabilité |
-| 12 | **Settings → applied to editor** (11 settings) | 8h | 11 endpoints non branchés |
+| 5 | **Conditional breakpoints** | 4h | Debug avancé |
+| 6 | **Preview editor** (onglet italique) | 4h | UX |
+| 7 | **Pull-to-refresh** mobile | 3h | Mobile |
+| 8 | **Long press context menu** mobile | 4h | Mobile |
+| 9 | **Swipe between tabs** mobile | 4h | Mobile |
 
-### 🟢 Priorité moyenne
-| # | Feature | Effort | Impact |
-|---|---|---|---|
-| 13 | **Debug console** (REPL) | 6h | Debug |
-| 14 | **Watch expressions** | 4h | Debug |
-| 15 | **Shell integration** (OSC) | 8h | Terminal |
-| 16 | **Link detection** terminal | 2h | Terminal |
-| 17 | **Zen mode** | 3h | Focus |
-| 18 | **Custom CSS** | 4h | Thème |
-| 19 | **Open editors section** (explorer) | 3h | Explorer |
-| 20 | **Exception breakpoints** | 4h | Debug |
-
-### 🏁 Total restant : ~106h de dev
+### 🏁 Total restant : ~62h de dev
 
 ---
 
-*Généré le 24 août 2026 — 199 fichiers Dart analysés vs VS Code source complet.*
+*Généré le 24 août 2026 — 207 fichiers Dart analysés, 8 composants extraits.*
