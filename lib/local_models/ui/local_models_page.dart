@@ -150,7 +150,7 @@ class _LocalModelsPageState extends State<LocalModelsPage> {
           IconButton(
             icon: Icon(Icons.speed, size: 17, color: cs.onSurfaceVariant),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const LruManagerPage(),
+              builder: (_) => LruManagerPage(),
             )),
             tooltip: 'Cache LRU',
             padding: EdgeInsets.zero,
@@ -159,7 +159,7 @@ class _LocalModelsPageState extends State<LocalModelsPage> {
           IconButton(
             icon: Icon(Icons.tune, size: 17, color: cs.onSurfaceVariant),
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => const AdvancedInferenceSettingsPage(),
+              builder: (_) => AdvancedInferenceSettingsPage(),
             )),
             tooltip: 'Paramètres avancés d\'inférence',
             padding: EdgeInsets.zero,

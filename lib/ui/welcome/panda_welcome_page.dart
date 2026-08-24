@@ -233,7 +233,7 @@ class PandaWelcomePage extends StatelessWidget {
                     onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
                             builder: (_) =>
-                                const MarketplacePage())),
+                                MarketplacePage())),
                   ),
                   const SizedBox(height: 10),
                   _WalkthroughCard(

@@ -18,7 +18,6 @@ export 'panels/api_testing.dart';
 // ── Editor sub-components ──
 export 'editor/zen_mode.dart';
 export 'editor/inlay_hints.dart';
-export 'editor/outline_view.dart';
 export 'editor/timeline_view.dart';
 export 'editor/codelens_provider.dart';
 export 'editor/gutter_indicators.dart';
@@ -28,7 +27,6 @@ export 'editor/conditional_breakpoints.dart';
 export 'editor/ghost_text_engine.dart';
 export 'editor/multi_cursor.dart';
 export 'editor/mobile_touch_toolbar.dart';
-export 'editor/symbol_picker.dart';
 export 'editor/side_by_side_diff_viewer.dart';
 export 'editor/global_search_dialog.dart';
 export 'editor/bottom_panel.dart';
@@ -59,7 +57,6 @@ export 'editor/breadcrumbs.dart';
 export 'editor/editor_breadcrumbs.dart';
 export 'editor/code_folding.dart';
 export 'editor/codicon.dart';
-export 'editor/diagnostics_pane.dart';
 
 // ── Navigation pages (additional) ──
 export 'keybindings_manager.dart';
@@ -88,8 +85,6 @@ export 'agent/beui/progress/beui_todo_list.dart';
 export 'agent/beui/response/beui_citations.dart';
 export 'agent/beui/response/beui_image_generation.dart';
 export 'agent/beui/response/beui_streaming_response.dart';
-export 'agent/beui/tools/beui_code_block.dart';
-export 'agent/beui/tools/beui_file_diff.dart';
 export 'agent/beui/tools/beui_tool_result.dart';
 export 'agent/beui/beui_theme.dart';
 
@@ -110,7 +105,6 @@ export '../services/flutter_sdk_service.dart';
 export '../services/package_downloader.dart';
 export '../utils/ollama_service.dart';
 export '../utils/runtime_config.dart';
-export '../utils/proj_temps.dart';
 export '../utils/subagent_runner.dart';
 export '../utils/agent_block.dart';
 export '../utils/agent_checkpoint_service.dart';
@@ -125,9 +119,7 @@ export '../extensions/extension_host_isolate.dart';
 export '../extensions/lsp_bridge.dart';
 export '../extensions/open_vsx_marketplace.dart';
 export '../extensions/ui/extension_host_status_page.dart';
-export '../extensions/ui/launch_config_page.dart';
 export '../extensions/permission_dialog.dart';
-export '../extensions/plugin_manager.dart';
 
 // ── Gateway ──
 export '../gateway/panda_remote_gateway.dart';

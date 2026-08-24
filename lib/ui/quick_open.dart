@@ -58,6 +58,16 @@ class QuickOpen extends StatefulWidget {
   State<QuickOpen> createState() => _QuickOpenState();
 }
 
+class _QuickOpenState extends State<QuickOpen> {
+  @override
+  Widget build(BuildContext context) {
+    return _QuickOpenSheet(
+      workspaceRoot: widget.workspaceRoot,
+      onOpen: widget.onOpen,
+    );
+  }
+}
+
 class _QuickOpenSheet extends StatefulWidget {
   final String workspaceRoot;
   final void Function(String filePath) onOpen;

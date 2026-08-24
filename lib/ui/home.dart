@@ -8,7 +8,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle, LogicalKeyboardKey, SingleActivator;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';

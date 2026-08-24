@@ -393,7 +393,7 @@ class _GitPanelState extends State<GitPanel> {
 
   Future<void> _stashDrop(int index) async {
     try {
-      await gitStashDrop(widget.workspacePath, ref: 'stash@{$index}');
+      await gitStashDrop(widget.workspacePath, stashRef: 'stash@{$index}');
       _showSnack('Stash dropped');
       await _loadStash();
     } catch (e) {
@@ -433,7 +433,7 @@ class _GitPanelState extends State<GitPanel> {
       appBar: AppBar(
         title: Row(
           children: [
-            const Icon(Icons.git_branch, size: 18),
+            const Icon(Icons.account_tree, size: 18),
             const SizedBox(width: 8),
             Text(_currentBranch ?? 'No branch', style: const TextStyle(fontSize: 14)),
           ],
@@ -450,7 +450,7 @@ class _GitPanelState extends State<GitPanel> {
             onPressed: _stash,
           ),
           IconButton(
-            icon: const Icon(Icons.pull, size: 18),
+            icon: const Icon(Icons.arrow_downward, size: 18),
             tooltip: 'Pull',
             onPressed: _pull,
           ),
