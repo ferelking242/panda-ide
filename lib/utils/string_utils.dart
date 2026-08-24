@@ -23,6 +23,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 import '../terminal/terminal.dart';
 import '../utils/constants.dart';
+import '../utils/extractors.dart';
 import '../utils/languages.dart';
 
 // String extensions for Panda IDE

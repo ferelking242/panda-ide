@@ -5,8 +5,7 @@ import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:ui' show ImageFilter;
 import 'dart:io';
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle;
 import 'package:flutter_bloc/flutter_bloc.dart';

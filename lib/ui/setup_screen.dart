@@ -10,7 +10,7 @@ import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import 'home.dart';
 import '../terminal/panda_bridge.dart';
-
+import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 

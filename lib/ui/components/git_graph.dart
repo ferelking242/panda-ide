@@ -392,5 +392,3 @@ Widget copyArea(
     ]
   ),
 );
-
-class GgufDownloadManager extends StatefulWidget {

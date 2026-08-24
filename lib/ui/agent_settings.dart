@@ -38,6 +38,8 @@ part 'agent/agent_settings_widgets.dart';
 const _kAccent  = Color(0xff6366f1);
 const _kDanger  = Color(0xffe05252);
 const _kSuccess = Color(0xff4caf7d);
+const _kChipBg  = Color(0xff252535);
+const _kChatBg   = Color(0xff0f0f1a);
 
 // Agent settings main page
 // Extracted from agent_settings.dart

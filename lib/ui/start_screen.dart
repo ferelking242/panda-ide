@@ -7,7 +7,7 @@ import '../ui/home.dart';
 import '../ui/permission_screen.dart';
 import '../ui/splash_screen.dart';
 import 'setup_screen.dart';
-
+import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 

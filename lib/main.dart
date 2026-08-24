@@ -17,7 +17,7 @@ import 'utils/functions.dart';
 import 'utils/settings_service.dart';
 import 'utils/themes.dart';
 import 'logging/logging.dart';
-
+import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 Future<void> main() async {

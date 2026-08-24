@@ -29,7 +29,7 @@ import '../editors/edit_hunks.dart';
 // SSH utilities: login, key management, keygen
 // Extracted from functions.dart
 
-class SSHInfo {
+abstract class SSHInfo {
   final String url, name;
   final int id;
 
