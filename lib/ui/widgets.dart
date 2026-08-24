@@ -23,7 +23,7 @@ export 'editor/timeline_view.dart';
 export 'editor/codelens_provider.dart';
 export 'editor/gutter_indicators.dart';
 export 'editor/editor_decorations.dart';
-export 'editor/tab_groups.dart';
+export 'editor/tab_groups.dart' hide EditorTabBar;
 export 'editor/conditional_breakpoints.dart';
 export 'editor/ghost_text_engine.dart';
 export 'editor/multi_cursor.dart';
@@ -35,7 +35,7 @@ export 'editor/bottom_panel.dart';
 export 'editor/editor_tab_bar.dart';
 export 'editor/empty_editor.dart';
 export 'editor/preview_panes.dart';
-export 'editor/diagnostics_panel.dart';
+export 'editor/diagnostics_panel.dart' hide DiagnosticSeverity;
 
 // ── Navigation pages ──
 export 'quick_open.dart';
@@ -124,7 +124,6 @@ export '../utils/agent_settings_service.dart';
 export '../extensions/extension_host_isolate.dart';
 export '../extensions/lsp_bridge.dart';
 export '../extensions/open_vsx_marketplace.dart';
-export '../extensions/ui/command_palette_v2.dart';
 export '../extensions/ui/extension_host_status_page.dart';
 export '../extensions/ui/launch_config_page.dart';
 export '../extensions/permission_dialog.dart';
@@ -141,7 +140,6 @@ export '../indexing/semantic_workspace_indexer.dart';
 export '../local_models/services/model_notification_service.dart';
 export '../local_models/services/model_selector_service.dart';
 export '../local_models/ui/advanced_inference_settings_page.dart';
-export '../local_models/ui/local_models_page_web.dart';
 export '../local_models/ui/lru_manager_page.dart';
 
 // ── MCP ──
@@ -149,7 +147,5 @@ export '../mcp/mcp_registry.dart';
 export '../mcp/mcp_tool_catalog.dart';
 
 // ── Terminal (additional) ──
-export '../terminal/terminal_keyboard_menu.dart';
 
 // ── Web stub ──
-export '../web/io_stub.dart';

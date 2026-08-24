@@ -1328,19 +1328,28 @@ class _SelectTypeState extends State<SelectType>
             child: CallbackShortcuts(
             bindings: <ShortcutActivator, VoidCallback>{
               // Ctrl+P → Quick Open
-              const SingleActivator(LogicalKeyboardKey.keyP, control: true): () {
-                showDialog(context: context, builder: (_) => const QuickOpen());
+              SingleActivator(LogicalKeyboardKey.keyP, control: true): () {
+                final ws = _currentWorkspaceDir ?? _activeProjectDir() ?? '/';
+                showDialog(context: context, builder: (_) => QuickOpen(
+                  workspaceRoot: ws,
+                  onOpen: (path) {},
+                ));
               },
               // Ctrl+Shift+F → Global Search
-              const SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): () {
-                _push(context, const GlobalSearch());
+              SingleActivator(LogicalKeyboardKey.keyF, control: true, shift: true): () {
+                final ws = _currentWorkspaceDir ?? _activeProjectDir() ?? '/';
+                _push(context, GlobalSearch(
+                  workspaceRoot: ws,
+                  onJumpTo: (path, line) {},
+                ));
               },
               // Ctrl+Shift+G → Git Panel
-              const SingleActivator(LogicalKeyboardKey.keyG, control: true, shift: true): () {
-                _push(context, const GitPanel());
+              SingleActivator(LogicalKeyboardKey.keyG, control: true, shift: true): () {
+                final ws = _currentWorkspaceDir ?? _activeProjectDir() ?? '/';
+                _push(context, GitPanel(workspacePath: ws));
               },
               // Ctrl+K → Keybindings
-              const SingleActivator(LogicalKeyboardKey.keyK, control: true): () {
+              SingleActivator(LogicalKeyboardKey.keyK, control: true): () {
                 _push(context, const KeybindingsPage());
               },
             },

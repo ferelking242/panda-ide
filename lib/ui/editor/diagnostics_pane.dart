@@ -424,6 +424,3 @@ import '../widgets.dart';
 
     return true;
   }
-
-
-  Widget _buildRunPanel(

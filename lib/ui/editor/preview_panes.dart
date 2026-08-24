@@ -63,6 +63,8 @@ import '../widgets.dart';
   }
 
   Widget _buildPreviewPane(ActiveEditor editor, AppTheme appTheme) {
+    return _PdfPreviewPane(filePath: editor.file.path, appTheme: appTheme);
+  }
 
 class _PdfPreviewPane extends StatefulWidget {
   final String filePath;

@@ -51,8 +51,8 @@ class FlutterSdkService {
   FlutterSdkService._();
   static final FlutterSdkService instance = FlutterSdkService._();
 
-  static const _flutterBin = '$runtimesDir/flutter/bin/flutter';
-  static const _dartBin    = '$runtimesDir/flutter/bin/dart';
+  static final _flutterBin = '$runtimesDir/flutter/bin/flutter';
+  static final _dartBin    = '$runtimesDir/flutter/bin/dart';
 
   // ── Installation state ────────────────────────────────────────────────────
 
