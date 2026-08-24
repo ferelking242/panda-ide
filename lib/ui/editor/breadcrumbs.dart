@@ -2,9 +2,10 @@
 ///
 /// Shows: folder > folder > file > class > method hierarchy
 /// Each segment is clickable for navigation.
+import 'package:flutter/material.dart';
+
 library;
 
-import 'package:flutter/material.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // Breadcrumb Segment
