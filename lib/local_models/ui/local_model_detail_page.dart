@@ -2,8 +2,6 @@
 ///
 /// Affiche specs, compatibilité, quantizations, et lance le téléchargement.
 /// Phase 3 : bouton "Utiliser dans Panda AI" + config d'inférence auto.
-library;
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/ai_model_entry.dart';
@@ -11,6 +9,9 @@ import '../models/device_profile.dart';
 import '../services/model_download_manager.dart';
 import '../services/inference_config_service.dart';
 import '../services/model_activation_service.dart';
+
+library;
+
 
 class LocalModelDetailPage extends StatefulWidget {
   final AiModelEntry  model;
