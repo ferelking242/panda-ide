@@ -8,10 +8,11 @@
 ///   if (ok) {
 ///     final result = await ShizukuService.instance.exec('pm install -r /path/to.apk');
 ///   }
-library;
-
 import 'dart:async';
 import 'package:flutter/services.dart';
+
+library;
+
 
 class ShizukuExecResult {
   final int exitCode;
