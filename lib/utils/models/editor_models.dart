@@ -21,9 +21,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
-import '../terminal/terminal.dart';
-import '../utils/constants.dart';
-import '../utils/languages.dart';
+import '../../terminal/terminal.dart';
+import '../constants.dart';
+import '../languages.dart';
 
 // Core models: ActiveEditor, CodeForgeDemoKey, AIConversation, etc.
 // Extracted from functions.dart
