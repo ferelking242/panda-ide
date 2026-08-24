@@ -1,14 +1,15 @@
 /// Registre des extensions installées.
 /// Persiste via SharedPreferences, gère l'état enable/disable.
-library;
-
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'models/extension_manifest.dart';
+
+library;
+
+
+
 
 enum ExtensionState { enabled, disabled, installing, error }
 
