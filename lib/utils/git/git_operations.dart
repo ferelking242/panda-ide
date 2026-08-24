@@ -646,9 +646,9 @@ Future<void> gitStash(String workspacePath, {String message = ''}) async {
 
 Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
-  await Process.run(
+  return await Process.run(
     "$binDir/git",
-    ['stash', 'pop'],
+    ['stash', 'pop'] + (stashRef != null ? [stashRef] : []),
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );

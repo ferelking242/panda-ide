@@ -1,4 +1,4 @@
-part of '../../agent_settings.dart';
+part of 'package:panda/ui/agent_settings.dart';
 
 
 

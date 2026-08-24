@@ -509,5 +509,3 @@ class APITesting extends StatelessWidget {
 }
 
 
-
-class AIChat extends StatefulWidget {
