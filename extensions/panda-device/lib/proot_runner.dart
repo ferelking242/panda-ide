@@ -12,7 +12,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import '../../../utils/alpine_setup.dart';
+import '../../../utils/debian_setup.dart';
 import '../../../utils/panda_log.dart';
 
 class ProcResult {
@@ -29,17 +29,17 @@ class ProotRunner {
     void Function(String line)? onLine,
     Duration timeout = const Duration(minutes: 30),
   }) async {
-    if (!AlpineSetup.isRootfsComplete()) {
+    if (!DebianSetup.isRootfsComplete()) {
       return const ProcResult(-1, "Alpine Linux n'est pas encore configuré");
     }
-    final prootBin = await AlpineSetup.locateProotBinary(AlpineSetup.alpineDir);
+    final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
     if (prootBin == null) return const ProcResult(-1, 'PRoot introuvable');
 
     final prootArgs = <String>[
       '-0',
       '--link2symlink',
       '--kill-on-exit',
-      '--rootfs=${AlpineSetup.alpineDir}',
+      '--rootfs=${DebianSetup.debianDir}',
       '-b', '/dev',
       '-b', '/proc',
       '-b', '/sys',
@@ -49,7 +49,7 @@ class ProotRunner {
       shellCmd,
     ];
 
-    final env = await AlpineSetup.prootSessionEnvironment();
+    final env = await DebianSetup.prootSessionEnvironment();
     final lines = <String>[];
     try {
       final process = await Process.start(prootBin, prootArgs).timeout(timeout);

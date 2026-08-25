@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import '../bloc/ui_bloc/ui_bloc.dart';
-import '../utils/alpine_setup.dart';
+import '../utils/debian_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
@@ -621,16 +621,16 @@ class PackageDownloader {
   //
   static Future<void> _setupAlpineProot() async {
     try {
-      await AlpineSetup.ensureAlpineRootfs();
-      await AlpineSetup.ensureAlpineRuntimeFiles();
+      await DebianSetup.ensureDebianRootfs();
+      await DebianSetup.ensureDebianRuntimeFiles();
 
-      final prootBin = await AlpineSetup.locateProotBinary(AlpineSetup.alpineDir);
+      final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
       debugPrint(
-        'Alpine proot setup complete — rootfs at ${AlpineSetup.alpineDir}, '
+        'Debian proot setup complete — rootfs at ${DebianSetup.debianDir}, '
         'proot at ${prootBin ?? "introuvable"}',
       );
     } catch (e) {
-      debugPrint('Alpine proot setup error: $e');
+      debugPrint('Debian proot setup error: $e');
     }
   }
 

@@ -7,7 +7,7 @@ import 'package:code_forge/code_forge.dart';
 import 'package:diff_match_patch/diff_match_patch.dart';
 import 'package:flutter/material.dart';
 
-import 'alpine_setup.dart';
+import 'debian_setup.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:html/dom.dart' as dom;
@@ -1110,7 +1110,7 @@ class AgenticTools {
 
   /// Exécute [script] dans l'environnement Alpine de l'agent en utilisant
   /// EXACTEMENT la même recette proot que le terminal interactif (binaire
-  /// localisé via AlpineSetup, loader embarqué, PROOT_TMP_DIR, binds
+  /// localisé via DebianSetup, loader embarqué, PROOT_TMP_DIR, binds
   /// conditionnels, kill-on-exit). C'était la cause des timeouts : l'agent
   /// lançait un vieux binaire $binDir/proot sans loader ni binds.
   Future<ProcessResult> _runGuestShell(
@@ -1119,13 +1119,13 @@ class AgenticTools {
     required Duration timeout,
     required String timeoutLabel,
   }) async {
-    final rootfsDir = AlpineSetup.alpineDir;
+    final rootfsDir = DebianSetup.debianDir;
 
-    if (AlpineSetup.isRootfsComplete()) {
+    if (DebianSetup.isRootfsComplete()) {
       try {
-        await AlpineSetup.ensureAlpineRuntimeFiles();
+        await DebianSetup.ensureDebianRuntimeFiles();
       } catch (_) {}
-      final prootBin = await AlpineSetup.locateProotBinary(rootfsDir);
+      final prootBin = await DebianSetup.locateProotBinary(rootfsDir);
       if (prootBin != null) {
         final prootArgs = <String>[
           '-0',
@@ -1161,9 +1161,9 @@ class AgenticTools {
 
         // Le workspace hôte est monté au point stable /root/workspace.
         final ws = workspacePath.trim();
-        final wsReadable = ws.isNotEmpty && AlpineSetup.isDirAccessible(ws);
-        if (wsReadable) addBind(ws, AlpineSetup.workspaceMount);
-        final guestCwd = wsReadable ? AlpineSetup.workspaceMount : '/root';
+        final wsReadable = ws.isNotEmpty && DebianSetup.isDirAccessible(ws);
+        if (wsReadable) addBind(ws, DebianSetup.workspaceMount);
+        final guestCwd = wsReadable ? DebianSetup.workspaceMount : '/root';
 
         // PATH invité d'abord (outils musl), fallback binaires hôtes ensuite.
         // Les extras ne doivent pas écraser le PATH invité : les paquets
@@ -1171,7 +1171,7 @@ class AgenticTools {
         // prioritaires sur les binaires hôtes embarqués.
         final hostExtras = Map<String, String>.from(envs)..remove('PATH');
         final env =
-            await AlpineSetup.prootSessionEnvironment(extra: hostExtras);
+            await DebianSetup.prootSessionEnvironment(extra: hostExtras);
 
         // Un git installé par l'utilisateur (apk add git) doit être utilisé
         // en entier : on retire l'override GIT_EXEC_PATH qui pointerait sur

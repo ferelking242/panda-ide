@@ -14,7 +14,7 @@ import '../ui/notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
-import '../utils/alpine_setup.dart';
+import '../utils/debian_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
@@ -679,7 +679,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Future<void> _ensureSharedAdbServer(String prootBin, String rootfsDir) async {
     if (_sharedAdbHost != null) return;
     try {
-      final sessionEnv = await AlpineSetup.prootSessionEnvironment();
+      final sessionEnv = await DebianSetup.prootSessionEnvironment();
       // Endpoint mémorisé par l'extension Panda Device (IP:port de debug)
       String endpoint = '';
       try {
@@ -717,10 +717,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
   // ── PRoot + Alpine session ─────────────────────────────────────────────────
 
   Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
-    final rootfsDir = AlpineSetup.alpineDir;
+    final rootfsDir = DebianSetup.debianDir;
     final sw = Stopwatch()..start();
 
-    if (!AlpineSetup.isRootfsComplete()) {
+    if (!DebianSetup.isRootfsComplete()) {
       // Alpine should have been extracted during SettingUpScreen.
       // If we're here, the extraction failed or was skipped.
       PandaLog.e('Terminal', 'Alpine rootfs incomplete — cannot start PRoot session');
@@ -733,13 +733,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
       return;
     }
     PandaLog.d('Terminal', 'Alpine rootfs verified complete');
-    await AlpineSetup.ensureAlpineRuntimeFiles();
+    await DebianSetup.ensureDebianRuntimeFiles();
 
     PandaLog.i('Terminal', 'Locating PRoot binary in rootfs=$rootfsDir');
-    final prootBin = await AlpineSetup.locateProotBinary(rootfsDir);
+    final prootBin = await DebianSetup.locateProotBinary(rootfsDir);
     if (prootBin == null) {
       PandaLog.e('Terminal', 'PRoot binary not found or incompatible (nativeLibDir checked)');
-      final nativeLib = await AlpineSetup.nativeLibDir();
+      final nativeLib = await DebianSetup.nativeLibDir();
       PandaLog.e('Terminal', 'nativeLibDir=$nativeLib, prootExists=${File("$nativeLib/libproot.so").existsSync()}');
       runtime.terminal.write('\r\n\x1b[31m[PRoot introuvable ou incompatible]\x1b[0m\r\n');
       runtime.terminal.write('\x1b[31m  Le binaire libproot.so est introuvable ou ne fonctionne pas.\x1b[0m\r\n');
@@ -751,7 +751,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       return;
     }
     PandaLog.i('Terminal', 'PRoot binary found: $prootBin');
-    final loaderPath = await AlpineSetup.prootLoaderPath();
+    final loaderPath = await DebianSetup.prootLoaderPath();
     if (loaderPath == null) {
       PandaLog.w('Terminal', 'PRoot loader (libproot-loader.so) not found');
       runtime.terminal.write('\r\n\x1b[33m[Avertissement: loader PRoot (libproot-loader.so) absent du dossier de libs natives.]\x1b[0m\r\n');
@@ -768,7 +768,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     // Termux behaviour: no project open -> silent session in ~ (/root).
     // The project (when any) is bind-mounted at /root/workspace.
     final projectReadable = widget.projectDir.trim().isNotEmpty &&
-        AlpineSetup.isDirAccessible(widget.projectDir);
+        DebianSetup.isDirAccessible(widget.projectDir);
 
     try {
       final prootArgs = <String>[
@@ -814,7 +814,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       // Point de montage stable du projet : evite les chemins Android
       // exotiques et donne un cwd previsible dans l'invite.
       if (projectReadable) {
-        addConditionalBind(widget.projectDir, AlpineSetup.workspaceMount);
+        addConditionalBind(widget.projectDir, DebianSetup.workspaceMount);
       }
 
       prootArgs.addAll([
@@ -827,7 +827,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       // LD_LIBRARY_PATH doit pointer vers le dossier des libs natives de
       // l'APK : PRoot y trouve libtalloc.so / libandroid-shmem.so, et
       // PROOT_LOADER designe le loader embarque (libproot-loader.so).
-      final sessionEnv = await AlpineSetup.prootSessionEnvironment();
+      final sessionEnv = await DebianSetup.prootSessionEnvironment();
       PandaLog.i('Terminal', 'Starting PRoot PTY', body: 'bin=$prootBin args=${prootArgs.length} env=${sessionEnv.keys.join(',')}');
 
       final process = Pty.start(

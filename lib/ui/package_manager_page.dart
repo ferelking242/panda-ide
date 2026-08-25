@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:panda/utils/apk_service.dart';
-import 'package:panda/utils/alpine_setup.dart';
+import 'package:panda/utils/debian_setup.dart';
 
 /// Visual apk package manager for the embedded Alpine Linux environment.
 /// Real backend: every action runs `apk` through PRoot (ApkService).
@@ -46,7 +46,7 @@ class _PackageManagerPageState extends State<PackageManagerPage> {
   Future<void> _autoUpdateReposIfNeeded() async {
     if (_autoUpdatedThisSession) return;
     _autoUpdatedThisSession = true;
-    if (!AlpineSetup.isRootfsComplete()) return;
+    if (!DebianSetup.isRootfsComplete()) return;
     unawaited(ApkService.updateRepos().catchError((_) {}));
   }
 
@@ -157,7 +157,7 @@ class _PackageManagerPageState extends State<PackageManagerPage> {
     required String title,
     required Future<ApkResult> Function(void Function(String)) task,
   }) async {
-    if (!AlpineSetup.isRootfsComplete()) {
+    if (!DebianSetup.isRootfsComplete()) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('Alpine Linux n\'est pas encore initialisé'),
       ));

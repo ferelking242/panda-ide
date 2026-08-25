@@ -14,7 +14,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../utils/alpine_setup.dart';
+import '../utils/debian_setup.dart';
 import '../utils/apk_service.dart';
 import '../utils/constants.dart';
 import 'shizuku_service.dart';
@@ -58,7 +58,7 @@ class FlutterDeviceService extends ChangeNotifier {
     List<String> extraBinds = const [],
     String workingDir = '/root',
   }) async {
-    final prootBin = await AlpineSetup.locateProotBinary(AlpineSetup.alpineDir);
+    final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
     if (prootBin == null) {
       throw StateError('PRoot introuvable');
     }
@@ -67,7 +67,7 @@ class FlutterDeviceService extends ChangeNotifier {
       '-0',
       '--link2symlink',
       '--kill-on-exit',
-      '--rootfs=${AlpineSetup.alpineDir}',
+      '--rootfs=${DebianSetup.debianDir}',
       '-b', '/dev',
       '-b', '/proc',
       '-b', '/sys',
@@ -78,7 +78,7 @@ class FlutterDeviceService extends ChangeNotifier {
       command.join(' '),
     ];
 
-    final env = await AlpineSetup.prootSessionEnvironment();
+    final env = await DebianSetup.prootSessionEnvironment();
     // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK
         // pour trouver libtalloc.so (sinon CANNOT LINK EXECUTABLE).;
     env.addAll(extraEnv);

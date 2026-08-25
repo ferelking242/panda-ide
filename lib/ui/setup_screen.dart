@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../utils/alpine_setup.dart';
+import '../utils/debian_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
@@ -80,7 +80,7 @@ class _SetupScreenState extends State<SetupScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    _isFirstInstall = !AlpineSetup.isRootfsComplete();
+    _isFirstInstall = !DebianSetup.isRootfsComplete();
     _initSteps();
     // Defer setup to after first frame so setState triggers rebuilds
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -225,11 +225,11 @@ class _SetupScreenState extends State<SetupScreen>
         } catch (e) {
           _addLog('⚠️ Alpine error: $e');
         }
-        if (AlpineSetup.isRootfsComplete()) {
+        if (DebianSetup.isRootfsComplete()) {
           _setStepState(si, completed: true);
           _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
         } else {
-          _setStepState(si, failed: true, error: AlpineSetup.lastError.isNotEmpty ? AlpineSetup.lastError : 'Extraction failed');
+          _setStepState(si, failed: true, error: DebianSetup.lastError.isNotEmpty ? DebianSetup.lastError : 'Extraction failed');
           _addLog('⚠️ Alpine extraction failed but setup will continue');
         }
         si++;
@@ -311,10 +311,10 @@ class _SetupScreenState extends State<SetupScreen>
   }
 
   Future<void> _setupAlpine(Stopwatch sw) async {
-    final alpineDir = Directory('${runtimesDir}/alpine-linux');
-    final marker = File('${alpineDir.path}/.panda-rootfs-version');
+    final debianDir = Directory('${runtimesDir}/alpine-linux');
+    final marker = File('${debianDir.path}/.panda-rootfs-version');
 
-    if (AlpineSetup.isRootfsComplete() && await marker.exists()) {
+    if (DebianSetup.isRootfsComplete() && await marker.exists()) {
       _addLog('Alpine rootfs already extracted, skipping');
       return;
     }
@@ -337,7 +337,7 @@ class _SetupScreenState extends State<SetupScreen>
     for (int attempt = 1; attempt <= 2; attempt++) {
       if (attempt > 1) _addLog('Retry attempt $attempt/2...');
 
-      result = await AlpineSetup.ensureAlpineRootfs(
+      result = await DebianSetup.ensureDebianRootfs(
         force: !await marker.exists() && attempt == 1,
       ).timeout(
         const Duration(seconds: 90),
@@ -350,7 +350,7 @@ class _SetupScreenState extends State<SetupScreen>
 
       if (result) break;
 
-      _addLog('⚠️ Attempt $attempt failed: ${AlpineSetup.lastError}');
+      _addLog('⚠️ Attempt $attempt failed: ${DebianSetup.lastError}');
       if (attempt < 2) {
         _addLog('Waiting 2s before retry...');
         await Future.delayed(const Duration(seconds: 2));
@@ -358,7 +358,7 @@ class _SetupScreenState extends State<SetupScreen>
     }
 
     if (!result) {
-      _addLog('❌ Alpine extraction failed: ${AlpineSetup.lastError}');
+      _addLog('❌ Alpine extraction failed: ${DebianSetup.lastError}');
       _addLog('Terminal may be degraded without Alpine');
     } else {
       _addLog('Alpine rootfs extracted and validated');
@@ -469,10 +469,10 @@ class _SetupScreenState extends State<SetupScreen>
     await _refreshDartRuntimeSymlinks(sharedPath);
 
     // ── Alpine runtime files ──
-    final alpineDir = '${runtimesDir}/alpine-linux';
-    if (await Directory(alpineDir).exists()) {
+    final debianDir = '${runtimesDir}/alpine-linux';
+    if (await Directory(debianDir).exists()) {
       try {
-        await AlpineSetup.ensureAlpineRuntimeFiles();
+        await DebianSetup.ensureDebianRuntimeFiles();
         _addLog('Alpine runtime files ready');
       } catch (e) {
         try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Alpine runtime files error: $e'); } catch (_) {} }); } catch (_) {}
@@ -480,7 +480,7 @@ class _SetupScreenState extends State<SetupScreen>
 
       // Inject Panda tools into Alpine local bin
       _addLog('Injecting Panda tools into Alpine...');
-      final localBinDir = Directory('$alpineDir/usr/local/bin');
+      final localBinDir = Directory('$debianDir/usr/local/bin');
       if (!await localBinDir.exists()) localBinDir.createSync(recursive: true);
 
       // Panda CLI bridge

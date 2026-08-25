@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:panda/utils/alpine_setup.dart';
+import 'package:panda/utils/debian_setup.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/panda_log.dart';
 
@@ -57,15 +57,15 @@ class ApkService {
     List<String> args, {
     void Function(String line)? onLine,
   }) async {
-    if (!AlpineSetup.isRootfsComplete()) {
+    if (!DebianSetup.isRootfsComplete()) {
       return const ApkResult(-1, ['Alpine Linux n\'est pas encore configuré']);
     }
-    final prootBin = await AlpineSetup.locateProotBinary(AlpineSetup.alpineDir);
+    final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
     if (prootBin == null) {
       return const ApkResult(-1, ['PRoot introuvable']);
     }
 
-    final rootfsDir = AlpineSetup.alpineDir;
+    final rootfsDir = DebianSetup.debianDir;
     final prootArgs = <String>[
       '-0',
       '--link2symlink',
@@ -79,7 +79,7 @@ class ApkService {
       ...args,
     ];
 
-    final env = await AlpineSetup.prootSessionEnvironment();
+    final env = await DebianSetup.prootSessionEnvironment();
     // No LD_PRELOAD-style leakage into guest: profile unsets it, but apk runs
     // non-login here so drop it explicitly for cleanliness.
     // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK
@@ -169,7 +169,7 @@ class ApkService {
   /// vides, champ nom = ligne `P:<name>`.
   static Future<List<String>> listInstalled() async {
     try {
-      final db = File('\${AlpineSetup.alpineDir}/lib/apk/db/installed');
+      final db = File('\${DebianSetup.debianDir}/lib/apk/db/installed');
       if (!await db.exists()) return [];
       final names = <String>[];
       await for (final line in db
