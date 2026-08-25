@@ -358,11 +358,11 @@ class _SetupScreenState extends State<SetupScreen>
     final marker = File('${debianDir.path}/.panda-rootfs-version');
 
     if (DebianSetup.isRootfsComplete() && await marker.exists()) {
-      _addLog('Alpine rootfs already extracted, skipping');
+      _addLog('Rootfs already extracted, skipping');
       return;
     }
 
-    _addLog('Preparing Alpine rootfs (downloaded at runtime)...');
+    _addLog('Preparing rootfs (downloaded at runtime)...');
     _addLog('Rootfs is managed by RootfsManager — no bundled asset needed.');
 
     // Retry logic: try up to 2 times
@@ -375,8 +375,8 @@ class _SetupScreenState extends State<SetupScreen>
       ).timeout(
         const Duration(seconds: 90),
         onTimeout: () {
-          _addLog('⚠️ Alpine extraction timed out after 90s');
-          try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Alpine extraction timeout'); } catch (_) {} }); } catch (_) {}
+          _addLog('⚠️ Rootfs extraction timed out after 90s');
+          try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Rootfs extraction timeout'); } catch (_) {} }); } catch (_) {}
           return false;
         },
       );
@@ -391,10 +391,10 @@ class _SetupScreenState extends State<SetupScreen>
     }
 
     if (!result) {
-      _addLog('❌ Alpine extraction failed: ${DebianSetup.lastError}');
+      _addLog('❌ Rootfs extraction failed: ${DebianSetup.lastError}');
       _addLog('Terminal may be degraded without Alpine');
     } else {
-      _addLog('Alpine rootfs extracted and validated');
+      _addLog('Rootfs extracted and validated');
     }
   }
 
@@ -508,7 +508,7 @@ class _SetupScreenState extends State<SetupScreen>
         await DebianSetup.ensureDebianRuntimeFiles();
         _addLog('Alpine runtime files ready');
       } catch (e) {
-        try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Alpine runtime files error: $e'); } catch (_) {} }); } catch (_) {}
+        try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Runtime files error: $e'); } catch (_) {} }); } catch (_) {}
       }
 
       // Inject Panda tools into Alpine local bin
