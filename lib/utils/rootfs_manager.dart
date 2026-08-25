@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:io' as io;
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -262,7 +261,7 @@ class RootfsManager {
   /// Extract tar.gz archive to destination.
   static Future<void> _extractTarball(File archive, Directory dest) async {
     final bytes = await archive.readAsBytes();
-    final tarBytes = gzip.decode(bytes);
+    final tarBytes = GZipDecoder().decodeBytes(bytes);
     final tarArchive = TarDecoder().decodeBytes(tarBytes);
 
     final symlinks = <ArchiveFile>[];
@@ -278,7 +277,7 @@ class RootfsManager {
       }
 
       if (file.isFile) {
-        final outFile = io.File(destPath);
+        final outFile = File(destPath);
         await outFile.parent.create(recursive: true);
         final content = file.content;
         if (content is List<int>) {
