@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/debian_setup.dart';
 import '../utils/rootfs_manager.dart';
+import 'terminal_choice_screen.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
@@ -218,9 +219,41 @@ class _SetupScreenState extends State<SetupScreen>
       if (_isFirstInstall) {
         _addLog('Step ${si + 1}/${_steps.length}: Choose Terminal...');
         _setStepState(si, active: true);
-        _setStepState(si, completed: true);
-        _addLog('Terminal chosen (${sw.elapsedMilliseconds}ms)');
-        si++;
+        // Check if a terminal was already chosen before
+        final existingTerminal = await RootfsManager.getActiveTerminal();
+        final existingInstalled = await RootfsManager.isInstalled(existingTerminal);
+        if (existingInstalled) {
+          _addLog('Terminal already set: ${existingTerminal.displayName}');
+          _setStepState(si, completed: true);
+          si++;
+        } else {
+          // Show terminal picker and wait for user choice
+          final completer = Completer<TerminalType?>();
+          if (mounted) {
+            Navigator.push(context, MaterialPageRoute(
+              builder: (_) => TerminalChoiceScreen(
+                isFromSettings: false,
+                onTerminalSelected: (type) {
+                  if (!completer.isCompleted) completer.complete(type);
+                },
+              ),
+            )).then((_) {
+              // Also complete if user pops without choosing
+              if (!completer.isCompleted) completer.complete(null);
+            });
+          }
+          final chosen = await completer.future;
+          if (chosen != null) {
+            _addLog('Terminal chosen: ${chosen.displayName}');
+            _setStepState(si, completed: true);
+          } else {
+            // Default to debian if user backed out
+            await RootfsManager.setActiveTerminal(TerminalType.debian);
+            _addLog('Default terminal: Debian');
+            _setStepState(si, completed: true);
+          }
+          si++;
+        }
       }
 
       // Step: Download Rootfs (first install only)
