@@ -58,7 +58,7 @@ class ApkService {
     void Function(String line)? onLine,
   }) async {
     if (!DebianSetup.isRootfsComplete()) {
-      return const ApkResult(-1, ['Alpine Linux n\'est pas encore configuré']);
+      return const ApkResult(-1, ['Linux n\'est pas encore configuré']);
     }
     final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
     if (prootBin == null) {
