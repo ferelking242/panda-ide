@@ -328,18 +328,8 @@ class _SetupScreenState extends State<SetupScreen>
       return;
     }
 
-    _addLog('Extracting alpine-rootfs.tar.gz...');
-    _addLog('This may take a moment on first install...');
-
-    // Check archive size
-    try {
-      final asset = await rootBundle.load('assets/runtimes/alpine-rootfs.tar.gz');
-      final sizeMB = (asset.lengthInBytes / (1024 * 1024)).toStringAsFixed(1);
-      _addLog('Archive size: ${sizeMB}MB');
-    } catch (e) {
-      _addLog('⚠️ Failed to read rootfs asset: $e');
-      try { Future.microtask(() { try { PandaLog.e('SetupScreen', 'Rootfs asset read failed: $e'); } catch (_) {} }); } catch (_) {}
-    }
+    _addLog('Preparing Alpine rootfs (downloaded at runtime)...');
+    _addLog('Rootfs is managed by RootfsManager — no bundled asset needed.');
 
     // Retry logic: try up to 2 times
     bool result = false;
