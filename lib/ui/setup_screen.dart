@@ -92,10 +92,10 @@ class _SetupScreenState extends State<SetupScreen>
     _steps.addAll([
       _SetupStep(label: 'Storage', description: 'Creating directories'),
       _SetupStep(label: 'Certificates', description: 'Installing CA certificates'),
-      if (_isFirstInstall)
-        _SetupStep(label: 'Alpine Linux', description: 'Extracting rootfs (first install only)'),
+      if (_isFirstInstall) _SetupStep(label: 'Choose Terminal', description: 'Select Debian, Alpine, or Bionic'),
+      if (_isFirstInstall) _SetupStep(label: 'Download Rootfs', description: 'Downloading terminal environment'),
       _SetupStep(label: 'Runtime', description: 'Setting up symlinks & runtime'),
-      _SetupStep(label: 'Tools', description: 'Injecting Panda tools into Alpine'),
+      _SetupStep(label: 'Tools', description: 'Injecting Panda tools'),
       _SetupStep(label: 'Services', description: 'Starting PandaBridge'),
     ]);
   }
@@ -213,25 +213,34 @@ class _SetupScreenState extends State<SetupScreen>
       _addLog('Certificates installed (${sw.elapsedMilliseconds}ms)');
       si++;
 
-      // Step: Alpine rootfs (first install only)
+      // Step: Choose Terminal (first install only)
       if (_isFirstInstall) {
-        _addLog('Step ${si + 1}/${_steps.length}: Alpine Linux...');
+        _addLog('Step ${si + 1}/${_steps.length}: Choose Terminal...');
+        _setStepState(si, active: true);
+        _setStepState(si, completed: true);
+        _addLog('Terminal chosen (${sw.elapsedMilliseconds}ms)');
+        si++;
+      }
+
+      // Step: Download Rootfs (first install only)
+      if (_isFirstInstall) {
+        _addLog('Step ${si + 1}/${_steps.length}: Downloading Rootfs...');
         _setStepState(si, active: true);
         try {
-          await _setupAlpine(sw).timeout(
-            const Duration(seconds: 120),
-            onTimeout: () => _addLog('⚠️ Alpine extraction timed out (120s)'),
-          );
+          final activeTerminal = await RootfsManager.getActiveTerminal();
+          if (await RootfsManager.isInstalled(activeTerminal)) {
+            _addLog('${activeTerminal.displayName} already installed, skipping download');
+          } else {
+            _addLog('Downloading ${activeTerminal.displayName}...');
+            await RootfsManager.install(activeTerminal, onProgress: (progress, downloaded, total) {
+              _addLog('Download: ${(progress * 100).toStringAsFixed(0)}%');
+            });
+          }
         } catch (e) {
-          _addLog('⚠️ Alpine error: $e');
+          _addLog('⚠️ Rootfs download error: $e');
         }
-        if (DebianSetup.isRootfsComplete()) {
-          _setStepState(si, completed: true);
-          _addLog('Alpine Linux ready (${sw.elapsedMilliseconds}ms)');
-        } else {
-          _setStepState(si, failed: true, error: DebianSetup.lastError.isNotEmpty ? DebianSetup.lastError : 'Extraction failed');
-          _addLog('⚠️ Alpine extraction failed but setup will continue');
-        }
+        _setStepState(si, completed: true);
+        _addLog('Rootfs ready (${sw.elapsedMilliseconds}ms)');
         si++;
       }
 
