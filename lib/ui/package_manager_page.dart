@@ -159,7 +159,7 @@ class _PackageManagerPageState extends State<PackageManagerPage> {
   }) async {
     if (!DebianSetup.isRootfsComplete()) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Alpine Linux n\'est pas encore initialisé'),
+        content: Text('Linux n\'est pas encore initialisé'),
       ));
       return null;
     }
