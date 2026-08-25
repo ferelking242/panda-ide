@@ -2,6 +2,7 @@
 /// All switches, steppers, and dropdowns are wired to SettingsService for persistence.
 library;
 import 'package:flutter/material.dart';
+import '../ui/terminal_choice_screen.dart';
 import '../utils/settings_service.dart';
 import '../extensions/extension_registry.dart';
 
