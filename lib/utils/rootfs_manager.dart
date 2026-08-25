@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:async';
-import 'dart:convert';
+import 'dart:io' as io;
+import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -9,8 +9,10 @@ import 'package:panda/utils/panda_log.dart';
 
 /// Supported terminal runtime environments.
 enum TerminalType {
-  debian('debian', 'Debian GNU/Linux (glibc)', 'Most compatible — supports Chromium, patchright, all glibc packages'),
-  alpine('alpine', 'Alpine Linux (musl)', 'Lightweight — smaller rootfs, limited glibc compatibility'),
+  debian('debian', 'Debian GNU/Linux (glibc)',
+      'Most compatible — supports Chromium, patchright, all glibc packages'),
+  alpine('alpine', 'Alpine Linux (musl)',
+      'Lightweight — smaller rootfs, limited glibc compatibility'),
   bionic('bionic', 'Android Bionic', 'Native Android — no download needed, limited Linux tools');
 
   final String id;
@@ -32,13 +34,11 @@ class RootfsInfo {
   final String version;
   final String url;
   final int sizeBytes;
-  final String sha256;
 
   const RootfsInfo({
     required this.version,
     required this.url,
     required this.sizeBytes,
-    required this.sha256,
   });
 
   factory RootfsInfo.fromJson(Map<String, dynamic> json) {
@@ -46,7 +46,6 @@ class RootfsInfo {
       version: json['version'] as String,
       url: json['url'] as String,
       sizeBytes: json['size_bytes'] as int,
-      sha256: json['sha256'] as String? ?? '',
     );
   }
 
@@ -54,44 +53,38 @@ class RootfsInfo {
         'version': version,
         'url': url,
         'size_bytes': sizeBytes,
-        'sha256': sha256,
       };
 }
 
-/// Download progress callback.
+/// Progress callback for downloads.
 typedef ProgressCallback = void Function(double progress, int downloaded, int total);
 
 /// RootfsManager handles downloading, caching, switching, and deleting
 /// terminal rootfs images (Debian, Alpine, Bionic).
 ///
-/// Key design principles:
-/// - Download happens ONCE on first install per terminal type
+/// Key design:
+/// - Download happens ONCE per terminal type on first install
 /// - APK updates do NOT trigger re-download
-/// - Switching terminals downloads the new rootfs, deletes the old
-/// - All rootfs data lives in app documents (deleted with uninstall)
+/// - Switching terminals downloads new rootfs, optionally deletes old
+/// - All rootfs data in app documents (deleted with uninstall)
 class RootfsManager {
-  static RootfsInfo? _debianInfo;
-  static RootfsInfo? _alpineInfo;
-
-  // GitHub release URLs for rootfs tarballs
-  static const String _githubReleaseBase =
+  static const String _githubBase =
       'https://github.com/ferelking242/panda-ide/releases/download/rootfs';
 
-  /// Manifest: maps terminal type to release info
-  static final Map<TerminalType, RootfsInfo> _manifest = {
+  static final Map<TerminalType, RootfsInfo> manifest = {
     TerminalType.debian: RootfsInfo(
       version: '1.0.0',
-      url: '$_githubReleaseBase/debian-arm64-v1.0.0.tar.gz',
-      sizeBytes: 90 * 1024 * 1024, // ~90MB
+      url: '$_githubBase/debian-arm64-v1.0.0.tar.gz',
+      sizeBytes: 90 * 1024 * 1024,
     ),
     TerminalType.alpine: RootfsInfo(
       version: '1.0.0',
-      url: '$_githubReleaseBase/alpine-arm64-v1.0.0.tar.gz',
-      sizeBytes: 4 * 1024 * 1024, // ~4MB
+      url: '$_githubBase/alpine-arm64-v1.0.0.tar.gz',
+      sizeBytes: 4 * 1024 * 1024,
     ),
   };
 
-  /// Get the rootfs directory for a given terminal type.
+  /// Rootfs directory for a terminal type.
   static Future<Directory> rootfsDir(TerminalType type) async {
     final appDir = await getApplicationDocumentsDirectory();
     final dir = Directory('${appDir.path}/terminals/${type.id}');
@@ -101,7 +94,7 @@ class RootfsManager {
     return dir;
   }
 
-  /// Get the download cache directory.
+  /// Cache directory for downloads.
   static Future<Directory> _cacheDir() async {
     final appDir = await getApplicationDocumentsDirectory();
     final dir = Directory('${appDir.path}/terminals/_cache');
@@ -111,67 +104,59 @@ class RootfsManager {
     return dir;
   }
 
-  /// Check if a rootfs is installed and valid for the given terminal type.
+  /// Check if rootfs is installed and valid.
   static Future<bool> isInstalled(TerminalType type) async {
-    if (type == TerminalType.bionic) return true; // Always available on Android
-
+    if (type == TerminalType.bionic) return true;
     final dir = await rootfsDir(type);
     final marker = File('${dir.path}/.panda-rootfs-version');
     if (!marker.existsSync()) return false;
-
     final installedVersion = marker.readAsStringSync().trim();
-    final manifest = _manifest[type];
-    if (manifest == null) return false;
-
-    return installedVersion == manifest.version && await _validateRootfs(dir, type);
+    final info = manifest[type];
+    if (info == null) return false;
+    return installedVersion == info.version && await _validateRootfs(dir, type);
   }
 
-  /// Validate rootfs integrity for a given type.
+  /// Validate rootfs integrity.
   static Future<bool> _validateRootfs(Directory dir, TerminalType type) async {
     switch (type) {
       case TerminalType.debian:
         return File('${dir.path}/bin/sh').existsSync() &&
-            File('${dir.path}/usr/bin/apt').existsSync() &&
-            File('${dir.path}/lib/aarch64-linux-gnu/libc.so.6').existsSync();
+            File('${dir.path}/usr/bin/apt').existsSync();
       case TerminalType.alpine:
         return File('${dir.path}/bin/sh').existsSync() &&
-            File('${dir.path}/bin/busybox').existsSync() &&
-            File('${dir.path}/sbin/apk').existsSync() &&
-            File('${dir.path}/lib/ld-musl-aarch64.so.1').existsSync();
+            File('${dir.path}/sbin/apk').existsSync();
       case TerminalType.bionic:
         return true;
     }
   }
 
-  /// Download and install a rootfs for the given terminal type.
-  /// Returns true on success.
+  /// Download and install a rootfs. Returns true on success.
   static Future<bool> install(
     TerminalType type, {
     ProgressCallback? onProgress,
   }) async {
     if (type == TerminalType.bionic) return true;
 
-    final manifest = _manifest[type];
-    if (manifest == null) {
-      PandaLog.e('RootfsManager', 'No manifest for terminal type: ${type.id}');
+    final info = manifest[type];
+    if (info == null) {
+      PandaLog.e('RootfsManager', 'No manifest for: ${type.id}');
       return false;
     }
 
-    // Check if already installed with same version
     if (await isInstalled(type)) {
-      PandaLog.i('RootfsManager', '${type.displayName} already installed v${manifest.version}');
+      PandaLog.i('RootfsManager', '${type.displayName} already installed');
       return true;
     }
 
-    PandaLog.i('RootfsManager', 'Downloading ${type.displayName} v${manifest.version}...');
+    PandaLog.i('RootfsManager', 'Downloading ${type.displayName}...');
 
     try {
-      // Download to cache
       final cacheDir = await _cacheDir();
-      final archiveFile = File('${cacheDir.path}/${type.id}-${manifest.version}.tar.gz');
+      final archiveFile = File('${cacheDir.path}/${type.id}-${info.version}.tar.gz');
 
+      // Download if not cached
       if (!archiveFile.existsSync()) {
-        await _downloadFile(manifest.url, archiveFile, onProgress);
+        await _downloadFile(info.url, archiveFile, onProgress);
       }
 
       // Extract to staging
@@ -180,42 +165,42 @@ class RootfsManager {
         await stagingDir.delete(recursive: true);
       }
       await stagingDir.create(recursive: true);
-
       await _extractTarball(archiveFile, stagingDir);
 
       // Validate
       if (!await _validateRootfs(stagingDir, type)) {
-        PandaLog.e('RootfsManager', 'Rootfs validation failed for ${type.id}');
+        PandaLog.e('RootfsManager', 'Validation failed for ${type.id}');
         await stagingDir.delete(recursive: true);
         return false;
       }
 
       // Write version marker
       await File('${stagingDir.path}/.panda-rootfs-version')
-          .writeAsString(manifest.version, flush: true);
+          .writeAsString(info.version, flush: true);
 
-      // Atomic rename: staging -> final
-      final targetDir = await rootfsDir(type);
-      if (targetDir.existsSync()) {
-        await targetDir.delete(recursive: true);
+      // Atomic rename
+      final target = await rootfsDir(type);
+      if (target.existsSync()) {
+        await target.delete(recursive: true);
       }
-      await stagingDir.rename(targetDir.path);
+      await stagingDir.rename(target.path);
 
-      // Cleanup cache
-      try { await archiveFile.delete(); } catch (_) {}
+      // Cleanup
+      try {
+        await archiveFile.delete();
+      } catch (_) {}
 
-      PandaLog.i('RootfsManager', '${type.displayName} installed successfully');
+      PandaLog.i('RootfsManager', '${type.displayName} installed OK');
       return true;
     } catch (e) {
-      PandaLog.e('RootfsManager', 'Installation failed: $e');
+      PandaLog.e('RootfsManager', 'Install failed: $e');
       return false;
     }
   }
 
-  /// Delete a rootfs and all its data.
+  /// Delete a rootfs and its data.
   static Future<bool> delete(TerminalType type) async {
     if (type == TerminalType.bionic) return false;
-
     try {
       final dir = await rootfsDir(type);
       if (dir.existsSync()) {
@@ -242,37 +227,26 @@ class RootfsManager {
     await prefs.setString('active_terminal', type.id);
   }
 
-  /// Get download progress for a terminal type.
-  static Future<double> getDownloadProgress(TerminalType type) async {
-    if (await isInstalled(type)) return 1.0;
-    final cacheDir = await _cacheDir();
-    final manifest = _manifest[type];
-    if (manifest == null) return 0.0;
-    final archive = File('${cacheDir.path}/${type.id}-${manifest.version}.tar.gz');
-    if (!archive.existsSync()) return 0.0;
-    return archive.lengthSync() / manifest.sizeBytes;
-  }
-
-  /// Get human-readable size string.
+  /// Format bytes to human-readable string.
   static String formatSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  /// Download a file with progress callback.
+  /// Download file with progress.
   static Future<void> _downloadFile(
     String url,
     File file,
     ProgressCallback? onProgress,
   ) async {
-    final client = http.Client();
-    final request = await http.get(Uri.parse(url));
-    final totalBytes = request.contentLength ?? 0;
+    final request = http.Request('GET', Uri.parse(url));
+    final response = await http.Client().send(request);
+    final totalBytes = response.contentLength ?? 0;
     final bytes = <int>[];
-
     int downloaded = 0;
-    await for (final chunk in request.bodyStream) {
+
+    await for (final chunk in response.stream) {
       bytes.addAll(chunk);
       downloaded += chunk.length;
       onProgress?.call(
@@ -283,14 +257,10 @@ class RootfsManager {
     }
 
     await file.writeAsBytes(bytes, flush: true);
-    await client.close();
   }
 
-  /// Extract a tar.gz file to a destination directory.
+  /// Extract tar.gz archive to destination.
   static Future<void> _extractTarball(File archive, Directory dest) async {
-    // Use Dart's archive package
-    import 'package:archive/archive.dart';
-
     final bytes = await archive.readAsBytes();
     final tarBytes = gzip.decode(bytes);
     final tarArchive = TarDecoder().decodeBytes(tarBytes);
@@ -308,7 +278,7 @@ class RootfsManager {
       }
 
       if (file.isFile) {
-        final outFile = File(destPath);
+        final outFile = io.File(destPath);
         await outFile.parent.create(recursive: true);
         final content = file.content;
         if (content is List<int>) {
@@ -321,7 +291,7 @@ class RootfsManager {
       }
     }
 
-    // Create symlinks last
+    // Symlinks last
     for (final link in symlinks) {
       final name = link.name.replaceFirst(RegExp(r'^\./'), '');
       final destPath = '${dest.path}/$name';
