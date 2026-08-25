@@ -28,7 +28,7 @@ class _StartScreenState extends State<StartScreen> {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => HomeScreen(),
+          pageBuilder: (_, __, ___) => SelectType(),
           transitionsBuilder: (_, __, ___, child) =>
               FadeTransition(opacity: __, child: child),
         ),
@@ -54,7 +54,7 @@ class _StartScreenState extends State<StartScreen> {
         // Already set up: straight to Home
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (_, __, ___) => HomeScreen(),
+            pageBuilder: (_, __, ___) => SelectType(),
             transitionsBuilder: (_, __, ___, child) =>
                 FadeTransition(opacity: __, child: child),
           ),
