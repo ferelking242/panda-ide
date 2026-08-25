@@ -44,7 +44,7 @@ class PandaLogBridge {
     if (lower.contains('file') || lower.contains('editor')) return PandaLogCategory.file;
     if (lower.contains('ui')) return PandaLogCategory.ui;
     if (lower.contains('performance') || lower.contains('perf')) return PandaLogCategory.performance;
-    if (lower.contains('alpine')) return PandaLogCategory.system;
+    if (lower.contains('debian')) return PandaLogCategory.system;
     return PandaLogCategory.app;
   }
 }

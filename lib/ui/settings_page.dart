@@ -559,7 +559,7 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 24),
         _tile('Repository', 'github.com/ferelking242/panda-ide', Icon(Icons.open_in_new, size: 16, color: cs.primary)),
         _tile('License', 'GPL-3.0', Icon(Icons.gavel, size: 16, color: cs.primary)),
-        _tile('Runtime', 'Alpine Linux + Node.js', Icon(Icons.dns, size: 16, color: cs.primary)),
+        _tile('Runtime', 'Debian Linux + Node.js', Icon(Icons.dns, size: 16, color: cs.primary)),
         _tile('Providers', '8 AI providers (ChatGPT, Claude, Gemini...)', Icon(Icons.smart_toy, size: 16, color: cs.primary)),
         _tile('Extensions', '${ExtensionRegistry.instance.all.length} VS Code extensions', Icon(Icons.extension, size: 16, color: cs.primary)),
       ],

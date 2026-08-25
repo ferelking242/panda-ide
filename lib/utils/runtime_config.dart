@@ -15,5 +15,5 @@ import '../utils/languages.dart';
 // Runtime configuration for downloads
 // Extracted from downloads.dart
 
-// Runtimes are now installed via Alpine Linux.
+// Runtimes are now installed via Debian Linux (glibc).
 

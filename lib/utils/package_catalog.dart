@@ -26,7 +26,7 @@ class PackageCatalogSyncResult {
 }
 
 class PackageCatalogService {
-  // Runtimes are now installed via Alpine Linux.
+  // Runtimes are now installed via Debian Linux (glibc).
 static final List<RunTime> _pfdRuntimes = [];
 
   static final List<Extension> _pfdExtensions = [

@@ -12,7 +12,7 @@ import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/languages.dart';
 
-// Runtimes are now installed via Alpine Linux.
+// Runtimes are now installed via Debian Linux (glibc).
 
 class DownloadManager extends StatefulWidget {
   final String? preselectedPackageParentName;
@@ -35,7 +35,7 @@ class _DownloadManagerState extends State<DownloadManager> {
   Future<void> _pfdInstallChain = Future<void>.value();
   final Set<StreamSubscription<Map<String, dynamic>>> _activePfdSubscriptions = {};
 
-  // Runtimes are now installed via Alpine Linux.
+  // Runtimes are now installed via Debian Linux (glibc).
   // Extensions are downloaded from Open VSX marketplace.
 
   static const List<String> _pythonDynloadModules = [
@@ -288,7 +288,7 @@ class _DownloadManagerState extends State<DownloadManager> {
     return aliases[parentName] ?? parentName;
   }
 
-  // PFD runtimes removed — Alpine Linux is now the only installation method.
+  // PFD runtimes removed — Debian Linux is now the only installation method.
   dynamic _runtimePfdConfig(
     String? packageParentName, {
     required bool isExtension,
