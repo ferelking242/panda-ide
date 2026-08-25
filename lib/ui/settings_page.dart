@@ -258,10 +258,37 @@ class _SettingsPageState extends State<SettingsPage> {
   // ══════════════════════════════════════════════════════════════════════════
 
   Widget _terminalSettings(ColorScheme cs) {
+    final currentTerminal = RootfsManager.getActiveTerminal();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Terminal'),
+        _sectionTitle('Terminal Environment'),
+        // Terminal distribution selector
+        FutureBuilder<TerminalType>(
+          future: currentTerminal,
+          builder: (context, snapshot) {
+            final terminal = snapshot.data ?? TerminalType.debian;
+            return _tile(
+              'Distribution',
+              terminal.displayName,
+              FilledButton.tonal(
+                onPressed: () {
+                  Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => TerminalChoiceScreen(
+                      isFromSettings: true,
+                      onTerminalSelected: (type) {
+                        setState(() {});
+                      },
+                    ),
+                  ));
+                },
+                child: const Text('Switch'),
+              ),
+            );
+          },
+        ),
+        const Divider(height: 1),
+        _sectionTitle('Shell Settings'),
         _tile('Default Shell', 'Terminal shell', DropdownButton<String>(
           value: _s.terminalShell,
           items: const [
