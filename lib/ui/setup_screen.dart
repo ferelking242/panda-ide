@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/debian_setup.dart';
+import '../utils/rootfs_manager.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
