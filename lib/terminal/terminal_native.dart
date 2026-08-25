@@ -723,16 +723,16 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (!DebianSetup.isRootfsComplete()) {
       // Alpine should have been extracted during SettingUpScreen.
       // If we're here, the extraction failed or was skipped.
-      PandaLog.e('Terminal', 'Alpine rootfs incomplete — cannot start PRoot session');
+      PandaLog.e('Terminal', 'Linux rootfs incomplete — cannot start PRoot session');
       runtime.terminal.write('\r\n\x1b[31m[Linux non configuré]\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[31m  Le rootfs Alpine n\'a pas été extrait correctement.\x1b[0m\r\n');
+      runtime.terminal.write('\x1b[31m  Le rootfs Linux n\'a pas été extrait correctement.\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m  Solution:\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m    1. Fermer et relancer Panda IDE\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m    2. L\'extraction se fera automatiquement\x1b[0m\r\n');
       _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
       return;
     }
-    PandaLog.d('Terminal', 'Alpine rootfs verified complete');
+    PandaLog.d('Terminal', 'Linux rootfs verified complete');
     await DebianSetup.ensureDebianRuntimeFiles();
 
     PandaLog.i('Terminal', 'Locating PRoot binary in rootfs=$rootfsDir');
