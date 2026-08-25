@@ -1,6 +1,7 @@
 /// Complete settings UI — Editor, Terminal, Git, Extensions, AI, Keybindings.
 /// All switches, steppers, and dropdowns are wired to SettingsService for persistence.
 library;
+import 'package:panda/utils/rootfs_manager.dart';
 import 'package:flutter/material.dart';
 import '../ui/terminal_choice_screen.dart';
 import '../utils/settings_service.dart';
