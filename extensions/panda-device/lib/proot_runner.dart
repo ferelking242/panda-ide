@@ -30,7 +30,7 @@ class ProotRunner {
     Duration timeout = const Duration(minutes: 30),
   }) async {
     if (!DebianSetup.isRootfsComplete()) {
-      return const ProcResult(-1, "Alpine Linux n'est pas encore configuré");
+      return const ProcResult(-1, "Linux n'est pas encore configuré");
     }
     final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
     if (prootBin == null) return const ProcResult(-1, 'PRoot introuvable');
