@@ -7,13 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../ui/home.dart';
 import '../ui/permission_screen.dart';
 import '../ui/splash_screen.dart';
-import 'setup_screen.dart';
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
-
-/// Splash → PermissionScreen (first time) → SetupScreen → Home.
-/// No background init. No heavy work. Just navigation.
+/// Splash → PermissionScreen (first time) → Home.
+/// Setup now runs inline on the splash screen.
 class StartScreen extends StatefulWidget {
   const StartScreen({super.key});
 
@@ -24,17 +20,15 @@ class StartScreen extends StatefulWidget {
 class _StartScreenState extends State<StartScreen> {
   bool _navigated = false;
 
-  /// Called the instant the splash animation finishes.
-  void _onAnimationComplete() {
+  void _onSetupComplete() {
     if (!mounted || _navigated) return;
     _navigated = true;
 
-    // Web / non-Android : l'IDE complet tourne directement (terminal proot
-    // masqué par des gardes kIsWeb dans home.dart) — pas d'écrans natifs.
+    // Web / non-Android: straight to home
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const SelectType(),
+          pageBuilder: (_, __, ___) => const HomeScreen(),
           transitionsBuilder: (_, __, ___, child) =>
               FadeTransition(opacity: __, child: child),
         ),
@@ -42,13 +36,13 @@ class _StartScreenState extends State<StartScreen> {
       return;
     }
 
-    // Android: check if permissions were already shown
+    // Android: check if permissions were shown
     SharedPreferences.getInstance().then((prefs) {
       if (!mounted) return;
       final permShown = prefs.getBool('permissions_shown') ?? false;
 
       if (!permShown) {
-        // First time: PermissionScreen → SetupScreen → Home
+        // First time: PermissionScreen → Home (setup already done on splash)
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
             pageBuilder: (_, __, ___) => const PermissionScreen(),
@@ -57,10 +51,10 @@ class _StartScreenState extends State<StartScreen> {
           ),
         );
       } else {
-        // Permissions done: straight to SetupScreen → Home
+        // Already set up: straight to Home
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (_, __, ___) => const SetupScreen(),
+            pageBuilder: (_, __, ___) => const HomeScreen(),
             transitionsBuilder: (_, __, ___, child) =>
                 FadeTransition(opacity: __, child: child),
           ),
@@ -71,6 +65,6 @@ class _StartScreenState extends State<StartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PandaSplashScreen(onComplete: _onAnimationComplete);
+    return PandaSplashScreen(onComplete: _onSetupComplete);
   }
 }
