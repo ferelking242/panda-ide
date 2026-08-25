@@ -124,12 +124,7 @@ jobs:
           done
           echo "--- dependances ELF ---"
           readelf -d "$dir/libproot.so" | grep NEEDED
-          archive=assets/runtimes/alpine-rootfs.tar.gz
-          [ -f "$archive" ] || { echo "::error::$archive manquant"; exit 1; }
-          gzip -t "$archive"
-          tar -tzf "$archive" >/dev/null
-          echo "OK  $archive"
-
+          echo "Rootfs downloaded at runtime (not bundled) -- skipping archive check"
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
