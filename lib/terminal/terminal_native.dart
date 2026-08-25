@@ -724,7 +724,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       // Alpine should have been extracted during SettingUpScreen.
       // If we're here, the extraction failed or was skipped.
       PandaLog.e('Terminal', 'Alpine rootfs incomplete — cannot start PRoot session');
-      runtime.terminal.write('\r\n\x1b[31m[Alpine Linux non configuré]\x1b[0m\r\n');
+      runtime.terminal.write('\r\n\x1b[31m[Linux non configuré]\x1b[0m\r\n');
       runtime.terminal.write('\x1b[31m  Le rootfs Alpine n\'a pas été extrait correctement.\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m  Solution:\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m    1. Fermer et relancer Panda IDE\x1b[0m\r\n');
@@ -2067,7 +2067,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       onAnimationStatusChanged: (status) => _terminalSelectionStatus = status,
       menuChildren: [
         MenuItemButton(
-          onPressed: () => _createSession(makeActive: true, showFeedback: true, title: 'Alpine Linux'),
+          onPressed: () => _createSession(makeActive: true, showFeedback: true, title: 'Linux Terminal'),
           leadingIcon: Icon(Icons.terminal_rounded, color: appTheme.selectScreenCardTextColor, size: 18),
           child: Text('Nouvelle session Alpine', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
         ),
