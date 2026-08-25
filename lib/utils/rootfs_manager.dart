@@ -69,17 +69,17 @@ typedef ProgressCallback = void Function(double progress, int downloaded, int to
 /// - All rootfs data in app documents (deleted with uninstall)
 class RootfsManager {
   static const String _githubBase =
-      'https://github.com/ferelking242/panda-ide/releases/download/rootfs';
+      'https://github.com/ferelking242/panda-ide/releases/download/v1.0.0';
 
   static final Map<TerminalType, RootfsInfo> manifest = {
     TerminalType.debian: RootfsInfo(
       version: '1.0.0',
-      url: '$_githubBase/debian-arm64-v1.0.0.tar.gz',
-      sizeBytes: 90 * 1024 * 1024,
+      url: '$_githubBase/debian-arm64-rootfs.tar.gz',
+      sizeBytes: 103 * 1024 * 1024,
     ),
     TerminalType.alpine: RootfsInfo(
       version: '1.0.0',
-      url: '$_githubBase/alpine-arm64-v1.0.0.tar.gz',
+      url: '$_githubBase/alpine-arm64-rootfs.tar.gz',
       sizeBytes: 4 * 1024 * 1024,
     ),
   };
