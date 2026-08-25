@@ -134,6 +134,17 @@ class DebianSetup {
   }
 
   /// Ensure Debian rootfs is installed.
+
+  /// Check if a directory is accessible (exists and is a directory).
+  static bool isDirAccessible(String path) {
+    try {
+      final dir = Directory(path);
+      return dir.existsSync() && dir.statSync().type == FileSystemEntityType.directory;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> ensureDebianRootfs({bool force = false}) async {
     final destination = Directory(debianDir);
     final marker = File('${destination.path}/.panda-rootfs-version');
@@ -412,8 +423,8 @@ __panda_ps() {
     esac
     echo -ne "\033[38;5;110m╭─ \033[38;5;183m\$p\033[0m"
     [ -n "\$(__panda_git)" ] && echo -ne " \$(__panda_git)"
-    echo -ne " \033[38;5;${c}m[\$code]\033[0m\\n"
-    echo -ne "\033[38;5;${c}m╰─❯ \033[0m"
+    echo -ne " \033[38;5;\${c}m[\$code]\033[0m\\n"
+    echo -ne "\033[38;5;\${c}m╰─❯ \033[0m"
 }
 PS1='\$(__panda_ps)'
 ''';
