@@ -14,7 +14,7 @@ import '../ui/notifications.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
-import '../utils/alpine_setup.dart';
+import '../utils/debian_setup.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
