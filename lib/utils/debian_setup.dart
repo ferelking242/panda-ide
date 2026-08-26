@@ -17,7 +17,7 @@ class DebianSetup {
   static const String _debianDirName = 'debian-arm64';
   static const String rootfsVersion = 'debian-bookworm-arm64 v1';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-debian-profile v3';
+  static const String profileVersion = 'panda-debian-profile v4';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -432,14 +432,14 @@ __panda_git() {
 
   __panda_ps() {
     local p
-    case "$PWD" in
-        "$HOME") p="~" ;;
-        "$HOME"/*) p="~${PWD#$HOME}" ;;
-        *) p="$PWD" ;;
+    case "\$PWD" in
+        "\$HOME") p="~" ;;
+        "\$HOME"/*) p="~\${PWD#\$HOME}" ;;
+        *) p="\$PWD" ;;
     esac
-    echo -ne "\001\033[38;5;110m\002╭─ \001\033[38;5;183m\002$p\001\033[0m\002"
-    local g="$(__panda_git)"
-    [ -n "$g" ] && echo -ne " $g"
+    echo -ne "\001\033[38;5;110m\002╭─ \001\033[38;5;183m\002\$p\001\033[0m\002"
+    local g="\$(\$__panda_git)"
+    [ -n "\$g" ] && echo -ne " \$g"
     echo -ne "\n"
     echo -ne "\001\033[38;5;110m\002╰─❯ \001\033[0m\002"
   }
