@@ -21,7 +21,17 @@ class DebianSetup {
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
-  static String get debianDir => '$runtimesDir/$_debianDirName';
+  static String get debianDir {
+    // Check RootfsManager paths (terminals/{id}/)
+    for (final id in ['ubuntu', 'debian', 'alpine']) {
+      final path = '$appDir/terminals/$id';
+      if (File('$path/.panda-rootfs-version').existsSync()) {
+        return path;
+      }
+    }
+    // Fallback to legacy debian-arm64 path
+    return '$runtimesDir/$_debianDirName';
+  }
 
   /// Last error message for display in terminal UI.
   static String lastError = '';
@@ -124,11 +134,19 @@ class DebianSetup {
   static bool isRootfsComplete() => isRootfsCompleteIn(debianDir);
 
   static bool isRootfsCompleteIn(String dir) {
-    return File('$dir/.panda-rootfs-version').existsSync() &&
-        File('$dir/bin/sh').existsSync() &&
-        File('$dir/usr/bin/apt').existsSync() &&
-        File('$dir/usr/bin/python3').existsSync() &&
-        File('$dir/lib/aarch64-linux-gnu/libc.so.6').existsSync() &&
+    if (!File('$dir/.panda-rootfs-version').existsSync()) return false;
+    // Ubuntu uses symlinks (bin -> usr/bin), check both paths
+    final hasSh = File('$dir/bin/sh').existsSync() ||
+        File('$dir/usr/bin/sh').existsSync() ||
+        File('$dir/usr/bin/bash').existsSync();
+    final hasApt = File('$dir/usr/bin/apt').existsSync() ||
+        File('$dir/bin/apt').existsSync();
+    final hasPython = File('$dir/usr/bin/python3').existsSync() ||
+        File('$dir/bin/python3').existsSync();
+    final hasLibc = File('$dir/lib/aarch64-linux-gnu/libc.so.6').existsSync() ||
+        File('$dir/usr/lib/aarch64-linux-gnu/libc.so.6').existsSync() ||
+        File('$dir/lib/libc.so.6').existsSync();
+    return hasSh && hasApt && hasPython && hasLibc &&
         Directory('$dir/etc/apt').existsSync() &&
         Directory('$dir/root').existsSync();
   }
