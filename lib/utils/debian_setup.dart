@@ -17,7 +17,7 @@ class DebianSetup {
   static const String _debianDirName = 'debian-arm64';
   static const String rootfsVersion = 'debian-bookworm-arm64 v1';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-debian-profile v1';
+  static const String profileVersion = 'panda-debian-profile v2';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
