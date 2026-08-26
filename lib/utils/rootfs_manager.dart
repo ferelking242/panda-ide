@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -56,6 +55,9 @@ typedef ProgressCallback = void Function(
 
 /// RootfsManager handles downloading, caching, switching, and deleting
 /// terminal rootfs images (Ubuntu, Debian, Alpine, Bionic).
+///
+/// Extraction uses Android's native tar (the Kern approach) instead of
+/// Dart's archive library which fails on symlink-heavy rootfs.
 class RootfsManager {
   static const String _githubBase =
       'https://github.com/ferelking242/panda-ide/releases/download/v1.0.0';
@@ -150,8 +152,8 @@ class RootfsManager {
     PandaLog.i('RootfsManager', 'Downloading ${type.displayName}...');
     try {
       final cacheDir = await _cacheDir();
-      final archiveFile = File(
-          '${cacheDir.path}/${type.id}-${info.version}.tar.gz');
+      final archiveFile =
+          File('${cacheDir.path}/${type.id}-${info.version}.tar.gz');
 
       if (!archiveFile.existsSync()) {
         await _downloadFile(info.url, archiveFile, onProgress);
@@ -160,9 +162,7 @@ class RootfsManager {
       // Verify gzip magic bytes
       try {
         final first = await archiveFile.openRead(0, 2).first;
-        if (first.length < 2 ||
-            first[0] != 0x1f ||
-            first[1] != 0x8b) {
+        if (first.length < 2 || first[0] != 0x1f || first[1] != 0x8b) {
           PandaLog.e('RootfsManager', 'Not a valid gzip archive');
           await archiveFile.delete();
           return false;
@@ -175,14 +175,19 @@ class RootfsManager {
         }
       }
 
-      // Extract
-      final staging =
-          Directory('${cacheDir.path}/${type.id}.staging');
+      // Extract to staging directory using native tar (Kern approach)
+      final staging = Directory('${cacheDir.path}/${type.id}.staging');
       if (staging.existsSync()) {
         await staging.delete(recursive: true);
       }
       await staging.create(recursive: true);
-      await _extractTarball(archiveFile, staging);
+
+      final extracted = await _extractWithNativeTar(archiveFile, staging);
+      if (!extracted) {
+        PandaLog.e('RootfsManager', 'Extraction failed for ${type.id}');
+        await staging.delete(recursive: true);
+        return false;
+      }
 
       // Validate
       if (!await _validateRootfs(staging, type)) {
@@ -261,198 +266,87 @@ class RootfsManager {
     await for (final chunk in resp.stream) {
       bytes.addAll(chunk);
       dl += chunk.length;
-      onProgress?.call(
-          total > 0 ? dl / total : 0, dl, total);
+      onProgress?.call(total > 0 ? dl / total : 0, dl, total);
     }
     await file.writeAsBytes(bytes, flush: true);
   }
 
-  /// Extract tar.gz with Android symlink fallback.
-  /// On Android, filesystem symlinks may fail silently.
-  /// When they do, we copy the target content as real files/dirs.
-  static Future<void> _extractTarball(
+  /// Extract tar.gz using Android's native /system/bin/tar.
+  ///
+  /// This is the Kern approach: Android ships toybox tar which handles
+  /// symlinks, hard links, and permissions natively. This completely
+  /// avoids the Dart archive library's broken symlink handling.
+  static Future<bool> _extractWithNativeTar(
       File archive, Directory dest) async {
-    final bytes = await archive.readAsBytes();
-    final tarBytes = GZipDecoder().decodeBytes(bytes);
-    final tarArchive = TarDecoder().decodeBytes(tarBytes);
-
-    final symlinks = <ArchiveFile>[];
-
-    // Pass 1: extract regular files and directories
-    for (final file in tarArchive) {
-      final name = file.name.replaceFirst(RegExp(r'^\./'), '');
-      if (name.isEmpty || name == '..' || name.contains('../')) {
-        continue;
-      }
-      if (file.isSymbolicLink) {
-        symlinks.add(file);
-        continue;
-      }
-      final destPath = '${dest.path}/$name';
-      if (file.isFile) {
-        final outFile = File(destPath);
-        await outFile.parent.create(recursive: true);
-        final content = file.content;
-        if (content is List<int>) {
-          await outFile.writeAsBytes(content, flush: true);
-        } else if (content != null) {
-          await outFile.writeAsBytes(
-              List<int>.from(content), flush: true);
-        }
-      } else if (file.isDirectory) {
-        await Directory(destPath).create(recursive: true);
-      }
-    }
-
-    // Pass 2: create symlinks with fallback
-    int ok = 0, copied = 0, skipped = 0;
-    for (final link in symlinks) {
-      final name =
-          link.name.replaceFirst(RegExp(r'^\./'), '');
-      final destPath = '${dest.path}/$name';
-      final target = link.symbolicLink;
-      if (target == null || target.isEmpty) {
-        skipped++;
-        continue;
-      }
-
-      final parent = File(destPath).parent;
-      if (!parent.existsSync()) {
-        await parent.create(recursive: true);
-      }
-
-      // Remove existing entry
-      final existing =
-          FileSystemEntity.typeSync(destPath, followLinks: false);
-      if (existing != FileSystemEntityType.notFound) {
-        try {
-          Link(destPath).deleteSync();
-        } catch (_) {}
-        if (existing == FileSystemEntityType.file) {
-          try {
-            File(destPath).deleteSync();
-          } catch (_) {}
-        } else if (existing == FileSystemEntityType.directory) {
-          try {
-            Directory(destPath).deleteSync(recursive: true);
-          } catch (_) {}
-        }
-      }
-
-      // Try symlink
-      bool symlinkOk = false;
-      try {
-        Link(destPath).createSync(target);
-        // Verify
-        final type = FileSystemEntity.typeSync(
-            destPath, followLinks: false);
-        if (type != FileSystemEntityType.notFound) {
-          symlinkOk = true;
-        }
-      } catch (_) {
-        symlinkOk = false;
-      }
-
-      if (symlinkOk) {
-        ok++;
-      } else {
-        // Fallback: copy target
-        await _copyLinkTarget(dest, name, target);
-        copied++;
-      }
-    }
-
+    // Primary: Android's /system/bin/tar (toybox)
     PandaLog.i('RootfsManager',
-        'Extract: ${symlinks.length} symlinks — '
-        '$ok OK, $copied copied, $skipped skipped');
+        'Extracting with native tar: ${archive.path} -> ${dest.path}');
+    final result = await Process.run(
+      '/system/bin/tar',
+      ['-xzf', archive.path, '-C', dest.path],
+    );
 
-    // chmod
-    const dirs = [
-      'bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin'
-    ];
-    for (final d in dirs) {
-      final p = '${dest.path}/$d';
-      if (Directory(p).existsSync()) {
-        try {
-          await Process.run(
-              '/system/bin/sh', ['-c', 'chmod -R 755 "$p"']);
-        } catch (_) {}
-      }
-    }
-  }
-
-  /// Copy the content a symlink was supposed to point to.
-  static Future<void> _copyLinkTarget(
-      Directory rootfsDest, String name, String target) async {
-    final symlinkPath = '${rootfsDest.path}/$name';
-
-    // Resolve absolute target relative to rootfs
-    String resolved;
-    if (target.startsWith('/')) {
-      resolved = '${rootfsDest.path}$target';
-    } else {
-      final dir = File(symlinkPath).parent.path;
-      resolved = '$dir/$target';
-    }
-
-    // Normalize ../
-    final parts = <String>[];
-    for (final seg in resolved.split('/')) {
-      if (seg == '..') {
-        if (parts.isNotEmpty) parts.removeLast();
-      } else if (seg.isNotEmpty && seg != '.') {
-        parts.add(seg);
-      }
-    }
-    resolved = parts.join('/');
-
-    final targetDir = Directory(resolved);
-    final targetFile = File(resolved);
-
-    if (targetDir.existsSync()) {
-      await _copyDir(targetDir, Directory(symlinkPath));
-      PandaLog.i('RootfsManager',
-          'Copied dir: $name -> $target');
-    } else if (targetFile.existsSync()) {
+    if (result.exitCode == 0) {
+      // Count extracted entries for logging
+      int fileCount = 0;
       try {
-        final c = await targetFile.readAsBytes();
-        await File(symlinkPath)
-            .writeAsBytes(c, flush: true);
-        PandaLog.i('RootfsManager',
-            'Copied file: $name -> $target');
-      } catch (e) {
-        PandaLog.w('RootfsManager',
-            'Copy failed: $name: $e');
-      }
-    } else {
-      PandaLog.w('RootfsManager',
-          'Target not found: $name -> $target');
+        await for (final _ in dest.list(recursive: true)) {
+          fileCount++;
+        }
+      } catch (_) {}
+      PandaLog.i('RootfsManager',
+          'Native tar extraction OK — $fileCount entries extracted');
+      return true;
     }
-  }
 
-  /// Recursively copy a directory tree.
-  static Future<void> _copyDir(
-      Directory src, Directory dst) async {
-    if (!dst.existsSync()) await dst.create(recursive: true);
-    await for (final entity
-        in src.list(followLinks: false)) {
-      final name = entity.path.split('/').last;
-      final destPath = '${dst.path}/$name';
-      if (entity is File) {
-        try {
-          final c = await entity.readAsBytes();
-          await File(destPath).writeAsBytes(c, flush: true);
-        } catch (_) {}
-      } else if (entity is Directory) {
-        await _copyDir(entity, Directory(destPath));
-      } else if (entity is Link) {
-        try {
-          final t = entity.targetSync();
-          if (!Link(destPath).existsSync()) {
-            Link(destPath).createSync(t);
-          }
-        } catch (_) {}
-      }
+    PandaLog.w('RootfsManager',
+        'Native tar failed (exit ${result.exitCode}): ${result.stderr}');
+
+    // Fallback 1: try /vendor/bin/tar or busybox
+    final fallback = await Process.run(
+      '/system/bin/sh',
+      [
+        '-c',
+        '(vendor/bin/tar -xzf "${archive.path}" -C "${dest.path}" 2>/dev/null || '
+            'busybox tar -xzf "${archive.path}" -C "${dest.path}" 2>/dev/null) && echo OK || echo FAIL'
+      ],
+    );
+    if (fallback.stdout.toString().contains('OK')) {
+      PandaLog.i('RootfsManager', 'Fallback tar extraction OK');
+      return true;
     }
+
+    // Fallback 2: use proot's internal tar if libproot.so is available
+    try {
+      final nativeDir = Platform.isAndroid
+          ? '/data/app' // Native libs are in the app's lib dir
+          : '';
+      if (nativeDir.isNotEmpty) {
+        final prootResult = await Process.run(
+          '/system/bin/sh',
+          [
+            '-c',
+            // Attempt to find and use proot-bundled tar extraction
+            'for p in /data/data/*/lib/libproot.so; do '
+                'PROOT_LOADER=${p%/*}/libproot_loader.so '
+                '$p -0 -l -r / '
+                '-b "${dest.path}:${dest.path}" '
+                '-b "${archive.parent.path}:${archive.parent.path}" '
+                '-w "${dest.path}" '
+                '/system/bin/tar -xzf "${archive.path}" -C "${dest.path}" '
+                '&& echo PROOT_OK && break; '
+                'done'
+          ],
+        );
+        if (prootResult.stdout.toString().contains('PROOT_OK')) {
+          PandaLog.i('RootfsManager', 'PRoot tar extraction OK');
+          return true;
+        }
+      }
+    } catch (_) {}
+
+    PandaLog.e('RootfsManager',
+        'All extraction methods failed for ${archive.path}');
+    return false;
   }
 }
