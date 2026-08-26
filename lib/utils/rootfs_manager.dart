@@ -278,16 +278,16 @@ class RootfsManager {
   /// avoids the Dart archive library's broken symlink handling.
   static Future<bool> _extractWithNativeTar(
       File archive, Directory dest) async {
-    // Primary: Android's /system/bin/tar (toybox)
     PandaLog.i('RootfsManager',
         'Extracting with native tar: ${archive.path} -> ${dest.path}');
+
+    // Primary: Android's /system/bin/tar (toybox)
     final result = await Process.run(
       '/system/bin/tar',
       ['-xzf', archive.path, '-C', dest.path],
     );
 
     if (result.exitCode == 0) {
-      // Count extracted entries for logging
       int fileCount = 0;
       try {
         await for (final _ in dest.list(recursive: true)) {
@@ -295,58 +295,34 @@ class RootfsManager {
         }
       } catch (_) {}
       PandaLog.i('RootfsManager',
-          'Native tar extraction OK — $fileCount entries extracted');
+          'Native tar extraction OK: $fileCount entries');
       return true;
     }
 
     PandaLog.w('RootfsManager',
         'Native tar failed (exit ${result.exitCode}): ${result.stderr}');
 
-    // Fallback 1: try /vendor/bin/tar or busybox
-    final fallback = await Process.run(
-      '/system/bin/sh',
-      [
-        '-c',
-        '(vendor/bin/tar -xzf "${archive.path}" -C "${dest.path}" 2>/dev/null || '
-            'busybox tar -xzf "${archive.path}" -C "${dest.path}" 2>/dev/null) && echo OK || echo FAIL'
-      ],
+    // Fallback 1: busybox tar
+    final fallback1 = await Process.run(
+      'busybox',
+      ['tar', '-xzf', archive.path, '-C', dest.path],
     );
-    if (fallback.stdout.toString().contains('OK')) {
-      PandaLog.i('RootfsManager', 'Fallback tar extraction OK');
+    if (fallback1.exitCode == 0) {
+      PandaLog.i('RootfsManager', 'Busybox tar extraction OK');
       return true;
     }
 
-    // Fallback 2: use proot's internal tar if libproot.so is available
-    try {
-      final nativeDir = Platform.isAndroid
-          ? '/data/app' // Native libs are in the app's lib dir
-          : '';
-      if (nativeDir.isNotEmpty) {
-        final prootResult = await Process.run(
-          '/system/bin/sh',
-          [
-            '-c',
-            // Attempt to find and use proot-bundled tar extraction
-            'for p in /data/data/*/lib/libproot.so; do '
-                'PROOT_LOADER=${p%/*}/libproot_loader.so '
-                '$p -0 -l -r / '
-                '-b "${dest.path}:${dest.path}" '
-                '-b "${archive.parent.path}:${archive.parent.path}" '
-                '-w "${dest.path}" '
-                '/system/bin/tar -xzf "${archive.path}" -C "${dest.path}" '
-                '&& echo PROOT_OK && break; '
-                'done'
-          ],
-        );
-        if (prootResult.stdout.toString().contains('PROOT_OK')) {
-          PandaLog.i('RootfsManager', 'PRoot tar extraction OK');
-          return true;
-        }
-      }
-    } catch (_) {}
+    // Fallback 2: /system/bin/busybox tar
+    final fallback2 = await Process.run(
+      '/system/bin/busybox',
+      ['tar', '-xzf', archive.path, '-C', dest.path],
+    );
+    if (fallback2.exitCode == 0) {
+      PandaLog.i('RootfsManager', '/system/bin/busybox tar OK');
+      return true;
+    }
 
-    PandaLog.e('RootfsManager',
-        'All extraction methods failed for ${archive.path}');
+    PandaLog.e('RootfsManager', 'All tar methods failed');
     return false;
   }
 }
