@@ -116,17 +116,15 @@ class RootfsManager {
     return installedVersion == info.version && await _validateRootfs(dir, type);
   }
 
-  /// Resolve a path that may be behind symlinks.
-  /// Android's File.existsSync() doesn't follow symlink chains,
-  /// so we check multiple candidate paths.
-  static bool _fileExistsViaSymlinks(Directory base, List<String> candidates) {
+  /// Check if a file exists, trying multiple paths for symlink fallback.
+  static bool _fileExists(Directory base, List<String> candidates) {
     for (final candidate in candidates) {
       final file = File('${base.path}/$candidate');
       if (file.existsSync()) return true;
+      // Also try the directory version (some checks want dir existence)
+      final dir = Directory('${base.path}/$candidate');
+      if (dir.existsSync()) return true;
     }
-    // Try resolving via the standard shell path
-    // Ubuntu/Debian: bin -> usr/bin, usr/bin/sh -> dash
-    // So bin/sh won't exist as a file, but usr/bin/sh will
     return false;
   }
 
@@ -136,14 +134,13 @@ class RootfsManager {
       case TerminalType.ubuntu:
       case TerminalType.debian:
         // Ubuntu/Debian have: bin -> usr/bin (symlink), usr/bin/sh -> dash (symlink)
-        // File.existsSync() may not follow multi-level symlinks on Android
-        // Check multiple paths to be safe
-        final shExists = _fileExistsViaSymlinks(dir, [
+        // On Android, symlinks may not work — check multiple paths
+        final shExists = _fileExists(dir, [
           'bin/sh',
           'usr/bin/sh',
           'usr/bin/bash',
         ]);
-        final aptExists = _fileExistsViaSymlinks(dir, [
+        final aptExists = _fileExists(dir, [
           'usr/bin/apt',
           'bin/apt',
           'usr/bin/apt-get',
@@ -152,10 +149,10 @@ class RootfsManager {
             'Validation ${type.id}: sh=$shExists apt=$aptExists');
         return shExists && aptExists;
       case TerminalType.alpine:
-        return _fileExistsViaSymlinks(dir, [
+        return _fileExists(dir, [
           'bin/sh',
           'usr/bin/sh',
-        ]) && _fileExistsViaSymlinks(dir, [
+        ]) && _fileExists(dir, [
           'sbin/apk',
           'usr/sbin/apk',
           'bin/apk',
@@ -195,13 +192,20 @@ class RootfsManager {
       }
 
       // Verify the downloaded file is actually a gzip
-      final firstBytes = await archiveFile.openRead(0, 2).first;
-      if (firstBytes.length >= 2 && firstBytes[0] == 0x1f && firstBytes[1] == 0x8b) {
-        PandaLog.i('RootfsManager', 'Archive valid gzip');
-      } else {
-        PandaLog.e('RootfsManager', 'Downloaded file is NOT a valid gzip archive!');
-        await archiveFile.delete();
-        return false;
+      try {
+        final firstBytes = await archiveFile.openRead(0, 2).first;
+        if (firstBytes.length < 2 || firstBytes[0] != 0x1f || firstBytes[1] != 0x8b) {
+          PandaLog.e('RootfsManager', 'Downloaded file is NOT a valid gzip archive!');
+          await archiveFile.delete();
+          return false;
+        }
+      } catch (_) {
+        // File might be empty
+        if (archiveFile.lengthSync() < 100) {
+          PandaLog.e('RootfsManager', 'Downloaded file too small, likely corrupt');
+          await archiveFile.delete();
+          return false;
+        }
       }
 
       // Extract to staging
@@ -215,13 +219,9 @@ class RootfsManager {
       // Validate
       if (!await _validateRootfs(stagingDir, type)) {
         PandaLog.e('RootfsManager', 'Validation failed for ${type.id}');
-        // Log what exists for debugging
-        final binDir = Directory('${stagingDir.path}/bin');
-        final usrBinDir = Directory('${stagingDir.path}/usr/bin');
         PandaLog.e('RootfsManager',
-            'bin/ exists: ${binDir.existsSync()}, '
-            'bin is symlink: ${binDir.existsSync() ? binDir.statSync().type : "N/A"}, '
-            'usr/bin/ exists: ${usrBinDir.existsSync()}');
+            'staging exists: ${stagingDir.existsSync()}, '
+            'contents: ${stagingDir.listSync().length} entries');
         await stagingDir.delete(recursive: true);
         return false;
       }
@@ -312,22 +312,26 @@ class RootfsManager {
   }
 
   /// Extract tar.gz archive to destination.
+  /// Handles Android symlink limitations by falling back to copies.
   static Future<void> _extractTarball(File archive, Directory dest) async {
     final bytes = await archive.readAsBytes();
     final tarBytes = GZipDecoder().decodeBytes(bytes);
     final tarArchive = TarDecoder().decodeBytes(tarBytes);
 
+    // Collect symlinks to process after regular files
     final symlinks = <ArchiveFile>[];
 
+    // First pass: extract all regular files and directories
     for (final file in tarArchive) {
       final name = file.name.replaceFirst(RegExp(r'^\./'), '');
       if (name.isEmpty || name == '..' || name.contains('../')) continue;
-      final destPath = '${dest.path}/$name';
 
       if (file.isSymbolicLink) {
         symlinks.add(file);
         continue;
       }
+
+      final destPath = '${dest.path}/$name';
 
       if (file.isFile) {
         final outFile = File(destPath);
@@ -338,46 +342,143 @@ class RootfsManager {
         } else if (content != null) {
           await outFile.writeAsBytes(List<int>.from(content), flush: true);
         }
-      } else {
+      } else if (file.isDirectory) {
         await Directory(destPath).create(recursive: true);
       }
     }
 
-    // Symlinks last (so targets exist)
+    // Second pass: create symlinks, with Android fallback
+    int symlinkSuccess = 0;
+    int symlinkCopied = 0;
+
     for (final link in symlinks) {
       final name = link.name.replaceFirst(RegExp(r'^\./'), '');
       final destPath = '${dest.path}/$name';
       final target = link.symbolicLink;
       if (target == null || target.isEmpty) continue;
+
+      final parent = File(destPath).parent;
+      if (!parent.existsSync()) await parent.create(recursive: true);
+
+      // Remove existing entry if any
+      if (FileSystemEntity.typeSync(destPath, followLinks: false) !=
+          FileSystemEntityType.notFound) {
+        try {
+          Link(destPath).deleteSync();
+        } catch (_) {
+          try { File(destPath).deleteSync(); } catch (_) {}
+          try { Directory(destPath).deleteSync(recursive: true); } catch (_) {}
+        }
+      }
+
+      // Try creating symlink
+      bool symlinkOk = false;
       try {
-        final parent = File(destPath).parent;
-        if (!parent.existsSync()) await parent.create(recursive: true);
+        Link(destPath).createSync(target);
+        // Verify it actually works
         if (FileSystemEntity.typeSync(destPath, followLinks: false) !=
             FileSystemEntityType.notFound) {
-          Link(destPath).deleteSync();
+          symlinkOk = true;
+          symlinkSuccess++;
         }
-        Link(destPath).createSync(target);
       } catch (e) {
-        PandaLog.w('RootfsManager', 'Symlink failed: $name -> $target: $e');
+        symlinkOk = false;
+      }
+
+      // If symlink failed, copy the target content
+      if (!symlinkOk) {
+        await _copySymlinkTarget(dest, name, target);
+        symlinkCopied++;
       }
     }
+
+    PandaLog.i('RootfsManager',
+        'Extraction: ${tarArchive.length} entries, '
+        '$symlinkSuccess symlinks OK, $symlinkCopied copied');
 
     // Make binaries executable
-    const execDirs = ['bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin', 'lib'];
-    final targets = <String>[];
+    const execDirs = ['bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin'];
     for (final d in execDirs) {
       final dirPath = '${dest.path}/$d';
-      final dir = Directory(dirPath);
-      if (dir.existsSync()) {
-        targets.add('"$dirPath"');
+      if (Directory(dirPath).existsSync()) {
+        try {
+          await Process.run(
+              '/system/bin/sh', ['-c', 'chmod -R 755 "$dirPath" 2>/dev/null']);
+        } catch (_) {}
       }
     }
-    if (targets.isNotEmpty) {
-      try {
-        await Process.run('/system/bin/sh', ['-c', 'chmod -R 755 ${targets.join(' ')}']);
-      } catch (_) {}
+  }
+
+  /// Copy the content that a symlink was supposed to point to.
+  /// Handles both file symlinks and directory symlinks.
+  static Future<void> _copySymlinkTarget(
+      Directory rootfsDest, String symlinkName, String target) async {
+    final symlinkPath = '${rootfsDest.path}/$symlinkName';
+
+    // Resolve the target path relative to the rootfs
+    String resolvedTarget;
+    if (target.startsWith('/')) {
+      // Absolute path — resolve relative to rootfs
+      resolvedTarget = '${rootfsDest.path}$target';
+    } else {
+      // Relative path — resolve from the symlink's directory
+      final symlinkDir = File(symlinkPath).parent.path;
+      resolvedTarget = '$symlinkDir/$target';
     }
 
-    PandaLog.i('RootfsManager', 'Extraction complete: ${tarArchive.length} entries');
+    // Normalize (resolve ..)
+    resolvedTarget = resolvedTarget.replaceAll(RegExp(r'[^/]+/\.\.'), '');
+
+    // Check what the target is
+    final targetFile = File(resolvedTarget);
+    final targetDir = Directory(resolvedTarget);
+
+    if (targetDir.existsSync()) {
+      // Directory symlink — copy entire directory
+      await _copyDirectory(targetDir, Directory(symlinkPath));
+      PandaLog.i('RootfsManager',
+          'Copied dir symlink: $symlinkName -> $target');
+    } else if (targetFile.existsSync()) {
+      // File symlink — copy file
+      try {
+        final content = await targetFile.readAsBytes();
+        await File(symlinkPath).writeAsBytes(content, flush: true);
+        symlinkSuccess++;
+        PandaLog.i('RootfsManager',
+            'Copied file symlink: $symlinkName -> $target');
+      } catch (e) {
+        PandaLog.w('RootfsManager',
+            'Failed to copy file symlink: $symlinkName: $e');
+      }
+    } else {
+      PandaLog.w('RootfsManager',
+          'Symlink target not found: $symlinkName -> $target (resolved: $resolvedTarget)');
+    }
+  }
+
+  /// Recursively copy a directory.
+  static Future<void> _copyDirectory(Directory source, Directory dest) async {
+    if (!dest.existsSync()) {
+      await dest.create(recursive: true);
+    }
+    await for (final entity in source.list(followLinks: false)) {
+      final name = entity.path.split('/').last;
+      final destPath = '${dest.path}/$name';
+      if (entity is File) {
+        try {
+          final content = await entity.readAsBytes();
+          await File(destPath).writeAsBytes(content, flush: true);
+        } catch (_) {}
+      } else if (entity is Directory) {
+        await _copyDirectory(entity, Directory(destPath));
+      } else if (entity is Link) {
+        try {
+          final linkTarget = entity.targetSync();
+          if (!Link(destPath).existsSync()) {
+            Link(destPath).createSync(linkTarget);
+          }
+        } catch (_) {}
+      }
+    }
   }
 }
