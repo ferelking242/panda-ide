@@ -430,20 +430,18 @@ __panda_git() {
     echo -ne "\033[38;5;141m\$b\033[0m"
 }
 
-__panda_ps() {
-    local code=\$? c=75
-    [ "\$code" -ne 0 ] && c=203
+  __panda_ps() {
     local p
-    case "\$PWD" in
-        "\$HOME") p='~' ;;
-        "\$HOME"/*) p="~\${PWD#\$HOME}" ;;
-        *) p="\$PWD" ;;
+    case "$PWD" in
+        "$HOME") p="~" ;;
+        "$HOME"/*) p="~${PWD#$HOME}" ;;
+        *) p="$PWD" ;;
     esac
-    echo -ne "\033[38;5;110m╭─ \033[38;5;183m\$p\033[0m"
-    [ -n "\$(__panda_git)" ] && echo -ne " \$(__panda_git)"
-    echo -ne " \033[38;5;\${c}m[\$code]\033[0m\\n"
-    echo -ne "\033[38;5;\${c}m╰─❯ \033[0m"
-}
+    echo -ne "\033[38;5;110m╭─ \033[38;5;183m$p\033[0m"
+    [ -n "$(__panda_git)" ] && echo -ne " $(__panda_git)"
+    echo -ne "\n"
+    echo -ne "\033[38;5;110m╰─❯ \033[0m"
+  }
 PS1='\$(__panda_ps)'
 ''';
 
