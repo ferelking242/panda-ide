@@ -53,7 +53,7 @@ fun SearchPanel(
                 .testTag("workspace_search_input")
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = "${results.size} résultat(s) trouvé(s)",

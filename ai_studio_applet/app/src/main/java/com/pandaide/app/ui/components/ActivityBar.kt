@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pandaide.app.model.IdeTheme
 import com.pandaide.app.viewmodel.ActivityPanel
+import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun ActivityBar(
@@ -50,6 +51,20 @@ fun ActivityBar(
                     isSelected = isSidebarVisible && activePanel == ActivityPanel.EXPLORER,
                     theme = theme,
                     onClick = { onSelectPanel(ActivityPanel.EXPLORER) }
+                )
+                ActivityItem(
+                    icon = Icons.Default.AccountTree,
+                    label = "Outline",
+                    isSelected = isSidebarVisible && activePanel == ActivityPanel.OUTLINE,
+                    theme = theme,
+                    onClick = { onSelectPanel(ActivityPanel.OUTLINE) }
+                )
+                ActivityItem(
+                    icon = Icons.Default.Schedule,
+                    label = "Timeline",
+                    isSelected = isSidebarVisible && activePanel == ActivityPanel.TIMELINE,
+                    theme = theme,
+                    onClick = { onSelectPanel(ActivityPanel.TIMELINE) }
                 )
                 ActivityItem(
                     icon = Icons.Default.Search,

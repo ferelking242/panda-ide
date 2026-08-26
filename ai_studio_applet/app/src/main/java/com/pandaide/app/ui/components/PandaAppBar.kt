@@ -58,29 +58,11 @@ fun PandaAppBar(
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clickable { onOpenAgent() }
-                    .padding(end = 8.dp)
-            ) {
-                Text(
-                    text = "🐼",
-                    fontSize = 18.sp,
-                    modifier = Modifier.padding(end = 4.dp)
-                )
-                Text(
-                    text = "Panda IDE",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = theme.primary
-                )
-            }
-
-            // Command Palette / File path bar
+            // Command Palette / File path bar (centered, wider)
             Box(
                 modifier = Modifier
                     .weight(1f)
+                    .padding(horizontal = 40.dp)
                     .height(28.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(theme.surfaceVariant)
@@ -118,6 +100,27 @@ fun PandaAppBar(
                         color = theme.textSecondary.copy(alpha = 0.6f)
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { onOpenAgent() }
+                    .padding(end = 8.dp)
+            ) {
+                Text(
+                    text = "🐼",
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+                Text(
+                    text = "Panda IDE",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = theme.primary
+                )
             }
 
             Spacer(modifier = Modifier.width(6.dp))

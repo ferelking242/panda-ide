@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 enum class ActivityPanel {
-    EXPLORER, SEARCH, GIT, AGENT, PLUGINS, SETTINGS, NONE
+    EXPLORER, OUTLINE, TIMELINE, SEARCH, GIT, AGENT, PLUGINS, SETTINGS, NONE
 }
 
 data class IdeState(

@@ -75,7 +75,7 @@ fun CodeEditorArea(
                 onOpenExplorer = onOpenExplorer
             )
         } else {
-            // Active Editor & Quick Tools
+            // Active Editor
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -90,13 +90,6 @@ fun CodeEditorArea(
                     onContentChange = onContentChange
                 )
             }
-
-            // Quick Tools Accessory Keyboard Row
-            QuickToolsRow(
-                theme = theme,
-                onInsertSymbol = onInsertSymbol,
-                onSaveFile = onSaveFile
-            )
         }
     }
 }
@@ -307,67 +300,3 @@ private fun highlightSyntax(code: String, language: String, theme: IdeTheme): An
     }
 }
 
-@Composable
-private fun QuickToolsRow(
-    theme: IdeTheme,
-    onInsertSymbol: (String) -> Unit,
-    onSaveFile: () -> Unit
-) {
-    val symbols = listOf("{", "}", "(", ")", ";", "=", "=>", "<", ">", "\"", "'", "/", "\\", "|", "tab")
-
-    Surface(
-        color = theme.surface,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(38.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onSaveFile,
-                modifier = Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(theme.primary.copy(alpha = 0.2f))
-                    .testTag("quick_save_btn")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Save,
-                    contentDescription = "Save File",
-                    tint = theme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            symbols.forEach { sym ->
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 2.dp)
-                        .height(28.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(theme.surfaceVariant)
-                        .clickable {
-                            if (sym == "tab") onInsertSymbol("  ") else onInsertSymbol(sym)
-                        }
-                        .padding(horizontal = 10.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = sym,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace,
-                        color = theme.textPrimary
-                    )
-                }
-            }
-        }
-    }
-}

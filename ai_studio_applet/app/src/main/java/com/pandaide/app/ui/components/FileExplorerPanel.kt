@@ -69,8 +69,6 @@ fun FileExplorerPanel(
             }
         }
 
-        HorizontalDivider(color = theme.surfaceVariant, thickness = 1.dp)
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

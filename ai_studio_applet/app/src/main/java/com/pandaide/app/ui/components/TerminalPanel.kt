@@ -2,16 +2,12 @@ package com.pandaide.app.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,47 +36,24 @@ fun TerminalPanel(
         modifier = Modifier
             .fillMaxWidth()
             .height(180.dp)
+            .clip(RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(6.dp)
         ) {
+            // Minimal close button row (no header title)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .padding(bottom = 2.dp),
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Terminal, contentDescription = "Terminal", tint = theme.secondary, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("PANDA TERMINAL", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = theme.textSecondary, letterSpacing = 1.sp)
+                IconButton(onClick = onCloseTerminal, modifier = Modifier.size(20.dp)) {
+                    Text("×", fontSize = 14.sp, color = theme.textSecondary, fontWeight = FontWeight.Bold)
                 }
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { onExecuteCmd("clear") }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = theme.textSecondary, modifier = Modifier.size(14.dp))
-                    }
-                    IconButton(onClick = onCloseTerminal, modifier = Modifier.size(24.dp)) {
-                        Text("×", fontSize = 16.sp, color = theme.textSecondary, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-
-            // Quick command chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(bottom = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                TerminalChip("flutter run", theme) { onExecuteCmd("flutter run") }
-                TerminalChip("git status", theme) { onExecuteCmd("git status") }
-                TerminalChip("help", theme) { onExecuteCmd("help") }
-                TerminalChip("clear", theme) { onExecuteCmd("clear") }
             }
 
             LazyColumn(
@@ -135,18 +108,5 @@ fun TerminalPanel(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun TerminalChip(label: String, theme: IdeTheme, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(theme.surfaceVariant)
-            .clickable { onClick() }
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    ) {
-        Text(label, fontSize = 10.sp, fontFamily = FontFamily.Monospace, color = theme.textPrimary)
     }
 }

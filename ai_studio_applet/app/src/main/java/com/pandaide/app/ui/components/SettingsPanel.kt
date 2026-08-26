@@ -96,8 +96,7 @@ fun SettingsPanel(
             }
         }
 
-        HorizontalDivider(color = activeTheme.surfaceVariant, thickness = 1.dp)
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Font size section
         Text("TAILLE DE LA POLICE (${fontSizeSp.toInt()} SP)", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = activeTheme.textSecondary)
@@ -113,9 +112,7 @@ fun SettingsPanel(
             modifier = Modifier.testTag("font_size_slider")
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
-        HorizontalDivider(color = activeTheme.surfaceVariant, thickness = 1.dp)
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Toggles
         Row(

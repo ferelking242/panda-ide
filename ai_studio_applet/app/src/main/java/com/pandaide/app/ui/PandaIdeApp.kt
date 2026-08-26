@@ -60,22 +60,17 @@ fun PandaIdeApp(
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                // Activity Bar (Navigation Strip)
-                ActivityBar(
-                    activePanel = state.activePanel,
-                    isSidebarVisible = state.isSidebarVisible,
-                    theme = theme,
-                    gitChangesCount = state.gitChanges.size,
-                    onSelectPanel = { panel -> viewModel.selectActivityPanel(panel) },
-                    onOpenWelcome = { viewModel.openWelcomeTab() }
-                )
+                // Activity Bar + Sidebar (seamless unit, no gap)
+                if (state.isSidebarVisible && state.activePanel != ActivityPanel.NONE) {
+                    ActivityBar(
+                        activePanel = state.activePanel,
+                        isSidebarVisible = state.isSidebarVisible,
+                        theme = theme,
+                        gitChangesCount = state.gitChanges.size,
+                        onSelectPanel = { panel -> viewModel.selectActivityPanel(panel) },
+                        onOpenWelcome = { viewModel.openWelcomeTab() }
+                    )
 
-                // Expandable Sidebar Panel
-                AnimatedVisibility(
-                    visible = state.isSidebarVisible && state.activePanel != ActivityPanel.NONE,
-                    enter = expandHorizontally(),
-                    exit = shrinkHorizontally()
-                ) {
                     Box(
                         modifier = Modifier
                             .width(260.dp)
@@ -89,6 +84,17 @@ fun PandaIdeApp(
                                     fileTree = state.fileTree,
                                     theme = theme,
                                     onOpenFile = { node -> viewModel.openFile(node) }
+                                )
+                            }
+                            ActivityPanel.OUTLINE -> {
+                                OutlinePanel(
+                                    openTabs = state.openTabs,
+                                    theme = theme
+                                )
+                            }
+                            ActivityPanel.TIMELINE -> {
+                                TimelinePanel(
+                                    theme = theme
                                 )
                             }
                             ActivityPanel.SEARCH -> {
@@ -139,6 +145,15 @@ fun PandaIdeApp(
                             ActivityPanel.NONE -> {}
                         }
                     }
+                } else if (state.isSidebarVisible) {
+                    ActivityBar(
+                        activePanel = state.activePanel,
+                        isSidebarVisible = state.isSidebarVisible,
+                        theme = theme,
+                        gitChangesCount = state.gitChanges.size,
+                        onSelectPanel = { panel -> viewModel.selectActivityPanel(panel) },
+                        onOpenWelcome = { viewModel.openWelcomeTab() }
+                    )
                 }
 
                 // Center Editor Canvas & Bottom Terminal
