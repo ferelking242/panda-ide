@@ -1,7 +1,7 @@
-/// ProotRunner — exécute des commandes DANS le rootfs Alpine (pattern ApkService).
+/// ProotRunner — exécute des commandes DANS le rootfs Linux.
 ///
-/// Les binaires adb/flutter vivent dans le rootfs : un appel Process.run
-/// direct depuis le process Android ne les trouve pas. Tout passe par proot.
+/// Supporte Ubuntu, Debian et Alpine via RootfsManager.
+/// Le rootfs actif est déterminé par la préférence utilisateur.
 ///
 /// NOTE compilation : ce fichier est compilé dans l'arbre lib/ de l'app
 /// (lib/extensions/dev.panda.device/) → l'import relatif vers utils/ est
@@ -14,6 +14,7 @@ import 'dart:io';
 
 import '../../../utils/debian_setup.dart';
 import '../../../utils/panda_log.dart';
+import '../../../utils/rootfs_manager.dart';
 
 class ProcResult {
   final int exitCode;
@@ -29,22 +30,59 @@ class ProotRunner {
     void Function(String line)? onLine,
     Duration timeout = const Duration(minutes: 30),
   }) async {
-    if (!DebianSetup.isRootfsComplete()) {
+    // 1. Get active terminal type from RootfsManager
+    final activeType = await RootfsManager.getActiveTerminal();
+
+    // 2. Check if rootfs is installed via RootfsManager
+    if (!await RootfsManager.isInstalled(activeType)) {
+      PandaLog.e('ProotRunner',
+          'Rootfs not installed for ${activeType.id}');
       return const ProcResult(-1, "Linux n'est pas encore configuré");
     }
-    final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
-    if (prootBin == null) return const ProcResult(-1, 'PRoot introuvable');
+
+    // 3. Get rootfs directory from RootfsManager
+    final rootfsDir = await RootfsManager.rootfsDir(activeType);
+
+    // 4. Find proot binary (still uses DebianSetup for native lib path)
+    final prootBin = await DebianSetup.locateProotBinary(rootfsDir.path);
+    if (prootBin == null) {
+      PandaLog.e('ProotRunner', 'PRoot binary not found');
+      return const ProcResult(-1, 'PRoot introuvable');
+    }
+
+    // 5. Determine the shell to use
+    // Ubuntu/Debian use /usr/bin/bash (real file, no symlink chain)
+    // Alpine uses /bin/sh (native, no usrmerge)
+    final String shell;
+    switch (activeType) {
+      case TerminalType.ubuntu:
+      case TerminalType.debian:
+        // Prefer /usr/bin/bash (real file) over /bin/sh (symlink chain)
+        shell = File('${rootfsDir.path}/usr/bin/bash').existsSync()
+            ? '/usr/bin/bash'
+            : '/bin/sh';
+        break;
+      case TerminalType.alpine:
+        shell = '/bin/sh';
+        break;
+      case TerminalType.bionic:
+        shell = '/system/bin/sh';
+        break;
+    }
+
+    PandaLog.i('ProotRunner',
+        'Running in ${activeType.id} rootfs at ${rootfsDir.path} with $shell');
 
     final prootArgs = <String>[
       '-0',
       '--link2symlink',
       '--kill-on-exit',
-      '--rootfs=${DebianSetup.debianDir}',
+      '--rootfs=${rootfsDir.path}',
       '-b', '/dev',
       '-b', '/proc',
       '-b', '/sys',
       '-w', '/root',
-      '/bin/sh',
+      shell,
       '-c',
       shellCmd,
     ];
