@@ -76,7 +76,7 @@ class RootfsManager {
     TerminalType.ubuntu: RootfsInfo(
       version: '1.0.0',
       url: '$_githubBase/ubuntu-arm64-rootfs.tar.gz',
-      sizeBytes: 34 * 1024 * 1024,
+      sizeBytes: 29 * 1024 * 1024,
     ),
     TerminalType.debian: RootfsInfo(
       version: '1.0.0',
