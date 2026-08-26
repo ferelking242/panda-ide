@@ -62,7 +62,7 @@ typedef ProgressCallback = void Function(
 /// 1. Download .tar.gz
 /// 2. Decompress gzip → .tar using Dart's GZipCodec (always works)
 /// 3. Extract .tar using Android's native tar (handles symlinks natively)
-/// 4. Repair any broken symlinks by copying target files
+/// 4. Repair any broken symlinks using shell (Kern does this via PRoot -l)
 /// 5. Validate with simple file existence checks (no symlink chains)
 class RootfsManager {
   static const String _githubBase =
@@ -120,19 +120,14 @@ class RootfsManager {
       case TerminalType.ubuntu:
       case TerminalType.debian:
         // Check real files (not symlinks) — same strategy as Kern.
-        // usr/bin/bash is always a real file in Ubuntu/Debian rootfs.
         final bashOk = File('${dir.path}/usr/bin/bash').existsSync();
-        // usr/bin/apt-get is always a real file.
         final aptOk = File('${dir.path}/usr/bin/apt-get').existsSync();
-        // etc/os-release is always a real file.
         final osRelease = File('${dir.path}/etc/os-release').existsSync();
-        // var/lib/dpkg/status is always a real file.
         final dpkgOk = File('${dir.path}/var/lib/dpkg/status').existsSync();
         PandaLog.i('RootfsManager',
             'Validate ${type.id}: bash=$bashOk apt=$aptOk os=$osRelease dpkg=$dpkgOk');
         return bashOk && aptOk && osRelease && dpkgOk;
       case TerminalType.alpine:
-        // Alpine has real /bin/sh (no usrmerge).
         final shOk = File('${dir.path}/bin/sh').existsSync();
         final apkOk = File('${dir.path}/sbin/apk').existsSync();
         PandaLog.i('RootfsManager',
@@ -194,7 +189,7 @@ class RootfsManager {
           final tarBytes = Uint8List.fromList(gzip.decode(gzipBytes));
           await tarFile.writeAsBytes(tarBytes, flush: true);
           PandaLog.i('RootfsManager',
-              'Decompressed: ${gzipBytes.length} → ${tarBytes.length} bytes');
+              'Decompressed: ${gzipBytes.length} -> ${tarBytes.length} bytes');
         } catch (e) {
           PandaLog.e('RootfsManager', 'Gzip decompression failed: $e');
           await archiveFile.delete();
@@ -217,16 +212,17 @@ class RootfsManager {
         return false;
       }
 
-      // Step 3: Repair broken symlinks by copying target files.
-      // On Android, symlinks may fail due to SELinux restrictions.
+      // Step 3: Repair broken symlinks using shell commands.
+      // On Android, SELinux may prevent creating proper symlinks.
+      // Kern handles this with PRoot -l (link2symlink); we use a shell script.
       await _repairBrokenSymlinks(staging);
 
       // Step 4: Validate
       if (!await _validateRootfs(staging, type)) {
         PandaLog.e('RootfsManager', 'Validation failed for ${type.id}');
-        // Dump directory listing for debugging
         try {
-          final listing = staging.listSync().take(30).map((e) => e.path).join('\n');
+          final listing =
+              staging.listSync().take(30).map((e) => e.path).join('\n');
           PandaLog.e('RootfsManager', 'Top-level contents:\n$listing');
         } catch (_) {}
         await staging.delete(recursive: true);
@@ -312,65 +308,77 @@ class RootfsManager {
     await file.writeAsBytes(bytes, flush: true);
   }
 
-  /// Repair broken symlinks in extracted rootfs.
+  /// Repair broken symlinks using shell commands.
   ///
-  /// On Android, symlinks may not be created correctly due to SELinux.
-  /// For each broken symlink, we either:
-  /// - Create a copy of the target file, or
-  /// - Create a relative symlink that works
+  /// On Android, SELinux may prevent creating proper directory symlinks
+  /// (bin -> usr/bin, lib -> usr/lib, etc). This shell script:
+  /// 1. Finds all broken symlinks
+  /// 2. For each one, copies the target file/directory as a real path
+  ///
+  /// Uses Process.run with /system/bin/sh (Kern approach: shell-native fix).
   static Future<void> _repairBrokenSymlinks(Directory root) async {
-    int fixed = 0;
-    int skipped = 0;
-    int copied = 0;
+    if (kIsWeb) return; // Never runs on web
+
+    PandaLog.i('RootfsManager', 'Repairing broken symlinks...');
+
+    // Shell script that:
+    // 1. Finds broken symlinks (symlinks whose target doesn't exist)
+    // 2. For each, resolves the target path and copies it as a real file/dir
+    final script = '''
+cd "${root.path}" 2>/dev/null || exit 0
+
+# Fix directory symlinks first (bin -> usr/bin, lib -> usr/lib, sbin -> usr/sbin)
+for link in bin sbin lib lib64 libexec; do
+  if [ -L "\$link" ] && [ ! -d "\$link" ]; then
+    target=\$(readlink "\$link" 2>/dev/null)
+    if [ -d "\$target" ]; then
+      rm -f "\$link"
+      cp -a "\$target" "\$link" 2>/dev/null
+    fi
+  fi
+done
+
+# Fix broken file symlinks recursively
+find . -type l ! -exec test -e {} \\; -print 2>/dev/null | while IFS= read -r link; do
+  # Skip top-level dir symlinks (already handled)
+  case "\$link" in
+    ./bin|./sbin|./lib|./lib64|./libexec) continue ;;
+  esac
+  
+  target=\$(readlink "\$link" 2>/dev/null)
+  dir=\$(dirname "\$link")
+  
+  # Resolve relative target
+  if echo "\$target" | grep -q "^/"; then
+    resolved="\$target"
+  else
+    resolved="\$dir/\$target"
+  fi
+  
+  # Remove broken symlink and copy target
+  rm -f "\$link"
+  if [ -f "\$resolved" ]; then
+    cp "\$resolved" "\$link" 2>/dev/null
+  elif [ -d "\$resolved" ]; then
+    cp -a "\$resolved" "\$link" 2>/dev/null
+  fi
+done
+''';
 
     try {
-      await for (final entity in root.list(recursive: true)) {
-        if (entity is! Link) continue;
-
-        // Check if the symlink target exists
-        if (entity.existsSync()) continue; // Symlink works fine
-
-        // Try to resolve the target
-        final target = entity.target;
-        File? targetFile;
-
-        if (target.startsWith('/')) {
-          // Absolute symlink — resolve relative to root
-          targetFile = File('${root.path}$target');
-        } else {
-          // Relative symlink — resolve relative to parent
-          final parentDir = Directory(entity.parent.path);
-          targetFile = File('${parentDir.path}/$target');
-          // Normalize path (resolve ..)
-          final normalized = targetFile.path.replaceAll(RegExp(r'[^/]+/\.\./'), '');
-          targetFile = File(normalized);
-        }
-
-        if (targetFile.existsSync()) {
-          // Copy the target file instead of creating a symlink
-          try {
-            final data = await targetFile.readAsBytes();
-            // Delete the broken link
-            await entity.delete();
-            // Create a real file with the same content
-            await File(entity.path).writeAsBytes(data, flush: true);
-            copied++;
-          } catch (_) {
-            skipped++;
-          }
-        } else {
-          skipped++;
-        }
-
-        fixed++;
+      // Try /system/bin/sh first (Android toybox)
+      final result = await Process.run(
+        '/system/bin/sh',
+        ['-c', script],
+      );
+      if (result.exitCode == 0) {
+        PandaLog.i('RootfsManager', 'Symlink repair OK');
+      } else {
+        PandaLog.w('RootfsManager',
+            'Symlink repair stderr: ${result.stderr}');
       }
     } catch (e) {
       PandaLog.e('RootfsManager', 'Symlink repair error: $e');
-    }
-
-    if (copied > 0 || skipped > 0) {
-      PandaLog.i('RootfsManager',
-          'Symlink repair: copied=$copied skipped=$skipped');
     }
   }
 
@@ -378,7 +386,6 @@ class RootfsManager {
   ///
   /// Since we already decompressed gzip → tar with Dart, we only need
   /// native tar to handle the tar format (including symlinks and hard links).
-  /// This is the Kern approach: use Android's toybox tar for extraction.
   static Future<bool> _extractWithNativeTar(
       File archive, Directory dest) async {
     PandaLog.i('RootfsManager',
@@ -395,12 +402,12 @@ class RootfsManager {
       try {
         await for (final _ in dest.list(recursive: true)) {
           fileCount++;
-          if (fileCount > 5000) break; // Safety limit
+          if (fileCount > 5000) break;
         }
       } catch (_) {}
       PandaLog.i('RootfsManager',
           'Native tar extraction OK: $fileCount+ entries');
-      return fileCount > 10; // Sanity check: rootfs should have many files
+      return fileCount > 10;
     }
 
     PandaLog.w('RootfsManager',
@@ -438,7 +445,6 @@ class RootfsManager {
       );
       PandaLog.e('RootfsManager',
           'Tar verbose stderr: ${fallback3.stderr}');
-      // Even with warnings, check if files were extracted
       int count = 0;
       try {
         await for (final _ in dest.list(recursive: true)) {
