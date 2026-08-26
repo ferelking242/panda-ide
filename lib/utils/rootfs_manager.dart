@@ -61,13 +61,7 @@ class RootfsInfo {
 typedef ProgressCallback = void Function(double progress, int downloaded, int total);
 
 /// RootfsManager handles downloading, caching, switching, and deleting
-/// terminal rootfs images (Debian, Alpine, Bionic).
-///
-/// Key design:
-/// - Download happens ONCE per terminal type on first install
-/// - APK updates do NOT trigger re-download
-/// - Switching terminals downloads new rootfs, optionally deletes old
-/// - All rootfs data in app documents (deleted with uninstall)
+/// terminal rootfs images (Ubuntu, Debian, Alpine, Bionic).
 class RootfsManager {
   static const String _githubBase =
       'https://github.com/ferelking242/panda-ide/releases/download/v1.0.0';
@@ -122,18 +116,50 @@ class RootfsManager {
     return installedVersion == info.version && await _validateRootfs(dir, type);
   }
 
+  /// Resolve a path that may be behind symlinks.
+  /// Android's File.existsSync() doesn't follow symlink chains,
+  /// so we check multiple candidate paths.
+  static bool _fileExistsViaSymlinks(Directory base, List<String> candidates) {
+    for (final candidate in candidates) {
+      final file = File('${base.path}/$candidate');
+      if (file.existsSync()) return true;
+    }
+    // Try resolving via the standard shell path
+    // Ubuntu/Debian: bin -> usr/bin, usr/bin/sh -> dash
+    // So bin/sh won't exist as a file, but usr/bin/sh will
+    return false;
+  }
+
   /// Validate rootfs integrity.
   static Future<bool> _validateRootfs(Directory dir, TerminalType type) async {
     switch (type) {
       case TerminalType.ubuntu:
-        return File('\${dir.path}/bin/sh').existsSync() &&
-            File('\${dir.path}/usr/bin/apt').existsSync();
       case TerminalType.debian:
-        return File('${dir.path}/bin/sh').existsSync() &&
-            File('${dir.path}/usr/bin/apt').existsSync();
+        // Ubuntu/Debian have: bin -> usr/bin (symlink), usr/bin/sh -> dash (symlink)
+        // File.existsSync() may not follow multi-level symlinks on Android
+        // Check multiple paths to be safe
+        final shExists = _fileExistsViaSymlinks(dir, [
+          'bin/sh',
+          'usr/bin/sh',
+          'usr/bin/bash',
+        ]);
+        final aptExists = _fileExistsViaSymlinks(dir, [
+          'usr/bin/apt',
+          'bin/apt',
+          'usr/bin/apt-get',
+        ]);
+        PandaLog.i('RootfsManager',
+            'Validation ${type.id}: sh=$shExists apt=$aptExists');
+        return shExists && aptExists;
       case TerminalType.alpine:
-        return File('${dir.path}/bin/sh').existsSync() &&
-            File('${dir.path}/sbin/apk').existsSync();
+        return _fileExistsViaSymlinks(dir, [
+          'bin/sh',
+          'usr/bin/sh',
+        ]) && _fileExistsViaSymlinks(dir, [
+          'sbin/apk',
+          'usr/sbin/apk',
+          'bin/apk',
+        ]);
       case TerminalType.bionic:
         return true;
     }
@@ -168,6 +194,16 @@ class RootfsManager {
         await _downloadFile(info.url, archiveFile, onProgress);
       }
 
+      // Verify the downloaded file is actually a gzip
+      final firstBytes = await archiveFile.openRead(0, 2).first;
+      if (firstBytes.length >= 2 && firstBytes[0] == 0x1f && firstBytes[1] == 0x8b) {
+        PandaLog.i('RootfsManager', 'Archive valid gzip');
+      } else {
+        PandaLog.e('RootfsManager', 'Downloaded file is NOT a valid gzip archive!');
+        await archiveFile.delete();
+        return false;
+      }
+
       // Extract to staging
       final stagingDir = Directory('${cacheDir.path}/${type.id}.staging');
       if (stagingDir.existsSync()) {
@@ -179,6 +215,13 @@ class RootfsManager {
       // Validate
       if (!await _validateRootfs(stagingDir, type)) {
         PandaLog.e('RootfsManager', 'Validation failed for ${type.id}');
+        // Log what exists for debugging
+        final binDir = Directory('${stagingDir.path}/bin');
+        final usrBinDir = Directory('${stagingDir.path}/usr/bin');
+        PandaLog.e('RootfsManager',
+            'bin/ exists: ${binDir.existsSync()}, '
+            'bin is symlink: ${binDir.existsSync() ? binDir.statSync().type : "N/A"}, '
+            'usr/bin/ exists: ${usrBinDir.existsSync()}');
         await stagingDir.delete(recursive: true);
         return false;
       }
@@ -201,8 +244,8 @@ class RootfsManager {
 
       PandaLog.i('RootfsManager', '${type.displayName} installed OK');
       return true;
-    } catch (e) {
-      PandaLog.e('RootfsManager', 'Install failed: $e');
+    } catch (e, stack) {
+      PandaLog.e('RootfsManager', 'Install failed: $e\n$stack');
       return false;
     }
   }
@@ -300,7 +343,7 @@ class RootfsManager {
       }
     }
 
-    // Symlinks last
+    // Symlinks last (so targets exist)
     for (final link in symlinks) {
       final name = link.name.replaceFirst(RegExp(r'^\./'), '');
       final destPath = '${dest.path}/$name';
@@ -323,8 +366,10 @@ class RootfsManager {
     const execDirs = ['bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin', 'lib'];
     final targets = <String>[];
     for (final d in execDirs) {
-      if (Directory('${dest.path}/$d').existsSync()) {
-        targets.add('"${dest.path}/$d"');
+      final dirPath = '${dest.path}/$d';
+      final dir = Directory(dirPath);
+      if (dir.existsSync()) {
+        targets.add('"$dirPath"');
       }
     }
     if (targets.isNotEmpty) {
@@ -332,5 +377,7 @@ class RootfsManager {
         await Process.run('/system/bin/sh', ['-c', 'chmod -R 755 ${targets.join(' ')}']);
       } catch (_) {}
     }
+
+    PandaLog.i('RootfsManager', 'Extraction complete: ${tarArchive.length} entries');
   }
 }
