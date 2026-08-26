@@ -1099,10 +1099,15 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 ..._buildSelectionHandles(runtime),
                 // ── Barre d'actions compacte ─────────────────────────────
                 Positioned(
-                  left: _toolbarPosition.dx > 0 ? _toolbarPosition.dx : null,
-                  right: _toolbarPosition.dx > 0 ? null : 0,
-                  bottom: MediaQuery.of(overlayCtx).viewInsets.bottom + _toolbarPosition.dy,
-                  child: _toolbarPosition.dx > 0 ? Center(child: _buildToolbarContent(runtime, overlayCtx)) : Center(child: _buildToolbarContent(runtime, overlayCtx)),
+                  left: _toolbarPosition.dx > 0 ? _toolbarPosition.dx : (MediaQuery.of(overlayCtx).size.width - 300) / 2,
+                  right: _toolbarPosition.dx > 0 ? null : null,
+                  bottom: MediaQuery.of(overlayCtx).viewInsets.bottom + 24 + _toolbarPosition.dy,
+                  child: GestureDetector(
+                    onPanUpdate: (d) {
+                      _toolbarPosition += d.delta;
+                      _selectionUiTick.value++;
+                    },
+                    child: Material(
                       elevation: 6,
                       borderRadius: BorderRadius.circular(14),
                       color: const Color(0xdd1c1c1e),
