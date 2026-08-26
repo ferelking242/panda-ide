@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../utils/debian_setup.dart';
+import '../utils/rootfs_manager.dart';
 import '../utils/constants.dart';
 import '../utils/functions.dart';
 import '../utils/panda_log.dart';
@@ -717,10 +718,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
   // ── PRoot + Alpine session ─────────────────────────────────────────────────
 
   Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
-    final rootfsDir = DebianSetup.debianDir;
+    final activeType = await RootfsManager.getActiveTerminal();
+    final rootfsDir = (await RootfsManager.rootfsDir(activeType)).path;
     final sw = Stopwatch()..start();
 
-    if (!DebianSetup.isRootfsComplete()) {
+    if (!await RootfsManager.isInstalled(activeType)) {
       // Alpine should have been extracted during SettingUpScreen.
       // If we're here, the extraction failed or was skipped.
       PandaLog.e('Terminal', 'Linux rootfs incomplete — cannot start PRoot session');
