@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:panda/utils/rootfs_manager.dart';
@@ -7,46 +8,46 @@ class _DistroBrand {
   final Color primary;
   final Color border;
   final Color bg;
-  final IconData icon;
-  final String assetLogo;
+  final Color accent;
+  final String tagline;
 
   const _DistroBrand({
     required this.primary,
     required this.border,
     required this.bg,
-    required this.icon,
-    required this.assetLogo,
+    required this.accent,
+    required this.tagline,
   });
 }
 
 const Map<TerminalType, _DistroBrand> _brands = {
   TerminalType.ubuntu: _DistroBrand(
-    primary: Color(0xFFE95420), // Ubuntu orange
+    primary: Color(0xFFE95420),
     border: Color(0xFFE95420),
-    bg: Color(0xFF2D1A0E),
-    icon: Icons.memory,
-    assetLogo: 'ubuntu',
+    bg: Color(0xFF1C0E06),
+    accent: Color(0xFFFF9D00),
+    tagline: 'For everyone',
   ),
   TerminalType.debian: _DistroBrand(
-    primary: Color(0xFFA80030), // Debian red
-    border: Color(0xFFA80030),
-    bg: Color(0xFF2D0A14),
-    icon: Icons.terminal,
-    assetLogo: 'debian',
+    primary: Color(0xFFD70A53),
+    border: Color(0xFFD70A53),
+    bg: Color(0xFF1C0610),
+    accent: Color(0xFFFC0E33),
+    tagline: 'The universal OS',
   ),
   TerminalType.alpine: _DistroBrand(
-    primary: Color(0xFF0D597F), // Alpine blue
+    primary: Color(0xFF0D597F),
     border: Color(0xFF0D597F),
-    bg: Color(0xFF0A1E2D),
-    icon: Icons.terrain,
-    assetLogo: 'alpine',
+    bg: Color(0xFF06141C),
+    accent: Color(0xFF45A5C4),
+    tagline: 'Simple. Secure.',
   ),
   TerminalType.bionic: _DistroBrand(
-    primary: Color(0xFF3DDC84), // Android green
+    primary: Color(0xFF3DDC84),
     border: Color(0xFF3DDC84),
-    bg: Color(0xFF0D2818),
-    icon: Icons.phone_android,
-    assetLogo: 'bionic',
+    bg: Color(0xFF061C0E),
+    accent: Color(0xFF7BED9F),
+    tagline: 'Native Android',
   ),
 };
 
@@ -59,6 +60,7 @@ class _DistroDetail {
   final List<String> pros;
   final List<String> cons;
   final String bestFor;
+  final String overview;
 
   const _DistroDetail({
     required this.title,
@@ -68,6 +70,7 @@ class _DistroDetail {
     required this.pros,
     required this.cons,
     required this.bestFor,
+    required this.overview,
   });
 }
 
@@ -78,11 +81,15 @@ const Map<TerminalType, _DistroDetail> _details = {
     size: '~28 MB',
     libc: 'glibc 2.39',
     bestFor: 'Best overall compatibility',
+    overview:
+        'Ubuntu is the most popular Linux distribution. With glibc natively supported, '
+        'almost every prebuilt Linux binary works out of the box. '
+        'Supports apt, patchright, playwright, and Chromium seamlessly.',
     pros: [
       'glibc native — 95%+ Linux packages work',
       'apt package manager (widest ecosystem)',
       'LTS support until 2029',
-      'patchright, playwright, Chromium work',
+      'patchright, playwright, Chromium work out of the box',
       'Most community tutorials apply directly',
     ],
     cons: [
@@ -96,16 +103,21 @@ const Map<TerminalType, _DistroDetail> _details = {
     size: '~103 MB',
     libc: 'glibc 2.36',
     bestFor: 'Maximum stability',
+    overview:
+        'Debian is the foundation that Ubuntu is built on. '
+        'Rock-solid stability with 3+ years of support. '
+        'Perfect for server workloads and reliability-critical tasks.',
     pros: [
-      'Rock-solid stability (3 year support)',
+      'Rock-solid stability (3+ year support)',
       'glibc — full package compatibility',
       'apt package manager',
-      'Smaller than full Ubuntu',
       'Server-grade reliability',
+      'Smaller than full Ubuntu install',
     ],
     cons: [
-      'Older package versions',
+      'Older package versions than Ubuntu',
       'Slower security patches than Ubuntu',
+      'Larger than Alpine rootfs',
     ],
   ),
   TerminalType.alpine: _DistroDetail(
@@ -114,6 +126,10 @@ const Map<TerminalType, _DistroDetail> _details = {
     size: '~4 MB',
     libc: 'musl libc',
     bestFor: 'Minimal footprint',
+    overview:
+        'Alpine Linux is an ultra-lightweight distribution using musl instead of glibc. '
+        'Incredibly small at just 4 MB, but many prebuilt Linux binaries require '
+        'glibc and won\'t work directly.',
     pros: [
       'Tiny rootfs (4 MB!)',
       'Fastest to download',
@@ -133,6 +149,10 @@ const Map<TerminalType, _DistroDetail> _details = {
     size: '0 MB',
     libc: 'Bionic libc',
     bestFor: 'Native Android tools only',
+    overview:
+        'Bionic is Android\'s built-in C library. No download needed, '
+        'but only Android-native tools are available. '
+        'Most standard Linux software will not run.',
     pros: [
       'No download needed',
       'Zero setup time',
@@ -282,7 +302,9 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
         content: const Text(
             'The rootfs will be deleted. You can re-download it later from Settings.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
@@ -301,21 +323,21 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
   void _openDetail(TerminalType type) {
     final brand = _brands[type]!;
     final detail = _details[type]!;
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => _DistroDetailPage(
-        type: type,
-        brand: brand,
-        detail: detail,
-        isInstalled: _installed[type] ?? false,
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _DistroDetailPage(
+          type: type,
+          brand: brand,
+          detail: detail,
+          isInstalled: _installed[type] ?? false,
+        ),
       ),
-    ));
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
@@ -336,7 +358,8 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
               ),
               const SizedBox(height: 6),
               Text(
-                'Select the Linux environment for your terminal.\nRootfs is downloaded on first use.',
+                'Select the Linux environment for your terminal.\n'
+                'Rootfs is downloaded on first use.',
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.5),
                   fontSize: 13,
@@ -380,80 +403,36 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
                   child: LinearProgressIndicator(
                     value: _installProgress,
                     backgroundColor: const Color(0xFF1A1A1A),
-                    color: _brands[_installingType]?.primary ?? cs.primary,
+                    color: _brands[_installingType]?.primary ?? Colors.white,
                     minHeight: 6,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(_installStatus,
-                    style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.5), fontSize: 12)),
               ],
 
               // Error with chevron
-              if (_installStatus.isNotEmpty && !_isInstalling && _installError.isNotEmpty) ...[
+              if (_installStatus.isNotEmpty &&
+                  !_isInstalling &&
+                  _installError.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () => setState(() => _showErrorDetail = !_showErrorDetail),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2D1520),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFFCF6679).withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.error_outline, color: Color(0xFFCF6679), size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _installStatus,
-                                style: const TextStyle(
-                                    color: Color(0xFFCF6679),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                            Icon(
-                              _showErrorDetail
-                                  ? Icons.keyboard_arrow_up
-                                  : Icons.keyboard_arrow_down,
-                              color: Colors.white54,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 4),
-                            GestureDetector(
-                              onTap: () {
-                                Clipboard.setData(ClipboardData(text: _installError));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Error log copied'),
-                                    backgroundColor: Color(0xFF1A3A55),
-                                  ),
-                                );
-                              },
-                              child: const Icon(Icons.copy, color: Colors.white38, size: 16),
-                            ),
-                          ],
-                        ),
-                        if (_showErrorDetail) ...[
-                          const SizedBox(height: 10),
-                          Text(
-                            _installError,
-                            style: const TextStyle(
-                              color: Color(0xFFCF6679),
-                              fontSize: 11,
-                              fontFamily: 'monospace',
-                              height: 1.5,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                _ErrorPanel(
+                  status: _installStatus,
+                  error: _installError,
+                  isExpanded: _showErrorDetail,
+                  onToggleExpand: () =>
+                      setState(() => _showErrorDetail = !_showErrorDetail),
+                  onCopy: () {
+                    Clipboard.setData(ClipboardData(text: _installError));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Error log copied'),
+                        backgroundColor: Color(0xFF1A3A55),
+                      ),
+                    );
+                  },
                 ),
               ],
 
@@ -464,10 +443,12 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
                 width: double.infinity,
                 height: 52,
                 child: FilledButton(
-                  onPressed:
-                      _isInstalling ? null : () => _selectAndInstall(_selectedType),
+                  onPressed: _isInstalling
+                      ? null
+                      : () => _selectAndInstall(_selectedType),
                   style: FilledButton.styleFrom(
-                    backgroundColor: _brands[_selectedType]?.primary ?? cs.primary,
+                    backgroundColor:
+                        _brands[_selectedType]?.primary ?? Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -480,7 +461,9 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
                               strokeWidth: 2, color: Colors.white))
                       : Text(
                           _installed[_selectedType] == true
-                              ? (widget.isFromSettings ? 'Switch Terminal' : 'Continue')
+                              ? (widget.isFromSettings
+                                  ? 'Switch Terminal'
+                                  : 'Continue')
                               : 'Download & Continue',
                           style: const TextStyle(
                               fontSize: 15, fontWeight: FontWeight.w600),
@@ -495,7 +478,86 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
   }
 }
 
-/// Distro selection card with colored border and brand styling.
+// ─── Error panel ────────────────────────────────────────────────────
+class _ErrorPanel extends StatelessWidget {
+  final String status;
+  final String error;
+  final bool isExpanded;
+  final VoidCallback onToggleExpand;
+  final VoidCallback onCopy;
+
+  const _ErrorPanel({
+    required this.status,
+    required this.error,
+    required this.isExpanded,
+    required this.onToggleExpand,
+    required this.onCopy,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onToggleExpand,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2D1520),
+          borderRadius: BorderRadius.circular(10),
+          border:
+              Border.all(color: const Color(0xFFCF6679).withOpacity(0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.error_outline,
+                    color: Color(0xFFCF6679), size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    status,
+                    style: const TextStyle(
+                        color: Color(0xFFCF6679),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Icon(
+                  isExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  color: Colors.white54,
+                  size: 20,
+                ),
+                const SizedBox(width: 4),
+                GestureDetector(
+                  onTap: onCopy,
+                  child: const Icon(Icons.copy,
+                      color: Colors.white38, size: 16),
+                ),
+              ],
+            ),
+            if (isExpanded) ...[
+              const SizedBox(height: 10),
+              Text(
+                error,
+                style: const TextStyle(
+                  color: Color(0xFFCF6679),
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Distro Card ────────────────────────────────────────────────────
 class _DistroCard extends StatelessWidget {
   final TerminalType type;
   final _DistroBrand brand;
@@ -539,134 +601,129 @@ class _DistroCard extends StatelessWidget {
             width: isSelected ? 2 : 1,
           ),
         ),
-        child: Column(
+        child: Row(
           children: [
-            Row(
-              children: [
-                // Distro icon circle
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: brand.primary.withOpacity(0.15),
-                    border: Border.all(
-                      color: brand.primary.withOpacity(0.3),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Center(
-                    child: _DistroLogo(type: type, size: 24),
-                  ),
+            // Real distro logo
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: brand.primary.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: brand.primary.withOpacity(0.25),
+                  width: 1.5,
                 ),
-                const SizedBox(width: 14),
-                // Info
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              ),
+              child: Center(
+                child: DistroLogo(type: type, size: 28),
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Row(
-                        children: [
-                          Text(
-                            detail.title,
-                            style: TextStyle(
-                              color: isSelected ? brand.primary : Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          if (isDefault) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: brand.primary.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                'Recommended',
-                                style: TextStyle(
-                                    fontSize: 9,
-                                    color: brand.primary,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ],
-                          if (isInstalled) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text('Installed',
-                                  style: TextStyle(
-                                      fontSize: 9, color: Colors.green)),
-                            ),
-                          ],
-                          if (isInstallingThis) ...[
-                            const SizedBox(width: 6),
-                            SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: brand.primary)),
-                          ],
-                        ],
+                      Text(
+                        detail.title,
+                        style: TextStyle(
+                          color: isSelected ? brand.primary : Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Text(
-                            '${detail.size} · ${detail.libc}',
+                      if (isDefault) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: brand.primary.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Recommended',
                             style: TextStyle(
-                                color: Colors.white.withOpacity(0.4),
-                                fontSize: 11),
+                                fontSize: 9,
+                                color: brand.primary,
+                                fontWeight: FontWeight.w600),
                           ),
-                          const Spacer(),
-                          // Detail chevron
-                          GestureDetector(
-                            onTap: onDetail,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Details',
-                                  style: TextStyle(
-                                      color: brand.primary.withOpacity(0.7),
-                                      fontSize: 11),
-                                ),
-                                Icon(Icons.chevron_right,
-                                    size: 16,
-                                    color: brand.primary.withOpacity(0.7)),
-                              ],
+                        ),
+                      ],
+                      if (isInstalled) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('Installed',
+                              style:
+                                  TextStyle(fontSize: 9, color: Colors.green)),
+                        ),
+                      ],
+                      if (isInstallingThis) ...[
+                        const SizedBox(width: 6),
+                        SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: brand.primary)),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Text(
+                        '${detail.size}  ${detail.libc}',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.4), fontSize: 11),
+                      ),
+                      const Spacer(),
+                      // Detail chevron
+                      GestureDetector(
+                        onTap: onDetail,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'Details',
+                              style: TextStyle(
+                                  color: brand.primary.withOpacity(0.7),
+                                  fontSize: 11),
                             ),
-                          ),
-                        ],
+                            Icon(Icons.chevron_right,
+                                size: 16,
+                                color: brand.primary.withOpacity(0.7)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                ),
-                // Selection / delete
-                if (onDelete != null)
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18),
-                    color: Colors.red.withOpacity(0.6),
-                    onPressed: onDelete,
-                    tooltip: 'Remove',
-                  )
-                else
-                  Icon(
-                    isSelected ? Icons.check_circle : Icons.circle_outlined,
-                    color: isSelected ? brand.primary : const Color(0xFF3A3A3A),
-                    size: 22,
-                  ),
-              ],
+                ],
+              ),
             ),
+            // Selection / delete
+            if (onDelete != null)
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 18),
+                color: Colors.red.withOpacity(0.6),
+                onPressed: onDelete,
+                tooltip: 'Remove',
+              )
+            else
+              Icon(
+                isSelected ? Icons.check_circle : Icons.circle_outlined,
+                color:
+                    isSelected ? brand.primary : const Color(0xFF3A3A3A),
+                size: 22,
+              ),
           ],
         ),
       ),
@@ -674,37 +731,229 @@ class _DistroCard extends StatelessWidget {
   }
 }
 
-/// SVG-free distro logo using styled text + icons.
-class _DistroLogo extends StatelessWidget {
+// ─── Real Distro Logos (CustomPainter) ──────────────────────────────
+/// Public widget so detail page can use it too.
+class DistroLogo extends StatelessWidget {
   final TerminalType type;
   final double size;
 
-  const _DistroLogo({required this.type, required this.size});
+  const DistroLogo({super.key, required this.type, required this.size});
 
   @override
   Widget build(BuildContext context) {
-    final brand = _brands[type]!;
     switch (type) {
       case TerminalType.ubuntu:
-        return Text(
-          'U',
-          style: TextStyle(
-            color: brand.primary,
-            fontSize: size,
-            fontWeight: FontWeight.w900,
-          ),
-        );
+        return CustomPaint(size: Size(size, size), painter: const UbuntuLogoPainter());
       case TerminalType.debian:
-        return Icon(Icons.terminal, color: brand.primary, size: size * 0.8);
+        return CustomPaint(size: Size(size, size), painter: const DebianLogoPainter());
       case TerminalType.alpine:
-        return Icon(Icons.terrain, color: brand.primary, size: size * 0.8);
+        return CustomPaint(size: Size(size, size), painter: const AlpineLogoPainter());
       case TerminalType.bionic:
-        return Icon(Icons.phone_android, color: brand.primary, size: size * 0.8);
+        return CustomPaint(size: Size(size, size), painter: const AndroidLogoPainter());
     }
   }
 }
 
-/// Detail page for a distro.
+/// Ubuntu "Circle of Friends" logo (simplified vector).
+class UbuntuLogoPainter extends CustomPainter {
+  const UbuntuLogoPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width * 0.42;
+
+    // Outer circle
+    final circlePaint = Paint()
+      ..color = const Color(0xFFE95420)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.08
+      ..strokeCap = StrokeCap.round;
+    canvas.drawCircle(Offset(cx, cy), r, circlePaint);
+
+    // Inner filled circle
+    final innerPaint = Paint()
+      ..color = const Color(0xFFE95420)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(cx, cy), r * 0.18, innerPaint);
+
+    // Three dots (the "friends")
+    final dotPaint = Paint()
+      ..color = const Color(0xFFE95420)
+      ..style = PaintingStyle.fill;
+    final dotR = r * 0.13;
+    final dist = r * 0.72;
+
+    for (int i = 0; i < 3; i++) {
+      final angle = (i * 2 * math.pi / 3) - math.pi / 2;
+      final dx = cx + dist * math.cos(angle);
+      final dy = cy + dist * math.sin(angle);
+      canvas.drawCircle(Offset(dx, dy), dotR, dotPaint);
+    }
+
+    // Gap lines in the circle (3 segments)
+    final gapPaint = Paint()
+      ..color = const Color(0xFF0A0A0A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.12
+      ..strokeCap = StrokeCap.round;
+
+    for (int i = 0; i < 3; i++) {
+      final angle = (i * 2 * math.pi / 3) - math.pi / 2;
+      final x1 = cx + r * 0.45 * math.cos(angle);
+      final y1 = cy + r * 0.45 * math.sin(angle);
+      final x2 = cx + r * 1.15 * math.cos(angle);
+      final y2 = cy + r * 1.15 * math.sin(angle);
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), gapPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Debian swirl logo (simplified vector).
+class DebianLogoPainter extends CustomPainter {
+  const DebianLogoPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width * 0.40;
+
+    // Outer circle (the "swirl")
+    final swirlPaint = Paint()
+      ..color = const Color(0xFFD70A53)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.06
+      ..strokeCap = StrokeCap.round;
+
+    // Draw arc
+    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: r);
+    canvas.drawArc(rect, -math.pi * 0.3, math.pi * 1.6, false, swirlPaint);
+
+    // Inner circle
+    final innerPaint = Paint()
+      ..color = const Color(0xFFD70A53)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(cx, cy), r * 0.22, innerPaint);
+
+    // Small swirl at top
+    final headPaint = Paint()
+      ..color = const Color(0xFFD70A53)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+        Offset(cx + r * 0.68, cy - r * 0.68), r * 0.10, headPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Alpine triangle/mountain logo (simplified vector).
+class AlpineLogoPainter extends CustomPainter {
+  const AlpineLogoPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final s = size.width * 0.40;
+
+    final paint = Paint()
+      ..color = const Color(0xFF0D597F)
+      ..style = PaintingStyle.fill;
+
+    // Mountain triangle
+    final path = Path()
+      ..moveTo(cx, cy - s * 0.85)
+      ..lineTo(cx - s * 0.85, cy + s * 0.65)
+      ..lineTo(cx + s * 0.85, cy + s * 0.65)
+      ..close();
+    canvas.drawPath(path, paint);
+
+    // Snow cap (small white triangle)
+    final capPaint = Paint()
+      ..color = Colors.white.withOpacity(0.9)
+      ..style = PaintingStyle.fill;
+    final capPath = Path()
+      ..moveTo(cx, cy - s * 0.85)
+      ..lineTo(cx - s * 0.22, cy - s * 0.35)
+      ..lineTo(cx + s * 0.22, cy - s * 0.35)
+      ..close();
+    canvas.drawPath(capPath, capPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Android robot logo (simplified vector).
+class AndroidLogoPainter extends CustomPainter {
+  const AndroidLogoPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final s = size.width * 0.38;
+
+    final paint = Paint()
+      ..color = const Color(0xFF3DDC84)
+      ..style = PaintingStyle.fill;
+
+    // Body (rounded rect)
+    final bodyPath = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+        Rect.fromCenter(
+            center: Offset(cx, cy + s * 0.15),
+            width: s * 1.3,
+            height: s * 1.1),
+        Radius.circular(s * 0.18),
+      ));
+    canvas.drawPath(bodyPath, paint);
+
+    // Head (half circle)
+    final headPaint = Paint()
+      ..color = const Color(0xFF3DDC84)
+      ..style = PaintingStyle.fill;
+    final headRect = Rect.fromCenter(
+      center: Offset(cx, cy - s * 0.45),
+      width: s * 1.3,
+      height: s * 0.9,
+    );
+    canvas.drawArc(headRect, math.pi, math.pi, false, headPaint);
+
+    // Eyes
+    final eyePaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(cx - s * 0.28, cy - s * 0.52), s * 0.09, eyePaint);
+    canvas.drawCircle(Offset(cx + s * 0.28, cy - s * 0.52), s * 0.09, eyePaint);
+
+    // Antennae
+    final antPaint = Paint()
+      ..color = const Color(0xFF3DDC84)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.03
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+        Offset(cx - s * 0.28, cy - s * 0.88),
+        Offset(cx - s * 0.40, cy - s * 1.08),
+        antPaint);
+    canvas.drawLine(
+        Offset(cx + s * 0.28, cy - s * 0.88),
+        Offset(cx + s * 0.40, cy - s * 1.08),
+        antPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ─── Detail Page ────────────────────────────────────────────────────
 class _DistroDetailPage extends StatelessWidget {
   final TerminalType type;
   final _DistroBrand brand;
@@ -722,157 +971,210 @@ class _DistroDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0A0A),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(detail.title,
-            style: TextStyle(
-                color: brand.primary,
-                fontSize: 18,
-                fontWeight: FontWeight.w600)),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Hero header
-            Center(
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: brand.primary.withOpacity(0.15),
-                  border: Border.all(
-                      color: brand.primary.withOpacity(0.4), width: 2),
-                ),
-                child: Center(
-                  child: _DistroLogo(type: type, size: 40),
-                ),
-              ),
+      body: CustomScrollView(
+        slivers: [
+          // SliverAppBar with logo
+          SliverAppBar(
+            expandedHeight: 220,
+            pinned: true,
+            backgroundColor: brand.bg,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
             ),
-            const SizedBox(height: 16),
-            Center(
-              child: Text(
-                detail.title,
-                style: TextStyle(
-                  color: brand.primary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            Center(
-              child: Text(
-                detail.version,
-                style: TextStyle(
-                    color: Colors.white.withOpacity(0.4), fontSize: 14),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Info chips
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _InfoChip(label: 'Size', value: detail.size, brand: brand),
-                const SizedBox(width: 12),
-                _InfoChip(label: 'Libc', value: detail.libc, brand: brand),
-                const SizedBox(width: 12),
-                _InfoChip(
-                    label: 'Status',
-                    value: isInstalled ? 'Installed' : 'Not installed',
-                    brand: brand),
-              ],
-            ),
-            const SizedBox(height: 28),
-
-            // Best for
-            Text(
-              'BEST FOR',
-              style: TextStyle(
-                  color: Colors.white.withOpacity(0.3),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              detail.bestFor,
-              style: TextStyle(
-                color: brand.primary,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Advantages
-            Text(
-              'ADVANTAGES',
-              style: TextStyle(
-                  color: Colors.white.withOpacity(0.3),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1),
-            ),
-            const SizedBox(height: 8),
-            ...detail.pros.map((p) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.check_circle,
-                          color: Colors.green.withOpacity(0.7), size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(p,
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
-                                fontSize: 13,
-                                height: 1.3)),
+            flexibleSpace: FlexibleSpaceBar(
+              background: Container(
+                color: brand.bg,
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 30),
+                    // Logo in gradient circle
+                    Container(
+                      width: 90,
+                      height: 90,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            brand.primary.withOpacity(0.25),
+                            brand.primary.withOpacity(0.05),
+                          ],
+                        ),
+                        border: Border.all(
+                            color: brand.primary.withOpacity(0.4), width: 2),
                       ),
-                    ],
-                  ),
-                )),
-            const SizedBox(height: 20),
-
-            // Limitations
-            Text(
-              'LIMITATIONS',
-              style: TextStyle(
-                  color: Colors.white.withOpacity(0.3),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1),
-            ),
-            const SizedBox(height: 8),
-            ...detail.cons.map((c) => Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.warning_amber,
-                          color: Colors.orange.withOpacity(0.7), size: 16),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(c,
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.8),
-                                fontSize: 13,
-                                height: 1.3)),
+                      child: Center(
+                        child: DistroLogo(type: type, size: 44),
                       ),
-                    ],
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      detail.title,
+                      style: TextStyle(
+                        color: brand.primary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      detail.version,
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.4), fontSize: 14),
+                    ),
+                    const SizedBox(height: 12),
+                    // Chips
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _InfoChip(
+                            label: 'Size', value: detail.size, brand: brand),
+                        const SizedBox(width: 10),
+                        _InfoChip(
+                            label: 'Libc', value: detail.libc, brand: brand),
+                        const SizedBox(width: 10),
+                        _InfoChip(
+                            label: 'Status',
+                            value: isInstalled ? 'Installed' : 'Available',
+                            brand: brand),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Content
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Overview
+                  Text(
+                    'OVERVIEW',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.3),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1),
                   ),
-                )),
-            const SizedBox(height: 32),
-          ],
-        ),
+                  const SizedBox(height: 8),
+                  Text(
+                    detail.overview,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Best for
+                  Text(
+                    'BEST FOR',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.3),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: brand.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: brand.primary.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.star, color: brand.primary, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            detail.bestFor,
+                            style: TextStyle(
+                              color: brand.primary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Advantages
+                  Text(
+                    'ADVANTAGES',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.3),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 8),
+                  ...detail.pros.map((p) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.check_circle,
+                                color: Colors.green.withOpacity(0.7),
+                                size: 16),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(p,
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 13,
+                                      height: 1.4)),
+                            ),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 24),
+
+                  // Limitations
+                  Text(
+                    'LIMITATIONS',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.3),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1),
+                  ),
+                  const SizedBox(height: 8),
+                  ...detail.cons.map((c) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.warning_amber,
+                                color: Colors.orange.withOpacity(0.7),
+                                size: 16),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(c,
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.8),
+                                      fontSize: 13,
+                                      height: 1.4)),
+                            ),
+                          ],
+                        ),
+                      )),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
