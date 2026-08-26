@@ -13,8 +13,6 @@ import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import 'home.dart';
 import '../terminal/panda_bridge.dart';
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 
 // ── Tool lists (shared with start_screen) ──────────────────────────────────────
@@ -94,7 +92,7 @@ class _SetupScreenState extends State<SetupScreen>
     _steps.addAll([
       _SetupStep(label: 'Storage', description: 'Creating directories'),
       _SetupStep(label: 'Certificates', description: 'Installing CA certificates'),
-      if (_isFirstInstall) _SetupStep(label: 'Choose Terminal', description: 'Select Debian, Alpine, or Bionic'),
+      if (_isFirstInstall) _SetupStep(label: 'Choose Terminal', description: 'Select Ubuntu, Debian, Alpine, or Bionic'),
       if (_isFirstInstall) _SetupStep(label: 'Download Rootfs', description: 'Downloading terminal environment'),
       _SetupStep(label: 'Runtime', description: 'Setting up symlinks & runtime'),
       _SetupStep(label: 'Tools', description: 'Injecting Panda tools'),
@@ -247,9 +245,9 @@ class _SetupScreenState extends State<SetupScreen>
             _addLog('Terminal chosen: ${chosen.displayName}');
             _setStepState(si, completed: true);
           } else {
-            // Default to debian if user backed out
-            await RootfsManager.setActiveTerminal(TerminalType.debian);
-            _addLog('Default terminal: Debian');
+            // Default to ubuntu if user backed out
+            await RootfsManager.setActiveTerminal(TerminalType.ubuntu);
+            _addLog('Default terminal: Ubuntu');
             _setStepState(si, completed: true);
           }
           si++;

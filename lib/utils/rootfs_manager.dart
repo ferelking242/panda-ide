@@ -8,6 +8,8 @@ import 'package:panda/utils/panda_log.dart';
 
 /// Supported terminal runtime environments.
 enum TerminalType {
+  ubuntu('ubuntu', 'Ubuntu 24.04 LTS (glibc)',
+      'Best compatibility — glibc native, apt works, most packages supported'),
   debian('debian', 'Debian GNU/Linux (glibc)',
       'Most compatible — supports Chromium, patchright, all glibc packages'),
   alpine('alpine', 'Alpine Linux (musl)',
@@ -23,7 +25,7 @@ enum TerminalType {
   static TerminalType fromString(String value) {
     return TerminalType.values.firstWhere(
       (t) => t.id == value,
-      orElse: () => TerminalType.debian,
+      orElse: () => TerminalType.ubuntu,
     );
   }
 }
@@ -71,6 +73,11 @@ class RootfsManager {
       'https://github.com/ferelking242/panda-ide/releases/download/v1.0.0';
 
   static final Map<TerminalType, RootfsInfo> manifest = {
+    TerminalType.ubuntu: RootfsInfo(
+      version: '1.0.0',
+      url: '$_githubBase/ubuntu-arm64-rootfs.tar.gz',
+      sizeBytes: 34 * 1024 * 1024,
+    ),
     TerminalType.debian: RootfsInfo(
       version: '1.0.0',
       url: '$_githubBase/debian-arm64-rootfs.tar.gz',
@@ -118,6 +125,9 @@ class RootfsManager {
   /// Validate rootfs integrity.
   static Future<bool> _validateRootfs(Directory dir, TerminalType type) async {
     switch (type) {
+      case TerminalType.ubuntu:
+        return File('\${dir.path}/bin/sh').existsSync() &&
+            File('\${dir.path}/usr/bin/apt').existsSync();
       case TerminalType.debian:
         return File('${dir.path}/bin/sh').existsSync() &&
             File('${dir.path}/usr/bin/apt').existsSync();
@@ -216,7 +226,7 @@ class RootfsManager {
   /// Get the currently active terminal type.
   static Future<TerminalType> getActiveTerminal() async {
     final prefs = await SharedPreferences.getInstance();
-    final value = prefs.getString('active_terminal') ?? 'debian';
+    final value = prefs.getString('active_terminal') ?? 'ubuntu';
     return TerminalType.fromString(value);
   }
 

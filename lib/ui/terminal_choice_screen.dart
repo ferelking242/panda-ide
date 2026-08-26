@@ -22,7 +22,7 @@ class TerminalChoiceScreen extends StatefulWidget {
 
 class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
     with SingleTickerProviderStateMixin {
-  TerminalType _selectedType = TerminalType.debian;
+  TerminalType _selectedType = TerminalType.ubuntu;
   final Map<TerminalType, bool> _installed = {};
   bool _isInstalling = false;
   TerminalType? _installingType;
@@ -161,7 +161,7 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
               const SizedBox(height: 8),
               Text(
                 'Select the Linux environment for your terminal.\n'
-                'Rootfs is downloaded on first use (~4 MB Alpine, ~90 MB Debian).',
+                'Rootfs is downloaded on first use (~34 MB Ubuntu, ~53 MB Debian, ~4 MB Alpine).',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),
@@ -270,11 +270,13 @@ class _TerminalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final icon = type == TerminalType.debian
-        ? Icons.terminal
-        : type == TerminalType.alpine
-            ? Icons.terrain
-            : Icons.phone_android;
+    final icon = type == TerminalType.ubuntu
+        ? Icons.memory
+        : type == TerminalType.debian
+            ? Icons.terminal
+            : type == TerminalType.alpine
+                ? Icons.terrain
+                : Icons.phone_android;
 
     return GestureDetector(
       onTap: onSelect,
@@ -327,7 +329,7 @@ class _TerminalCard extends StatelessWidget {
                             style: TextStyle(fontSize: 10, color: Colors.green)),
                       ),
                     ],
-                    if (type == TerminalType.debian) ...[
+                    if (type == TerminalType.ubuntu) ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -335,7 +337,7 @@ class _TerminalCard extends StatelessWidget {
                           color: cs.primary.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text('Default',
+                        child: Text('Recommended',
                             style: TextStyle(
                                 fontSize: 10,
                                 color: cs.primary,
