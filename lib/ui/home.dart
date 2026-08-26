@@ -74,7 +74,6 @@ import '../services/flutter_device_service.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'logs_ui/logs_explorer_page.dart';
-import '../editor/outline_view.dart';
 import '../editor/timeline_view.dart';
 
 
