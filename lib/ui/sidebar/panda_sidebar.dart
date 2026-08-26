@@ -52,11 +52,8 @@ class PandaSidebarPanel extends StatelessWidget {
     final borderColor =
         isDark ? const Color(0xff3c3c3c) : const Color(0xffdddddd);
 
-    return PhysicalShape(
+    return Container(
       color: bg,
-      elevation: 6,
-      shadowColor: Colors.black38,
-      clipper: SidebarClipper(),
       child: SizedBox(
         width: kSidebarWidth,
         child: Column(
@@ -66,9 +63,6 @@ class PandaSidebarPanel extends StatelessWidget {
             Container(
               height: 35,
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: borderColor)),
-              ),
               child: Row(
                 children: [
                   Expanded(

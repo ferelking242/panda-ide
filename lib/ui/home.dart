@@ -74,6 +74,8 @@ import '../services/flutter_device_service.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'logs_ui/logs_explorer_page.dart';
+import '../editor/outline_view.dart';
+import '../editor/timeline_view.dart';
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2271,6 +2273,8 @@ class _SelectTypeState extends State<SelectType>
       9: 'GITHUB COPILOT',
       10: 'PANDA AGENT',
       11: 'MODÈLES LOCAUX',
+      12: 'OUTLINE',
+      13: 'TIMELINE',
     };
 
     Widget panelBody;
@@ -2293,6 +2297,12 @@ class _SelectTypeState extends State<SelectType>
       case 6: // Marketplace
         panelBody = _sidebarMarketplace(context, appTheme, isDark);
         break;
+      case 12: // Outline
+        panelBody = _sidebarOutline(context, appTheme, isDark);
+        break;
+      case 13: // Timeline
+        panelBody = _sidebarTimeline(context, appTheme, isDark);
+        break;
       case 9: // GitHub Copilot
         panelBody = _sidebarCopilot(context, appTheme, isDark);
         break;
@@ -2300,11 +2310,8 @@ class _SelectTypeState extends State<SelectType>
         panelBody = const SizedBox.shrink();
     }
 
-    return PhysicalShape(
+    return Container(
       color: bg,
-      elevation: 6,
-      shadowColor: Colors.black38,
-      clipper: _SidebarClipper(),
       child: SizedBox(
         width: _kSidebarWidth,
         child: Column(
@@ -2314,9 +2321,6 @@ class _SelectTypeState extends State<SelectType>
             Container(
               height: 35,
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: borderColor)),
-              ),
               child: Row(
                 children: [
                   Expanded(
@@ -2479,6 +2483,46 @@ class _SelectTypeState extends State<SelectType>
     }
     return Icon(Icons.insert_drive_file_outlined,
         size: 16, color: theme.selectScreenCardTextColor.withValues(alpha: 0.65));
+  }
+
+
+  // ── Outline panel ──────────────────────────────────────────────────────
+  Widget _sidebarOutline(BuildContext ctx, AppTheme t, bool dark) {
+    return DirectoryTreeViewerCustom(
+      rootPath: _activeProjectDir() ?? _currentWorkspaceDir ?? '/',
+      appTheme: t,
+      isUnfoldedFirst: true,
+      enableCreateFileOption: false,
+      enableCreateFolderOption: false,
+      enableDeleteFileOption: false,
+      enableDeleteFolderOption: false,
+      enableRenameFileOption: false,
+      enableRenameFolderOption: false,
+      onFileTap: (file) {
+        _openFileFromWorkspace(file, _activeProjectDir() ?? _currentWorkspaceDir ?? '/');
+      },
+    );
+  }
+
+  // ── Timeline panel ──────────────────────────────────────────────────────
+  Widget _sidebarTimeline(BuildContext ctx, AppTheme t, bool dark) {
+    final projectDir = _activeProjectDir() ?? _currentWorkspaceDir;
+    if (projectDir == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'Open a project to see timeline.',
+            style: TextStyle(color: dark ? Colors.grey[500]! : Colors.grey[600]!, fontSize: 12),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+    return TimelineView(
+      filePath: _activeEditorConfig()?.file?.path ?? '',
+      workspacePath: projectDir,
+    );
   }
 
   // ── Search panel ──────────────────────────────────────────────────────────
@@ -3398,8 +3442,8 @@ class _SelectTypeState extends State<SelectType>
                       child: Container(
                         key: _workspaceBoxKey,
                         constraints: BoxConstraints(
-                            minWidth: 110,
-                            maxWidth: MediaQuery.of(ctx).size.width * 0.42),
+                            minWidth: 140,
+                            maxWidth: MediaQuery.of(ctx).size.width * 0.55),
                         height: 26,
                         padding:
                             const EdgeInsets.symmetric(horizontal: 10),
@@ -4201,11 +4245,8 @@ class _SelectTypeState extends State<SelectType>
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
             return Container(
               height: _bottomPanelHeight,
-              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                   color: bg,
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12)),
                   border: Border(top: BorderSide(color: border))),
               child: Column(children: [
                 // Resize handle at top of bottom panel.
@@ -4254,11 +4295,6 @@ class _SelectTypeState extends State<SelectType>
                               horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: active ? bg : Colors.transparent,
-                            border: Border(
-                              top: BorderSide(
-                                  color: active ? _kAccent : Colors.transparent,
-                                  width: 1),
-                            ),
                           ),
                           child: Text(tabNames[i],
                               style: TextStyle(
@@ -11782,19 +11818,7 @@ class _SidebarCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: EdgeInsets.fromLTRB(
-          6, isFirst ? 4 : 4, 6, isLast ? 8 : 4),
-      decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xff2a2a2a)
-            : const Color(0xffe8e8e8),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: child,
-    );
+    return child;
   }
 }
 
