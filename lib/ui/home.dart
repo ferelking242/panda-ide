@@ -1910,6 +1910,8 @@ class _SelectTypeState extends State<SelectType>
         _RailItem(icon: Broken.cpu,                 label: 'Gateway AI',       idx: 7),
         _RailItem(icon: Broken.global,              label: 'Navigateur',        idx: 8),
         _RailItem(icon: Broken.message_programming, label: 'GitHub Copilot',    idx: 9),
+        _RailItem(icon: Icons.account_tree,        label: 'Outline',           idx: 12),
+        _RailItem(icon: Icons.schedule,            label: 'Timeline',          idx: 13),
       ];
 
       return Container(
