@@ -4035,7 +4035,7 @@ class _SelectTypeState extends State<SelectType>
         );
       }
 
-      // ── Bottom panel (terminal / problems / output / debug) ──────────────────
+      // ── Bottom panel (terminal / problems / output / debug) ────────────────────────────────────
       Widget _buildBottomPanel() {
         return BlocBuilder<AppThemeBloc, AppThemeState>(
           builder: (context, ts) {
@@ -4046,23 +4046,12 @@ class _SelectTypeState extends State<SelectType>
             final selFg  = isDark ? Colors.grey[200]! : Colors.grey[900]!;
             final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
-            return ClipRRect(
-              borderRadius: const BorderRadius.only(
-                bottomRight: Radius.circular(12),
-              ),
-              child: Container(
+            const double _pr = 10.0;
+            const double _gap = 4.0;
+            return SizedBox(
               height: _bottomPanelHeight,
-              decoration: BoxDecoration(
-                  color: bg,
-                  border: Border(
-                    top: BorderSide(color: border, width: 0.5),
-                    right: BorderSide(color: border, width: 0.5),
-                    bottom: BorderSide(color: border, width: 0.5),
-                  )),
               child: Column(children: [
-                // Resize handle at top of bottom panel.
-                // 20px opaque hit target (was a 4px sliver: the first touch
-                // was regularly missed and the drag felt random).
+                // Resize handle
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onVerticalDragStart: (_) {},
@@ -4078,168 +4067,120 @@ class _SelectTypeState extends State<SelectType>
                     cursor: SystemMouseCursors.resizeRow,
                     child: Container(
                       width: double.infinity,
-                      height: 20,
+                      height: 16,
                       color: Colors.transparent,
                       alignment: Alignment.center,
                       child: Container(
-                        width: 46,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: border,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
+                        width: 40, height: 3,
+                        decoration: BoxDecoration(color: border, borderRadius: BorderRadius.circular(1.5)),
                       ),
                     ),
                   ),
                 ),
-                // Separator line
-                Container(
-                  height: 1,
-                  color: border,
-                ),
-                // Tab strip
-                Container(
-                  height: 30,
-                  color: tabBg,
-                  child: Row(children: [
-                    ...List.generate(tabNames.length, (i) {
-                      final active = _bottomPanelTab == i;
-                      return GestureDetector(
-                        onTap: () => setState(() => _bottomPanelTab = i),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: active ? bg : Colors.transparent,
-                          ),
-                          child: Text(tabNames[i],
-                              style: TextStyle(
+                // Tab strip — rounded card (4 corners)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: _gap),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(_pr),
+                    child: Container(
+                      height: 32,
+                      color: tabBg,
+                      child: Row(children: [
+                        ...List.generate(tabNames.length, (i) {
+                          final active = _bottomPanelTab == i;
+                          return GestureDetector(
+                            onTap: () => setState(() => _bottomPanelTab = i),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(color: active ? bg : Colors.transparent),
+                              child: Text(tabNames[i], style: TextStyle(
                                   fontSize: 11,
-                                  fontWeight: active
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
+                                  fontWeight: active ? FontWeight.w600 : FontWeight.normal,
                                   color: active ? selFg : fg)),
-                        ),
-                      );
-                    }),
-                    const Spacer(),
-                    InkWell(
-                      onTap: () => setState(() => _bottomPanelOpen = false),
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 6),
-                        child: Icon(Broken.close_circle, size: 14, color: fg),
-                      ),
-                    ),
-                    // Ouvre le terminal comme onglet plein écran de l'éditeur
-                    // (mode étendu). Placé à droite du bouton de fermeture.
-                    if (!kIsWeb)
-                      Tooltip(
-                        message: 'Ouvrir le terminal dans l\'éditeur (mode étendu)',
-                        child: InkWell(
-                          onTap: _openTerminalTab,
+                            ),
+                          );
+                        }),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => setState(() => _bottomPanelOpen = false),
                           borderRadius: BorderRadius.circular(4),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 6),
-                            child: Icon(Icons.open_in_new_rounded,
-                                size: 14, color: fg),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                            child: Icon(Broken.close_circle, size: 14, color: fg),
                           ),
                         ),
-                      ),
-                  ]),
-                ),
-                // ── Problems toolbar (search + filter + actions) ───────────
-                if (_bottomPanelTab == 1)
-                  Container(
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: tabBg,
-                      border: Border(bottom: BorderSide(color: border)),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Row(children: [
-                      // Search input
-                      Expanded(
-                        child: SizedBox(
-                          height: 20,
-                          child: TextField(
-                            controller: _problemsSearchCtrl,
-                            style: TextStyle(fontSize: 11, color: selFg),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              hintText: 'Filter (e.g. text, **/*.ts, !**/node_modules/**)',
-                              hintStyle: TextStyle(fontSize: 11, color: fg),
-                              prefixIcon: Icon(Icons.search, size: 12, color: fg),
-                              prefixIconConstraints: const BoxConstraints(minWidth: 24, minHeight: 20),
-                              filled: true,
-                              fillColor: isDark ? const Color(0xff3c3c3c) : const Color(0xff1e293b),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(2),
-                                borderSide: BorderSide.none,
+                        if (!kIsWeb)
+                          Tooltip(
+                            message: "Ouvrir le terminal dans l'\u00e9diteur (mode \u00e9tendu)",
+                            child: InkWell(
+                              onTap: _openTerminalTab,
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                child: Icon(Icons.open_in_new_rounded, size: 14, color: fg),
                               ),
                             ),
-                            onChanged: (v) => setState(() => _problemsSearch = v),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      // Filter: errors only
-                      _PanelToolbarBtn(
-                        icon: Icons.cancel_outlined,
-                        tooltip: 'Show Errors',
-                        active: _problemsFilter == 1,
-                        fg: fg, activeFg: Colors.red[300]!,
-                        onTap: () => setState(() =>
-                          _problemsFilter = _problemsFilter == 1 ? 0 : 1),
-                      ),
-                      // Filter: warnings only
-                      _PanelToolbarBtn(
-                        icon: Icons.warning_amber_outlined,
-                        tooltip: 'Show Warnings',
-                        active: _problemsFilter == 2,
-                        fg: fg, activeFg: Colors.orange[300]!,
-                        onTap: () => setState(() =>
-                          _problemsFilter = _problemsFilter == 2 ? 0 : 2),
-                      ),
-                      // Collapse all
-                      _PanelToolbarBtn(
-                        icon: Icons.unfold_less,
-                        tooltip: 'Collapse All',
-                        active: false,
-                        fg: fg, activeFg: fg,
-                        onTap: () {},
-                      ),
-                      // Clear all
-                      _PanelToolbarBtn(
-                        icon: Icons.clear_all,
-                        tooltip: 'Clear All',
-                        active: false,
-                        fg: fg, activeFg: fg,
-                        onTap: () => setState(() {
-                          _problemsSearch = '';
-                          _problemsSearchCtrl.clear();
-                          _problemsFilter = 0;
-                        }),
-                      ),
-                      // More actions
-                      _PanelToolbarBtn(
-                        icon: Icons.more_horiz,
-                        tooltip: 'More Actions',
-                        active: false,
-                        fg: fg, activeFg: fg,
-                        onTap: () {},
-                      ),
-                    ]),
+                      ]),
+                    ),
                   ),
-                Expanded(
-                  child: _buildBottomPanelContent(context, ts.appTheme, isDark),
                 ),
-              ]),
-              ), // Container
-            ); // ClipRRect
+                // Separator gap — empty space showing the app background
+                const SizedBox(height: _gap),
+                // Problems toolbar
+                if (_bottomPanelTab == 1)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: _gap),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(_pr),
+                      child: Container(
+                        height: 28,
+                        color: tabBg,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Row(children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 20,
+                              child: TextField(
+                                controller: _problemsSearchCtrl,
+                                style: TextStyle(fontSize: 11, color: selFg),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  hintText: 'Filter',
+                                  hintStyle: TextStyle(fontSize: 11, color: fg),
+                                  prefixIcon: Icon(Icons.search, size: 12, color: fg),
+                                  prefixIconConstraints: const BoxConstraints(minWidth: 24, minHeight: 20),
+                                  filled: true,
+                                  fillColor: isDark ? const Color(0xff3c3c3c) : const Color(0xff1e293b),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(2), borderSide: BorderSide.none),
+                                ),
+                                onChanged: (v) => setState(() => _problemsSearch = v),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          _PanelToolbarBtn(icon: Icons.cancel_outlined, tooltip: 'Show Errors', active: _problemsFilter == 1, fg: fg, activeFg: Colors.red[300]!, onTap: () => setState(() => _problemsFilter = _problemsFilter == 1 ? 0 : 1)),
+                          _PanelToolbarBtn(icon: Icons.warning_amber_outlined, tooltip: 'Show Warnings', active: _problemsFilter == 2, fg: fg, activeFg: Colors.orange[300]!, onTap: () => setState(() => _problemsFilter = _problemsFilter == 2 ? 0 : 2)),
+                          _PanelToolbarBtn(icon: Icons.unfold_less, tooltip: 'Collapse All', active: false, fg: fg, activeFg: fg, onTap: () {}),
+                          _PanelToolbarBtn(icon: Icons.clear_all, tooltip: 'Clear All', active: false, fg: fg, activeFg: fg, onTap: () => setState(() { _problemsSearch = ''; _problemsSearchCtrl.clear(); _problemsFilter = 0; })),
+                          _PanelToolbarBtn(icon: Icons.more_horiz, tooltip: 'More Actions', active: false, fg: fg, activeFg: fg, onTap: () {}),
+                        ]),
+                      ),
+                    ),
+                  ),
+                // Content area — rounded card (4 corners)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(_gap, 0, _gap, _gap),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(_pr),
+                      child: _buildBottomPanelContent(context, ts.appTheme, isDark),
+                    ),
+                  ),
+                ),
+              ]);
+            );
           },
         );
       }
