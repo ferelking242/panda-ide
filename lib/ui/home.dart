@@ -369,7 +369,7 @@ class _SelectTypeState extends State<SelectType>
     _activityCtrl.setOnUpdate(() { if (mounted) setState(() {}); });
     _eventActivityBridge = EventActivityBridge(
       eventBus: _agentEventBus,
-      activityController: _activityCtrl,
+      activityCtrl: _activityCtrl,
     );
     _environmentManager.detect(); // Detect device capabilities at startup
     WidgetsBinding.instance.addObserver(this);
