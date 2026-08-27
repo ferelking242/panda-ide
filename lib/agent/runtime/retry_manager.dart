@@ -1,3 +1,5 @@
+import 'error_classifier.dart';
+
 /// Manages retry logic for agent operations.
 ///
 /// Different error types get different retry strategies.

@@ -207,7 +207,7 @@ class _SelectTypeState extends State<SelectType>
   final      _agentRunner       = AgentRunner();
   final      _activityCtrl      = AgentActivityController();
   final      _agentEventBus     = AgentEventBus();
-  AgentEventActivityBridge? _eventActivityBridge;
+  EventActivityBridge? _eventActivityBridge;
   final      _environmentManager = EnvironmentManager();
   int        _agentRequestSerial = 0;
   Completer<bool>? _pendingApprovalCompleter;
@@ -367,7 +367,7 @@ class _SelectTypeState extends State<SelectType>
   void initState() {
     super.initState();
     _activityCtrl.setOnUpdate(() { if (mounted) setState(() {}); });
-    _eventActivityBridge = AgentEventActivityBridge(
+    _eventActivityBridge = EventActivityBridge(
       eventBus: _agentEventBus,
       activityController: _activityCtrl,
     );

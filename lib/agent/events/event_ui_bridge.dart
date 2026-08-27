@@ -5,6 +5,17 @@ import 'package:flutter/foundation.dart';
 import 'agent_event.dart';
 import 'agent_event_bus.dart';
 
+/// Agent phase — mirrors the phase from AgentRunner for V3 bridge use.
+enum AgentPhase {
+  idle,
+  thinking,
+  toolRunning,
+  toolDone,
+  streaming,
+  done,
+  error,
+}
+
 /// Provides reactive state for UI widgets by listening to AgentEventBus.
 ///
 /// Widgets use this to get current agent state without tight coupling.

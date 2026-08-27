@@ -9,7 +9,7 @@
 export 'events/agent_event.dart';
 export 'events/agent_event_bus.dart';
 export 'events/event_activity_bridge.dart';
-export 'events/event_ui_bridge.dart';
+// export 'events/event_ui_bridge.dart'; // Not exported — defines AgentPhase which conflicts with agent_runner.dart
 
 // Tools
 export 'tools/tool_definition.dart';
