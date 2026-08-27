@@ -1466,7 +1466,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
             cursorType: TerminalCursorType.verticalBar,
             alwaysShowCursor: true,
             deleteDetection: true,
-            hardwareKeyboardOnly: true,
             textStyle: TerminalStyle(
               fontSize: state.fontSize,
               fontFamily: _terminalFontFamilyFromConfig(),
@@ -1521,7 +1520,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 cursorType: TerminalCursorType.verticalBar,
                 alwaysShowCursor: true,
                 deleteDetection: true,
-                hardwareKeyboardOnly: true,
                 textStyle: TerminalStyle(
                   fontSize: state.fontSize,
                   fontFamily: _terminalFontFamilyFromConfig(),
@@ -2156,18 +2154,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 Column(
                   children: [
                     Expanded(child: mainTermView),
-                    // Text input field for typing commands (when system keyboard is hidden)
-                    if (widget.showKeyboardMenu)
-                      Container(
-                        height: 36,
-                        decoration: const BoxDecoration(
-                          color: Color(0xff1a1a2e),
-                          border: Border(top: BorderSide(color: Color(0xff333333), width: 0.5)),
-                        ),
-                        child: _TerminalInputField(
-                          onSubmit: sendToPty,
-                        ),
-                      ),
                     if (widget.showKeyboardMenu)
                       TerminalKeyboardMenu(
                         onSendSequence: sendToPty,
@@ -2406,80 +2392,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
             return scaffold;
           },
         ),
-      ),
-    );
-  }
-}
-
-/// Champ de texte intégré au terminal pour taper des commandes
-/// quand le clavier système est masqué (hardwareKeyboardOnly).
-class _TerminalInputField extends StatefulWidget {
-  final Function(String) onSubmit;
-  const _TerminalInputField({required this.onSubmit});
-
-  @override
-  State<_TerminalInputField> createState() => _TerminalInputFieldState();
-}
-
-class _TerminalInputFieldState extends State<_TerminalInputField> {
-  final TextEditingController _ctrl = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final text = _ctrl.text;
-    if (text.isNotEmpty) {
-      widget.onSubmit(text);
-      _ctrl.clear();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 36,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      color: const Color(0xff1e1e2e),
-      child: Row(
-        children: [
-          const Icon(Icons.terminal_rounded, size: 14, color: Colors.white38),
-          const SizedBox(width: 6),
-          Expanded(
-            child: TextField(
-              controller: _ctrl,
-              focusNode: _focusNode,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontFamily: 'monospace',
-              ),
-              decoration: const InputDecoration(
-                hintText: 'Tapez une commande...',
-                hintStyle: TextStyle(color: Colors.white24, fontSize: 13),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 8),
-              ),
-              keyboardType: TextInputType.text,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _submit(),
-              onTapOutside: (_) => _focusNode.unfocus(),
-            ),
-          ),
-          GestureDetector(
-            onTap: _submit,
-            child: const Padding(
-              padding: EdgeInsets.all(4),
-              child: Icon(Icons.send_rounded, size: 16, color: Colors.white54),
-            ),
-          ),
-        ],
       ),
     );
   }
