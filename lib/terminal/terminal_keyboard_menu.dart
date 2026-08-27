@@ -200,6 +200,7 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
             chip('&',  () => widget.onSendSequence('&')),
             chip(';',  () => widget.onSendSequence(';')),
             chip('~',  () => widget.onSendSequence('~')),
+            chip('.',  () => widget.onSendSequence('.')),
             chip('/',  () => widget.onSendSequence('/')),
             chip('\\', () => widget.onSendSequence('\\')),
             chip('`',  () => widget.onSendSequence('`')),

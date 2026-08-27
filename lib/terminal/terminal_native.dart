@@ -21,6 +21,7 @@ import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import './terminal_bridge.dart';
+import './terminal_keyboard_menu.dart';
 
 /// Taille de police par défaut du terminal — source de vérité du zoom
 /// (100%). Le pinch et les boutons A+/A− gravitent autour de cette valeur.
@@ -2155,6 +2156,18 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 Column(
                   children: [
                     Expanded(child: mainTermView),
+                    // Text input field for typing commands (when system keyboard is hidden)
+                    if (widget.showKeyboardMenu)
+                      Container(
+                        height: 36,
+                        decoration: const BoxDecoration(
+                          color: Color(0xff1a1a2e),
+                          border: Border(top: BorderSide(color: Color(0xff333333), width: 0.5)),
+                        ),
+                        child: _TerminalInputField(
+                          onSubmit: sendToPty,
+                        ),
+                      ),
                     if (widget.showKeyboardMenu)
                       TerminalKeyboardMenu(
                         onSendSequence: sendToPty,
@@ -2398,207 +2411,75 @@ class _SetupTerminalState extends State<SetupTerminal> {
   }
 }
 
-class TerminalKeyboardMenu extends StatefulWidget {
-  final Function(String) onSendSequence;
-  final Function(bool ctrl, bool alt, bool shift, VoidCallback resetCallback)
-  onModifierChanged;
-  final VoidCallback? onCopy;
-  final VoidCallback? onPaste;
-
-  const TerminalKeyboardMenu({
-    super.key,
-    required this.onSendSequence,
-    required this.onModifierChanged,
-    this.onCopy,
-    this.onPaste,
-  });
+/// Champ de texte intégré au terminal pour taper des commandes
+/// quand le clavier système est masqué (hardwareKeyboardOnly).
+class _TerminalInputField extends StatefulWidget {
+  final Function(String) onSubmit;
+  const _TerminalInputField({required this.onSubmit});
 
   @override
-  State<TerminalKeyboardMenu> createState() => _TerminalKeyboardMenuState();
+  State<_TerminalInputField> createState() => _TerminalInputFieldState();
 }
 
-class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
-  bool isCtrlActive = false;
-  bool isAltActive = false;
-  bool isShiftActive = false;
+class _TerminalInputFieldState extends State<_TerminalInputField> {
+  final TextEditingController _ctrl = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
 
-  void _resetModifiers() {
-    setState(() {
-      isCtrlActive = false;
-      isAltActive = false;
-      isShiftActive = false;
-    });
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
   }
 
-  void _toggleCtrl() {
-    setState(() {
-      isCtrlActive = !isCtrlActive;
-      if (isCtrlActive) {
-        isAltActive = false;
-        isShiftActive = false;
-      }
-    });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
-  }
-
-  void _toggleAlt() {
-    setState(() {
-      isAltActive = !isAltActive;
-      if (isAltActive) {
-        isCtrlActive = false;
-        isShiftActive = false;
-      }
-    });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
-  }
-
-  void _toggleShift() {
-    setState(() {
-      isShiftActive = !isShiftActive;
-      if (isShiftActive) {
-        isCtrlActive = false;
-        isAltActive = false;
-      }
-    });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
+  void _submit() {
+    final text = _ctrl.text;
+    if (text.isNotEmpty) {
+      widget.onSubmit(text);
+      _ctrl.clear();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Compact single-row scrollable keyboard bar — ~44px height vs old ~90px.
-    const baseStyle = TextStyle(
-      color: Colors.white,
-      fontSize: 11.5,
-      fontWeight: FontWeight.w500,
-      letterSpacing: 0.1,
-    );
-    const activeStyle = TextStyle(
-      color: Color(0xffffd700),
-      fontSize: 11.5,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.1,
-    );
-    const divColor = Color(0xff454545);
-    const chipBg   = Color(0xff2d2d2d);
-    const activeBg = Color(0xff3a3000);
-    const chipBorder = Color(0xff454545);
-    const activeBorder = Color(0xffffd700);
-
-    Widget chip(String label, VoidCallback onTap, {bool active = false}) {
-      return GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 28,
-          constraints: const BoxConstraints(minWidth: 34),
-          padding: const EdgeInsets.symmetric(horizontal: 7),
-          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-          decoration: BoxDecoration(
-            color: active ? activeBg : chipBg,
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(
-              color: active ? activeBorder : chipBorder,
-              width: 0.8,
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      color: const Color(0xff1e1e2e),
+      child: Row(
+        children: [
+          const Icon(Icons.terminal_rounded, size: 14, color: Colors.white38),
+          const SizedBox(width: 6),
+          Expanded(
+            child: TextField(
+              controller: _ctrl,
+              focusNode: _focusNode,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontFamily: 'monospace',
+              ),
+              decoration: const InputDecoration(
+                hintText: 'Tapez une commande...',
+                hintStyle: TextStyle(color: Colors.white24, fontSize: 13),
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(vertical: 8),
+              ),
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.send,
+              onSubmitted: (_) => _submit(),
+              onTapOutside: (_) => _focusNode.unfocus(),
             ),
           ),
-          alignment: Alignment.center,
-          child: Text(label, style: active ? activeStyle : baseStyle),
-        ),
-      );
-    }
-
-    Widget iconChip(IconData icon, VoidCallback onTap) {
-      return GestureDetector(
-        onTap: onTap,
-        child: Container(
-          height: 28,
-          width: 36,
-          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-          decoration: BoxDecoration(
-            color: chipBg,
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: chipBorder, width: 0.8),
+          GestureDetector(
+            onTap: _submit,
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(Icons.send_rounded, size: 16, color: Colors.white54),
+            ),
           ),
-          alignment: Alignment.center,
-          child: Icon(icon, size: 14, color: Colors.white),
-        ),
-      );
-    }
-
-    Widget div() => Container(
-      width: 1,
-      height: 20,
-      color: divColor,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-    );
-
-    return Container(
-      height: 44,
-      color: const Color(0xff181818),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
-          children: [
-            chip('ESC',   () => widget.onSendSequence('\x1b')),
-            chip('CTRL',  _toggleCtrl,  active: isCtrlActive),
-            chip('ALT',   _toggleAlt,   active: isAltActive),
-            chip('SHIFT', _toggleShift, active: isShiftActive),
-            chip('TAB',   () => widget.onSendSequence('\t')),
-            div(),
-            iconChip(Icons.arrow_upward_rounded,  () => widget.onSendSequence('\x1b[A')),
-            iconChip(Icons.arrow_downward_rounded, () => widget.onSendSequence('\x1b[B')),
-            iconChip(Icons.arrow_back_rounded,    () => widget.onSendSequence('\x1b[D')),
-            iconChip(Icons.arrow_forward_rounded, () => widget.onSendSequence('\x1b[C')),
-            div(),
-            chip('HOME',  () => widget.onSendSequence('\x1b[H')),
-            chip('END',   () => widget.onSendSequence('\x1b[F')),
-            chip('PgUp',  () => widget.onSendSequence('\x1b[5~')),
-            chip('PgDn',  () => widget.onSendSequence('\x1b[6~')),
-            div(),
-            chip('|',  () => widget.onSendSequence('|')),
-            chip('&',  () => widget.onSendSequence('&')),
-            chip(';',  () => widget.onSendSequence(';')),
-            chip('~',  () => widget.onSendSequence('~')),
-            chip('/',  () => widget.onSendSequence('/')),
-            chip('\\', () => widget.onSendSequence('\\')),
-            chip('`',  () => widget.onSendSequence('`')),
-            chip('"',  () => widget.onSendSequence('"')),
-            chip("'",  () => widget.onSendSequence("'")),
-            div(),
-            chip('(',  () => widget.onSendSequence('(')),
-            chip(')',  () => widget.onSendSequence(')')),
-            chip('{',  () => widget.onSendSequence('{')),
-            chip('}',  () => widget.onSendSequence('}')),
-            chip('[',  () => widget.onSendSequence('[')),
-            chip(']',  () => widget.onSendSequence(']')),
-            chip('!',  () => widget.onSendSequence('!')),
-            chip('#',  () => widget.onSendSequence('#')),
-            chip('%',  () => widget.onSendSequence('%')),
-            chip('^',  () => widget.onSendSequence('^')),
-            chip('@',  () => widget.onSendSequence('@')),
-            chip('*',  () => widget.onSendSequence('*')),
-            chip('>',  () => widget.onSendSequence('>')),
-            chip('<',  () => widget.onSendSequence('<')),
-            div(),
-            iconChip(Icons.copy_rounded,  () => widget.onCopy?.call()),
-            iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
-          ],
-        ),
+        ],
       ),
     );
   }
