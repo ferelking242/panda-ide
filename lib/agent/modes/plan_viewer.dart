@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:broken_icons/broken_icons.dart';
 
 /// Displays a plan with checkable steps.
 ///
@@ -49,7 +48,7 @@ class PlanViewer extends StatelessWidget {
                 children: [
                   Icon(
                     step.done
-                        ? Broken.tick_circle
+                        ? Icons.check_circle
                         : step.active
                             ? Icons.radio_button_checked
                             : Icons.radio_button_unchecked,

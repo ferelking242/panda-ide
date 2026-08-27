@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:broken_icons/broken_icons.dart';
 
 import '../events/event_ui_bridge.dart';
 
