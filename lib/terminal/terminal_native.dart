@@ -1465,6 +1465,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
             cursorType: TerminalCursorType.verticalBar,
             alwaysShowCursor: true,
             deleteDetection: true,
+            hardwareKeyboardOnly: true,
             textStyle: TerminalStyle(
               fontSize: state.fontSize,
               fontFamily: _terminalFontFamilyFromConfig(),
@@ -1519,6 +1520,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 cursorType: TerminalCursorType.verticalBar,
                 alwaysShowCursor: true,
                 deleteDetection: true,
+                hardwareKeyboardOnly: true,
                 textStyle: TerminalStyle(
                   fontSize: state.fontSize,
                   fontFamily: _terminalFontFamilyFromConfig(),
