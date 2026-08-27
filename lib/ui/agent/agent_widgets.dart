@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/broken_icons.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import '../../utils/themes.dart';
