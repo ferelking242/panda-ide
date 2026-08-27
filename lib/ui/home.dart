@@ -1209,21 +1209,7 @@ class _SelectTypeState extends State<SelectType>
             ),
 
             // ── Bottom Navigation (mobile only) ──────────────────────────
-            bottomNavigationBar: Responsive.isMobile(context)
-                ? MobileBottomNav(
-                    currentIndex: _mobileNavIndex,
-                    onTap: (i) {
-                      setState(() {
-                        _mobileNavIndex = i;
-                        if (i == 0) { _sidebarState = 2; _activeRail = 1; }
-                        if (i == 1) { _sidebarState = 2; _activeRail = 2; }
-                        if (i == 2) { _sidebarState = 1; _activeRail = 0; }
-                        if (i == 3) { _openAgentTab(); }
-                        if (i == 4) { _push(context, const Settings()); }
-                      });
-                    },
-                  )
-                : null,
+            bottomNavigationBar: null,
 
             // ── Body ─────────────────────────────────────────────────────
             body: SafeArea(
@@ -3247,6 +3233,8 @@ class _SelectTypeState extends State<SelectType>
         child: Row(
           children: [
             // ── CENTER: ← [workspace box] → ──────────────────────────────
+            // Workspace box - centered after activity bar + rounded corner
+            SizedBox(width: _sidebarState >= 1 ? 70.0 : 0.0),
             Expanded(
               child: Center(
                 child: Row(
@@ -4058,11 +4046,19 @@ class _SelectTypeState extends State<SelectType>
             final selFg  = isDark ? Colors.grey[200]! : Colors.grey[900]!;
             final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
-            return Container(
+            return ClipRRect(
+              borderRadius: const BorderRadius.only(
+                bottomRight: Radius.circular(12),
+              ),
+              child: Container(
               height: _bottomPanelHeight,
               decoration: BoxDecoration(
                   color: bg,
-                  border: Border(top: BorderSide(color: border))),
+                  border: Border(
+                    top: BorderSide(color: border, width: 0.5),
+                    right: BorderSide(color: border, width: 0.5),
+                    bottom: BorderSide(color: border, width: 0.5),
+                  )),
               child: Column(children: [
                 // Resize handle at top of bottom panel.
                 // 20px opaque hit target (was a 4px sliver: the first touch
@@ -4095,6 +4091,11 @@ class _SelectTypeState extends State<SelectType>
                       ),
                     ),
                   ),
+                ),
+                // Separator line
+                Container(
+                  height: 1,
+                  color: border,
                 ),
                 // Tab strip
                 Container(
@@ -4237,7 +4238,8 @@ class _SelectTypeState extends State<SelectType>
                   child: _buildBottomPanelContent(context, ts.appTheme, isDark),
                 ),
               ]),
-            );
+              ), // Container
+            ); // ClipRRect
           },
         );
       }
