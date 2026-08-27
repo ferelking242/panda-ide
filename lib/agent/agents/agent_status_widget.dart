@@ -84,11 +84,13 @@ class AgentStatusWidget extends StatelessWidget {
       case AgentPhase.toolRunning:
         return (Icons.build, '🔧 ${uiState.currentTool}');
       case AgentPhase.toolDone:
-        return (Icons.build_done, 'Terminé');
+        return (Icons.check, 'Terminé');
       case AgentPhase.done:
         return (Icons.check_circle, 'Terminé');
       case AgentPhase.error:
         return (Icons.error, 'Erreur: ${uiState.error}');
+      default:
+        return (Icons.help_outline, 'Inconnu');
     }
   }
 

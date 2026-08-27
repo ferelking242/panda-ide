@@ -12,9 +12,9 @@ class EventActivityBridge {
 
   EventActivityBridge({
     required AgentEventBus eventBus,
-    required AgentActivityController activityController,
+    required AgentActivityController activityCtrl,
   })  : _eventBus = eventBus,
-        _activityCtrl = activityController;
+        _activityCtrl = activityCtrl;
 
   /// Start listening to events and updating the activity controller.
   void start() {
@@ -25,75 +25,94 @@ class EventActivityBridge {
     switch (event) {
       case AgentStarted():
         _activityCtrl.startRun();
+        break;
 
       case AgentThinkingStarted():
         _activityCtrl.updateNarrative('Réflexion…');
+        break;
 
       case AgentThinkingFinished():
         _activityCtrl.updateNarrative('Réflexion terminée');
+        break;
 
       case AgentStreamingStarted():
         _activityCtrl.updateNarrative('Génération…');
+        break;
 
       case AgentStreamingChunk():
         // Don't update narrative on every chunk to avoid flicker
+        break;
 
-      case AgentToolStarted(:final toolId, :final toolName, :final args):
+      case AgentToolStarted():
         _activityCtrl.startTool(
-          toolId: toolId,
-          toolName: toolName,
-          args: args,
+          toolId: event.toolId,
+          toolName: event.toolName,
+          args: event.args,
         );
+        break;
 
-      case AgentToolFinished(:final toolId, :final result):
+      case AgentToolFinished():
         _activityCtrl.completeTool(
-          toolId: toolId,
-          result: result,
+          toolId: event.toolId,
+          result: event.result,
         );
+        break;
 
-      case AgentToolFailed(:final toolId, :final error):
+      case AgentToolFailed():
         _activityCtrl.failTool(
-          toolId: toolId,
-          error: error,
+          toolId: event.toolId,
+          error: event.error,
         );
+        break;
 
-      case AgentToolBlocked(:final toolId, :final reason):
+      case AgentToolBlocked():
         _activityCtrl.failTool(
-          toolId: toolId,
-          error: 'Blocked: $reason',
+          toolId: event.toolId,
+          error: 'Blocked: ${event.reason}',
         );
+        break;
 
       case AgentVerificationStarted():
         _activityCtrl.updateNarrative('Vérification…');
+        break;
 
       case AgentVerificationPassed():
         _activityCtrl.updateNarrative('Vérification OK');
+        break;
 
-      case AgentVerificationFailed(:final errors):
-        _activityCtrl.updateNarrative('${errors.length} erreur(s)');
+      case AgentVerificationFailed():
+        _activityCtrl.updateNarrative('${event.errors.length} erreur(s)');
+        break;
 
-      case AgentSubagentStarted(:final agentType):
-        _activityCtrl.updateNarrative('Sub-agent $agentType…');
+      case AgentSubagentStarted():
+        _activityCtrl.updateNarrative('Sub-agent ${event.agentType}…');
+        break;
 
       case AgentSubagentFinished():
         _activityCtrl.updateNarrative('Sub-agent terminé');
+        break;
 
-      case AgentContextCompacted(:final tokensAfter):
+      case AgentContextCompacted():
         _activityCtrl.updateNarrative(
-            'Contexte compresse ($tokensAfter tokens)');
+            'Contexte compresse (${event.tokensAfter} tokens)');
+        break;
 
-      case AgentRetryStarted(:final attempt, :final maxAttempts, :final reason):
+      case AgentRetryStarted():
         _activityCtrl.updateNarrative(
-            'Retry $attempt/$maxAttempts: $reason');
+            'Retry ${event.attempt}/${event.maxAttempts}: ${event.reason}');
+        break;
 
       case AgentFinished():
         _activityCtrl.finishRun();
+        break;
 
-      case AgentError(:final error):
-        _activityCtrl.finishRun(error: error);
+      case AgentError():
+        _activityCtrl.finishRun(error: event.error);
+        break;
 
       case AgentCancelled():
         _activityCtrl.finishRun(error: 'Annulé');
+        break;
 
       default:
         // Other events don't need activity feed updates

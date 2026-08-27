@@ -5,9 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'agent_event.dart';
 import 'agent_event_bus.dart';
 import '../../ui/agent_runner.dart' show AgentPhase;
-import '../../ui/agent_runner.dart' show AgentPhase;
-
-/// Agent phase — mirrors the phase from AgentRunner for V3 bridge use.
 
 /// Provides reactive state for UI widgets by listening to AgentEventBus.
 ///
@@ -16,7 +13,7 @@ class AgentUiState extends ChangeNotifier {
   final AgentEventBus _eventBus;
   StreamSubscription<AgentEvent>? _sub;
 
-  String _phase = 'idle';
+  AgentPhase _phase = AgentPhase.idle;
   String _currentTool = '';
   String _thinking = '';
   String _streaming = '';
@@ -29,7 +26,7 @@ class AgentUiState extends ChangeNotifier {
 
   // ── Getters ────────────────────────────────────────────────────────────
 
-  String get phase => _phase;
+  AgentPhase get phase => _phase;
   String get currentTool => _currentTool;
   String get thinking => _thinking;
   String get streaming => _streaming;
@@ -55,7 +52,7 @@ class AgentUiState extends ChangeNotifier {
   void _onEvent(AgentEvent event) {
     switch (event) {
       case AgentStarted():
-        _phase = 'streaming';
+        _phase = AgentPhase.streaming;
         _isGenerating = true;
         _error = null;
         _thinking = '';
@@ -63,7 +60,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentThinkingStarted():
-        _phase = 'thinking';
+        _phase = AgentPhase.thinking;
         notifyListeners();
 
       case AgentThinkingChunk():
@@ -75,7 +72,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentStreamingStarted():
-        _phase = 'streaming';
+        _phase = AgentPhase.streaming;
         notifyListeners();
 
       case AgentStreamingChunk():
@@ -84,17 +81,17 @@ class AgentUiState extends ChangeNotifier {
 
       case AgentToolStarted():
         _currentTool = event.toolName;
-        _phase = 'toolRunning';
+        _phase = AgentPhase.toolRunning;
         notifyListeners();
 
       case AgentToolFinished():
         _currentTool = '';
-        _phase = 'streaming';
+        _phase = AgentPhase.streaming;
         notifyListeners();
 
       case AgentToolFailed():
         _currentTool = '';
-        _phase = 'streaming';
+        _phase = AgentPhase.streaming;
         notifyListeners();
 
       case AgentSubagentStarted():
@@ -132,7 +129,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentFinished():
-        _phase = 'done';
+        _phase = AgentPhase.done;
         _isGenerating = false;
         _currentTool = '';
         _activeSubagents.clear();
@@ -140,7 +137,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentError():
-        _phase = 'error';
+        _phase = AgentPhase.error;
         _isGenerating = false;
         _error = event.error;
         _currentTool = '';
@@ -164,4 +161,40 @@ class AgentUiState extends ChangeNotifier {
       _activeSubagents[idx] = _activeSubagents[idx].copyWith(status: status);
     }
   }
+}
+
+// ── Supporting data classes ───────────────────────────────────────────────
+
+class SubagentInfo {
+  final String id;
+  final String type;
+  final String status;
+
+  const SubagentInfo({
+    required this.id,
+    required this.type,
+    required this.status,
+  });
+
+  SubagentInfo copyWith({String? status}) =>
+      SubagentInfo(id: id, type: type, status: status ?? this.status);
+}
+
+class VerificationInfo {
+  final List<String> files;
+  final String status;
+  final List<String> errors;
+
+  const VerificationInfo({
+    required this.files,
+    required this.status,
+    this.errors = const [],
+  });
+
+  VerificationInfo copyWith({String? status, List<String>? errors}) =>
+      VerificationInfo(
+        files: files,
+        status: status ?? this.status,
+        errors: errors ?? this.errors,
+      );
 }

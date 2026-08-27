@@ -121,7 +121,7 @@ class NativeToolBridge {
       case 'globSearchFiles':
         return tools.globSearchFiles(
           (args['pattern'] ?? '').toString(),
-          directoryPath: args['directoryPath']?.toString(),
+          directoryPath: args['directoryPath']?.toString() ?? '.',
         );
       case 'searchInFiles':
         return tools.searchInFiles(
