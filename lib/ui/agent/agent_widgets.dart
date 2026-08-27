@@ -319,7 +319,7 @@ class AgentToolCallBlock extends StatefulWidget {
   final bool showResultInline;
   final VoidCallback? onOpenInEditor;
 
-  const AgentAgentToolCallBlock({
+  const AgentToolCallBlock({
     required this.toolName,
     required this.args,
     required this.result,
@@ -337,7 +337,7 @@ class AgentToolCallBlock extends StatefulWidget {
   });
 
   @override
-  State<ToolCallBlock> createState() => ToolCallBlockState();
+  State<AgentToolCallBlock> createState() => AgentToolCallBlockState();
 }
 
 class AgentToolCallBlockState extends State<AgentToolCallBlock> {
