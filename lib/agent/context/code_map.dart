@@ -89,6 +89,7 @@ class CodeMap {
         path.startsWith('.');
   }
 }
+}
 
 class CodeStructure {
   final List<CodeClass> classes;

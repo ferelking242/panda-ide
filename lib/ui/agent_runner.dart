@@ -18,6 +18,8 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 
 import '../utils/ai.dart';
+import '../agent/events/agent_event.dart';
+import '../agent/events/agent_event_bus.dart';
 import '../utils/agentic_tools.dart';
 import '../utils/panda_log.dart';
 import '../terminal/terminal_bridge.dart';
@@ -107,6 +109,7 @@ class AgentRunner {
     String? systemPromptOverride,
     AgentConfirmCallback? onConfirmRequired,
     String approvalMode = 'default',
+    AgentEventBus? eventBus,
   }) {
     final ctrl = StreamController<AgentChunk>();
     _run(
@@ -119,6 +122,7 @@ class AgentRunner {
       agentMode: agentMode,
       onConfirmRequired: onConfirmRequired,
       approvalMode: approvalMode,
+      eventBus: eventBus,
     );
     return ctrl.stream;
   }
@@ -390,9 +394,11 @@ $toolLines
     String agentMode = 'agent',
     AgentConfirmCallback? onConfirmRequired,
     String approvalMode = 'default',
+    AgentEventBus? eventBus,
   }) async {
     _client = http.Client();
     bool terminalError = false;
+    eventBus?.emit(AgentStarted(taskId: DateTime.now().millisecondsSinceEpoch.toString(), mode: agentMode));
     try {
       // Ask = aucun outil du tout. Plan = outils en lecture seule.
       // Agent = tous les outils.
@@ -435,6 +441,7 @@ $toolLines
           allowWrites: agentMode == 'agent',
           agentMode: agentMode,
           blocks: _BlockSequencer(),
+          eventBus: eventBus,
         );
       } else {
         await _runSse(
@@ -447,11 +454,13 @@ $toolLines
           allowWrites: agentMode == 'agent',
           agentMode: agentMode,
           blocks: _BlockSequencer(),
+          eventBus: eventBus,
         );
       }
     } catch (e) {
       terminalError = true;
       PandaLog.e('AgentRunner', 'Uncaught error in _run', error: e);
+      eventBus?.emit(AgentError(taskId: '', error: e.toString()));
       if (!ctrl.isClosed) {
         ctrl.add(AgentChunk(phase: AgentPhase.error, text: e.toString()));
       }
@@ -459,6 +468,7 @@ $toolLines
       _client?.close();
       _client = null;
       PandaLog.i('AgentRunner', 'Run complete');
+      eventBus?.emit(const AgentFinished(taskId: '', result: ''));
       if (!terminalError && !ctrl.isClosed) {
         ctrl.add(const AgentChunk(phase: AgentPhase.done, text: ''));
       }
@@ -474,7 +484,7 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks}
+    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks, AgentEventBus? eventBus}
   ) async {
     final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
@@ -519,6 +529,7 @@ $toolLines
         final text = decoded['candidates']?[0]?['content']?['parts']?[0]?['text'] ?? '';
         if (text.toString().isNotEmpty) {
           ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: text.toString()));
+          eventBus?.emit(AgentStreamingChunk(text: text.toString()));
         }
         return;
       }
@@ -532,6 +543,7 @@ $toolLines
           final t = part['text']?.toString() ?? '';
           if (t.isNotEmpty) {
             ctrl.add(AgentChunk(phase: AgentPhase.thinking, text: t, blockId: seq.next('thinking')));
+            eventBus?.emit(AgentThinkingChunk(text: t));
           }
         } else if (part['functionCall'] != null) {
           functionCalls.add(Map<String, dynamic>.from(part['functionCall'] as Map));
@@ -540,6 +552,7 @@ $toolLines
           if (t.isNotEmpty) {
             assistantText += t;
             ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: t, blockId: seq.next('text')));
+            eventBus?.emit(AgentStreamingChunk(text: t));
           }
         }
       }
@@ -570,6 +583,7 @@ $toolLines
             : <String, dynamic>{};
 
         ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: name, toolArgs: args, blockId: seq.next('tool')));
+        eventBus?.emit(AgentToolStarted(toolId: name, toolName: name, args: args));
         PandaLog.toolCall('Gemini', name, args);
 
         final result = await _dispatchTool(
@@ -585,6 +599,7 @@ $toolLines
         });
         PandaLog.toolResult('Gemini', name, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: name, toolResult: result));
+        eventBus?.emit(AgentToolFinished(toolId: name, toolName: name, result: result));
         toolResults.add({
           'tool_call_id': name,
           'role': 'tool',
@@ -612,7 +627,7 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks}
+    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks, AgentEventBus? eventBus}
   ) async {
     final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
@@ -733,6 +748,7 @@ $toolLines
           text: reasoningText,
           blockId: seq.next('thinking'),
         ));
+        eventBus?.emit(AgentThinkingChunk(text: reasoningText));
         PandaLog.d(
           'AgentRunner',
           'Non-stream reasoning received (${reasoningText.length} chars)',
@@ -748,6 +764,7 @@ $toolLines
           text: assistantText,
           blockId: seq.next('text'),
         ));
+        eventBus?.emit(AgentStreamingChunk(text: assistantText));
       } else {
         final fallbackChunks = parseSsePayload(decoded);
         if (fallbackChunks.isNotEmpty) {
@@ -796,6 +813,7 @@ $toolLines
           toolArgs: args,
           blockId: seq.next('tool'),
         ));
+        eventBus?.emit(AgentToolStarted(toolId: functionName, toolName: functionName, args: args));
         PandaLog.toolCall('SSE', functionName, args);
         final result = await _dispatchTool(
           tools,
@@ -810,6 +828,7 @@ $toolLines
         });
         PandaLog.toolResult('SSE', functionName, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: functionName, toolResult: result));
+        eventBus?.emit(AgentToolFinished(toolId: functionName, toolName: functionName, result: result));
         toolResults.add(result);
       }
 

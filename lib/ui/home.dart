@@ -77,6 +77,7 @@ import 'logs_ui/logs_explorer_page.dart';
 import 'editor/timeline_view.dart';
 import 'agent/agent_models.dart';
 import 'agent/agent_widgets.dart';
+import '../agent/agent_v3.dart';
 
 
 
@@ -205,6 +206,9 @@ class _SelectTypeState extends State<SelectType>
   String     _agentCurrentTool  = '';
   final      _agentRunner       = AgentRunner();
   final      _activityCtrl      = AgentActivityController();
+  final      _agentEventBus     = AgentEventBus();
+  AgentEventActivityBridge? _eventActivityBridge;
+  final      _environmentManager = EnvironmentManager();
   int        _agentRequestSerial = 0;
   Completer<bool>? _pendingApprovalCompleter;
   int        _agentToolTabSeq   = 0;
@@ -363,6 +367,11 @@ class _SelectTypeState extends State<SelectType>
   void initState() {
     super.initState();
     _activityCtrl.setOnUpdate(() { if (mounted) setState(() {}); });
+    _eventActivityBridge = AgentEventActivityBridge(
+      eventBus: _agentEventBus,
+      activityController: _activityCtrl,
+    );
+    _environmentManager.detect(); // Detect device capabilities at startup
     WidgetsBinding.instance.addObserver(this);
     _splitViewController = MultiSplitViewController(areas: [Area(), Area()]);
     // Send button pulse animation
@@ -9186,6 +9195,7 @@ class _SelectTypeState extends State<SelectType>
           agentMode: _agentChatMode,
           approvalMode: _agentApprovalMode,
           onConfirmRequired: _handleAgentConfirmRequired,
+          eventBus: _agentEventBus,
           systemPromptOverride: systemPromptParts.isEmpty
               ? null
               : systemPromptParts.join('\n\n'),
