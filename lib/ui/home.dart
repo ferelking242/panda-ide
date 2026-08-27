@@ -10565,13 +10565,6 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 /// calls ne sont JAMAIS des enfants de la réflexion : ils sont des blocs
 /// frères rendus avant/après, et une nouvelle réflexion après des outils
 /// ouvre une nouvelle [ReflectionBox] (jamais de fusion).
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ToolCallBlock — bloc expandable pour un appel d'outil (style Replit)
-// ─────────────────────────────────────────────────────────────────────────────
-
-}
-
 // ── _SidebarClipper ────────────────────────────────────────────────────────────
 // Rounds the top-right and bottom-right corners of the sidebar panel,
 // giving it the "floating card" look from Scolaris.

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:broken_icons/broken_icons.dart';
+import '../core/broken_icons.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import '../utils/themes.dart';
 import '../agent_runner.dart' show AgentPhase;
@@ -1038,6 +1038,8 @@ class MsgActionBtn extends StatelessWidget {
       ),
     );
   }
+}
+
 class AgentMarkdownView extends StatelessWidget {
   final String markdown;
   final bool isDark;
