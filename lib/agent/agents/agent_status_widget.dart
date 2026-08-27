@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../events/event_ui_bridge.dart';
+import '../../ui/agent_runner.dart' show AgentPhase;
 
 /// Compact agent status display showing current phase and active operations.
 ///
@@ -73,27 +74,39 @@ class AgentStatusWidget extends StatelessWidget {
   }
 
   (IconData, String) _getStateInfo() {
-    return switch (uiState.phase) {
-      AgentPhase.idle => (Icons.pause, 'En attente'),
-      AgentPhase.thinking => (Icons.psychology, 'Réflexion…'),
-      AgentPhase.streaming => (Icons.text_fields, 'Génération…'),
-      AgentPhase.toolRunning => (
-          Icons.build,
-          '🔧 ${uiState.currentTool}',
-        ),
-      AgentPhase.done => (Icons.check_circle, 'Terminé'),
-      AgentPhase.error => (Icons.error, 'Erreur: ${uiState.error}'),
-    };
+    switch (uiState.phase) {
+      case AgentPhase.idle:
+        return (Icons.pause, 'En attente');
+      case AgentPhase.thinking:
+        return (Icons.psychology, 'Réflexion…');
+      case AgentPhase.streaming:
+        return (Icons.text_fields, 'Génération…');
+      case AgentPhase.toolRunning:
+        return (Icons.build, '🔧 ${uiState.currentTool}');
+      case AgentPhase.toolDone:
+        return (Icons.build_done, 'Terminé');
+      case AgentPhase.done:
+        return (Icons.check_circle, 'Terminé');
+      case AgentPhase.error:
+        return (Icons.error, 'Erreur: ${uiState.error}');
+    }
   }
 
   Color _phaseColor() {
-    return switch (uiState.phase) {
-      AgentPhase.thinking => Colors.purple,
-      AgentPhase.streaming => Colors.blue,
-      AgentPhase.toolRunning => Colors.orange,
-      AgentPhase.done => Colors.green,
-      AgentPhase.error => Colors.red,
-      _ => Colors.grey,
-    };
+    switch (uiState.phase) {
+      case AgentPhase.thinking:
+        return Colors.purple;
+      case AgentPhase.streaming:
+        return Colors.blue;
+      case AgentPhase.toolRunning:
+      case AgentPhase.toolDone:
+        return Colors.orange;
+      case AgentPhase.done:
+        return Colors.green;
+      case AgentPhase.error:
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 }

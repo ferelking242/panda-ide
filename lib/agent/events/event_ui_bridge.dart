@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 
 import 'agent_event.dart';
 import 'agent_event_bus.dart';
+import '../../ui/agent_runner.dart' show AgentPhase;
+import '../../ui/agent_runner.dart' show AgentPhase;
 
 /// Agent phase — mirrors the phase from AgentRunner for V3 bridge use.
 
@@ -162,40 +164,4 @@ class AgentUiState extends ChangeNotifier {
       _activeSubagents[idx] = _activeSubagents[idx].copyWith(status: status);
     }
   }
-}
-
-// ── Supporting data classes ───────────────────────────────────────────────
-
-class SubagentInfo {
-  final String id;
-  final String type;
-  final String status;
-
-  const SubagentInfo({
-    required this.id,
-    required this.type,
-    required this.status,
-  });
-
-  SubagentInfo copyWith({String? status}) =>
-      SubagentInfo(id: id, type: type, status: status ?? this.status);
-}
-
-class VerificationInfo {
-  final List<String> files;
-  final String status;
-  final List<String> errors;
-
-  const VerificationInfo({
-    required this.files,
-    required this.status,
-    this.errors = const [],
-  });
-
-  VerificationInfo copyWith({String? status, List<String>? errors}) =>
-      VerificationInfo(
-        files: files,
-        status: status ?? this.status,
-        errors: errors ?? this.errors,
-      );
 }

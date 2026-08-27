@@ -6,7 +6,7 @@ class HistoryCompactor {
   ///
   /// Returns the original messages if no compaction needed,
   /// or a compacted list with a summary message replacing old messages.
-  static List<Map<String, dynamic>> compact(
+  static Future<List<Map<String, dynamic>>> compact(
     List<Map<String, dynamic>> messages, {
     required int maxTokens,
     required Future<String> Function(String text) summarize,
