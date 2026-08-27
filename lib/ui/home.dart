@@ -79,11 +79,6 @@ import 'agent/agent_models.dart';
 import 'agent/agent_widgets.dart';
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Agent Activity Feed — model + state machine controller
-// ═══════════════════════════════════════════════════════════════════════════════
-
-
 
 Map<String, String> _extractThinkingFromText(String rawText, String existingThinking) {
   final thinkRegex = RegExp(r'<(think|thought)>([\s\S]*?)(?:</\1>|$)', caseSensitive: false);
@@ -10555,16 +10550,6 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 /// Une phase de raisonnement AUTONOME de l'agent.
 ///
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Agent Activity Feed — UI widgets
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/// Light wave painter for active text.
-
-/// Chaque phase de réflexion crée SA propre box dans la timeline. Les tool
-/// calls ne sont JAMAIS des enfants de la réflexion : ils sont des blocs
-/// frères rendus avant/après, et une nouvelle réflexion après des outils
-/// ouvre une nouvelle [ReflectionBox] (jamais de fusion).
 // ── _SidebarClipper ────────────────────────────────────────────────────────────
 // Rounds the top-right and bottom-right corners of the sidebar panel,
 // giving it the "floating card" look from Scolaris.
