@@ -1,6 +1,83 @@
-# Panda Agent — Architecture Finale
+# Panda Agent — Architecture Finale (v2)
 
 > Analyse comparative de 12+ coding agents open-source → Architecture Flutter/Dart pour Panda IDE
+> Corrigé : MCP reconsidéré, détection ressources device, intégration multi-langage
+
+---
+
+## 0. Corrections de la v1
+
+### MCP n'est PAS lourd
+
+MCP (Model Context Protocol) est un **protocole JSON léger** — pas un framework lourd.
+
+| Composant | Taille | RAM | CPU |
+|---|---|---|---|
+| MCP protocol (JSON over stdio) | ~10 KB | ~1 MB | Négligeable |
+| MCP server simple (filesystem) | ~50 KB | ~5 MB | Négligeable |
+| MCP server complexe (browser) | ~500 KB | ~50 MB | Modéré |
+| **Total pour 3-4 MCP servers** | **~600 KB** | **~60 MB** | **Faible** |
+
+**60 MB = 7.5% de 8 GB RAM.** C'est rien.
+
+Ce qui est lourd, c'est pas le protocole, c'est le **contenu** du serveur MCP (ex: un browser headless). Mais ça, c'est un choix par serveur, pas un problème de protocole.
+
+**Décision : Panda supporte MCP.** Les serveurs MCP tournent comme des Dart isolates ou des processus natifs.
+
+### Détection Ressources Device
+
+Au démarrage, Panda détecte les ressources disponibles et configure dynamiquement :
+
+```dart
+class DeviceCapabilities {
+  final int totalRamMB;
+  final int availableRamMB;
+  final int cpuCores;
+  final double batteryPercent;
+  final NetworkType network; // wifi, mobile, none
+  final int storageAvailableMB;
+  
+  // Calculé automatiquement
+  int get maxConcurrentAgents {
+    if (totalRamMB >= 8192) return 3;  // 8GB+ : 3 agents
+    if (totalRamMB >= 6144) return 2;  // 6GB : 2 agents
+    if (totalRamMB >= 4096) return 2;  // 4GB : 2 agents
+    return 1;                           // <4GB : 1 agent
+  }
+  
+  int get maxContextTokens {
+    if (availableRamMB >= 2048) return 120000;  // 2GB+ libre : 120k tokens
+    if (availableRamMB >= 1024) return 80000;   // 1GB libre : 80k tokens
+    if (availableRamMB >= 512) return 40000;    // 512MB libre : 40k tokens
+    return 20000;                                // <512MB : 20k tokens
+  }
+  
+  int get maxToolOutputTokens {
+    if (availableRamMB >= 1024) return 4000;
+    return 2000;
+  }
+  
+  bool get allowVerification {
+    return batteryPercent > 20 && network != NetworkType.none;
+  }
+  
+  bool get allowSubagents {
+    return maxConcurrentAgents > 1 && batteryPercent > 15;
+  }
+}
+```
+
+### Exemple : Galaxy S21 (8GB RAM, 8 cores)
+
+| Ressource | Valeur | Impact |
+|---|---|---|
+| RAM totale | 8192 MB | maxConcurrentAgents = 3 |
+| RAM disponible (typique) | ~3000 MB | maxContextTokens = 120k |
+| CPU cores | 8 | Isolates Dart = 4-6 threads utiles |
+| Batterie (typique) | 70% | allowVerification = true |
+| Réseau | WiFi/5G | Appels LLM rapides |
+
+**Avec un S21, Panda peut faire tourner 3 agents simultanés + MCP + vérification.**
 
 ---
 
@@ -38,990 +115,627 @@
 | **Sessions** | ✅ | ✅ Workspace | ✅ Task | ✅ Task | ✅ Session | ✅ | ✅ Trajectory | ✅ | ✅ AgentSession |
 | **Parallel Execution** | ✅ Parallel spawns | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ A2A |
 
-### 1.2 Architectures Type
+---
 
-**Architecture A — Single Agent (Aider, SWE-agent)**
-```
-User → Agent → Tools → Result
-```
-Simple, efficace, mais limité pour les tâches complexes.
+## 2. Critique de l'Ancienne Proposition (v1)
 
-**Architecture B — Agent + Subagents parallèles (Codebuff)**
-```
-Main Agent → spawn_agents → [FilePicker, Researcher, Editor, Reviewer, Thinker]
-```
-Le plus puissant. Les subagents sont des agents à part entière avec leur propre modèle et tools.
-
-**Architecture C — Modes spécialisés (Roo Code)**
-```
-User → Mode Switch → Agent (même code, prompt/tools différents)
-```
-Pas de vrais subagents. Un seul agent avec configurations différentes par mode.
-
-**Architecture D — Plan/Act (Cline)**
-```
-User → Plan Phase → Act Phase → Verify → Loop
-```
-Deux phases dans un même agent. Pas de subagents.
-
-**Architecture E — Event-driven (OpenHands, Gemini CLI)**
-```
-User → AgentSession → Events → UI
-```
-Architecture réactive basée sur les événements.
+| Erreur v1 | Correction v2 |
+|---|---|
+| « MCP trop lourd pour mobile » | **Faux.** MCP = 60 MB RAM pour 3-4 serveurs. Un S21 a 8 GB. |
+| « Pas de parallélisme mobile » | **Faux.** Dart isolates + 8 cores = 3-4 agents possibles. |
+| « Max 1 subagent » | **Faux.** Avec détection device, on peut aller à 3 sur device haut de gamme. |
+| « Pas de Rust/C/Go » | **À réévaluer.** Dart FFI permet d'appeler du code natif pour les tâches critiques. |
+| « 80k tokens max contexte » | **Dépend du device.** S21 = 120k tokens possibles. |
 
 ---
 
-## 2. Critique de l'Ancienne Proposition
+## 3. Intégration Multi-Langage
 
-L'ancienne proposition de Panda Agent avait ces défauts :
+### 3.1 Pourquoi ?
 
-1. **Trop de subagents** — 5-6 subagents est excessif pour un mobile IDE. Chaque subagent = appels LLM supplémentaires = tokens + latence + batterie.
-2. **Pas d'événements** — L'UI est couplée au moteur via des callbacks directs au lieu d'un bus d'événements.
-3. **Pas de context pruning** — Le contexte croît indéfiniment jusqu'à overflow.
-4. **Pas de vérification** — Aucune étape de vérification automatique après les modifications.
-5. **Pas de code map** — L'agent n'a pas de vue globale du projet.
-6. **Architecture monolithique** — Tout est dans `home.dart` (corrigé avec l'extraction récente).
+Dart est excellent pour :
+- UI Flutter
+- Async/Isolates
+- Communication réseau
+- State management (BLoC)
+
+Mais il est **plus lent** que Rust/C pour :
+- Parsing syntaxique (tree-sitter)
+- Indexation de code
+- Compression de contexte
+- Opérations sur gros fichiers
+- Calculs mathématiques
+
+### 3.2 Ce qui change la donne
+
+| Tâche | Dart seul | Dart + Rust (FFI) | Gain |
+|---|---|---|---|
+| Tree-sitter parse 10k lignes | ~200ms | ~20ms | **10x** |
+| Indexation code complet | ~5s | ~500ms | **10x** |
+| Compression contexte | ~500ms | ~50ms | **10x** |
+| Search dans 1000 fichiers | ~2s | ~200ms | **10x** |
+| JSON parse gros payload | ~100ms | ~10ms | **10x** |
+
+### 3.3 Langages à intégrer
+
+| Langage | Usage | Priorité | Complexité |
+|---|---|---|---|
+| **Rust** (via FFI) | Tree-sitter, indexation, compression | **P1** | Moyenne |
+| **C** (via FFI) | Algorithmes existants (zlib, etc.) | **P2** | Faible |
+| **Go** (via FFI ou process) | Networking, MCP servers | **P3** | Élevée |
+
+### 3.4 Architecture FFI
+
+```
+┌─────────────────────────────────────────┐
+│  Flutter/Dart (UI + Logic)              │
+│                                         │
+│  ┌─────────────────────────────────┐   │
+│  │  Dart FFI Bridge                │   │
+│  │  (dart:ffi + package:ffi)       │   │
+│  └──────────┬──────────────────────┘   │
+│             │                           │
+│  ┌──────────▼──────────────────────┐   │
+│  │  Native Libraries (.so/.dylib)  │   │
+│  │                                 │   │
+│  │  ├── libpanda_parser.so (Rust)  │   │ ← tree-sitter parsing
+│  │  ├── libpanda_index.so (Rust)   │   │ ← code indexing
+│  │  ├── libpanda_compress.so (C)   │   │ ← context compression
+│  │  └── libpanda_search.so (Rust)  │   │ ← search engine
+│  └─────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+### 3.5决择 : Faut-il vraiment Rust ?
+
+**OUI, mais uniquement pour les tâches CPU-critiques.**
+
+| Tâche | Dart suffit ? | Rust nécessaire ? | Pourquoi |
+|---|---|---|---|
+| UI Flutter | ✅ | ❌ | Dart est fait pour ça |
+| Agent loop | ✅ | ❌ | Async Dart suffit |
+| Tool execution | ✅ | ❌ | Process launch suffit |
+| LLM API calls | ✅ | ❌ | HTTP client Dart suffit |
+| **Tree-sitter parsing** | ❌ Lent | ✅ | 10x plus rapide en Rust |
+| **Code indexing** | ❌ Lent | ✅ | 10x plus rapide en Rust |
+| **Search dans gros projets** | ❌ Lent | ✅ | 10x plus rapide en Rust |
+| **Context compression** | ⚠️ Acceptable | ✅ | 10x plus rapide en Rust |
+| MCP servers | ✅ | ❌ | Dart isolates suffisent |
+
+**Règle : Si ça tourne > 100ms en Dart, on utilise Rust.**
 
 ---
 
-## 3. Synthèse — Ce qui Est Vraiment Utile pour Panda
-
-### 3.1 De Codebuff/Freebuff (LE MEILLEUR MODÈLE)
-- **Architecture subagents parallèles** avec `spawn_agents`
-- **Context pruner** comme subagent dédié
-- **Reviewer** comme subagent post-tâche
-- **File picker** + **code searcher** pour naviguer le projet
-- **Agent definitions** typées avec input/output schemas
-
-### 3.2 De Cline
-- **Plan/Act phases** dans un même agent
-- **LSP diagnostics** comme feedback loop
-- **Checkpoints** pour rollback
-
-### 3.3 De Roo Code
-- **Modes** (Ask, Plan, Agent) — PAS des subagents
-- **Tool restrictions** par mode
-- **Context condensing** automatique
-
-### 3.4 De Aider
-- **RepoMap** — arbre syntaxique du projet
-- **Auto-commit** après chaque modification
-
-### 3.5 De Gemini CLI
-- **AgentSession** — wrapper event-driven
-- **Skills** — procédures réutilisables
-- **Memory** persistante
-
-### 3.6 De Goose
-- **Extensions MCP** — extensibilité
-- **Provider abstraction** — multi-modèles
-
----
-
-## 4. Architecture Conceptuelle de Panda Agent
+## 4. Architecture Conceptuelle Finale
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    PANDA AGENT                               │
+│                    PANDA AGENT v2                            │
 │                                                              │
 │  ┌──────────┐    ┌──────────────┐    ┌──────────────────┐   │
 │  │   User   │───▶│  AgentRunner │───▶│  AgentEventBus   │   │
 │  │  Input   │    │  (Main Loop) │    │  (Events → UI)   │   │
 │  └──────────┘    └──────┬───────┘    └──────────────────┘   │
 │                         │                                    │
+│  ┌──────────────────────┼──────────────────────┐            │
+│  │         DeviceCapabilities                  │            │
+│  │  RAM → maxAgents, maxTokens                 │            │
+│  │  CPU → parallelism level                    │            │
+│  │  Battery → verification aggressiveness      │            │
+│  │  Network → LLM timeout, retry strategy      │            │
+│  └──────────────────────┼──────────────────────┘            │
+│                         │                                    │
 │              ┌──────────┼──────────┐                        │
 │              ▼          ▼          ▼                        │
 │     ┌────────────┐ ┌─────────┐ ┌──────────┐               │
 │     │  Context   │ │  Tool   │ │  Model   │               │
 │     │  Manager   │ │ Registry│ │ Provider │               │
-│     └────────────┘ └─────────┘ └──────────┘               │
-│              │          │          │                        │
-│              ▼          ▼          ▼                        │
-│     ┌────────────┐ ┌─────────┐ ┌──────────┐               │
-│     │  SubAgent  │ │  Tool   │ │  LLM     │               │
-│     │  Manager   │ │Executor │ │  API     │               │
-│     └────────────┘ └─────────┘ └──────────┘               │
-│              │          │          │                        │
-│              ▼          ▼          ▼                        │
-│     ┌────────────┐ ┌─────────┐ ┌──────────┐               │
-│     │  Memory    │ │ Verifier│ │  Session │               │
-│     │  System    │ │ (LSP+  │ │  Store   │               │
-│     └────────────┘ │ Tests)  │ └──────────┘               │
-│                    └─────────┘                              │
+│     └─────┬──────┘ └────┬────┘ └──────────┘               │
+│           │             │                                   │
+│     ┌─────▼──────┐ ┌────▼─────┐                            │
+│     │  MCP       │ │  Tool    │                            │
+│     │  Manager   │ │ Executor │                            │
+│     │ (Isolates) │ │          │                            │
+│     └────────────┘ └──────────┘                            │
+│           │             │                                   │
+│     ┌─────▼──────┐ ┌────▼─────┐ ┌──────────┐             │
+│     │  SubAgent  │ │ Native   │ │  LLM     │             │
+│     │  Manager   │ │ Bridge   │ │  API     │             │
+│     │ (max N)    │ │ (Rust/C) │ │          │             │
+│     └────────────┘ └──────────┘ └──────────┘             │
+│           │             │           │                      │
+│     ┌─────▼──────┐ ┌────▼─────┐ ┌──────────┐             │
+│     │  Memory    │ │ Verifier │ │  Session │             │
+│     │  System    │ │ (LSP+    │ │  Store   │             │
+│     └────────────┘ │  native) │ └──────────┘             │
+│                    └──────────┘                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 4.1 Agents vs Modes vs Skills vs Tools vs Subagents
+---
 
-| Concept | Définition | Panda |
+## 5. Architecture des MCP Servers
+
+### 5.1 Pourquoi MCP dans Panda ?
+
+MCP permet d'**étendre les tools de l'agent** sans modifier le code Dart. C'est exactement comme les extensions VSCode, mais pour les outils.
+
+### 5.2 MCP Servers Panda
+
+| Serveur MCP | Usage | RAM | Priorité |
+|---|---|---|---|
+| **filesystem** | Lecture/écriture fichiers | ~5 MB | P0 |
+| **git** | Opérations git complètes | ~3 MB | P0 |
+| **search** | Recherche dans le code | ~10 MB | P1 |
+| **browser** | Navigation web | ~50 MB | P2 |
+| **database** | SQLite local | ~5 MB | P2 |
+| **android** | ADB, intents, device info | ~3 MB | P1 |
+| **flutter** | Flutter SDK, build, test | ~5 MB | P0 |
+
+### 5.3 Architecture MCP dans Dart
+
+```dart
+class McpManager {
+  final Map<String, McpServer> _servers = {};
+  final DeviceCapabilities _device;
+  
+  McpManager(this._device);
+  
+  /// Lance un serveur MCP comme Dart Isolate
+  Future<void> startServer(String name, McpServerConfig config) async {
+    if (!_device.allowMcpServer(name)) return;
+    
+    final isolate = await Isolate.spawn(
+      _runMcpServer,
+      config,
+      debugName: 'mcp-$name',
+    );
+    _servers[name] = McpServer(isolate: isolate, config: config);
+  }
+  
+  /// Appelle un outil MCP
+  Future<McpResult> callTool(String server, String tool, Map<String, dynamic> args) async {
+    final s = _servers[server];
+    if (s == null) throw McpError('Server $server not running');
+    return s.callTool(tool, args);
+  }
+  
+  /// Arrête les serveurs低priorité si RAM insuffisante
+  void trimToFit(int targetRamMB) {
+    // Ordre de priorité : filesystem > git > search > android > flutter > browser > database
+    final priority = ['filesystem', 'git', 'search', 'android', 'flutter', 'browser', 'database'];
+    // Arrêter les moins prioritaires jusqu'à atteindre la cible
+  }
+}
+```
+
+### 5.4 MCP vs Tools Natifs
+
+| Aspect | Tools Natifs (Dart) | MCP Servers |
 |---|---|---|
-| **Tool** | Capacité unitaire (read_file, run_shell, etc.) | ✅ Existe déjà |
-| **Skill** | Procédure réutilisable (flutter-dev, git-workflow) | 🆕 Nouveau |
-| **Mode** | Configuration comportementale (Ask, Plan, Agent) | ✅ Existe déjà |
-| **Agent** | Instance qui raisonne et appelle des tools | ✅ Existe déjà |
-| **Subagent** | Agent lancé par un autre agent | 🆕 Nouveau |
+| Performance | ⚡ Plus rapide (pas IPC) | 🔄 Overhead IPC ~1ms |
+| Extensibilité | ❌ Recompiler | ✅ Plugins dynamiques |
+| Isolation | ❌ Même processus | ✅ Isolates séparés |
+| Crash isolation | ❌ Crash = crash app | ✅ Crash = restart isolate |
+| RAM | 💚 Partagée | 🟡 ~5 MB par serveur |
+| Complexité | 💚 Simple | 🟡 Plus de code |
 
-**Décision : Panda utilise les DEUX — modes ET subagents.**
-- Les **modes** changent le comportement de l'agent principal (prompt, tools autorisés)
-- Les **subagents** sont lancés par l'agent principal pour des sous-tâches spécifiques
+**Décision : Les outils critiques (file read/write, shell) restent natifs. MCP pour l'extensibilité.**
 
 ---
 
-## 5. Architecture Flutter/Dart Finale
+## 6. Architecture Flutter/Dart Finale (mise à jour)
 
 ```
 lib/
 ├── agent/
 │   ├── core/
-│   │   ├── agent_runner.dart          # Boucle principale de l'agent
-│   │   ├── agent_state.dart           # État de l'agent (idle, thinking, streaming, etc.)
-│   │   ├── agent_event_bus.dart       # Bus d'événements pour découpler UI/moteur
-│   │   └── agent_config.dart          # Configuration globale de l'agent
+│   │   ├── agent_runner.dart          # Boucle principale
+│   │   ├── agent_state.dart           # État de l'agent
+│   │   ├── agent_event_bus.dart       # Bus d'événements
+│   │   ├── agent_config.dart          # Configuration
+│   │   └── device_capabilities.dart   # 🆕 Détection ressources device
 │   │
 │   ├── agents/
-│   │   ├── agent_definition.dart      # Définition typée d'un agent (comme Codebuff)
-│   │   ├── agent_registry.dart        # Registre des agents disponibles
-│   │   ├── main_agent.dart            # Agent principal (celui que l'utilisateur voit)
-│   │   ├── thinker_agent.dart         # Agent de réflexion profonde (sans tools)
-│   │   ├── reviewer_agent.dart        # Agent de review post-tâche
-│   │   └── context_pruner_agent.dart  # Agent de compression du contexte
+│   │   ├── agent_definition.dart      # Définition typée
+│   │   ├── agent_registry.dart        # Registre des agents
+│   │   ├── main_agent.dart            # Agent principal
+│   │   ├── thinker_agent.dart         # Réflexion profonde
+│   │   ├── reviewer_agent.dart        # Review post-tâche
+│   │   └── context_pruner_agent.dart  # Compression contexte
 │   │
 │   ├── subagents/
-│   │   ├── subagent_manager.dart      # Lance et suit les subagents
-│   │   └── subagent_task.dart         # Tâche d'un subagent (input/output)
+│   │   ├── subagent_manager.dart      # Gestion dynamique basée sur device
+│   │   └── subagent_task.dart         # Tâche d'un subagent
 │   │
 │   ├── tools/
-│   │   ├── tool_registry.dart         # Registre des tools disponibles
-│   │   ├── tool_executor.dart         # Exécuteur de tools avec permissions
-│   │   ├── tool_permission.dart       # Système de permissions par mode
-│   │   ├── file_tools.dart            # readFile, writeFile, editFile, etc.
-│   │   ├── terminal_tools.dart        # runShellCommand, getTerminalOutput
-│   │   ├── search_tools.dart          # searchInFiles, grepInFiles, globSearch
-│   │   ├── editor_tools.dart          # activeEditorFile, insertAtLine, etc.
-│   │   ├── git_tools.dart             # git operations
-│   │   └── web_tools.dart             # fetch, browser
+│   │   ├── tool_registry.dart         # Registre des tools
+│   │   ├── tool_executor.dart         # Exécuteur
+│   │   ├── tool_permission.dart       # Permissions par mode
+│   │   ├── file_tools.dart            # Outils fichiers (natifs)
+│   │   ├── terminal_tools.dart        # Outils terminal (natifs)
+│   │   ├── search_tools.dart          # Outils recherche (natifs)
+│   │   ├── editor_tools.dart          # Outils éditeur (natifs)
+│   │   ├── git_tools.dart             # Outils git (natifs)
+│   │   └── web_tools.dart             # Outils web (MCP)
+│   │
+│   ├── mcp/                           # 🆕 MCP Support
+│   │   ├── mcp_manager.dart           # Gestionnaire MCP
+│   │   ├── mcp_server.dart            # Serveur MCP (isolate)
+│   │   ├── mcp_tool_bridge.dart       # Bridge tools natifs ↔ MCP
+│   │   └── servers/
+│   │       ├── filesystem_server.dart
+│   │       ├── git_server.dart
+│   │       ├── search_server.dart
+│   │       ├── android_server.dart
+│   │       └── flutter_server.dart
 │   │
 │   ├── context/
-│   │   ├── context_manager.dart       # Gère ce qui est envoyé au LLM
-│   │   ├── code_map.dart              # Arbre syntaxique du projet (comme Aider)
-│   │   ├── project_tree.dart          # Structure des fichiers
-│   │   ├── relevant_files.dart        # Fichiers pertinents pour la tâche
-│   │   └── context_pruner.dart        # Compresse le contexte quand il déborde
+│   │   ├── context_manager.dart       # Gestion du contexte
+│   │   ├── code_map.dart              # Arbre syntaxique (Rust FFI)
+│   │   ├── project_tree.dart          # Structure fichiers
+│   │   ├── relevant_files.dart        # Fichiers pertinents
+│   │   └── context_pruner.dart        # Compression (Rust FFI)
+│   │
+│   ├── native/                        # 🆕 Pont FFI vers code natif
+│   │   ├── native_bridge.dart         # Bridge Dart ↔ Rust/C
+│   │   ├── tree_sitter_parser.dart    # Parser tree-sitter (Rust)
+│   │   ├── code_indexer.dart          # Indexeur de code (Rust)
+│   │   └── search_engine.dart         # Moteur de recherche (Rust)
 │   │
 │   ├── memory/
 │   │   ├── project_memory.dart        # .panda/memory.md
-│   │   ├── knowledge_files.dart       # .panda/rules.md, .panda/skills/
-│   │   └── session_memory.dart        # Mémoire de la session en cours
+│   │   ├── knowledge_files.dart       # .panda/rules.md + skills
+│   │   └── session_memory.dart        # Mémoire session
 │   │
 │   ├── verification/
-│   │   ├── verification_pipeline.dart # Pipeline de vérification adaptative
-│   │   ├── lsp_checker.dart           # Vérifie les diagnostics LSP
-│   │   ├── analyzer_checker.dart      # dart analyze / flutter analyze
-│   │   └── test_runner.dart           # Lance les tests ciblés
+│   │   ├── verification_pipeline.dart # Pipeline adaptatif
+│   │   ├── lsp_checker.dart           # Diagnostics LSP
+│   │   ├── analyzer_checker.dart      # dart analyze
+│   │   ├── native_checker.dart        # 🆕 Vérification via Rust (rapide)
+│   │   └── test_runner.dart           # Tests ciblés
 │   │
 │   ├── events/
 │   │   ├── agent_event.dart           # Types d'événements
 │   │   ├── agent_event_bus.dart       # Bus d'événements
-│   │   └── event_handlers.dart        # Gestionnaires d'événements
+│   │   └── event_handlers.dart        # Gestionnaires
 │   │
 │   ├── models/
-│   │   ├── agent_message.dart         # Message de conversation
+│   │   ├── agent_message.dart         # Message conversation
 │   │   ├── tool_call.dart             # Appel d'outil
 │   │   ├── tool_result.dart           # Résultat d'outil
-│   │   ├── agent_result.dart          # Résultat final de l'agent
-│   │   └── agent_phase.dart           # Phases de l'agent
+│   │   ├── agent_result.dart          # Résultat final
+│   │   └── agent_phase.dart           # Phases agent
 │   │
 │   └── modes/
-│       ├── agent_mode.dart            # Mode Agent (autonomie totale)
-│       ├── ask_mode.dart              # Mode Ask (questions/réponses)
-│       ├── plan_mode.dart             # Mode Plan (planification)
-│       └── mode_registry.dart         # Registre des modes
+│       ├── agent_mode.dart            # Mode Agent
+│       ├── ask_mode.dart              # Mode Ask
+│       ├── plan_mode.dart             # Mode Plan
+│       └── mode_registry.dart         # Registre modes
 │
-├── features/
-│   └── agent_ui/
-│       ├── activity_feed/             # Feed d'activités (existant, à déplacer)
-│       ├── plan_viewer/               # Visualiseur de plans
-│       ├── tool_viewer/               # Visualiseur d'outils en cours
-│       ├── prompt_input/              # Barre de saisie
-│       └── model_selector/            # Sélecteur de modèle
+├── native/                            # 🆕 Code Rust/C source
+│   ├── rust/
+│   │   ├── Cargo.toml
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── parser.rs              # tree-sitter parser
+│   │   │   ├── indexer.rs             # code indexer
+│   │   │   ├── searcher.rs            # search engine
+│   │   │   └── compressor.rs          # context compressor
+│   │   └── target/                    # Compiled .so pour Android
+│   │       ├── aarch64-linux-android/
+│   │       └── armv7-linux-android/
+│   └── c/
+│       ├── zlib压缩.c                  # compression (si besoin)
+│       └── Makefile
 │
-└── (fichiers existants conservés)
-    ├── ui/agent/beui/                 # Composants Beautiful UI (à intégrer)
-    ├── ui/agent/agent_models.dart     # Modèles extraits
-    └── ui/agent/agent_widgets.dart    # Widgets extraits
+└── features/
+    └── agent_ui/
+        ├── activity_feed/
+        ├── plan_viewer/
+        ├── tool_viewer/
+        ├── prompt_input/
+        └── model_selector/
 ```
 
 ---
 
-## 6. Liste des Nouveaux Fichiers
+## 7. Limits Dynamiques par Device
 
-| Fichier | Responsabilité | Utilisé par | Appelle | État |
-|---|---|---|---|---|
-| `core/agent_runner.dart` | Boucle principale de l'agent | UI, AgentEventBus | ContextManager, ToolExecutor, AgentRegistry | **Existant** (à refactorer) |
-| `core/agent_state.dart` | État de l'agent | AgentRunner, UI | — | **Existant** (à extraire) |
-| `core/agent_event_bus.dart` | Bus d'événements | Tous | — | **Nouveau** |
-| `core/agent_config.dart` | Configuration globale | AgentRunner, Tools | SharedPreferences | **Nouveau** |
-| `agents/agent_definition.dart` | Définition typée d'un agent | AgentRegistry | — | **Nouveau** |
-| `agents/agent_registry.dart` | Registre des agents | AgentRunner, SubagentManager | AgentDefinition | **Nouveau** |
-| `agents/main_agent.dart` | Agent principal | AgentRunner | ToolRegistry, ContextManager | **Nouveau** |
-| `agents/thinker_agent.dart` | Réflexion profonde | SubagentManager | LLM (sans tools) | **Nouveau** |
-| `agents/reviewer_agent.dart` | Review post-tâche | SubagentManager | LLM (sans tools) | **Nouveau** |
-| `agents/context_pruner_agent.dart` | Compression contexte | AgentRunner | LLM | **Nouveau** |
-| `subagents/subagent_manager.dart` | Lance/suit les subagents | AgentRunner | AgentRegistry, AgentRunner | **Nouveau** |
-| `subagents/subagent_task.dart` | Tâche d'un subagent | SubagentManager | — | **Nouveau** |
-| `tools/tool_registry.dart` | Registre des tools | ToolExecutor, AgentRunner | Tool | **Nouveau** |
-| `tools/tool_executor.dart` | Exécuteur de tools | AgentRunner | Tool, ToolPermission | **Nouveau** |
-| `tools/tool_permission.dart` | Permissions par mode | ToolExecutor | ModeRegistry | **Nouveau** |
-| `tools/file_tools.dart` | Outils fichiers | ToolExecutor | — | **Nouveau** |
-| `tools/terminal_tools.dart` | Outils terminal | ToolExecutor | PTY | **Nouveau** |
-| `tools/search_tools.dart` | Outils recherche | ToolExecutor | — | **Nouveau** |
-| `tools/editor_tools.dart` | Outils éditeur | ToolExecutor | CodeForge | **Nouveau** |
-| `tools/git_tools.dart` | Outils git | ToolExecutor | — | **Nouveau** |
-| `tools/web_tools.dart` | Outils web | ToolExecutor | http | **Nouveau** |
-| `context/context_manager.dart` | Gère le contexte LLM | AgentRunner | CodeMap, ProjectTree, Memory | **Nouveau** |
-| `context/code_map.dart` | Arbre syntaxique | ContextManager | analyzer | **Nouveau** |
-| `context/project_tree.dart` | Structure fichiers | ContextManager | dart:io | **Nouveau** |
-| `context/relevant_files.dart` | Fichiers pertinents | ContextManager | CodeMap | **Nouveau** |
-| `context/context_pruner.dart` | Compresse le contexte | ContextManager | LLM | **Nouveau** |
-| `memory/project_memory.dart` | .panda/memory.md | ContextManager | dart:io | **Nouveau** |
-| `memory/knowledge_files.dart` | .panda/rules.md | ContextManager | dart:io | **Nouveau** |
-| `memory/session_memory.dart` | Mémoire session | ContextManager | SharedPreferences | **Nouveau** |
-| `verification/verification_pipeline.dart` | Pipeline adaptatif | AgentRunner | LSP, Analyzer, Tests | **Nouveau** |
-| `verification/lsp_checker.dart` | Diagnostics LSP | VerificationPipeline | LSP | **Nouveau** |
-| `verification/analyzer_checker.dart` | dart analyze | VerificationPipeline | PTY | **Nouveau** |
-| `verification/test_runner.dart` | Tests ciblés | VerificationPipeline | PTY | **Nouveau** |
-| `events/agent_event.dart` | Types d'événements | AgentEventBus | — | **Nouveau** |
-| `events/agent_event_bus.dart` | Bus d'événements | AgentRunner, UI | StreamController | **Nouveau** |
-| `events/event_handlers.dart` | Gestionnaires | AgentEventBus | ActivityFeed | **Nouveau** |
-| `models/agent_message.dart` | Message conversation | AgentRunner | — | **Nouveau** |
-| `models/tool_call.dart` | Appel d'outil | AgentRunner | — | **Nouveau** |
-| `models/tool_result.dart` | Résultat d'outil | AgentRunner | — | **Nouveau** |
-| `models/agent_result.dart` | Résultat final | AgentRunner | — | **Nouveau** |
-| `models/agent_phase.dart` | Phases agent | AgentRunner | — | **Existant** (à déplacer) |
-| `modes/agent_mode.dart` | Mode Agent | ModeRegistry | ToolPermission | **Nouveau** |
-| `modes/ask_mode.dart` | Mode Ask | ModeRegistry | ToolPermission | **Nouveau** |
-| `modes/plan_mode.dart` | Mode Plan | ModeRegistry | ToolPermission | **Nouveau** |
-| `modes/mode_registry.dart` | Registre modes | AgentRunner, ToolPermission | ModeConfig | **Nouveau** |
+### 7.1 Grille de Configuration
+
+| Device Category | RAM | CPU | maxAgents | maxTokens | maxToolOutput | allowMcp | allowRust | allowVerification |
+|---|---|---|---|---|---|---|---|---|
+| **Flagship** (S21+, Pixel 7+) | 8GB+ | 8 cores | 3 | 120k | 4k | ✅ Full | ✅ | ✅ Full |
+| **Mid-range** (A52+, Nord) | 6GB | 8 cores | 2 | 80k | 3k | ✅ Limited | ✅ | ✅ Light |
+| **Budget** (A32, older) | 4GB | 4-6 cores | 2 | 40k | 2k | ✅ Minimal | ❌ | ⚠️ Basic only |
+| **Low-end** (< 4GB) | <4GB | 4 cores | 1 | 20k | 1k | ❌ | ❌ | ❌ |
+
+### 7.2 Détection au Démarrage
+
+```dart
+class DeviceDetector {
+  static Future<DeviceCapabilities> detect() async {
+    final info = await DeviceInfoPlugin().androidInfo;
+    final battery = await Battery().batteryLevel;
+    final connectivity = await Connectivity().checkConnectivity();
+    
+    return DeviceCapabilities(
+      totalRamMB: info.totalRam ~/ (1024 * 1024),
+      availableRamMB: await _getAvailableRam(),
+      cpuCores: info.physicalCpu ?? 4,
+      batteryPercent: battery,
+      network: _networkFromConnectivity(connectivity),
+      storageAvailableMB: await _getStorageAvailable(),
+      deviceModel: info.model,
+      androidVersion: info.version.sdkInt,
+    );
+  }
+  
+  static Future<int> _getAvailableRam() async {
+    // /proc/meminfo ou ActivityManager
+    // ...
+  }
+}
+```
+
+### 7.3 Adaptation Dynamique
+
+```dart
+class AgentRunner {
+  late final DeviceCapabilities _device;
+  
+  Future<void> start(String text) async {
+    _device = await DeviceDetector.detect();
+    
+    // Adapter le comportement selon le device
+    final maxAgents = _device.maxConcurrentAgents;
+    final maxTokens = _device.maxContextTokens;
+    
+    // Si device faible, réduire la complexité
+    if (_device.totalRamMB < 4096) {
+      // Pas de subagents, pas de MCP, contexte réduit
+      _config = AgentConfig.simple();
+    } else if (_device.totalRamMB < 6144) {
+      // 1 subagent possible, MCP limité
+      _config = AgentConfig.moderate();
+    } else {
+      // Full features
+      _config = AgentConfig.full();
+    }
+  }
+}
+```
 
 ---
 
-## 7. Fichiers Existants à Modifier
+## 8. Architecture MCP dans Panda
 
-| Fichier | Modification | Priorité |
-|---|---|---|
-| `lib/ui/agent_runner.dart` | Extraire AgentPhase, refactorer en AgentRunner pur (pas de UI) | P0 |
-| `lib/ui/home.dart` | Remplacer callbacks directs par AgentEventBus | P1 |
-| `lib/ui/agent/agent_models.dart` | Renommer en `core/agent_state.dart` | P1 |
-| `lib/ui/agent/agent_widgets.dart` | Déplacer dans `features/agent_ui/` | P2 |
-| `lib/ui/agent/beui/` | Intégrer les 15 composants non utilisés | P2 |
-| `lib/ui/agent_settings.dart` | Ajouter configuration modes/skills | P1 |
+### 8.1 Serveurs MCP Intégrés
+
+| Serveur | Description | Outils exposés | RAM |
+|---|---|---|---|
+| **panda-filesystem** | Lecture/écriture fichiers | readFile, writeFile, listDir, watchFile | ~5 MB |
+| **panda-git** | Opérations git | commit, push, pull, diff, log, branch | ~3 MB |
+| **panda-search** | Recherche code | grep, glob, ripgrep, ast-search | ~10 MB |
+| **panda-android** | Device Android | adb, intents, device-info, install | ~3 MB |
+| **panda-flutter** | Flutter SDK | analyze, build, test, pub-get | ~5 MB |
+| **panda-browser** | Navigation web | navigate, screenshot, extract-text | ~50 MB |
+
+### 8.2 Avantages de MCP pour Panda
+
+1. **Extensibilité** : Les utilisateurs peuvent ajouter leurs propres MCP servers
+2. **Isolation** : Un crash de serveur MCP ne crash pas l'app
+3. **Performance** : Les serveurs lourds (browser) tournent en arrière-plan
+4. **Compatibilité** : Les MCP servers existants fonctionnent directement
+5. **Sécurité** : Chaque serveur a ses propres permissions
+
+### 8.3 Intégration avec l'Agent
+
+```
+AgentRunner
+  ↓
+ToolRegistry.get("mcp:panda-git:commit")
+  ↓
+McpManager.callTool("panda-git", "commit", { message: "..." })
+  ↓
+McpServer (Dart Isolate)
+  ↓
+Exécute git commit
+  ↓
+Résultat → AgentRunner
+```
 
 ---
 
-## 8. Flux Main Agent — Tâche Complète
+## 9. Flux avec Détection Device
 
-### Exemple : « Ajoute une page de login avec Firebase »
+### Exemple : S21 (8GB RAM, 70% batterie, WiFi)
 
 ```
 User: "Ajoute une page de login avec Firebase"
   ↓
-AgentRunner.start(text: "Ajoute une page de login avec Firebase")
+DeviceDetector.detect() → { ram: 8192, cores: 8, battery: 70, network: wifi }
   ↓
-AgentEventBus.emit(AgentStarted)
+Config: maxAgents=3, maxTokens=120k, allowMcp=true, allowRust=true
   ↓
-ContextManager.buildContext()
-  ├── ProjectTree.scan(workspacePath)
-  ├── RelevantFiles.find("login", "firebase", "auth")
-  ├── CodeMap.analyze(workspacePath)          ← arbre syntaxique
-  ├── ProjectMemory.load(".panda/memory.md")
-  ├── KnowledgeFiles.load(".panda/rules.md")
-  └── ConversationHistory.get(last 20 messages)
-  ↓
-AgentRunner.run(systemPrompt, context, messages)
-  ↓
-MainAgent.process()
-  ├── Phase 1: THINKING
-  │   └── AgentEventBus.emit(ThinkingStarted)
-  │       "Je dois créer une page de login avec Firebase Auth..."
+AgentRunner.start()
+  ├── ContextManager.buildContext(maxTokens: 120k)
+  │   ├── CodeMap.analyze() → Rust FFI (~50ms au lieu de 500ms)
+  │   ├── ProjectTree.scan()
+  │   ├── RelevantFiles.find()
+  │   └── ProjectMemory.load()
   │
-  ├── Phase 2: TOOL CALLS (itératif)
-  │   ├── readFile("lib/ui/home.dart")         ← comprendre l'architecture
-  │   ├── readFile("pubspec.yaml")             ← vérifier les dépendances
-  │   ├── searchInFiles("firebase")            ← chercher si déjà installé
+  ├── MainAgent.process()
+  │   ├── Tool: readFile (natif, 2ms)
+  │   ├── Tool: mcp:panda-flutter:pub-add(firebase_auth) (MCP, 200ms)
+  │   ├── Tool: writeFile (natif, 1ms)
   │   │
-  │   ├── SUBAGENT: ContextPruner si tokens > 40k
-  │   │   └── Compresse l'historique
+  │   ├── SubAgent: ThinkerAgent (parallèle, Analyse approfondie)
+  │   │   └── Result → MainAgent continue
   │   │
-  │   ├── runShellCommand("flutter pub add firebase_auth firebase_core")
-  │   │   └── Si erreur "command not found" → auto-install flutter
-  │   │
-  │   ├── writeFile("lib/ui/login_page.dart", code)
-  │   │   └── AgentEventBus.emit(FileChanged, path: "lib/ui/login_page.dart")
-  │   │
-  │   └── editFile("lib/ui/home.dart", navigation)
-  │       └── AgentEventBus.emit(FileChanged, path: "lib/ui/home.dart")
+  │   └── Tool: editFile (natif, 1ms)
   │
-  ├── Phase 3: VERIFICATION
-  │   └── VerificationPipeline.run(changedFiles: ["lib/ui/login_page.dart", "lib/ui/home.dart"])
-  │       ├── LspChecker.check()               ← diagnostics LSP
-  │       ├── AnalyzerChecker.run("dart analyze")
-  │       ├── Si erreurs → Agent corrige automatiquement
-  │       └── AgentEventBus.emit(VerificationPassed)
+  ├── VerificationPipeline.run()
+  │   ├── LspChecker (natif, 50ms)
+  │   ├── AnalyzerChecker (MCP:panda-flutter, 2s)
+  │   └── Result: PASS
   │
-  ├── Phase 4: REVIEW (optionnel, pour tâches > 5 fichiers)
-  │   └── SubagentManager.spawn(ReviewerAgent, prompt: "Review login page")
-  │       └── AgentEventBus.emit(ReviewCompleted, feedback: "...")
-  │
-  └── Phase 5: DONE
-      └── AgentEventBus.emit(AgentFinished, result: "Page de login créée")
+  └── SubAgent: ReviewerAgent (post-tāche)
+      └── "La page de login est bien structurée, ajoute la validation email"
+          → MainAgent corrige
   ↓
-UI met à jour via AgentEventBus listeners
-  ├── Activity Feed se remplit
-  ├── Messages s'affichent
-  └── Plan viewer montre les étapes cochées
+AgentFinished → UI met à jour
+```
+
+### Exemple : A32 (4GB RAM, 40% batterie, 4G)
+
+```
+User: "Ajoute une page de login avec Firebase"
+  ↓
+DeviceDetector.detect() → { ram: 4096, cores: 4, battery: 40, network: mobile }
+  ↓
+Config: maxAgents=2, maxTokens=40k, allowMcp=minimal, allowRust=false
+  ↓
+AgentRunner.start()
+  ├── ContextManager.buildContext(maxTokens: 40k)
+  │   ├── ProjectTree.scan() → Dart seul (~500ms)
+  │   ├── RelevantFiles.find()
+  │   └── ProjectMemory.load()
+  │
+  ├── MainAgent.process()
+  │   ├── Tool: readFile (natif, 2ms)
+  │   ├── Tool: runShellCommand("flutter pub add firebase_auth") (natif)
+  │   ├── Tool: writeFile (natif, 1ms)
+  │   └── Tool: editFile (natif, 1ms)
+  │
+  ├── VerificationPipeline.run()
+  │   └── AnalyzerChecker (natif, 5s au lieu de 2s via MCP)
+  │
+  └── PAS de subagent (device trop faible)
+  ↓
+AgentFinished → UI met à jour
 ```
 
 ---
 
-## 9. Flux Subagent
+## 10. Gaps Finaux de Panda
 
-```
-MainAgent needs help with subtask
-  ↓
-SubagentManager.spawn(agentId: "thinker", prompt: "Analyse la meilleure approche")
-  ↓
-AgentRegistry.get("thinker") → AgentDefinition
-  ↓
-SubagentTask created:
-  - input: { prompt: "...", filePaths: [...] }
-  - agent: ThinkerAgent
-  - context: subset du contexte parent
-  ↓
-AgentRunner.run(subagentTask)         ← même boucle, agent différent
-  ↓
-ThinkerAgent.process()                ← pas de tools, juste réflexion
-  ↓
-SubagentTask.result = { message: "..." }
-  ↓
-MainAgent reçoit le résultat et continue
-```
+### Déjà Excellent
 
----
+| Fonctionnalité | Évaluation |
+|---|---|
+| Agent / Ask / Plan modes | ✅ Complet |
+| Activity Feed | ✅ Original |
+| Tool system | ✅ Complet |
+| Approval system | ✅ |
+| Mémoire | ✅ |
+| LSP diagnostics | ✅ |
+| Git integration | ✅ |
+| PTY terminal | ✅ |
 
-## 10. Flux Tool
+### À Améliorer
 
-```
-AgentRunner receives tool call from LLM
-  ↓
-ToolRegistry.get("readFile") → ToolDefinition
-  ↓
-ToolPermissionManager.check(tool, currentMode)
-  ├── Mode Agent: tous les tools autorisés
-  ├── Mode Ask: lecture seule
-  ├── Mode Plan: lecture seule + search
-  └── Si refusé → retourne "Blocage: tool non autorisé en mode X"
-  ↓
-ToolExecutor.execute(tool, args)
-  ├── file_tools.readFile(path)
-  ├── terminal_tools.runShellCommand(cmd)
-  ├── search_tools.searchInFiles(query)
-  └── etc.
-  ↓
-ToolResult { success, data, error }
-  ↓
-AgentRunner adds result to conversation
-  ↓
-AgentEventBus.emit(ToolFinished, toolId, result)
-  ↓
-Activity Feed met à jour
-```
-
----
-
-## 11. Flux Verification
-
-```
-Agent modifies files
-  ↓
-VerificationPipeline.run(changedFiles)
-  ↓
-Stratégie adaptative:
-  ├── Si 1 fichier Dart modifié:
-  │   └── LspChecker.check(file) + AnalyzerChecker.run("dart analyze lib/")
-  │
-  ├── Si dépendances modifiées (pubspec.yaml):
-  │   └── AnalyzerChecker.run("flutter pub get && dart analyze")
-  │
-  ├── Si +5 fichiers modifiés:
-  │   ├── LspChecker.checkAll(changedFiles)
-  │   ├── AnalyzerChecker.run("dart analyze")
-  │   └── TestRunner.run("flutter test")  ← tests ciblés
-  │
-  └── Si build critique (main.dart, navigation):
-      ├── AnalyzerChecker.run("flutter build apk --debug")
-      └── TestRunner.run("flutter test")
-  ↓
-Si erreurs:
-  └── Agent reçoit les erreurs et corrige automatiquement
-      └── Loop jusqu'à PASS ou max 3 tentatives
-  ↓
-AgentEventBus.emit(VerificationPassed/Failed)
-```
-
----
-
-## 12. Flux Context
-
-```
-ContextManager.buildContext()
-  ↓
-┌─────────────────────────────────────────┐
-│ 1. ProjectTree                          │
-│    → structure des fichiers du projet   │
-│    → Dart: pubspec.yaml, lib/, etc.     │
-├─────────────────────────────────────────┤
-│ 2. CodeMap                              │
-│    → arbre syntaxique (classes, funcs)  │
-│    → basé sur dart:analyzer             │
-│    → taille max: 4k tokens              │
-├─────────────────────────────────────────┤
-│ 3. RelevantFiles                        │
-│    → fichiers liés à la tâche           │
-│    → trouvés par searchInFiles + glob   │
-│    → max: 10 fichiers                   │
-├─────────────────────────────────────────┤
-│ 4. ActiveFile                           │
-│    → fichier actuellement ouvert        │
-│    → contenu complet                    │
-├─────────────────────────────────────────┤
-│ 5. GitDiff                              │
-│    → modifications non commitées        │
-│    → git diff HEAD                      │
-├─────────────────────────────────────────┤
-│ 6. LspDiagnostics                       │
-│    → erreurs/warnings en cours          │
-│    → diagnostics des fichiers ouverts   │
-├─────────────────────────────────────────┤
-│ 7. ProjectMemory                        │
-│    → .panda/memory.md                   │
-│    → préférences utilisateur            │
-├─────────────────────────────────────────┤
-│ 8. KnowledgeFiles                       │
-│    → .panda/rules.md                    │
-│    → instructions spécifiques           │
-├─────────────────────────────────────────┤
-│ 9. ToolOutputs                          │
-│    → sorties des tools précédents       │
-│    → max: 2k tokens par sortie          │
-├─────────────────────────────────────────┤
-│ 10. ConversationHistory                 │
-│    → derniers 20 messages               │
-│    → compresse si > 40k tokens          │
-└─────────────────────────────────────────┘
-  ↓
-Taille totale max: 80k tokens (pour laisser de la place à la réponse)
-  ↓
-Si dépassement → ContextPruner compresse
-```
-
----
-
-## 13. Flux Event → Activity Feed
-
-```
-AgentEventBus (Stream<AgentEvent>)
-  ↓
-┌──────────────────────────────────────────┐
-│ Event Types:                             │
-│  ├── AgentStarted                        │
-│  ├── ThinkingStarted                     │
-│  ├── ThinkingFinished                    │
-│  ├── ToolStarted(toolId, toolName, args) │
-│  ├── ToolFinished(toolId, result)        │
-│  ├── ToolFailed(toolId, error)           │
-│  ├── SubAgentStarted(agentId)            │
-│  ├── SubAgentFinished(agentId, result)   │
-│  ├── FileChanged(path)                   │
-│  ├── VerificationStarted                 │
-│  ├── VerificationPassed                  │
-│  ├── VerificationFailed(errors)          │
-│  ├── StreamingChunk(text)                │
-│  ├── AgentFinished(result)               │
-│  └── AgentError(error)                   │
-└──────────────────────────────────────────┘
-  ↓
-UI listens via StreamBuilder/StreamSubscription
-  ↓
-AgentActivityFeed (widget) → met à jour automatiquement
-  ↓
-Pas de couplage UI/moteur via callbacks
-```
-
----
-
-## 14. Architecture Mémoire
-
-```
-.panda/
-├── memory.md              # Mémoire persistante du projet
-│                          # (préférences, conventions, décisions)
-│
-├── rules.md               # Règles spécifiques au projet
-│                          # (style, patterns, interdictions)
-│
-├── skills/                # Compétences réutilisables
-│   ├── flutter-dev.md     # Guide développement Flutter
-│   ├── git-workflow.md    # Workflow Git du projet
-│   ├── testing.md         # Stratégie de tests
-│   └── debugging.md       # Guide de debug
-│
-└── knowledge/             # Connaissance du projet
-    ├── architecture.md    # Architecture du projet
-    └── api.md             # API documentation
-```
-
-Comparaison :
-| Projet | Fichier | Contenu |
+| Fonctionnalité | Solution | Priorité |
 |---|---|---|
-| Codebuff | `AGENTS.md` | Instructions pour l'agent |
-| Cline | `.clinerules` | Règles comportementales |
-| Roo | `.roo/` | Modes + rules + settings |
-| Continue | `.continue/` | Config + context |
-| Gemini | `GEMINI.md` | Instructions + mémoire |
-| **Panda** | **`.panda/`** | **Memory + Rules + Skills + Knowledge** |
-
----
-
-## 15. Architecture Mobile (Android)
-
-### Contraintes
-
-| Ressource | Limite | Justification |
-|---|---|---|
-| **RAM** | 512 MB max pour l'agent | Android tue les apps > 512MB en background |
-| **CPU** | 1 subagent à la fois | Éviter le throttle CPU |
-| **Batterie** | Max 3 appels LLM par tâche | Limiter les appels réseau |
-| **Réseau** | Timeout 30s par appel | Connexions mobiles instables |
-| **Tokens** | 80k contexte max | Modèles mobiles limités |
-| **Tool output** | 2k tokens max par sortie | Éviter le flooding du contexte |
-| **Steps** | 20 max par tâche | Éviter les boucles infinies |
-| **Subagents** | 1 à la fois | RAM/CPU limités |
-| **Historique** | 20 messages max | Compresse au-delà |
-
-### Stratégie
-
-1. **Un seul subagent à la fois** (pas de parallélisme massif)
-2. **Context pruning automatique** quand > 40k tokens
-3. **Tool output tronqué** à 2k tokens
-4. **Timeout 30s** sur tous les appels réseau
-5. **Retry max 3 fois** sur erreurs réseau
-6. **Session recovery** après interruption app
-7. **Modèles distants** uniquement (pas de local sur mobile sauf Llama si disponible)
-
----
-
-## 16. Tableau Comparatif Final — Gaps de Panda
-
-### Déjà excellent dans Panda
-
-| Fonctionnalité | Évaluation | Source |
-|---|---|---|
-| Agent / Ask / Plan modes | ✅ | Inspiré de Cline/Roo |
-| Activity Feed | ✅ | Original |
-| Tool system (read/write/edit/shell/search) | ✅ | Complet |
-| Approval system | ✅ | Inspiré de Cline |
-| Mémoire (.panda/memory.md) | ✅ | Inspiré de Gemini/Cline |
-| LSP diagnostics | ✅ | Inspiré de Cline |
-| Git integration | ✅ | Standard |
-| PTY terminal | ✅ | Original |
-
-### À améliorer
-
-| Fonctionnalité | Problème | Solution | Source |
-|---|---|---|---|
-| Agent loop | Monolithique, pas d'événements | Event-driven avec AgentEventBus | Gemini CLI |
-| Context management | Pas de pruning | ContextPruner agent | Codebuff |
-| Tool permissions | Basique | Mode-based permission matrix | Roo Code |
-| UI coupling | Callbacks directs | Stream-based events | Gemini CLI |
-| Vérification | Aucune | VerificationPipeline adaptatif | Cline |
-| Agent definitions | Hardcodées | Typed definitions avec schemas | Codebuff |
-| Skills | Aucune | .panda/skills/ directory | Gemini CLI |
+| Agent loop | Event-driven avec AgentEventBus | P0 |
+| Context management | ContextManager + ContextPruner | P0 |
+| Device detection | DeviceCapabilities au démarrage | P0 |
+| Tool permissions | Permission matrix par mode | P1 |
+| UI coupling | Stream-based events | P1 |
+| Verification | Pipeline adaptatif | P1 |
+| Agent definitions | Typed definitions | P1 |
 
 ### Manquant
 
-| Fonctionnalité | Pourquoi | Solution | Source | Priorité |
-|---|---|---|---|---|
-| Subagents | Tâches complexes nécessitent spécialisation | SubagentManager + ThinkerAgent + ReviewerAgent | Codebuff | **P1** |
-| Code map | L'agent n'a pas de vue globale du projet | CodeMap basé sur dart:analyzer | Aider | **P1** |
-| Context pruning | Le contexte déborde | ContextPruner subagent | Codebuff | **P1** |
-| Verification pipeline | Pas de vérification post-modification | LSP + Analyzer + Tests adaptatifs | Cline | **P1** |
-| Review agent | Pas de review automatique | ReviewerAgent post-tâche | Codebuff | **P2** |
-| Knowledge files | Pas de rules/skills | .panda/rules.md + .panda/skills/ | Gemini/Cline/Roo | **P2** |
-| Event bus | UI couplée au moteur | AgentEventBus avec StreamController | Gemini CLI | **P1** |
-| Tool permissions fines | Permissions basiques | Permission matrix par mode | Roo Code | **P2** |
+| Fonctionnalité | Solution | Source | Priorité |
+|---|---|---|---|
+| Subagents | SubagentManager dynamique | Codebuff | P1 |
+| Code map | Rust FFI tree-sitter | Aider | P1 |
+| MCP support | McpManager + serveurs | Goose/Cline | P1 |
+| Native bridge | Dart FFI → Rust | — | P1 |
+| Review agent | ReviewerAgent | Codebuff | P2 |
+| Knowledge files | .panda/rules.md + skills | Gemini/Cline | P2 |
+| Event bus | AgentEventBus | Gemini CLI | P0 |
+| Tool permissions | Mode-based matrix | Roo Code | P2 |
 
 ### Inutile pour Panda
 
 | Fonctionnalité | Pourquoi |
 |---|---|
-| MCP (Model Context Protocol) | Panda est un IDE mobile, pas un extension host |
 | Docker sandbox | Android n'a pas Docker |
-| Browser automation | secondaire sur mobile |
-| A2A (Agent-to-Agent) | Trop complexe pour mobile |
+| Electron UI | Desktop only |
+| Local inference (LLaMA) | RAM insuffisante pour un modèle complet |
+| A2A protocol | Trop complexe, MCP suffit |
 
-### À adapter au mobile
+### À Adapter au Mobile
 
 | Fonctionnalité | Adaptation |
 |---|---|
-| Subagents | Max 1 à la fois, timeout 30s |
-| Context pruning | Plus agressif (80k max au lieu de 200k+) |
-| Code map | Lazy loading, pas de cache complet |
-| Verification | Pas de `flutter build` complet, juste `dart analyze` |
-| Parallel execution | Désactivé sur mobile |
-
-### À ne surtout pas copier
-
-| Fonctionnalité | Projet | Pourquoi |
-|---|---|---|
-| Docker sandboxing | OpenHands, SWE-agent | Impossible sur Android |
-| Electron UI | Cline, Roo | Desktop only |
-| MCP extensions | Cline, Goose | Trop lourd pour mobile |
-| Local inference | Goose | RAM insuffisante |
+| Subagents | Dynamique selon RAM (1-3) |
+| MCP servers | Démarrent à la demande, pas tous en même temps |
+| Context pruning | Plus agressif si RAM faible |
+| Verification | Pas de build complet, juste analyze |
+| Native code | FFI uniquement, pas de process Go |
+| Parallel execution | Dart isolates, pas de threads |
 
 ---
 
-## 17. Faut-il Réellement Plusieurs Agents ?
+## 11. Roadmap d'Implémentation (mise à jour)
 
-### Réponse : OUI, mais modéré.
-
-**Architecture recommandée pour Panda :**
-
-```
-MainAgent (1)
-  ├── spawn → ThinkerAgent (0-1, sans tools, réflexion profonde)
-  ├── spawn → ReviewerAgent (0-1, sans tools, post-tâche)
-  └── spawn → ContextPrunerAgent (0-1, compresse le contexte)
-```
-
-**Pourquoi PAS 5-6 subagents :**
-1. Chaque subagent = 1 appels LLM supplémentaire = tokens + latence
-2. Sur Android, la RAM est limitée (512 MB)
-3. Les modèles distants ont des timeouts
-4. La plupart des tâches ne nécessitent pas de spécialisation
-
-**Pourquoi quand même des subagents :**
-1. Le **Thinker** permet une réflexion profonde sans polluer le contexte principal
-2. Le **Reviewer** permet une vérification objective post-tâche
-3. Le **ContextPruner** compresse le contexte sans interrompre l'agent principal
-
----
-
-## 18. Architecture des Subagents
-
-### Quels subagents ?
-
-| Subagent | Quand | Tools | Contexte | Modèle |
-|---|---|---|---|---|
-| **ThinkerAgent** | Tâche complexe nécessitant réflexion | Aucun | Historique complet | LLM puissant |
-| **ReviewerAgent** | Post-tâche (> 3 fichiers modifiés) | Aucun | Historique + fichiers modifiés | LLM puissant |
-| **ContextPrunerAgent** | Tokens > 40k | Aucun | Historique complet | LLM rapide |
-
-### Communication
-
-```
-MainAgent
-  ├── spawn(ThinkerAgent, prompt: "...", filePaths: [...])
-  │   └── result → MainAgent reçoit le raisonnement
-  │
-  ├── spawn(ReviewerAgent, prompt: "Review les changements")
-  │   └── result → MainAgent corrige si nécessaire
-  │
-  └── spawn(ContextPrunerAgent, params: { maxTokens: 40k })
-      └── result → Historique compressé
-```
-
-### Partage de contexte
-
-- Les subagents reçoivent un **sous-ensemble** du contexte (pas tout)
-- Le Thinker reçoit l'historique complet mais pas les tool outputs
-- Le Reviewer reçoit les fichiers modifiés + la tâche originale
-- Le ContextPruner reçoit tout l'historique pour le compresse
-
-### Conflits
-
-- Pas de conflit possible : les subagents sont **lecture seule** (sauf ContextPruner qui compresse)
-- Seul le MainAgent peut modifier les fichiers
-
----
-
-## 19. Architecture des Tools
-
-### Structure
-
-```
-Agent
-  ↓
-ToolRegistry.get(toolName) → ToolDefinition
-  ↓
-ToolPermissionManager.check(tool, mode) → allowed?
-  ↓
-ToolExecutor.execute(tool, args) → ToolResult
-  ↓
-Agent
-```
-
-### ToolDefinition
-
-```dart
-class ToolDefinition {
-  final String name;
-  final String description;
-  final Map<String, dynamic> parameters; // JSON Schema
-  final bool isMutating; // true = modify files/shell
-  final ToolCategory category;
-}
-```
-
-### ToolPermissionMatrix
-
-| Tool | Agent Mode | Ask Mode | Plan Mode |
-|---|---|---|---|
-| readFile | ✅ | ✅ | ✅ |
-| writeFile | ✅ | ❌ | ❌ |
-| editFile | ✅ | ❌ | ❌ |
-| runShellCommand | ✅ | ❌ | ❌ |
-| searchInFiles | ✅ | ✅ | ✅ |
-| git operations | ✅ | ❌ | ❌ |
-| getTerminalOutput | ✅ | ✅ | ✅ |
-| getLspDiagnostics | ✅ | ✅ | ✅ |
-
----
-
-## 20. Architecture Event Bus
-
-```dart
-class AgentEventBus {
-  final _controller = StreamController<AgentEvent>.broadcast();
-  
-  Stream<AgentEvent> get events => _controller.stream;
-  
-  void emit(AgentEvent event) => _controller.add(event);
-  
-  void dispose() => _controller.close();
-}
-
-// Types d'événements
-sealed class AgentEvent {
-  const AgentEvent();
-}
-
-class AgentStarted extends AgentEvent { final String taskId; }
-class ThinkingStarted extends AgentEvent {}
-class ThinkingFinished extends AgentEvent { final String thinking; }
-class ToolStarted extends AgentEvent { final String toolId; final String toolName; final Map<String, dynamic> args; }
-class ToolFinished extends AgentEvent { final String toolId; final String? result; }
-class ToolFailed extends AgentEvent { final String toolId; final String error; }
-class SubAgentStarted extends AgentEvent { final String agentId; }
-class SubAgentFinished extends AgentEvent { final String agentId; final String result; }
-class FileChanged extends AgentEvent { final String path; }
-class VerificationStarted extends AgentEvent { final List<String> files; }
-class VerificationPassed extends AgentEvent {}
-class VerificationFailed extends AgentEvent { final List<String> errors; }
-class StreamingChunk extends AgentEvent { final String text; }
-class AgentFinished extends AgentEvent { final String result; }
-class AgentError extends AgentEvent { final String error; }
-```
-
-### UI listens
-
-```dart
-// Dans le widget agent
-StreamBuilder<AgentEvent>(
-  stream: agentEventBus.events,
-  builder: (context, snapshot) {
-    final event = snapshot.data;
-    if (event is ToolStarted) return ToolCard(event);
-    if (event is StreamingChunk) return TypingIndicator(event.text);
-    // ...
-  },
-)
-```
-
----
-
-## 21. Roadmap d'Implémentation
-
-### P0 — Architecture Fondamentale (2-3 semaines)
+### P0 — Fondations (2-3 semaines)
 
 | Tâche | Fichier | Description |
 |---|---|---|
 | AgentEventBus | `core/agent_event_bus.dart` | Bus d'événements |
-| AgentState | `core/agent_state.dart` | État de l'agent (extraire de home.dart) |
-| AgentRunner refactor | `core/agent_runner.dart` | Utiliser AgentEventBus au lieu de callbacks |
-| ToolRegistry | `tools/tool_registry.dart` | Registre des tools |
-| ToolExecutor | `tools/tool_executor.dart` | Exécuteur de tools |
-| ModeRegistry | `modes/mode_registry.dart` | Registre des modes |
+| DeviceCapabilities | `core/device_capabilities.dart` | Détection ressources |
+| AgentState | `core/agent_state.dart` | État agent (extraire) |
+| AgentRunner refactor | `core/agent_runner.dart` | Utiliser EventBus + DeviceConfig |
+| ToolRegistry | `tools/tool_registry.dart` | Registre tools |
+| ToolExecutor | `tools/tool_executor.dart` | Exécuteur tools |
+| ModeRegistry | `modes/mode_registry.dart` | Registre modes |
 
 ### P1 — Fonctionnalités Indispensables (3-4 semaines)
 
 | Tâche | Fichier | Description |
 |---|---|---|
-| ContextManager | `context/context_manager.dart` | Gestion du contexte |
-| ContextPruner | `context/context_pruner.dart` | Compression du contexte |
-| SubagentManager | `subagents/subagent_manager.dart` | Gestion des subagents |
-| ThinkerAgent | `agents/thinker_agent.dart` | Agent de réflexion |
-| VerificationPipeline | `verification/verification_pipeline.dart` | Pipeline de vérification |
-| LspChecker | `verification/lsp_checker.dart` | Vérification LSP |
+| ContextManager | `context/context_manager.dart` | Gestion contexte |
+| ContextPruner | `context/context_pruner.dart` | Compression (Dart d'abord, Rust P2) |
+| SubagentManager | `subagents/subagent_manager.dart` | Gestion dynamique |
+| ThinkerAgent | `agents/thinker_agent.dart` | Réflexion profonde |
+| VerificationPipeline | `verification/verification_pipeline.dart` | Pipeline adaptatif |
+| LspChecker | `verification/lsp_checker.dart` | Diagnostics LSP |
+| McpManager | `mcp/mcp_manager.dart` | Gestion MCP |
+| McpServer | `mcp/mcp_server.dart` | Serveur MCP isolate |
 | AgentDefinition | `agents/agent_definition.dart` | Définitions typées |
-| CodeMap | `context/code_map.dart` | Arbre syntaxique |
 
 ### P2 — Améliorations (2-3 semaines)
 
 | Tâche | Fichier | Description |
 |---|---|---|
-| ReviewerAgent | `agents/reviewer_agent.dart` | Agent de review |
-| KnowledgeFiles | `memory/knowledge_files.dart` | .panda/rules.md + skills |
+| ReviewerAgent | `agents/reviewer_agent.dart` | Review post-tâche |
+| KnowledgeFiles | `memory/knowledge_files.dart` | Rules + skills |
 | ToolPermission | `tools/tool_permission.dart` | Permissions fines |
-| ToolPermissions file tools | `tools/file_tools.dart` | Extraction des tools fichiers |
-| ToolPermissions terminal tools | `tools/terminal_tools.dart` | Extraction des tools terminal |
-| ToolPermissions search tools | `tools/search_tools.dart` | Extraction des tools recherche |
-| BeUI integration | `features/agent_ui/` | Intégration des 15 composants |
-| AnalyzerChecker | `verification/analyzer_checker.dart` | dart analyze |
-| TestRunner | `verification/test_runner.dart` | Tests ciblés |
+| NativeBridge | `native/native_bridge.dart` | FFI bridge |
+| Rust parser | `native/rust/src/parser.rs` | tree-sitter |
+| Rust indexer | `native/rust/src/indexer.rs` | code indexer |
+| MCP servers | `mcp/servers/*.dart` | filesystem, git, search |
+| BeUI integration | `features/agent_ui/` | 15 composants |
 
 ### P3 — Avancé (3-4 semaines)
 
 | Tâche | Fichier | Description |
 |---|---|---|
-| SessionRecovery | `core/session_recovery.dart` | Reprise après interruption |
-| RetryManager | `core/retry_manager.dart` | Gestion des retries |
-| ErrorClassifier | `core/error_classifier.dart` | Classification des erreurs |
-| Skills system | `memory/skills/` | Système de compétences |
-| SessionStore | `core/session_store.dart` | Persistance des sessions |
-| ModelCapabilities | `core/model_capabilities.dart` | Capacités par modèle |
+| SessionRecovery | `core/session_recovery.dart` | Reprise interruption |
+| RetryManager | `core/retry_manager.dart` | Gestion retries |
+| ErrorClassifier | `core/error_classifier.dart` | Classification erreurs |
+| Skills system | `memory/skills/` | Compétences |
+| SessionStore | `core/session_store.dart` | Persistance sessions |
+| MCP browser | `mcp/servers/browser_server.dart` | Navigation web |
+| MCP android | `mcp/servers/android_server.dart` | Device Android |
+| Rust searcher | `native/rust/src/searcher.rs` | Moteur recherche |
 
 ---
 
-## 22. Exemple de Flow Complet — Dart/Flutter
-
-### Fichier : `lib/agent/core/agent_event_bus.dart`
-
-```dart
-import 'dart:async';
-
-sealed class AgentEvent {
-  const AgentEvent();
-}
-
-class AgentStarted extends AgentEvent {
-  final String taskId;
-  const AgentStarted({required this.taskId});
-}
-
-class ThinkingStarted extends AgentEvent {
-  const ThinkingStarted();
-}
-
-class ToolStarted extends AgentEvent {
-  final String toolId;
-  final String toolName;
-  final Map<String, dynamic> args;
-  const ToolStarted({required this.toolId, required this.toolName, required this.args});
-}
-
-class ToolFinished extends AgentEvent {
-  final String toolId;
-  final String? result;
-  const ToolFinished({required this.toolId, this.result});
-}
-
-class StreamingChunk extends AgentEvent {
-  final String text;
-  const StreamingChunk({required this.text});
-}
-
-class AgentFinished extends AgentEvent {
-  final String result;
-  const AgentFinished({required this.result});
-}
-
-class AgentEventBus {
-  final _controller = StreamController<AgentEvent>.broadcast();
-  
-  Stream<AgentEvent> get events => _controller.stream;
-  
-  void emit(AgentEvent event) => _controller.add(event);
-  
-  void dispose() => _controller.close();
-}
-```
-
-### Fichier : `lib/agent/agents/agent_definition.dart`
-
-```dart
-class AgentDefinition {
-  final String id;
-  final String displayName;
-  final String model;
-  final String systemPrompt;
-  final List<String> toolNames;
-  final List<String> spawnableAgents;
-  final bool inheritParentSystemPrompt;
-  final bool includeMessageHistory;
-  final Map<String, dynamic>? inputSchema;
-  
-  const AgentDefinition({
-    required this.id,
-    required this.displayName,
-    required this.model,
-    required this.systemPrompt,
-    this.toolNames = const [],
-    this.spawnableAgents = const [],
-    this.inheritParentSystemPrompt = false,
-    this.includeMessageHistory = false,
-    this.inputSchema,
-  });
-}
-```
-
-### Fichier : `lib/agent/tools/tool_registry.dart`
-
-```dart
-class ToolDefinition {
-  final String name;
-  final String description;
-  final Map<String, dynamic> parameters;
-  final bool isMutating;
-  final Future<ToolResult> Function(Map<String, dynamic> args) execute;
-  
-  const ToolDefinition({
-    required this.name,
-    required this.description,
-    required this.parameters,
-    required this.isMutating,
-    required this.execute,
-  });
-}
-
-class ToolRegistry {
-  final Map<String, ToolDefinition> _tools = {};
-  
-  void register(ToolDefinition tool) => _tools[tool.name] = tool;
-  
-  ToolDefinition? get(String name) => _tools[name];
-  
-  List<Map<String, dynamic>> getSchemas() => _tools.values.map((t) => {
-    'function': {
-      'name': t.name,
-      'description': t.description,
-      'parameters': t.parameters,
-    }
-  }).toList();
-}
-```
-
----
-
-*Document généré par Buffy (Codebuff) — Analyse de 12+ coding agents open-source*
-*Repos analysés : Freebuff/Codebuff, OpenHands, Cline, Roo Code, Goose, Continue, SWE-agent, Aider, Gemini CLI*
+*Document v2 — Corrigé : MCP reconsidéré, détection device, multi-langage*
+*Analyse de 12+ coding agents open-source*
