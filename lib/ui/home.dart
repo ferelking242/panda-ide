@@ -7544,7 +7544,7 @@ class _SelectTypeState extends State<SelectType>
       final status = b['status'] as String? ?? 'done';
 
       if (status == 'pending_approval' || status == 'pending') {
-        return ToolCallBlock(
+        return AgentToolCallBlock(
           toolName: name,
           args: args,
           result: result,
@@ -7576,7 +7576,7 @@ class _SelectTypeState extends State<SelectType>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          ToolCallBlock(
+          AgentToolCallBlock(
             toolName: name,
             args: args,
             result: result,
@@ -11370,7 +11370,7 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    ...toolCalls.map((call) => ToolCallBlock(
+                    ...toolCalls.map((call) => AgentToolCallBlock(
                           toolName: call['name'] as String? ?? call['toolName'] as String? ?? '',
                           args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
                           result: call['result'] as String?,

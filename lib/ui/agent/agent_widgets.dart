@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../core/broken_icons.dart';
+import '../../core/broken_icons.dart';
 import 'package:markdown_widget/markdown_widget.dart';
-import '../utils/themes.dart';
+import '../../utils/themes.dart';
 import '../agent_runner.dart' show AgentPhase;
 import '../panda_ai_ui/components.dart' show LoadingStateWidget;
 import 'agent_models.dart';
@@ -301,7 +301,7 @@ class ReflectionBoxState extends State<ReflectionBox> {
     );
   }
 }
-class ToolCallBlock extends StatefulWidget {
+class AgentToolCallBlock extends StatefulWidget {
   final String toolName;
   final Map<String, dynamic> args;
   final String? result;
@@ -319,7 +319,7 @@ class ToolCallBlock extends StatefulWidget {
   final bool showResultInline;
   final VoidCallback? onOpenInEditor;
 
-  const ToolCallBlock({
+  const AgentAgentToolCallBlock({
     required this.toolName,
     required this.args,
     required this.result,
@@ -340,7 +340,7 @@ class ToolCallBlock extends StatefulWidget {
   State<ToolCallBlock> createState() => ToolCallBlockState();
 }
 
-class ToolCallBlockState extends State<ToolCallBlock> {
+class AgentToolCallBlockState extends State<AgentToolCallBlock> {
   bool _expanded = false;
 
   // Icône par catégorie d'outil
@@ -1318,7 +1318,7 @@ class AgentToolCallsGroupState extends State<AgentToolCallsGroup> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Divider(height: 8),
-                  ...widget.toolCalls.map((call) => ToolCallBlock(
+                  ...widget.toolCalls.map((call) => AgentToolCallBlock(
                     toolName: call['name'] as String? ?? call['toolName'] as String? ?? '',
                     args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
                     result: call['result'] as String?,
