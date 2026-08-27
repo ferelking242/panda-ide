@@ -468,7 +468,7 @@ $toolLines
       _client?.close();
       _client = null;
       PandaLog.i('AgentRunner', 'Run complete');
-      eventBus?.emit(const AgentFinished(taskId: '', result: ''));
+      eventBus?.emit(AgentFinished(taskId: '', result: ''));
       if (!terminalError && !ctrl.isClosed) {
         ctrl.add(const AgentChunk(phase: AgentPhase.done, text: ''));
       }

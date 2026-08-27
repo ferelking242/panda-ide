@@ -6,15 +6,6 @@ import 'agent_event.dart';
 import 'agent_event_bus.dart';
 
 /// Agent phase — mirrors the phase from AgentRunner for V3 bridge use.
-enum AgentPhase {
-  idle,
-  thinking,
-  toolRunning,
-  toolDone,
-  streaming,
-  done,
-  error,
-}
 
 /// Provides reactive state for UI widgets by listening to AgentEventBus.
 ///
@@ -23,7 +14,7 @@ class AgentUiState extends ChangeNotifier {
   final AgentEventBus _eventBus;
   StreamSubscription<AgentEvent>? _sub;
 
-  AgentPhase _phase = AgentPhase.idle;
+  String _phase = 'idle';
   String _currentTool = '';
   String _thinking = '';
   String _streaming = '';
@@ -36,7 +27,7 @@ class AgentUiState extends ChangeNotifier {
 
   // ── Getters ────────────────────────────────────────────────────────────
 
-  AgentPhase get phase => _phase;
+  String get phase => _phase;
   String get currentTool => _currentTool;
   String get thinking => _thinking;
   String get streaming => _streaming;
@@ -62,7 +53,7 @@ class AgentUiState extends ChangeNotifier {
   void _onEvent(AgentEvent event) {
     switch (event) {
       case AgentStarted():
-        _phase = AgentPhase.streaming;
+        _phase = 'streaming';
         _isGenerating = true;
         _error = null;
         _thinking = '';
@@ -70,7 +61,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentThinkingStarted():
-        _phase = AgentPhase.thinking;
+        _phase = 'thinking';
         notifyListeners();
 
       case AgentThinkingChunk():
@@ -82,7 +73,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentStreamingStarted():
-        _phase = AgentPhase.streaming;
+        _phase = 'streaming';
         notifyListeners();
 
       case AgentStreamingChunk():
@@ -91,17 +82,17 @@ class AgentUiState extends ChangeNotifier {
 
       case AgentToolStarted():
         _currentTool = event.toolName;
-        _phase = AgentPhase.toolRunning;
+        _phase = 'toolRunning';
         notifyListeners();
 
       case AgentToolFinished():
         _currentTool = '';
-        _phase = AgentPhase.streaming;
+        _phase = 'streaming';
         notifyListeners();
 
       case AgentToolFailed():
         _currentTool = '';
-        _phase = AgentPhase.streaming;
+        _phase = 'streaming';
         notifyListeners();
 
       case AgentSubagentStarted():
@@ -139,7 +130,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentFinished():
-        _phase = AgentPhase.done;
+        _phase = 'done';
         _isGenerating = false;
         _currentTool = '';
         _activeSubagents.clear();
@@ -147,7 +138,7 @@ class AgentUiState extends ChangeNotifier {
         notifyListeners();
 
       case AgentError():
-        _phase = AgentPhase.error;
+        _phase = 'error';
         _isGenerating = false;
         _error = event.error;
         _currentTool = '';
@@ -174,8 +165,6 @@ class AgentUiState extends ChangeNotifier {
 }
 
 // ── Supporting data classes ───────────────────────────────────────────────
-
-enum AgentPhase { idle, thinking, streaming, toolRunning, done, error }
 
 class SubagentInfo {
   final String id;

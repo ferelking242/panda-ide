@@ -83,7 +83,7 @@ class ToolResult {
   factory ToolResult.fail(String error) =>
       ToolResult(success: false, error: error);
 
-  /// Compatibility with existing code that returns strings.
+  /// Compatibility with existing code that returns strings or ToolResult objects.
   factory ToolResult.fromExisting(dynamic result) {
     if (result is String) {
       return ToolResult(success: true, data: result);
@@ -91,6 +91,21 @@ class ToolResult {
     if (result is Map && result.containsKey('error')) {
       return ToolResult(success: false, error: result['error'].toString());
     }
-    return ToolResult(success: true, data: result?.toString() ?? '');
+    // Handle native AgenticTools ToolResult (duck-typed)
+    try {
+      final dynamic nativeResult = result;
+      final bool isSuccess = nativeResult.success as bool;
+      final dynamic data = nativeResult.data;
+      final String? error = nativeResult.error?.toString();
+      if (!isSuccess) {
+        return ToolResult(success: false, error: error ?? 'Unknown error');
+      }
+      if (data is String) {
+        return ToolResult(success: true, data: data);
+      }
+      return ToolResult(success: true, data: data?.toString() ?? '');
+    } catch (_) {
+      return ToolResult(success: true, data: result?.toString() ?? '');
+    }
   }
 }

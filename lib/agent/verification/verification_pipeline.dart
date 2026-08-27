@@ -21,13 +21,13 @@ class VerificationPipeline {
     final warnings = <String>[];
 
     // 1. LSP diagnostics (always)
-    if (level >= VerificationLevel.basic) {
+    if (level.index >= VerificationLevel.basic.index) {
       final lspErrors = await _checkLsp(changedFiles);
       errors.addAll(lspErrors);
     }
 
     // 2. dart analyze (for Dart files)
-    if (level >= VerificationLevel.standard) {
+    if (level.index >= VerificationLevel.standard.index) {
       final dartFiles = changedFiles.where((f) => f.endsWith('.dart')).toList();
       if (dartFiles.isNotEmpty) {
         final analyzeErrors = await _runAnalyzer(workspacePath);
@@ -36,13 +36,13 @@ class VerificationPipeline {
     }
 
     // 3. Tests (only for significant changes)
-    if (level >= VerificationLevel.thorough && changedFiles.length > 3) {
+    if (level.index >= VerificationLevel.thorough.index && changedFiles.length > 3) {
       final testErrors = await _runTests(workspacePath);
       warnings.addAll(testErrors);
     }
 
     // 4. Build check (only for critical files)
-    if (level >= VerificationLevel.full) {
+    if (level.index >= VerificationLevel.full.index) {
       final criticalFiles = changedFiles.where((f) =>
           f.contains('main.dart') ||
           f.contains('pubspec.yaml') ||

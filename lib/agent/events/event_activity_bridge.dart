@@ -12,9 +12,9 @@ class EventActivityBridge {
 
   EventActivityBridge({
     required AgentEventBus eventBus,
-    required AgentActivityController activityCtrl,
+    required AgentActivityController activityController,
   })  : _eventBus = eventBus,
-        _activityCtrl = activityCtrl;
+        _activityCtrl = activityController;
 
   /// Start listening to events and updating the activity controller.
   void start() {
@@ -38,29 +38,29 @@ class EventActivityBridge {
       case AgentStreamingChunk():
         // Don't update narrative on every chunk to avoid flicker
 
-      case AgentToolStarted():
+      case AgentToolStarted(:final toolId, :final toolName, :final args):
         _activityCtrl.startTool(
-          toolId: event.toolId,
-          toolName: event.toolName,
-          args: event.args,
+          toolId: toolId,
+          toolName: toolName,
+          args: args,
         );
 
-      case AgentToolFinished():
+      case AgentToolFinished(:final toolId, :final result):
         _activityCtrl.completeTool(
-          toolId: event.toolId,
-          result: event.result,
+          toolId: toolId,
+          result: result,
         );
 
-      case AgentToolFailed():
+      case AgentToolFailed(:final toolId, :final error):
         _activityCtrl.failTool(
-          toolId: event.toolId,
-          error: event.error,
+          toolId: toolId,
+          error: error,
         );
 
-      case AgentToolBlocked():
+      case AgentToolBlocked(:final toolId, :final reason):
         _activityCtrl.failTool(
-          toolId: event.toolId,
-          error: 'Blocked: ${event.reason}',
+          toolId: toolId,
+          error: 'Blocked: $reason',
         );
 
       case AgentVerificationStarted():
@@ -69,28 +69,28 @@ class EventActivityBridge {
       case AgentVerificationPassed():
         _activityCtrl.updateNarrative('Vérification OK');
 
-      case AgentVerificationFailed():
-        _activityCtrl.updateNarrative('${event.errors.length} erreur(s)');
+      case AgentVerificationFailed(:final errors):
+        _activityCtrl.updateNarrative('${errors.length} erreur(s)');
 
-      case AgentSubagentStarted():
-        _activityCtrl.updateNarrative('Sub-agent ${event.agentType}…');
+      case AgentSubagentStarted(:final agentType):
+        _activityCtrl.updateNarrative('Sub-agent $agentType…');
 
       case AgentSubagentFinished():
         _activityCtrl.updateNarrative('Sub-agent terminé');
 
-      case AgentContextCompacted():
+      case AgentContextCompacted(:final tokensAfter):
         _activityCtrl.updateNarrative(
-            'Contexte compresse (${event.tokensAfter} tokens)');
+            'Contexte compresse ($tokensAfter tokens)');
 
-      case AgentRetryStarted():
+      case AgentRetryStarted(:final attempt, :final maxAttempts, :final reason):
         _activityCtrl.updateNarrative(
-            'Retry ${event.attempt}/${event.maxAttempts}: ${event.reason}');
+            'Retry $attempt/$maxAttempts: $reason');
 
       case AgentFinished():
         _activityCtrl.finishRun();
 
-      case AgentError():
-        _activityCtrl.finishRun(error: event.error);
+      case AgentError(:final error):
+        _activityCtrl.finishRun(error: error);
 
       case AgentCancelled():
         _activityCtrl.finishRun(error: 'Annulé');
