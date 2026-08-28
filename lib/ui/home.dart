@@ -5832,8 +5832,7 @@ class _SelectTypeState extends State<SelectType>
     final hoverBg = isDark ? const Color(0xff252525) : const Color(0xfff2f2f2);
 
     final tools = [
-      (icon: Broken.cpu_setting, color: _kAccent, title: 'Providers',
-       desc: 'Configure API keys and AI models'),
+
       (icon: Broken.lock,          color: Colors.orange[400]!,  title: 'Secrets',        desc: 'Store sensitive information (like API keys) securely in your App'),
       (icon: Broken.code_1,        color: Colors.blue[400]!,    title: 'Agent Skills',   desc: 'Manage skills that extend Agent capabilities'),
       (icon: Broken.archive_book,  color: Colors.green[400]!,   title: 'App Storage',    desc: 'Host and save uploads like images, videos, and documents'),
@@ -5843,7 +5842,7 @@ class _SelectTypeState extends State<SelectType>
       (icon: Broken.data,          color: Colors.cyan[400]!,    title: 'Database',       desc: 'Stores structured data such as user profiles, game scores, and product catalogs'),
       (icon: Broken.code,          color: Colors.indigo[400]!,  title: 'Developer',      desc: 'Internal developer tools, telemetry, and diagnostics'),
       (icon: Broken.global,        color: Colors.amber[400]!,   title: 'Domains',        desc: 'Manage custom domains for your published project'),
-      (icon: Broken.setting,       color: Colors.grey[500]!,    title: 'User Settings',  desc: 'Configure your account settings, appearance, and notifications'),
+
     ];
 
     final filtered = _agentToolsSearch.isEmpty

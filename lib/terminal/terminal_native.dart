@@ -447,6 +447,21 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (live.isNotEmpty && _sessionBloc.state.sessions.isNotEmpty) {
       _sessionBloc.add(SetActiveTerminalSession(
           _sessionBloc.state.activeSessionId ?? live.first.sessionId));
+      // Re-attach onOutput for live sessions — dispose() nulled it,
+      // but the PTY is still alive. Without this, user input goes nowhere.
+      for (final r in live) {
+        if (r.pty != null && r.terminal.onOutput == null) {
+          final proc = r.pty!;
+          r.terminal.onOutput = (data) {
+            if (widget.readOnly) return;
+            proc.write(const Utf8Encoder().convert(data));
+            final activeId = _sessionBloc.state.activeSessionId;
+            if (activeId == r.sessionId) {
+              _handleInputForAutocomplete(r, data);
+            }
+          };
+        }
+      }
       return;
     }
     await _createSession(

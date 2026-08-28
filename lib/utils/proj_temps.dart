@@ -185,7 +185,7 @@ List<ProjectTemplates> projTemps(BuildContext context) => [
     subtitle: "Create a Dart console app.",
     appendProjectName: true,
     openAfterCreate: true,
-    requirements: const [
+    requirements: [
       TemplateRequirement(
         binaryPath: '$binDir/dart',
         title: 'Dart runtime',
@@ -201,7 +201,7 @@ List<ProjectTemplates> projTemps(BuildContext context) => [
     subtitle: "Create a Rust project.",
     appendProjectName: true,
     openAfterCreate: true,
-    requirements: const [
+    requirements: [
       TemplateRequirement(
         binaryPath: '$binDir/cargo',
         title: 'Rust runtime',

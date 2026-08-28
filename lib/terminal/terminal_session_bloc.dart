@@ -232,4 +232,3 @@ class TerminalSessionStore {
   TerminalSessionBloc? bloc;
 }
 
-class _SetupTerminalState extends State<SetupTerminal> {

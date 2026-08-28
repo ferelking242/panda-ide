@@ -28,16 +28,16 @@ class FileSymbol {
   IconData get icon {
     switch (kind) {
       case 'class': return Icons.class_;
-      case 'method': return Icons.function;
+      case 'method': return Icons.functions;
       case 'function': return Icons.code;
       case 'variable': return Icons.data_object;
       case 'enum': return Icons.list;
       case 'interface': return Icons.device_hub;
       case 'property': return Icons.label;
-      case 'constant': return Icons.constant;
+      case 'constant': return Icons.lock;
       case 'constructor': return Icons.build;
       case 'field': return Icons.view_sidebar;
-      default: return Icons.symbolize;
+      default: return Icons.help_outline;
     }
   }
 

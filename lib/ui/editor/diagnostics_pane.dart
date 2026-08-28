@@ -424,3 +424,127 @@ import '../widgets.dart';
 
     return true;
   }
+
+// ── Helper functions (extracted from editor_page.dart) ────────────────
+
+class ActiveEditor {
+  final TextEditingController controller;
+  final bool isActive;
+  final String? filePath;
+  final bool isPreview;
+  const ActiveEditor({
+    required this.controller,
+    this.isActive = false,
+    this.filePath,
+    this.isPreview = false,
+  });
+}
+
+class ActiveEditorState {
+  final List<ActiveEditor> activeEditors;
+  const ActiveEditorState({this.activeEditors = const []});
+}
+
+Color _diagnosticSeverityColor(int severity, AppTheme appTheme) {
+  switch (severity) {
+    case 1:
+      return const Color(0xFFF14C4C);
+    case 2:
+      return const Color(0xFFCCA700);
+    case 3:
+      return const Color(0xFF75BEFF);
+    default:
+      return appTheme.editorPageToolColor;
+  }
+}
+
+IconData _diagnosticSeverityIcon(int severity) {
+  switch (severity) {
+    case 1:
+      return Icons.error_outline;
+    case 2:
+      return Icons.warning_amber_outlined;
+    case 3:
+      return Icons.info_outline;
+    default:
+      return Icons.help_outline;
+  }
+}
+
+int _offsetFromLineAndCharacter(String text, int line, int character) {
+  final lines = text.split('\n');
+  int offset = 0;
+  for (int i = 0; i < line && i < lines.length; i++) {
+    offset += lines[i].length + 1;
+  }
+  if (line < lines.length) {
+    offset += character.clamp(0, lines[line].length);
+  }
+  return offset;
+}
+
+ActiveEditor? _resolveActiveEditor(List<ActiveEditor> editors) {
+  if (editors.isEmpty) return null;
+  return editors.firstWhere(
+    (e) => e.isActive,
+    orElse: () => editors.first,
+  );
+}
+
+bool _isPreviewEditor(ActiveEditor editor) {
+  return editor.isPreview || (editor.filePath?.endsWith('.pdf') ?? false) ||
+      (editor.filePath?.endsWith('.svg') ?? false) ||
+      (editor.filePath?.endsWith('.png') ?? false) ||
+      (editor.filePath?.endsWith('.jpg') ?? false);
+}
+
+bool _isTrackableEditor(ActiveEditor editor) => true;
+
+final Map<dynamic, String> _savedSnapshotByController = {};
+final Set<dynamic> _dirtyControllers = {};
+
+bool _isEditorDirty(ActiveEditor editor) {
+  return _dirtyControllers.contains(editor.controller);
+}
+
+void _showDiagnosticDetailsSheet(
+  BuildContext context,
+  ActiveEditor editor,
+  dynamic diag,
+  AppTheme appTheme,
+) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: appTheme.isDark ? const Color(0xff1e1e1e) : Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    builder: (ctx) => Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            diag.message ?? 'Diagnostic',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: appTheme.selectScreenCardTextColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Source: ${diag.source ?? "unknown"}',
+            style: TextStyle(fontSize: 12, color: appTheme.editorPageToolColor),
+          ),
+          if (diag.code != null)
+            Text(
+              'Code: ${diag.code}',
+              style: TextStyle(fontSize: 12, color: appTheme.editorPageToolColor),
+            ),
+        ],
+      ),
+    ),
+  );
+}

@@ -95,7 +95,7 @@ class _BeUIFileDiffState extends State<BeUIFileDiff> {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: Row(
                 children: [
-                  Icon(Icons.diff, size: 13, color: accent),
+                  Icon(Icons.compare_arrows, size: 13, color: accent),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(

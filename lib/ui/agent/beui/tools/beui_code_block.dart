@@ -156,7 +156,7 @@ class _BeUICodeBlockState extends State<BeUICodeBlock> {
       'var', 'late', 'static', 'async', 'await', 'return', 'if',
       'else', 'for', 'while', 'switch', 'case', 'break', 'new',
       'this', 'super', 'true', 'false', 'null', 'required',
-      'function', 'const', 'let', 'from', 'in', 'of', 'try',
+      'function', 'let', 'from', 'in', 'of', 'try',
       'catch', 'throw', 'yield', 'enum', 'sealed', 'mixin',
     };
 

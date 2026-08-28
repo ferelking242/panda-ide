@@ -132,7 +132,7 @@ class _OutlineViewState extends State<OutlineView> {
                     symbol.name,
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: symbol.kind == SymbolKind.class_ || symbol.kind == SymbolKind.interface_
+                      fontWeight: symbol.kind == SymbolKind.class_ || symbol.kind == SymbolKind.interface
                           ? FontWeight.w600
                           : FontWeight.normal,
                       color: symbol.isDeprecated ? Colors.grey : null,
@@ -153,10 +153,10 @@ class _OutlineViewState extends State<OutlineView> {
   IconData _symbolIcon(SymbolKind kind) {
     switch (kind) {
       case SymbolKind.class_: return Icons.class_;
-      case SymbolKind.interface_: return Icons.device_hub;
+      case SymbolKind.interface: return Icons.device_hub;
       case SymbolKind.enum_: return Icons.list;
       case SymbolKind.method: return Icons.functions;
-      case SymbolKind.function_: return Icons.code;
+      case SymbolKind.function: return Icons.code;
       case SymbolKind.property: return Icons.tune;
       case SymbolKind.field: return Icons.input;
       case SymbolKind.variable: return Icons.change_history;
@@ -172,10 +172,10 @@ class _OutlineViewState extends State<OutlineView> {
   Color _symbolColor(SymbolKind kind) {
     switch (kind) {
       case SymbolKind.class_: return Colors.blue;
-      case SymbolKind.interface_: return Colors.purple;
+      case SymbolKind.interface: return Colors.purple;
       case SymbolKind.enum_: return Colors.orange;
       case SymbolKind.method: return Colors.teal;
-      case SymbolKind.function_: return Colors.cyan;
+      case SymbolKind.function: return Colors.cyan;
       case SymbolKind.property: return Colors.green;
       case SymbolKind.field: return Colors.brown;
       case SymbolKind.variable: return Colors.indigo;
