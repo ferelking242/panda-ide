@@ -1255,25 +1255,21 @@ class _SelectTypeState extends State<SelectType>
                         Expanded(
                           child: Stack(
                             children: [
-                              Column(
+                              ClipSmoothRect(
+                              radius: _sidebarState >= 1
+                                  ? SmoothBorderRadius.only(
+                                      topLeft: SmoothRadius(
+                                          cornerRadius: 22,
+                                          cornerSmoothing: 0.6),
+                                      bottomLeft: SmoothRadius(
+                                          cornerRadius: 22,
+                                          cornerSmoothing: 0.6))
+                                  : SmoothBorderRadius.zero,
+                              child: Column(
                                 children: [
                                   // ── Editor area ──────────────────────────────
                                   Expanded(
-                                    child: ClipSmoothRect(
-                                      radius: _sidebarState >= 1
-                                          ? SmoothBorderRadius.only(
-                                              topLeft: SmoothRadius(
-                                                  cornerRadius: 22,
-                                                  cornerSmoothing: 0.6),
-                                              bottomLeft: _bottomPanelOpen
-                                                  ? const SmoothRadius(
-                                                      cornerRadius: 0,
-                                                      cornerSmoothing: 0)
-                                                  : SmoothRadius(
-                                                      cornerRadius: 22,
-                                                      cornerSmoothing: 0.6))
-                                          : SmoothBorderRadius.zero,
-                                      child: Container(
+                                    child: Container(
                                       color: appTheme.scaffoldBg,
                                       child: Row(
                                       children: [
@@ -1340,13 +1336,13 @@ class _SelectTypeState extends State<SelectType>
                                       ],
                                     ),
                                     ),
-                                    ),
                                   ),
                                   // ── Bottom panel — stays right of activity bar ──
                                   if (_bottomPanelOpen)
                                     _buildBottomPanel(),
                                 ],
                               ),
+                            ),
 
 
                             ],
@@ -3243,7 +3239,7 @@ class _SelectTypeState extends State<SelectType>
           children: [
             // ── CENTER: ← [workspace box] → ──────────────────────────────
             // Workspace box - centered after activity bar + rounded corner
-            SizedBox(width: _sidebarState >= 1 ? 70.0 : 0.0),
+            SizedBox(width: _sidebarState >= 1 ? 48.0 : 0.0),
             Expanded(
               child: Center(
                 child: Row(
@@ -4055,23 +4051,15 @@ class _SelectTypeState extends State<SelectType>
             final selFg  = isDark ? Colors.grey[200]! : Colors.grey[900]!;
             final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
-            return ClipRRect(
-              borderRadius: const BorderRadius.only(
-                bottomRight: Radius.circular(12),
-              ),
-              child: Container(
+            return Container(
               height: _bottomPanelHeight,
               decoration: BoxDecoration(
                   color: bg,
                   border: Border(
-                    top: BorderSide(color: border, width: 0.5),
-                    right: BorderSide(color: border, width: 0.5),
-                    bottom: BorderSide(color: border, width: 0.5),
+                    top: BorderSide(color: border, width: 1),
                   )),
               child: Column(children: [
                 // Resize handle at top of bottom panel.
-                // 20px opaque hit target (was a 4px sliver: the first touch
-                // was regularly missed and the drag felt random).
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onVerticalDragStart: (_) {},
@@ -4247,8 +4235,7 @@ class _SelectTypeState extends State<SelectType>
                   child: _buildBottomPanelContent(context, ts.appTheme, isDark),
                 ),
               ]),
-              ), // Container
-            ); // ClipRRect
+              ); // Container
           },
         );
       }
