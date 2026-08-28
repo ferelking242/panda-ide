@@ -7336,11 +7336,16 @@ class _SelectTypeState extends State<SelectType>
         final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user') ? i - 1 : -1;
 
         if (isMe) {
-          return _UserMessageBubble(
-            text: text,
-            isDark: isDark,
-            fg: fg,
-            muted: muted,
+          return BeUIMessage(
+            role: BeUIMessageRole.user,
+            avatarText: 'U',
+            isGrouped: false,
+            child: BeUIMessageBubble(
+              tone: BeUIBubbleTone.user,
+              text: text,
+              expandable: false,
+              animateIn: false,
+            ),
           );
         }
 
@@ -7431,12 +7436,22 @@ class _SelectTypeState extends State<SelectType>
               if (isActiveMsg && !hasVisibleTimeline && _activityCtrl.activeActivity == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: AgentPhaseChip(
-                    phase: _agentPhase,
-                    isDark: isDark,
-                    toolName: _agentCurrentTool,
-                    fg: fg,
-                    muted: muted,
+                  child: BeUILoadingState(
+                    label: _agentPhase == AgentPhase.thinking
+                        ? 'Réflexion en cours…'
+                        : _agentPhase == AgentPhase.streaming
+                            ? 'Génération…'
+                            : _agentPhase == AgentPhase.error
+                                ? 'Erreur'
+                                : 'Travail en cours…',
+                    variant: _agentPhase == AgentPhase.thinking
+                        ? BeUILoadingVariant.shimmer
+                        : _agentPhase == AgentPhase.streaming
+                            ? BeUILoadingVariant.progress
+                            : BeUILoadingVariant.cycling,
+                    color: _agentPhase == AgentPhase.error
+                        ? Colors.redAccent
+                        : BeUIColors.accentOf(isDark),
                   ),
                 ),
 
@@ -7539,31 +7554,16 @@ class _SelectTypeState extends State<SelectType>
       final status = b['status'] as String? ?? 'done';
 
       if (status == 'pending_approval' || status == 'pending') {
-        return AgentToolCallBlock(
+        return BeUIToolApproval(
           toolName: name,
           args: args,
-          result: result,
-          status: status,
-          isDark: isDark,
-          fg: fg,
-          muted: muted,
-          onApprove: () => _pendingApprovalCompleter?.complete(true),
-          onDeny: () => _pendingApprovalCompleter?.complete(false),
-          onAutopilot: () {
-            setState(() => _agentApprovalMode = 'autopilot');
-            _pendingApprovalCompleter?.complete(true);
-          },
-          onAllowSession: () {
+          onAllow: () => _pendingApprovalCompleter?.complete(true),
+          onAlways: () {
             AgenticTools.allowAllCommandsThisSession = true;
             _pendingApprovalCompleter?.complete(true);
           },
-          onWhitelist: () {
-            final cmd = args['command']?.toString() ?? '';
-            if (cmd.isNotEmpty) {
-              AgenticTools.approvedCommandsWhitelist.add(cmd.trim());
-            }
-            _pendingApprovalCompleter?.complete(true);
-          },
+          onDeny: () => _pendingApprovalCompleter?.complete(false),
+          isDark: isDark,
         );
       }
 
@@ -7584,7 +7584,12 @@ class _SelectTypeState extends State<SelectType>
             showResultInline: false,
           ),
           if (result != null && result.trim().isNotEmpty)
-            ToolOutputBlock(output: result, isDark: isDark, fg: fg, muted: muted),
+            BeUIToolResult(
+              title: name.isNotEmpty ? name : 'outil',
+              output: result,
+              isRunning: false,
+              isDark: isDark,
+            ),
         ],
       );
     }
