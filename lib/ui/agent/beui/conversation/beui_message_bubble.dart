@@ -138,9 +138,9 @@ class _BeUIMessageBubbleState extends State<BeUIMessageBubble> {
     return content;
   }
 
-  final fg = isDark ? Colors.grey[200]! : Colors.grey[900]!;on) {
+  Widget _buildText(BuildContext context, bool needsTruncation) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final fg = isDark ? Colors.grey[200]! : Colors.grey[900]!;
     final displayText = needsTruncation
         ? widget.text.substring(0, 300)
         : widget.text;
