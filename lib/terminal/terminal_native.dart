@@ -392,6 +392,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
   final ValueNotifier<_ExitBannerData?> _exitBannerNotifier = ValueNotifier(null);
   Timer? _exitBannerTimer;
 
+  // ── Modifier state for keyboard menu (shared, never replaces onOutput) ──
+  bool _modCtrl = false;
+  bool _modAlt = false;
+  bool _modShift = false;
+  VoidCallback? _modResetCallback;
+
   // ── Feature 3: Fullscreen ──────────────────────────────────────────────────
   bool _isFullscreen = false;
 
@@ -454,10 +460,35 @@ class _SetupTerminalState extends State<SetupTerminal> {
           final proc = r.pty!;
           r.terminal.onOutput = (data) {
             if (widget.readOnly) return;
-            proc.write(const Utf8Encoder().convert(data));
+
+            String sequence = '';
+            if (_modCtrl) {
+              if (data.length == 1) {
+                int code = data.toUpperCase().codeUnitAt(0);
+                if (code >= 65 && code <= 90) {
+                  sequence = String.fromCharCode(code - 64);
+                }
+              }
+              if (_modResetCallback != null) _modResetCallback!();
+              _modCtrl = false; _modAlt = false; _modShift = false; _modResetCallback = null;
+            } else if (_modAlt) {
+              sequence = '\x1b$data';
+              if (_modResetCallback != null) _modResetCallback!();
+              _modCtrl = false; _modAlt = false; _modShift = false; _modResetCallback = null;
+            } else if (_modShift) {
+              sequence = data.toUpperCase();
+              if (_modResetCallback != null) _modResetCallback!();
+              _modCtrl = false; _modAlt = false; _modShift = false; _modResetCallback = null;
+            } else {
+              sequence = data;
+            }
+
+            if (sequence.isNotEmpty) {
+              proc.write(const Utf8Encoder().convert(sequence));
+            }
             final activeId = _sessionBloc.state.activeSessionId;
             if (activeId == r.sessionId) {
-              _handleInputForAutocomplete(r, data);
+              _handleInputForAutocomplete(r, sequence);
             }
           };
         }
@@ -879,10 +910,45 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
       runtime.terminal.onOutput = (data) {
         if (widget.readOnly) return;
-        process.write(const Utf8Encoder().convert(data));
+
+        String sequence = '';
+        if (_modCtrl) {
+          if (data.length == 1) {
+            int code = data.toUpperCase().codeUnitAt(0);
+            if (code >= 65 && code <= 90) {
+              sequence = String.fromCharCode(code - 64);
+            }
+          }
+          // Reset modifier after one key
+          if (_modResetCallback != null) _modResetCallback!();
+          _modCtrl = false;
+          _modAlt = false;
+          _modShift = false;
+          _modResetCallback = null;
+        } else if (_modAlt) {
+          sequence = '\x1b$data';
+          if (_modResetCallback != null) _modResetCallback!();
+          _modCtrl = false;
+          _modAlt = false;
+          _modShift = false;
+          _modResetCallback = null;
+        } else if (_modShift) {
+          sequence = data.toUpperCase();
+          if (_modResetCallback != null) _modResetCallback!();
+          _modCtrl = false;
+          _modAlt = false;
+          _modShift = false;
+          _modResetCallback = null;
+        } else {
+          sequence = data;
+        }
+
+        if (sequence.isNotEmpty) {
+          process.write(const Utf8Encoder().convert(sequence));
+        }
         final activeSessionId = _sessionBloc.state.activeSessionId;
         if (activeSessionId == runtime.sessionId) {
-          _handleInputForAutocomplete(runtime, data);
+          _handleInputForAutocomplete(runtime, sequence);
         }
       };
 
@@ -1382,38 +1448,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
     bool shift = false,
     VoidCallback? resetCallback,
   }) {
-    final runtime = _activeRuntime();
-    final process = runtime?.pty;
-    if (runtime == null || process == null) return;
-
-    runtime.terminal.onOutput = (data) {
-      String sequence = '';
-
-      if (ctrl) {
-        if (data.length == 1) {
-          int code = data.toUpperCase().codeUnitAt(0);
-          if (code >= 65 && code <= 90) {
-            sequence = String.fromCharCode(code - 64);
-          }
-        }
-      } else if (alt) {
-        sequence = '\x1b$data';
-      } else if (shift) {
-        sequence = data.toUpperCase();
-      } else {
-        sequence = data;
-      }
-
-      if (sequence.isNotEmpty) {
-        process.write(const Utf8Encoder().convert(sequence));
-        _handleInputForAutocomplete(runtime, sequence);
-      }
-
-      if ((ctrl || alt || shift) && resetCallback != null) {
-        resetCallback();
-        _setTerminalOutputWithAutocomplete();
-      }
-    };
+    _modCtrl = ctrl;
+    _modAlt = alt;
+    _modShift = shift;
+    _modResetCallback = resetCallback;
   }
 
   @override
