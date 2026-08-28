@@ -17,7 +17,7 @@ class DebianSetup {
   static const String _debianDirName = 'debian-arm64';
   static const String rootfsVersion = 'debian-bookworm-arm64 v1';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-debian-profile v4';
+  static const String profileVersion = 'panda-debian-profile v5';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -453,6 +453,24 @@ PS1='\$(__panda_ps)'
     if (!Directory(dir).existsSync()) return;
 
     final readyMarker = File('$dir/.panda-runtime-ready');
+    final profileMarker = File('$dir/.panda-profile-version');
+
+    // Always update profile files if profileVersion changed, even when
+    // rootfs is already ready — ensures bash PS1 prompt works.
+    final profileNeedsUpdate = !profileMarker.existsSync() ||
+        profileMarker.readAsStringSync().trim() != profileVersion;
+    if (profileNeedsUpdate) {
+      final profile = pandaProfileScript();
+      _write('$dir/etc/profile.d/panda.sh', profile);
+      _write('$dir/etc/profile',
+          'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n');
+      _write('$dir/root/.profile', profile);
+      _write('$dir/root/.bashrc', profile);
+      try {
+        profileMarker.writeAsStringSync(profileVersion);
+      } catch (_) {}
+    }
+
     if (readyMarker.existsSync() &&
         readyMarker.readAsStringSync().trim() == rootfsVersion) {
       return;

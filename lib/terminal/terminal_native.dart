@@ -868,7 +868,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
       prootArgs.addAll([
         '-w', '/root',
-        '/bin/sh',
+        '/bin/bash',
         '-l',
         ...args,
       ]);
@@ -1520,14 +1520,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
             alwaysShowCursor: true,
             deleteDetection: true,
             keyboardType: TextInputType.text,
-            onKeyEvent: (node, event) {
-              // Intercept Enter key to ensure it always reaches the PTY.
-              if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
-                sendToPty('\r');
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
             textStyle: TerminalStyle(
               fontSize: state.fontSize,
               fontFamily: _terminalFontFamilyFromConfig(),
@@ -1583,13 +1575,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 alwaysShowCursor: true,
                 deleteDetection: true,
                 keyboardType: TextInputType.text,
-                onKeyEvent: (node, event) {
-                  if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
-                    sendToPty('\r');
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
                 textStyle: TerminalStyle(
                   fontSize: state.fontSize,
                   fontFamily: _terminalFontFamilyFromConfig(),
