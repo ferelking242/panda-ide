@@ -1479,21 +1479,24 @@ class _SelectTypeState extends State<SelectType>
   void _openAgentProvidersPage() {
     _agentSettingsOpenProviders = true;
     setState(() {
-      final existing = _openTabs.indexWhere((tab) => tab.id == 'agent-settings');
-      if (existing == -1) {
+      // Switch the agent panel tab to Providers (tab 4) instead of opening
+      // a separate top-level tab. First ensure the agent tab is active.
+      final existing = _openTabs.indexWhere((tab) => tab.id == 'agent');
+      if (existing != -1) {
+        _activeTabIdx = existing;
+      } else {
         _openTabs.add(const _TabDef(
-          id: 'agent-settings',
-          title: 'Providers IA',
+          id: 'agent',
+          title: 'Panda Agent',
           icon: Broken.cpu_setting,
         ));
         _activeTabIdx = _openTabs.length - 1;
-      } else {
-        _activeTabIdx = existing;
       }
+      _agentPanelPrevTab = _agentPanelTab;
+      _agentPanelTab = 4; // Providers tab
       _sidebarState = 1;
       _activeRail = 0;
     });
-    // Le flag n'est consommé qu'une fois (initState d'AgentSettings).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _agentSettingsOpenProviders = false;
     });
@@ -7338,7 +7341,6 @@ class _SelectTypeState extends State<SelectType>
         if (isMe) {
           return BeUIMessage(
             role: BeUIMessageRole.user,
-            avatarText: 'U',
             isGrouped: false,
             child: BeUIMessageBubble(
               tone: BeUIBubbleTone.user,

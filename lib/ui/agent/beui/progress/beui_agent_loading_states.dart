@@ -5,7 +5,7 @@ import '../beui_theme.dart';
 /// ═══════════════════════════════════════════════════════════════════════════
 /// BeUILoadingState — 3 variantes de chargement agent :
 ///   - shimmer  : texte lumineux en balayage
-///   - progress : barre de progression indéterminée
+///   - progress : carré animé qui pulse (style VS Code)
 ///   - cycling  : phrases tournantes avec fade
 /// ═══════════════════════════════════════════════════════════════════════════
 
@@ -29,7 +29,7 @@ class BeUILoadingState extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (variant) {
       BeUILoadingVariant.shimmer => _ShimmerLabel(label: label, color: color),
-      BeUILoadingVariant.progress => _ProgressLine(color: color),
+      BeUILoadingVariant.progress => _AnimatedSquare(label: label, color: color),
       BeUILoadingVariant.cycling => _CyclingPhrases(
           phrases: cyclingPhrases ?? [label],
           color: color,
@@ -63,17 +63,18 @@ class _ShimmerLabel extends StatelessWidget {
   }
 }
 
-// ── Progress Bar (indeterminate) ──────────────────────────────────────────
+// ── Animated Square (VS Code style pulsing square) ────────────────────────
 
-class _ProgressLine extends StatefulWidget {
+class _AnimatedSquare extends StatefulWidget {
+  final String label;
   final Color color;
-  const _ProgressLine({required this.color});
+  const _AnimatedSquare({required this.label, required this.color});
 
   @override
-  State<_ProgressLine> createState() => _ProgressLineState();
+  State<_AnimatedSquare> createState() => _AnimatedSquareState();
 }
 
-class _ProgressLineState extends State<_ProgressLine>
+class _AnimatedSquareState extends State<_AnimatedSquare>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
 
@@ -82,8 +83,8 @@ class _ProgressLineState extends State<_ProgressLine>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: BeUIDurations.slow,
-    )..repeat();
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
   }
 
   @override
@@ -97,28 +98,31 @@ class _ProgressLineState extends State<_ProgressLine>
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (context, _) {
-        return Container(
-          height: 3,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: widget.color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(2),
-          ),
-          child: FractionallySizedBox(
-            alignment: Alignment(_ctrl.value * 2 - 1, 0),
-            widthFactor: 0.4,
-            child: Container(
+        final size = 8.0 + _ctrl.value * 2;
+        final opacity = 0.5 + _ctrl.value * 0.5;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Pulsing square
+            Container(
+              width: size,
+              height: size,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    widget.color.withValues(alpha: 0),
-                    widget.color,
-                    widget.color.withValues(alpha: 0),
-                  ],
-                ),
+                color: widget.color.withValues(alpha: opacity),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            // White label text
+            Text(
+              widget.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+          ],
         );
       },
     );

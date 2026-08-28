@@ -48,7 +48,7 @@ class BeUIMessage extends StatelessWidget {
 
     Widget content = Padding(
       padding: EdgeInsets.only(
-        left: isUser ? 48 : 10,
+        left: 10,
         right: isUser ? 10 : 48,
         top: isGrouped ? 2 : 10,
         bottom: 4,
@@ -99,20 +99,21 @@ class BeUIMessage extends StatelessWidget {
     // Avatar
     final avatar = _buildAvatar(isDark, isUser, isAssistant, fg, muted);
 
-    if (!isUser) {
-      content = Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          avatar,
-          Expanded(child: content),
-        ],
+    if (isUser) {
+      // User messages: right-aligned, no avatar, smaller padding
+      content = Padding(
+        padding: const EdgeInsets.only(right: 10),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: content,
+        ),
       );
     } else {
       content = Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: content),
           avatar,
+          Expanded(child: content),
         ],
       );
     }
@@ -125,11 +126,11 @@ class BeUIMessage extends StatelessWidget {
   }
 
   Widget _buildAvatar(bool isDark, bool isUser, bool isAssistant, Color fg, Color muted) {
+    // User messages: no avatar (clean look)
+    if (isUser) return const SizedBox.shrink();
     final accent = BeUIColors.accentOf(isDark);
-    final label = avatarText ?? (isUser ? 'U' : 'A');
-    final bgColor = isAssistant ? accent.withValues(alpha: 0.15)
-        : isUser ? Colors.orange.withValues(alpha: 0.12)
-        : muted.withValues(alpha: 0.1);
+    final label = avatarText ?? 'A';
+    final bgColor = accent.withValues(alpha: 0.15);
 
     return Padding(
       padding: const EdgeInsets.only(top: 4),
@@ -146,9 +147,7 @@ class BeUIMessage extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: isAssistant ? accent
-                  : isUser ? Colors.orange
-                  : muted,
+              color: accent,
             ),
           ),
         ),
