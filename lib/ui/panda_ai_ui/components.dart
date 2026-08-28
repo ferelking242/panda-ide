@@ -576,49 +576,75 @@ class LoadingStateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool round = variant == 'Dots';
-    final int durationMs = variant == 'Orbit' ? 950 : 650;
-    
-    final List<int?> delays;
-    if (variant == 'Orbit') {
-      delays = [0, 110, 220, 770, null, 330, 660, 550, 440];
-    } else {
-      delays = [90, 180, 270, 0, 90, 180, 90, 180, 270];
-    }
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        SizedBox(
-          width: 15,
-          height: 15,
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 1.5,
-              crossAxisSpacing: 1.5,
-            ),
-            itemCount: 9,
-            itemBuilder: (context, index) {
-              return PixelGridCell(
-                delay: delays[index],
-                durationMs: durationMs,
-                round: round,
-                color: color,
-              );
-            },
-          ),
-        ),
+        _SpinningSquare(color: color),
         const SizedBox(width: 8),
         ShimmerText(
           text: label,
           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
         ),
-        // ElapsedTimerWidget removed — no seconds counter per spec
       ],
+    );
+  }
+}
+
+/// Animated spinning square indicator (Replit Agent style).
+class _SpinningSquare extends StatefulWidget {
+  final Color color;
+  const _SpinningSquare({required this.color});
+
+  @override
+  State<_SpinningSquare> createState() => _SpinningSquareState();
+}
+
+class _SpinningSquareState extends State<_SpinningSquare>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+    _anim = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Transform.rotate(
+        angle: _anim.value * math.pi * 2,
+        child: Container(
+          width: 11,
+          height: 11,
+          decoration: BoxDecoration(
+            color: widget.color.withValues(alpha: 0.9),
+            borderRadius: BorderRadius.circular(2.5),
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: 0.4),
+                blurRadius: 4,
+                spreadRadius: 0.5,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

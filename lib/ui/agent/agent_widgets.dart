@@ -937,12 +937,34 @@ class AgentPhaseChipState extends State<AgentPhaseChip> {
         variant = 'Drive';
     }
 
+    final Color accent;
+    switch (widget.phase) {
+      case AgentPhase.error:
+        accent = Colors.redAccent;
+        break;
+      case AgentPhase.toolRunning:
+        accent = widget.isDark ? const Color(0xff8b5cf6) : const Color(0xff6366f1);
+        break;
+      default:
+        accent = widget.isDark ? const Color(0xff8b5cf6) : const Color(0xff6366f1);
+    }
+
     return Padding(
       padding: const EdgeInsets.only(top: 2, bottom: 6),
-      child: LoadingStateWidget(
-        label: label,
-        variant: variant,
-        color: widget.muted,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BeUIPulsingSquare(size: 11, color: accent),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        ],
       ),
     );
   }

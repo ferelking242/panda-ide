@@ -77,6 +77,8 @@ import 'logs_ui/logs_explorer_page.dart';
 import 'editor/timeline_view.dart';
 import 'agent/agent_models.dart';
 import 'agent/agent_widgets.dart';
+import 'agent/beui/beui_theme.dart';
+import 'agent/beui/conversation/beui_message_scroller.dart';
 import '../agent/agent_v3.dart';
 
 
@@ -7317,8 +7319,9 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Widget _buildAgentMessages(bool isDark, Color fg, Color muted) {
-    return ListView.builder(
-      controller: _agentScrollCtrl,
+    return BeUIMessageScroller(
+      scrollController: _agentScrollCtrl,
+      isStreaming: _agentGenerating,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       itemCount: _agentMessages.length,
       itemBuilder: (_, i) {
@@ -10993,8 +10996,8 @@ class _UserMessageBubbleState extends State<_UserMessageBubble> {
             maxWidth: MediaQuery.of(context).size.width * 0.85,
           ),
           decoration: BoxDecoration(
-            color: const Color(0xff3b82f6),
-            borderRadius: BorderRadius.circular(16),
+            color: widget.isDark ? const Color(0xFF2A2B30) : const Color(0xFFE8EAF0),
+            borderRadius: BorderRadius.circular(14),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -11008,7 +11011,7 @@ class _UserMessageBubbleState extends State<_UserMessageBubble> {
                     fontSize: 13,
                     height: 1.45,
                     fontWeight: FontWeight.w500,
-                    color: widget.isDark ? Colors.white : Colors.black87,
+                    color: widget.isDark ? Colors.grey[200]! : Colors.grey[900]!,
                   ),
                 ),
               ),
