@@ -64,7 +64,7 @@ class _BeUIMessageBubbleState extends State<BeUIMessageBubble> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(14),
         border: isSystem
             ? Border.all(color: borderColor, width: 0.8)
             : null,
@@ -138,7 +138,7 @@ class _BeUIMessageBubbleState extends State<BeUIMessageBubble> {
     return content;
   }
 
-  Widget _buildText(BuildContext context, bool needsTruncation) {
+  final fg = isDark ? Colors.grey[200]! : Colors.grey[900]!;on) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
     final displayText = needsTruncation
@@ -153,7 +153,7 @@ class _BeUIMessageBubbleState extends State<BeUIMessageBubble> {
 
   Color _bgColor(bool isDark) {
     return switch (widget.tone) {
-      BeUIBubbleTone.user => BeUIColors.accentOf(isDark).withValues(alpha: 0.1),
+      BeUIBubbleTone.user => isDark ? const Color(0xFF2A2B30) : const Color(0xFFE8EAF0),
       BeUIBubbleTone.assistant => BeUIColors.deepSurfaceOf(isDark),
       BeUIBubbleTone.system => BeUIColors.surfaceOf(isDark).withValues(alpha: 0.5),
     };

@@ -8,6 +8,7 @@ import '../../utils/themes.dart';
 import '../agent_runner.dart' show AgentPhase;
 import '../panda_ai_ui/components.dart' show LoadingStateWidget;
 import 'agent_models.dart';
+import 'beui/beui_theme.dart';
 
 // ── LightWavePainter ───────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ class ActiveActivityCardState extends State<ActiveActivityCard>
             else
               SizedBox(
                 width: 13, height: 13,
-                child: CircularProgressIndicator(strokeWidth: 1.5, color: accent),
+                child: BeUIPulsingSquare(size: 13, color: accent),
               ),
             const SizedBox(width: 8),
             Expanded(
@@ -261,14 +262,7 @@ class ReflectionBoxState extends State<ReflectionBox> {
                   ),
                   const Spacer(),
                   if (widget.isActive)
-                    SizedBox(
-                      width: 10,
-                      height: 10,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: widget.muted,
-                      ),
-                    )
+                    BeUIPulsingSquare(size: 10, color: widget.muted)
                   else
                     Icon(
                       showBody ? Broken.arrow_up_2 : Broken.arrow_down_2,
@@ -571,14 +565,7 @@ class AgentToolCallBlockState extends State<AgentToolCallBlock> {
                 children: [
                   // Status indicator
                   if (isRunning)
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.5,
-                        color: widget.muted,
-                      ),
-                    )
+                    BeUIPulsingSquare(size: 12, color: widget.muted)
                   else
                     agentToolIconWidget(widget.toolName, 12,
                         isError
@@ -1275,7 +1262,7 @@ class AgentToolCallsGroupState extends State<AgentToolCallsGroup> {
                                     if (isRunning)
                                       SizedBox(
                                         width: 8, height: 8,
-                                        child: CircularProgressIndicator(strokeWidth: 1.5, color: widget.fg.withValues(alpha: 0.7)),
+                                        child: BeUIPulsingSquare(size: 8, color: widget.fg.withValues(alpha: 0.7)),
                                       )
                                     else
                                       Icon(icon, size: 10, color: widget.fg.withValues(alpha: 0.7)),
@@ -1295,10 +1282,7 @@ class AgentToolCallsGroupState extends State<AgentToolCallsGroup> {
 
                     if (widget.isStreaming) ...[
                       const SizedBox(width: 4),
-                      SizedBox(
-                        width: 10, height: 10,
-                        child: CircularProgressIndicator(strokeWidth: 1.5, color: widget.fg),
-                      ),
+                      BeUIPulsingSquare(size: 10, color: widget.fg),
                     ],
                     const SizedBox(width: 6),
                     Icon(
