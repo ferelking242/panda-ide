@@ -1519,6 +1519,15 @@ class _SetupTerminalState extends State<SetupTerminal> {
             cursorType: TerminalCursorType.verticalBar,
             alwaysShowCursor: true,
             deleteDetection: true,
+            keyboardType: TextInputType.text,
+            onKeyEvent: (node, event) {
+              // Intercept Enter key to ensure it always reaches the PTY.
+              if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
+                sendToPty('\r');
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
             textStyle: TerminalStyle(
               fontSize: state.fontSize,
               fontFamily: _terminalFontFamilyFromConfig(),
@@ -1569,10 +1578,18 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 padding: EdgeInsets.zero,
                 controller: r.controller,
                 autofocus: isActive,
-                    theme: activeTheme.theme,
+                theme: activeTheme.theme,
                 cursorType: TerminalCursorType.verticalBar,
                 alwaysShowCursor: true,
                 deleteDetection: true,
+                keyboardType: TextInputType.text,
+                onKeyEvent: (node, event) {
+                  if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
+                    sendToPty('\r');
+                    return KeyEventResult.handled;
+                  }
+                  return KeyEventResult.ignored;
+                },
                 textStyle: TerminalStyle(
                   fontSize: state.fontSize,
                   fontFamily: _terminalFontFamilyFromConfig(),

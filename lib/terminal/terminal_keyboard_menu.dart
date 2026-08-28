@@ -1,25 +1,4 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'package:dartssh2/dartssh2.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_pty/flutter_pty.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:xterm/xterm.dart';
-import 'package:xterm/src/ui/render.dart' show RenderTerminal;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import '../ui/notifications.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../bloc/ui_bloc/ui_bloc.dart';
-import '../utils/debian_setup.dart';
-import '../utils/constants.dart';
-import '../utils/functions.dart';
-import '../utils/panda_log.dart';
-import '../utils/themes.dart';
-import './terminal_bridge.dart';
 
 // Terminal keyboard menu overlay
 // Extracted from terminal_native.dart
@@ -172,10 +151,29 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       margin: const EdgeInsets.symmetric(horizontal: 4),
     );
 
-    return Container(
-      height: 44,
-      color: const Color(0xff181818),
-      child: SingleChildScrollView(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Clean dongle handle bar
+        Container(
+          height: 6,
+          color: const Color(0xff181818),
+          child: Center(
+            child: Container(
+              width: 40,
+              height: 3,
+              decoration: BoxDecoration(
+                color: const Color(0xff555555),
+                borderRadius: BorderRadius.circular(1.5),
+              ),
+            ),
+          ),
+        ),
+        // Keyboard bar
+        Container(
+          height: 44,
+          color: const Color(0xff181818),
+          child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(
@@ -227,6 +225,8 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
           ],
         ),
       ),
-    );
+    ),
+    ],
+  );
   }
 }
