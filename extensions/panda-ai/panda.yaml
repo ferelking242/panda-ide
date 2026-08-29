@@ -1,0 +1,89 @@
+# panda.yaml — Extension manifest for Panda IDE
+# Format: panda-v1
+
+id: dev.panda.ai
+name: Panda AI
+version: "1.0.0"
+author: "Ferelking"
+description: |
+  Panda AI — Dashboard et gateway pour l'IA dans Panda IDE.
+
+  1. Installe le serveur Python (FastAPI/uvicorn) depuis GitHub
+  2. Vérifie Python, pip, et les dépendances système
+  3. Démarre le serveur Gateway (API OpenAI-compatible)
+  4. Lance le dashboard Next.js dans un WebView intégré
+  5. Gère ChatGPT, Claude, et Panda Open Gateway
+
+license: MIT
+repository: https://github.com/ferelking242/panda-ai
+
+# Compatibility
+panda:
+  min_version: "1.0.0"
+  platforms:
+    - android
+
+# Activation
+activation:
+  events:
+    - onStartup
+
+# Permissions requises
+permissions:
+  - terminal        # exécuter python/pip dans le rootfs
+  - network         # télécharger panda-ai depuis GitHub
+  - storage         # cache d'installation ($appDir/gateway)
+  - notifications   # état du serveur
+
+# Contributions
+contributes:
+  commands:
+    - id: dev.panda.ai.open
+      title: "Panda AI: Open Dashboard"
+      icon: "robot"
+      keybinding: "ctrl+shift+a"
+
+    - id: dev.panda.ai.install
+      title: "Panda AI: Install Gateway"
+      icon: "cloud-download"
+
+    - id: dev.panda.ai.start
+      title: "Panda AI: Start Server"
+      icon: "play"
+
+    - id: dev.panda.ai.stop
+      title: "Panda AI: Stop Server"
+      icon: "stop"
+
+    - id: dev.panda.ai.status
+      title: "Panda AI: Show Status"
+      icon: "info"
+
+  views:
+    sidebar:
+      - id: dev.panda.ai.panel
+        name: "Panda AI"
+        icon: "robot"
+        widget: "views/dashboard_panel.dart"
+        default_visible: false
+
+  configuration:
+    dev.panda.ai.apiPort:
+      type: number
+      default: 8000
+      description: "Port du serveur API Gateway"
+    dev.panda.ai.provider:
+      type: string
+      default: "chatgpt"
+      values: ["chatgpt", "claude", "pandagateway"]
+      description: "Provider IA par défaut"
+    dev.panda.ai.headless:
+      type: boolean
+      default: true
+      description: "Lancer Chromium en headless (pas de fenêtre)"
+
+  icons:
+    activity_bar:
+      - id: dev.panda.ai.activity
+        name: "Panda AI"
+        icon: "robot"
