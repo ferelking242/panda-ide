@@ -640,7 +640,7 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
             style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
           style: ElevatedButton.styleFrom(
-            backgroundColor: (enough && _selectedQuant != null) ? btnColor : cs.surfaceVariant,
+            backgroundColor: (enough && _selectedQuant != null) ? btnColor : cs.surfaceContainerHighest,
             foregroundColor: (enough && _selectedQuant != null) ? Colors.white : cs.onSurfaceVariant,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             elevation: 0,
@@ -1027,7 +1027,7 @@ class _TripleTapDownloadButtonState extends State<_TripleTapDownloadButton> {
             label: Text(btnLabel,
                 style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
-              backgroundColor: widget.enabled ? widget.cs.error : widget.cs.surfaceVariant,
+              backgroundColor: widget.enabled ? widget.cs.error : widget.cs.surfaceContainerHighest,
               foregroundColor: widget.enabled ? Colors.white : widget.cs.onSurfaceVariant,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               elevation: 0,
@@ -1069,7 +1069,7 @@ class _MainButton extends StatelessWidget {
         icon: Icon(icon, size: 16),
         label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: onTap != null ? color : cs.surfaceVariant,
+          backgroundColor: onTap != null ? color : cs.surfaceContainerHighest,
           foregroundColor: onTap != null
               ? (danger || secondary ? Colors.white : cs.onPrimary)
               : cs.onSurfaceVariant,

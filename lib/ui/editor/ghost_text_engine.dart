@@ -16,12 +16,12 @@ class GhostTextEngine extends StatefulWidget {
   final Future<String> Function(String textBeforeCursor, String fileContext)? fetchSuggestion;
 
   const GhostTextEngine({
-    Key? key,
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.child,
     this.fetchSuggestion,
-  }) : super(key: key);
+  });
 
   @override
   State<GhostTextEngine> createState() => _GhostTextEngineState();
@@ -105,9 +105,9 @@ class _GhostTextEngineState extends State<GhostTextEngine> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade900.withOpacity(0.9),
+                  color: Colors.grey.shade900.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.blueAccent.withOpacity(0.5)),
+                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

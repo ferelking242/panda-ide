@@ -123,8 +123,11 @@ class InferenceConfigService {
     const options = [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
     int result = 512;
     for (final o in options) {
-      if (o <= value) result = o;
-      else break;
+      if (o <= value) {
+        result = o;
+      } else {
+        break;
+      }
     }
     return result;
   }

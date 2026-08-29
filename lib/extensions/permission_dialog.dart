@@ -68,7 +68,7 @@ Future<bool> showPermissionRationale(
               Expanded(
                 child: Text(
                   'Permission : ${permission.name}\n'
-                  '${isPhone ? "Une boîte de dialogue système Android s\'ouvrira ensuite." : "Portée limitée à l\'environnement Panda."}',
+                  '${isPhone ? "Une boîte de dialogue système Android s'ouvrira ensuite." : "Portée limitée à l'environnement Panda."}',
                   style: const TextStyle(fontSize: 11.5),
                 ),
               ),

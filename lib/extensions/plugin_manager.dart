@@ -3,13 +3,13 @@
 /// This is the single entry point for loading, activating, and managing
 /// all types of extensions in Panda IDE.
 library;
-import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:async';
 import 'package:path/path.dart' as p;
 import 'extension_host_manager.dart';
 import 'extension_registry.dart';
 import 'models/extension_manifest.dart';
-import 'models/panda_manifest.dart';
 import 'native_extension_loader.dart';
 
 
@@ -32,15 +32,15 @@ class LoadedExtension {
   LoadedExtension.vscode(this._impl)
       : type = ExtensionType.vscode,
         id = (_impl as InstalledExtension).manifest.id,
-        name = (_impl as InstalledExtension).manifest.displayName ??
-            (_impl as InstalledExtension).manifest.name,
-        version = (_impl as InstalledExtension).manifest.version;
+        name = (_impl).manifest.displayName ??
+            (_impl).manifest.name,
+        version = (_impl).manifest.version;
 
   LoadedExtension.native(this._impl)
       : type = ExtensionType.native,
         id = (_impl as NativeExtension).id,
-        name = (_impl as NativeExtension).manifest.name,
-        version = (_impl as NativeExtension).manifest.version;
+        name = (_impl).manifest.name,
+        version = (_impl).manifest.version;
 
   InstalledExtension? get asVscode =>
       type == ExtensionType.vscode ? _impl as InstalledExtension : null;
@@ -95,11 +95,12 @@ class PluginManager {
   /// Load a single .vsix extension.
   Future<void> _loadVscode(String dir) async {
     final manifestPath = p.join(dir, 'package.json');
-    final manifest = await ExtensionManifest.fromFile(manifestPath);
+    final manifestJson = jsonDecode(await File(manifestPath).readAsString()) as Map<String, dynamic>;
+    final manifest = ExtensionManifest.fromJson(manifestJson);
     final installed = InstalledExtension(
       manifest: manifest,
       installPath: dir,
-      isEnabled: true,
+      state: ExtensionState.enabled,
     );
 
     // Register in the existing extension registry

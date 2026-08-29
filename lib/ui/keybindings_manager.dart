@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 /// Represents a single keybinding
 class Keybinding {
@@ -443,7 +442,7 @@ class _KeybindingsPageState extends State<KeybindingsPage> {
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFAB387).withOpacity(0.15),
+                color: const Color(0xFFFAB387).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -529,7 +528,7 @@ class _KeybindingsPageState extends State<KeybindingsPage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
                                   color: hasConflict
-                                      ? const Color(0xFFF38BA8).withOpacity(0.2)
+                                      ? const Color(0xFFF38BA8).withValues(alpha: 0.2)
                                       : const Color(0xFF45475A),
                                   borderRadius: BorderRadius.circular(6),
                                   border: hasConflict

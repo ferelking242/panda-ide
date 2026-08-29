@@ -1,25 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:code_forge/code_forge.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:flutter_json/flutter_json.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:http/http.dart' as http;
 import '../../utils/llama_wrapper.dart';
 import 'package:markdown_widget/config/configs.dart';
 import 'package:markdown_widget/widget/all.dart';
 import 'package:path/path.dart' as path;
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:percent_indicator/linear_percent_indicator.dart';
-import 'package:re_highlight/re_highlight.dart' show Mode;
 import 'package:re_highlight/styles/atom-one-dark.dart';
 import 'package:panda/utils/agentic_tools.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../bloc/repo_bloc/repo_bloc.dart';
 import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../terminal/terminal.dart';
@@ -28,9 +20,7 @@ import '../../utils/copilot_chat.dart';
 import '../../utils/functions.dart';
 import '../../utils/languages.dart';
 import '../../utils/themes.dart';
-import '../../utils/constants.dart';
 
-import '../../utils/editors/edit_hunks.dart';
 
 // Helper functions extracted from monolithic widgets.dart
 
@@ -870,9 +860,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
               height: 32,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50).withOpacity(0.12),
+                color: const Color(0xFF4CAF50).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: const Color(0xFF4CAF50).withOpacity(0.3)),
+                border: Border.all(color: const Color(0xFF4CAF50).withValues(alpha: 0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

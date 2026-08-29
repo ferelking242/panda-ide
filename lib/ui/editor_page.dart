@@ -7,17 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
 import 'package:vector_math/vector_math_64.dart' hide Colors;
 import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
-import 'package:panda/ui/mdview.dart';
 import 'package:panda/utils/constants.dart';
 import 'webview.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../extensions/extension_host.dart';
-import '../terminal/terminal.dart';
 import '../utils/languages.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
@@ -2082,32 +2079,32 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
       ]),
       builder: (context, snapshot) {
         if (snapshot.hasError && !widget.isProject) {
-          final _cs = Theme.of(context).colorScheme;
-          final _ab = Theme.of(context).appBarTheme;
+          final cs = Theme.of(context).colorScheme;
+          final ab = Theme.of(context).appBarTheme;
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             resizeToAvoidBottomInset: true,
             appBar: AppBar(
-              backgroundColor: _ab.backgroundColor ?? _cs.surface,
-              foregroundColor: _ab.foregroundColor ?? _cs.onSurface,
-              title: Text('Error', style: TextStyle(color: _ab.foregroundColor ?? _cs.onSurface)),
+              backgroundColor: ab.backgroundColor ?? cs.surface,
+              foregroundColor: ab.foregroundColor ?? cs.onSurface,
+              title: Text('Error', style: TextStyle(color: ab.foregroundColor ?? cs.onSurface)),
             ),
             body: SingleChildScrollView(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, size: 48, color: _cs.error),
+                    Icon(Icons.error_outline, size: 48, color: cs.error),
                     const SizedBox(height: 16),
                     Text('Failed to initialize editor',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
-                            color: _cs.onSurface)),
+                            color: cs.onSurface)),
                     const SizedBox(height: 8),
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Text(snapshot.error.toString(),
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: _cs.onSurface.withValues(alpha: 0.6))),
+                          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.6))),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
@@ -2125,23 +2122,23 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                 snapshot.data == null ||
                 snapshot.data!.isEmpty) &&
             !widget.isProject) {
-          final _cs = Theme.of(context).colorScheme;
-          final _ab = Theme.of(context).appBarTheme;
+          final cs = Theme.of(context).colorScheme;
+          final ab = Theme.of(context).appBarTheme;
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             appBar: AppBar(
-              backgroundColor: _ab.backgroundColor ?? _cs.surface,
-              foregroundColor: _ab.foregroundColor ?? _cs.onSurface,
-              title: Text('Error', style: TextStyle(color: _ab.foregroundColor ?? _cs.onSurface)),
+              backgroundColor: ab.backgroundColor ?? cs.surface,
+              foregroundColor: ab.foregroundColor ?? cs.onSurface,
+              title: Text('Error', style: TextStyle(color: ab.foregroundColor ?? cs.onSurface)),
             ),
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.warning_amber_rounded, size: 48, color: _cs.error),
+                  Icon(Icons.warning_amber_rounded, size: 48, color: cs.error),
                   const SizedBox(height: 16),
                   Text('No data received',
-                      style: TextStyle(fontSize: 18, color: _cs.onSurface)),
+                      style: TextStyle(fontSize: 18, color: cs.onSurface)),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -2161,14 +2158,14 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
             : null;
 
         if ((target == null || !target.existsSync()) && !widget.isProject) {
-          final _cs = Theme.of(context).colorScheme;
-          final _ab = Theme.of(context).appBarTheme;
+          final cs = Theme.of(context).colorScheme;
+          final ab = Theme.of(context).appBarTheme;
           return Scaffold(
             backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             appBar: AppBar(
-              backgroundColor: _ab.backgroundColor ?? _cs.surface,
-              foregroundColor: _ab.foregroundColor ?? _cs.onSurface,
-              title: Text('Error', style: TextStyle(color: _ab.foregroundColor ?? _cs.onSurface)),
+              backgroundColor: ab.backgroundColor ?? cs.surface,
+              foregroundColor: ab.foregroundColor ?? cs.onSurface,
+              title: Text('Error', style: TextStyle(color: ab.foregroundColor ?? cs.onSurface)),
             ),
             body: Center(
               child: Column(
@@ -2275,13 +2272,17 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
             child: BlocBuilder<ActiveEditorBloc, ActiveEditorState>(
               buildWhen: (previous, current) {
                 if (previous.activeEditors.length !=
-                    current.activeEditors.length) return true;
+                    current.activeEditors.length) {
+                  return true;
+                }
                 for (int i = 0; i < previous.activeEditors.length; i++) {
                   final p = previous.activeEditors[i];
                   final c = current.activeEditors[i];
                   if (p.isActive != c.isActive ||
                       p.file.path != c.file.path ||
-                      p.customTitle != c.customTitle) return true;
+                      p.customTitle != c.customTitle) {
+                    return true;
+                  }
                 }
                 return false;
               },

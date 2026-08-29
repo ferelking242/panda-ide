@@ -1,5 +1,6 @@
 /// Stub for dart:io types on web platform.
 /// Provides minimal stubs so conditional dart:io imports compile on web.
+library;
 
 class Directory {
   final String path;

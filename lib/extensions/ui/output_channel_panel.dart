@@ -37,7 +37,9 @@ class OutputChannel {
   void removeListener(VoidCallback cb) => _listeners.remove(cb);
 
   void _notify() {
-    for (final cb in List.of(_listeners)) cb();
+    for (final cb in List.of(_listeners)) {
+      cb();
+    }
   }
 }
 
@@ -56,7 +58,9 @@ class OutputChannelManager {
   void addPanelListener(VoidCallback cb) => _panelListeners.add(cb);
   void removePanelListener(VoidCallback cb) => _panelListeners.remove(cb);
   void _notifyPanel() {
-    for (final cb in List.of(_panelListeners)) cb();
+    for (final cb in List.of(_panelListeners)) {
+      cb();
+    }
   }
 
   void create(String name) {

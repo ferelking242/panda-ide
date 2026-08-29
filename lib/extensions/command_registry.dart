@@ -111,7 +111,7 @@ class CommandRegistry {
     // qui crée un ipc.onCall handler. On peut aussi utiliser fireEvent.
     // On préfère call() pour avoir un retour.
     try {
-      return await bridge.call('command.${command}', args);
+      return await bridge.call('command.$command', args);
     } catch (_) {
       // Si pas de handler call, fire l'event classique
       bridge.fireEvent('command.invoke', {'command': command, 'args': args});

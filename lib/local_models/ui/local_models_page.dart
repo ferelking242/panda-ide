@@ -602,7 +602,7 @@ class _DownloadBtn extends StatelessWidget {
       child: ElevatedButton(
         onPressed: incompatible ? null : onTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: incompatible ? cs.surfaceVariant : cs.primary,
+          backgroundColor: incompatible ? cs.surfaceContainerHighest : cs.primary,
           foregroundColor: incompatible ? cs.onSurfaceVariant : cs.onPrimary,
           padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),

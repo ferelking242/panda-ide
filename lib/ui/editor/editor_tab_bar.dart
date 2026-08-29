@@ -170,7 +170,7 @@ void showEditorContextMenu(
       isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
   final shortcutStyle = TextStyle(fontSize: 11, color: fgDim);
 
-  PopupMenuItem<String> _mi(String value, String label,
+  PopupMenuItem<String> mi(String value, String label,
       [String? shortcut]) {
     return PopupMenuItem<String>(
         value: value,
@@ -191,28 +191,28 @@ void showEditorContextMenu(
     shape:
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
     items: [
-      _mi('close', 'Close', 'Ctrl+W'),
-      _mi('close_others', 'Close Others', 'Ctrl+K Ctrl+W'),
-      _mi('close_right', 'Close to the Right'),
-      _mi('close_saved', 'Close Saved', 'Ctrl+K U'),
-      _mi('close_all', 'Close All', 'Ctrl+K W'),
+      mi('close', 'Close', 'Ctrl+W'),
+      mi('close_others', 'Close Others', 'Ctrl+K Ctrl+W'),
+      mi('close_right', 'Close to the Right'),
+      mi('close_saved', 'Close Saved', 'Ctrl+K U'),
+      mi('close_all', 'Close All', 'Ctrl+K W'),
       const PopupMenuDivider(height: 1),
-      _mi('reopen', 'Reopen Editor With...'),
+      mi('reopen', 'Reopen Editor With...'),
       const PopupMenuDivider(height: 1),
-      _mi('keep_open', 'Keep Open'),
-      _mi('pin', 'Pin'),
-      _mi('unpin', 'Unpin'),
+      mi('keep_open', 'Keep Open'),
+      mi('pin', 'Pin'),
+      mi('unpin', 'Unpin'),
       const PopupMenuDivider(height: 1),
-      _mi('split_right', 'Split Right', 'Ctrl+\\\\'),
-      _mi('split_down', 'Split Down'),
+      mi('split_right', 'Split Right', 'Ctrl+\\\\'),
+      mi('split_down', 'Split Down'),
       const PopupMenuDivider(height: 1),
-      _mi('move_new_window', 'Move into New Window'),
-      _mi('copy_new_window', 'Copy into New Window'),
+      mi('move_new_window', 'Move into New Window'),
+      mi('copy_new_window', 'Copy into New Window'),
       const PopupMenuDivider(height: 1),
-      _mi('share', 'Share'),
+      mi('share', 'Share'),
       const PopupMenuDivider(height: 1),
-      _mi('show_opened', 'Show Opened Editors'),
-      _mi('enable_preview', 'Enable Preview Editors'),
+      mi('show_opened', 'Show Opened Editors'),
+      mi('enable_preview', 'Enable Preview Editors'),
     ],
   ).then((value) {
     if (value == null) return;

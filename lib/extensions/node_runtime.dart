@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'package:path/path.dart' as p;
 import '../utils/constants.dart';
 
 /// Manages the Node.js runtime binary for the extension host.
@@ -32,7 +31,7 @@ class NodeRuntimeManager {
   Future<bool> init() async {
     // 1. Check if node binary already exists at the expected path
     final expectedPath = '$binDir/node';
-    if (await File(expectedPath).existsSync()) {
+    if (File(expectedPath).existsSync()) {
       _nodePath = expectedPath;
       _installed = true;
       _version = await _getVersion();
@@ -48,7 +47,7 @@ class NodeRuntimeManager {
     ];
 
     for (final path in altPaths) {
-      if (await File(path).existsSync()) {
+      if (File(path).existsSync()) {
         _nodePath = path;
         _installed = true;
         _version = await _getVersion();
@@ -154,7 +153,7 @@ class NodeRuntimeManager {
       // The PFD download is handled by PackageDownloader
       // This method just checks if the result landed in the right place
       final pfdPath = '$runtimesDir/node/bin/node';
-      if (await File(pfdPath).existsSync()) {
+      if (File(pfdPath).existsSync()) {
         await _copyToExpectedPath(pfdPath);
         _nodePath = '$binDir/node';
         _installed = true;
@@ -171,7 +170,7 @@ class NodeRuntimeManager {
 
   /// Get detailed installation status.
   Future<NodeRuntimeStatus> getStatus() async {
-    final installed = _installed || await File('$binDir/node').existsSync();
+    final installed = _installed || File('$binDir/node').existsSync();
     final version = installed ? await _getVersion() : null;
     final size = installed ? await _getBinarySize() : 0;
 

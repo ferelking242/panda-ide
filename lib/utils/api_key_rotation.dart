@@ -97,7 +97,7 @@ class KeyStats {
         ? quotaResetAt
         : (cooldownUntil != null && cooldownUntil!.isAfter(DateTime.now()) ? cooldownUntil : null);
     if (until == null) return '';
-    final two = (int v) => v.toString().padLeft(2, '0');
+    String two(int v) => v.toString().padLeft(2, '0');
     final hm = '${two(until.hour)}:${two(until.minute)}';
     if (until.day != DateTime.now().day) return '${until.day}/${until.month} $hm';
     return hm;

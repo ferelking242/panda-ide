@@ -41,13 +41,13 @@ class MarketplaceExtension {
   String get id => '$namespace.$name';
 
   factory MarketplaceExtension.fromSearchJson(Map<String, dynamic> json) {
-    List<String> _strings(String key) {
+    List<String> strings(String key) {
       final v = json[key];
       if (v is List) return v.whereType<String>().toList();
       return const [];
     }
 
-    DateTime? _date(String key) {
+    DateTime? date(String key) {
       final v = json[key] as String?;
       if (v == null) return null;
       try {
@@ -69,9 +69,9 @@ class MarketplaceExtension {
       averageRating: (json['averageRating'] as num?)?.toDouble(),
       reviewCount: (json['reviewCount'] as num?)?.toInt() ?? 0,
       downloadCount: (json['downloadCount'] as num?)?.toInt() ?? 0,
-      timestamp: _date('timestamp'),
-      categories: _strings('categories'),
-      tags: _strings('tags'),
+      timestamp: date('timestamp'),
+      categories: strings('categories'),
+      tags: strings('tags'),
       license: json['license'] as String?,
       repository: json['repository'] as String?,
       downloadUrl: json['files']?['download'] as String?,

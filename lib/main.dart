@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'utils/llama_wrapper.dart';
 import 'package:path_provider/path_provider.dart';
 import 'bloc/repo_bloc/repo_bloc.dart';
 import 'bloc/ui_bloc/ui_bloc.dart';
@@ -18,8 +17,6 @@ import 'utils/functions.dart';
 import 'utils/settings_service.dart';
 import 'utils/themes.dart';
 import 'logging/logging.dart';
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

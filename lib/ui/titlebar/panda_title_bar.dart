@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/broken_icons.dart';
-import '../../ui/notifications.dart';
 import '../../utils/themes.dart';
 
 /// VS Code-style title bar: centered workspace box + left nav buttons.

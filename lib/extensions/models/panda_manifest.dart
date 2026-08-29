@@ -2,7 +2,6 @@
 ///
 /// Parses `panda.yaml` — the manifest format for native Dart extensions.
 library;
-import 'dart:convert';
 import 'dart:io';
 import 'package:yaml/yaml.dart';
 
@@ -849,7 +848,7 @@ Map<String, dynamic> _parseYaml(String yaml) {
     } else if (currentMap != null || currentKey != null) {
       if (indent <= 2) {
         // Sub-key under current key
-        final target = currentMap ?? (result[currentKey!] = <String, dynamic>{}) as Map<String, dynamic>;
+        final target = currentMap ?? (result[currentKey!] = <String, dynamic>{});
         if (currentMap == null) {
           result[currentKey!] = target;
           currentMap = target;
@@ -871,8 +870,8 @@ Map<String, dynamic> _parseYaml(String yaml) {
         // Deeper nesting
         if (currentMap != null) {
           // Check if parent value was a list
-          final parentKey = currentMap!.keys.last;
-          final parentValue = currentMap![parentKey];
+          final parentKey = currentMap.keys.last;
+          final parentValue = currentMap[parentKey];
 
           if (parentValue is List) {
             // Item in a list of maps

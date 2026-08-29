@@ -4,7 +4,6 @@
 /// The Problems tab shows errors, warnings, infos with file:line:col.
 /// Clicking an error navigates to that location.
 library;
-import 'dart:math';
 import 'package:flutter/material.dart';
 
 
@@ -537,16 +536,16 @@ class _BottomPanelState extends State<BottomPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.bug_report_rounded, size: 32, color: cs.onSurface.withOpacity(0.3)),
+            Icon(Icons.bug_report_rounded, size: 32, color: cs.onSurface.withValues(alpha: 0.3)),
             const SizedBox(height: 8),
             Text(
               'No debug session active',
-              style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 13),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13),
             ),
             const SizedBox(height: 4),
             Text(
               'Start debugging via Run > Start Debugging',
-              style: TextStyle(color: cs.onSurface.withOpacity(0.3), fontSize: 11),
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11),
             ),
           ],
         ),

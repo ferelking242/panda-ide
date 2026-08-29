@@ -35,7 +35,7 @@ const double kDefaultTerminalFontSize = 15.0;
 /// swipe de pages. À un seul doigt elle ne se manifeste jamais, donc le
 /// comportement natif du terminal (tap, long-press, drag) reste intact.
 class _TwoFingerPinchRecognizer extends OneSequenceGestureRecognizer {
-  _TwoFingerPinchRecognizer({super.debugOwner});
+  _TwoFingerPinchRecognizer();
 
   void Function()? onStart;
   void Function(double scale)? onUpdate;
@@ -901,7 +901,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         PandaLog.i('Terminal', 'PRoot session ended with exit code $code', body: 'session=${runtime.sessionId}');
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
         runtime.pty = null;
-        runtime.terminal.write('\r\n\r\n[Alpine session ended with exit code ' + code.toString() + ']');
+        runtime.terminal.write('\r\n\r\n[Alpine session ended with exit code $code]');
         _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
         _showExitBanner(runtime.sessionId, code);
       });
@@ -953,7 +953,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       runtime.terminal.onResize = (w, h, pw, ph) {
         process.resize(h, w);
       };
-    } catch (e, stack) {
+    } catch (e) {
       PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString());
       runtime.terminal.write('\r\n\x1b[31m[Erreur PRoot / Alpine]\x1b[0m\r\n');
       runtime.terminal.write('\x1b[31m  $e\x1b[0m\r\n');
@@ -975,7 +975,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       await _startProotSession(runtime, args: args);
       return;
     }
-    if(externalServer != null && externalServer.client != null){
+    if(externalServer.client != null){
       final terminal = runtime.terminal;
       final session = await externalServer.client!.shell(
         pty: SSHPtyConfig(
@@ -1928,6 +1928,20 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }
   }
 
+  // ── Deploy & run LSP servers install script from assets ────────────────────
+  Future<void> _installLspServers() async {
+    try {
+      final scriptDir = Directory('$appDir/scripts');
+      if (!scriptDir.existsSync()) await scriptDir.create(recursive: true);
+      final dest = File('${scriptDir.path}/install_lsp_servers.sh');
+      final data = await rootBundle.load('assets/scripts/install_lsp_servers.sh');
+      await dest.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      sendToPty('chmod +x ${scriptDir.path}/install_lsp_servers.sh && bash ${scriptDir.path}/install_lsp_servers.sh\n');
+    } catch (e) {
+      PandaLog.e('Terminal', 'Failed to deploy LSP install script: $e');
+    }
+  }
+
   // ── Helper: popup menu item ──────────────────────────────────────────────
   Widget _menuItem(IconData icon, String label, bool isDark) {
     final fg = isDark ? Colors.white.withValues(alpha: 0.85) : const Color(0xff1a1a1a);
@@ -2093,6 +2107,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 case 'install_claude':
                   _installClaudeCode();
                   break;
+                case 'install_lsp':
+                  _installLspServers();
+                  break;
               }
             },
             itemBuilder: (_) => [
@@ -2126,6 +2143,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
               PopupMenuItem(
                 value: 'install_claude',
                 child: _menuItem(Icons.auto_awesome_rounded, 'Installer Claude Code', isDark),
+              ),
+              PopupMenuItem(
+                value: 'install_lsp',
+                child: _menuItem(Icons.code_rounded, 'Installer LSP Servers', isDark),
               ),
             ],
           ),

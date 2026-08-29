@@ -195,7 +195,9 @@ class _BeUICodeBlockState extends State<BeUICodeBlock> {
         // Number
         if (RegExp(r'[0-9]').hasMatch(line[pos])) {
           var end = pos;
-          while (end < line.length && RegExp(r'[0-9._]').hasMatch(line[end])) end++;
+          while (end < line.length && RegExp(r'[0-9._]').hasMatch(line[end])) {
+            end++;
+          }
           spans.add(TextSpan(
             text: line.substring(pos, end),
             style: TextStyle(color: numberColor),
@@ -207,7 +209,9 @@ class _BeUICodeBlockState extends State<BeUICodeBlock> {
         // Word
         if (RegExp(r'[a-zA-Z_]').hasMatch(line[pos])) {
           var end = pos;
-          while (end < line.length && RegExp(r'[a-zA-Z0-9_]').hasMatch(line[end])) end++;
+          while (end < line.length && RegExp(r'[a-zA-Z0-9_]').hasMatch(line[end])) {
+            end++;
+          }
           final word = line.substring(pos, end);
           final isKeyword = keywords.contains(word);
           final isType = !isKeyword && word[0].toUpperCase() == word[0] && !word.startsWith('_');

@@ -126,27 +126,27 @@ activation:
 # Contributions
 contributes:
   commands:
-    - id: ${id}.hello
-      title: "${name}: Say Hello"
+    - id: $id.hello
+      title: "$name: Say Hello"
       keybinding: "ctrl+shift+h"
 
   # views:
   #   sidebar:
-  #     - id: ${name}.panel
+  #     - id: $name.panel
   #       name: "My Panel"
   #       widget: "views/my_panel.dart"
 
   # themes:
-  #   - id: ${name}-dark
-  #     name: "${name} Dark"
+  #   - id: $name-dark
+  #     name: "$name Dark"
   #     type: dark
   #     file: "assets/themes/dark.yaml"
 
   configuration:
-    ${name}.enabled:
+    $name.enabled:
       type: boolean
       default: true
-      description: "Enable ${name}"
+      description: "Enable $name"
 ''');
 
   // Create extension.dart
@@ -164,7 +164,7 @@ class ${_toClassName(name)}Extension extends PandaExtension {
   @override
   Future<void> onActivate(ExtensionContext context) async {
     // Register commands
-    context.commands.register('${id}.hello', (args) async {
+    context.commands.register('$id.hello', (args) async {
       await context.window.showInformation('Hello from $name! 🐼');
     });
 
@@ -284,11 +284,11 @@ void _packageExtension(List<String> args) {
   final content = File(yamlPath).readAsStringSync();
   final nameMatch = RegExp(r'^name:\s*(.+)', multiLine: true).firstMatch(content);
   final versionMatch =
-      RegExp(r'^version:\s*["\']?(.+?)["\']?\s*$', multiLine: true)
+      RegExp(r'^version:\s*["\']?(.+?)["']?s*$', multiLine: true)
           .firstMatch(content);
 
   final name = nameMatch?.group(1)?.trim() ?? 'extension';
-  final version = versionMatch?.group(1)?.trim() ?? '0.0.0';
+  final version = versionMatch.group(1)?.trim() ?? '0.0.0';
   final outputName = '$name-$version.panda';
 
   print('📦 Packaging $name@$version...');

@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/broken_icons.dart';
 
 // ── DESIGN SYSTEM & CONSTANTS ────────────────────────────────────────────────
@@ -26,7 +24,7 @@ class BeautifulUITheme {
       color: isDark ? const Color(0x1a000000) : const Color(0x0fffffff),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: borderCol.withOpacity(isDark ? 0.15 : 0.4),
+        color: borderCol.withValues(alpha: isDark ? 0.15 : 0.4),
         width: 0.8,
       ),
     );
@@ -35,7 +33,7 @@ class BeautifulUITheme {
   static List<BoxShadow> softShadow() {
     return [
       BoxShadow(
-        color: const Color(0xff000000).withOpacity(0.12),
+        color: const Color(0xff000000).withValues(alpha: 0.12),
         blurRadius: 16,
         offset: const Offset(0, 4),
       ),
@@ -425,7 +423,7 @@ class _PixelGridCellState extends State<PixelGridCell> with SingleTickerProvider
         width: 4,
         height: 4,
         decoration: BoxDecoration(
-          color: widget.color.withOpacity(0.07),
+          color: widget.color.withValues(alpha: 0.07),
           borderRadius: widget.round ? BorderRadius.circular(2) : BorderRadius.circular(1),
         ),
       );
@@ -438,7 +436,7 @@ class _PixelGridCellState extends State<PixelGridCell> with SingleTickerProvider
           width: 4,
           height: 4,
           decoration: BoxDecoration(
-            color: widget.color.withOpacity(_opacityAnimation.value),
+            color: widget.color.withValues(alpha: _opacityAnimation.value),
             borderRadius: widget.round ? BorderRadius.circular(2) : BorderRadius.circular(1),
           ),
         );
@@ -676,7 +674,7 @@ class ApprovalCard extends StatelessWidget {
         color: isDark ? const Color(0xff1f1717) : const Color(0xfffef2f2),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: BeautifulUITheme.warningRed.withOpacity(0.3),
+          color: BeautifulUITheme.warningRed.withValues(alpha: 0.3),
           width: 0.8,
         ),
         boxShadow: BeautifulUITheme.softShadow(),
@@ -764,9 +762,9 @@ class ToolChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
+        color: color.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.2), width: 0.5),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1067,9 +1065,9 @@ class ContextCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: BeautifulUITheme.accentColor.withOpacity(0.08),
+        color: BeautifulUITheme.accentColor.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: BeautifulUITheme.accentColor.withOpacity(0.2), width: 0.5),
+        border: Border.all(color: BeautifulUITheme.accentColor.withValues(alpha: 0.2), width: 0.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1213,7 +1211,7 @@ class RecordsTable extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: col.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: col.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
                 child: Text(
                   rec.action,
                   textAlign: TextAlign.center,
@@ -1671,7 +1669,7 @@ class SelectionActionsOverlay extends StatelessWidget {
     return Container(
       width: 1,
       height: 12,
-      color: Colors.grey.withOpacity(0.3),
+      color: Colors.grey.withValues(alpha: 0.3),
     );
   }
 }

@@ -99,6 +99,6 @@ class SemanticWorkspaceIndexer {
     }
 
     if (matchedSnippets.isEmpty) return '';
-    return '--- Relevant Workspace Context ---\n' + matchedSnippets.join('\n');
+    return '--- Relevant Workspace Context ---\n${matchedSnippets.join('\n')}';
   }
 }

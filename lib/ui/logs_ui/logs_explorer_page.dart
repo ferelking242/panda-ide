@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../logging/logging.dart';
-import '../../utils/themes.dart';
 
 /// Main Logs Explorer page.
 class LogsExplorerPage extends StatefulWidget {

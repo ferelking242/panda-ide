@@ -282,8 +282,11 @@ class _LruManagerPageState extends State<LruManagerPage> {
 
     return GestureDetector(
       onTap: () => setState(() {
-        if (selected) _selected.remove(key);
-        else          _selected.add(key);
+        if (selected) {
+          _selected.remove(key);
+        } else {
+          _selected.add(key);
+        }
       }),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
@@ -308,8 +311,11 @@ class _LruManagerPageState extends State<LruManagerPage> {
             Checkbox(
               value:   selected,
               onChanged: (v) => setState(() {
-                if (v == true) _selected.add(key);
-                else           _selected.remove(key);
+                if (v == true) {
+                  _selected.add(key);
+                } else {
+                  _selected.remove(key);
+                }
               }),
             ),
             const SizedBox(width: 4),

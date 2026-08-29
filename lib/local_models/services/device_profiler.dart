@@ -270,29 +270,33 @@ class DeviceProfiler {
 
     // RAM (40 pts)
     final ramGb = mem.totalMb / 1024;
-    if (ramGb >= 16) score += 40;
-    else if (ramGb >= 12) score += 35;
+    if (ramGb >= 16) {
+      score += 40;
+    } else if (ramGb >= 12) score += 35;
     else if (ramGb >= 8)  score += 28;
     else if (ramGb >= 6)  score += 20;
     else if (ramGb >= 4)  score += 12;
     else score += 5;
 
     // CPU cores (30 pts)
-    if (cpu.cores >= 8)  score += 30;
-    else if (cpu.cores >= 6) score += 22;
+    if (cpu.cores >= 8) {
+      score += 30;
+    } else if (cpu.cores >= 6) score += 22;
     else if (cpu.cores >= 4) score += 15;
     else score += 8;
 
     // CPU features (20 pts)
-    if (cpu.features.contains('sve2') || cpu.features.contains('sme')) score += 20;
-    else if (cpu.features.contains('sve'))  score += 15;
+    if (cpu.features.contains('sve2') || cpu.features.contains('sme')) {
+      score += 20;
+    } else if (cpu.features.contains('sve'))  score += 15;
     else if (cpu.features.contains('i8mm')) score += 12;
     else if (cpu.features.contains('neon')) score += 8;
     else score += 4;
 
     // Fréquence (10 pts)
-    if (cpu.freqMHz >= 3000) score += 10;
-    else if (cpu.freqMHz >= 2500) score += 8;
+    if (cpu.freqMHz >= 3000) {
+      score += 10;
+    } else if (cpu.freqMHz >= 2500) score += 8;
     else if (cpu.freqMHz >= 2000) score += 6;
     else score += 3;
 

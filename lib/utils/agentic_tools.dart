@@ -199,7 +199,7 @@ class AgenticTools {
   Future<ToolResult<String>> activeEditorFile() async {
     try {
       if (_activeEditor == null) return ToolResult.error('No active editor');
-      return ToolResult.success(_activeEditor!.file.path);
+      return ToolResult.success(_activeEditor.file.path);
     } catch (e) {
       return ToolResult.error("An error occured: ${e.toString()}");
     }
@@ -208,7 +208,7 @@ class AgenticTools {
   Future<ToolResult<Map<String, dynamic>>> currentlySelectedText() async {
     try {
       if (_activeEditor == null) return ToolResult.error('No active editor');
-      final controller = _activeEditor!.controller;
+      final controller = _activeEditor.controller;
       final selStart = controller.getLineAtOffset(
         controller.selection.baseOffset,
       );
@@ -304,15 +304,15 @@ class AgenticTools {
 
   Future<void> _refreshPendingDecorationsForPath(String canonicalPath) async {
     if (_activeEditor == null) return;
-    if (_canonicalFilePath(_activeEditor!.file.path) != canonicalPath) {
+    if (_canonicalFilePath(_activeEditor.file.path) != canonicalPath) {
       return;
     }
 
     final pending = await PendingEditFile.getForFile(canonicalPath);
     if (pending == null || pending.editHunks.isEmpty) {
-      _activeEditor!.controller.clearGitDiffDecorations();
+      _activeEditor.controller.clearGitDiffDecorations();
     } else {
-      pending.applyDecorations(_activeEditor!.controller);
+      pending.applyDecorations(_activeEditor.controller);
     }
   }
 
@@ -388,15 +388,15 @@ class AgenticTools {
         await _trackPendingEditsForWrite(canonicalPath, oldContent, content);
       }
 
-      if (_activeEditor != null && _canonicalFilePath(_activeEditor!.file.path) == canonicalPath) {
-        _activeEditor!.controller.refetchFile();
+      if (_activeEditor != null && _canonicalFilePath(_activeEditor.file.path) == canonicalPath) {
+        _activeEditor.controller.refetchFile();
 
         if (trackPendingEdits) {
           final pending = await PendingEditFile.getForFile(canonicalPath);
           if (pending == null || pending.editHunks.isEmpty) {
-            _activeEditor!.controller.clearGitDiffDecorations();
+            _activeEditor.controller.clearGitDiffDecorations();
           } else {
-            pending.applyDecorations(_activeEditor!.controller);
+            pending.applyDecorations(_activeEditor.controller);
           }
         }
       }
@@ -508,8 +508,8 @@ class AgenticTools {
       await file.delete();
       await PendingEditFile.removeFile(canonicalPath);
 
-      if (_activeEditor != null && _canonicalFilePath(_activeEditor!.file.path) == canonicalPath) {
-        _activeEditor!.controller.clearGitDiffDecorations();
+      if (_activeEditor != null && _canonicalFilePath(_activeEditor.file.path) == canonicalPath) {
+        _activeEditor.controller.clearGitDiffDecorations();
       }
 
       return ToolResult.success(null);
@@ -576,10 +576,10 @@ class AgenticTools {
       }
 
       if (_activeEditor == null) return ToolResult.error("No active editor");
-      final activePath = _canonicalFilePath(_activeEditor!.file.path);
+      final activePath = _canonicalFilePath(_activeEditor.file.path);
       if (activePath == canonicalOldPath ||
           path.isWithin(canonicalOldPath, activePath)) {
-        _activeEditor!.controller.clearGitDiffDecorations();
+        _activeEditor.controller.clearGitDiffDecorations();
       }
 
       return ToolResult.success(null);
@@ -1023,14 +1023,14 @@ class AgenticTools {
         return writeResult;
       }
 
-      if (_activeEditor != null && _canonicalFilePath(_activeEditor!.file.path) == canonicalPath) {
+      if (_activeEditor != null && _canonicalFilePath(_activeEditor.file.path) == canonicalPath) {
         final refreshedPending = await PendingEditFile.getForFile(
           canonicalPath,
         );
         if (refreshedPending == null || refreshedPending.editHunks.isEmpty) {
-          _activeEditor!.controller.clearGitDiffDecorations();
+          _activeEditor.controller.clearGitDiffDecorations();
         } else {
-          refreshedPending.applyDecorations(_activeEditor!.controller);
+          refreshedPending.applyDecorations(_activeEditor.controller);
         }
       }
 
@@ -1459,12 +1459,12 @@ class AgenticTools {
 
       await PendingEditFile.removeHunk(canonicalPath, hunkId);
 
-      if (_activeEditor != null && _canonicalFilePath(_activeEditor!.file.path) == canonicalPath) {
+      if (_activeEditor != null && _canonicalFilePath(_activeEditor.file.path) == canonicalPath) {
         final pending = await PendingEditFile.getForFile(canonicalPath);
         if (pending == null || pending.editHunks.isEmpty) {
-          _activeEditor!.controller.clearGitDiffDecorations();
+          _activeEditor.controller.clearGitDiffDecorations();
         } else {
-          pending.applyDecorations(_activeEditor!.controller);
+          pending.applyDecorations(_activeEditor.controller);
         }
       }
 
@@ -1484,8 +1484,8 @@ class AgenticTools {
       }
 
       await PendingEditFile.removeFile(canonicalPath);
-      if (_activeEditor != null && _canonicalFilePath(_activeEditor!.file.path) == canonicalPath) {
-        _activeEditor!.controller.clearGitDiffDecorations();
+      if (_activeEditor != null && _canonicalFilePath(_activeEditor.file.path) == canonicalPath) {
+        _activeEditor.controller.clearGitDiffDecorations();
       }
       return ToolResult.success(null);
     } catch (e) {
@@ -1545,12 +1545,12 @@ class AgenticTools {
 
       await PendingEditFile.removeHunk(canonicalPath, hunkId);
 
-      if (_activeEditor != null && _canonicalFilePath(_activeEditor!.file.path) == canonicalPath) {
+      if (_activeEditor != null && _canonicalFilePath(_activeEditor.file.path) == canonicalPath) {
         final refreshed = await PendingEditFile.getForFile(canonicalPath);
         if (refreshed == null || refreshed.editHunks.isEmpty) {
-          _activeEditor!.controller.clearGitDiffDecorations();
+          _activeEditor.controller.clearGitDiffDecorations();
         } else {
-          refreshed.applyDecorations(_activeEditor!.controller);
+          refreshed.applyDecorations(_activeEditor.controller);
         }
       }
 
@@ -1584,8 +1584,8 @@ class AgenticTools {
       }
 
       await PendingEditFile.removeFile(canonicalPath);
-      if (_activeEditor != null && _canonicalFilePath(_activeEditor!.file.path) == canonicalPath) {
-        _activeEditor!.controller.clearGitDiffDecorations();
+      if (_activeEditor != null && _canonicalFilePath(_activeEditor.file.path) == canonicalPath) {
+        _activeEditor.controller.clearGitDiffDecorations();
       }
       return ToolResult.success(null);
     } catch (e) {

@@ -1,5 +1,4 @@
 
-import 'package:markdown_widget/markdown_widget.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:convert';
@@ -11,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, SystemUiOverlayStyle, LogicalKeyboardKey, SingleActivator;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:figma_squircle/figma_squircle.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:percent_indicator/percent_indicator.dart';
@@ -32,14 +30,11 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package_manager_page.dart';
 // downloads.dart kept for GgufDownloadManager + backward compat; navigation redirected to MarketplacePage
-import 'downloads.dart';
 import 'settings.dart';
-import 'settings_page.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
 import '../terminal/terminal_bridge.dart';
 import '../utils/ai.dart';
-import '../utils/agent_history_service.dart';
 import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
 import '../ui/github_page.dart';
@@ -53,32 +48,23 @@ import '../utils/themes.dart';
 import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
-import '../extensions/ui/extension_webview.dart';
 import '../extensions/extension_host.dart';
 import '../extensions/ui/command_palette.dart';
 import '../services/ide_tab_opener.dart';
 import '../extensions/language_feature_router.dart';
 import '../ui/gateway_panel.dart';
-import '../ui/browser/browser_panel.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
     if (dart.library.html) '../local_models/ui/local_models_page_web.dart';
 import 'widgets.dart';
-import 'widgets/responsive_layout.dart';
 import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
-import 'notifications.dart';
 import 'editor/status_bar.dart';
-import '../services/flutter_device_service.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
-import 'logs_ui/logs_explorer_page.dart';
-import 'editor/timeline_view.dart';
 import 'agent/agent_models.dart';
 import 'agent/agent_widgets.dart';
-import 'agent/beui/beui_theme.dart';
-import 'agent/beui/conversation/beui_message_scroller.dart';
 import '../agent/agent_v3.dart';
 
 
@@ -140,7 +126,7 @@ class _SelectTypeState extends State<SelectType>
   final _scaffoldKey         = GlobalKey<ScaffoldState>();
   final createFileController = TextEditingController();
   final _createFileKey       = GlobalKey<FormState>();
-  AnimationStatus _terminalSelectionStatus = AnimationStatus.dismissed;
+  final AnimationStatus _terminalSelectionStatus = AnimationStatus.dismissed;
   bool _didShowPackageUpdateToast  = false;
   bool _didShowStorageMigrationToast = false;
   bool _didCheckAndroidUpdate = false;
@@ -171,7 +157,7 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Split editor ─────────────────────────────────────────────
   bool _splitEditor = false;
-  int _mobileNavIndex = 2; // default to Editor
+  final int _mobileNavIndex = 2; // default to Editor
   int  _splitTabIdx = 0;
   final List<_TabDef> _splitTabs = [
     const _TabDef(id: 'welcome', title: 'Welcome', icon: Broken.global_refresh),
@@ -194,10 +180,10 @@ class _SelectTypeState extends State<SelectType>
   bool _fullScreen = false;
 
   // ── Resizable panels ──────────────────────────────────────
-  double _bottomPanelHeight = 220;
+  final double _bottomPanelHeight = 220;
 
   // ── Resizable sidebar ─────────────────────────────────────
-  double _sidebarWidth = _kSidebarWidth;
+  final double _sidebarWidth = _kSidebarWidth;
 
   // ── Full screen mode
   // ── Agent AI state ────────────────────────────────────────────────
@@ -213,7 +199,7 @@ class _SelectTypeState extends State<SelectType>
   final      _environmentManager = EnvironmentManager();
   int        _agentRequestSerial = 0;
   Completer<bool>? _pendingApprovalCompleter;
-  int        _agentToolTabSeq   = 0;
+  final int        _agentToolTabSeq   = 0;
   final Map<String, Map<String, String>> _agentToolTabs = {};
   DateTime?  _agentTurnStartedAt;
 
@@ -300,14 +286,14 @@ class _SelectTypeState extends State<SelectType>
   // ── Agent UI state ───────────────────────────────────────────────
   /// 'ask' | 'agent' | 'plan'
   String _agentChatMode      = 'ask';
-  bool   _agentAutopilot     = true;
+  final bool   _agentAutopilot     = true;
   final List<String> _promptQueue = [];
   final List<Map<String,String>> _agentAttachments = [];
 
   // ── Floating agent overlay ────────────────────────────────────────
   bool   _agentFloating      = false;
   Offset _agentFloatOffset   = const Offset(20, 100);
-  bool   _agentFloatStickLeft = false;
+  final bool   _agentFloatStickLeft = false;
 
   // ── Send button animation ─────────────────────────────────────────
   late AnimationController _sendAnimCtrl;
@@ -339,7 +325,7 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Approval mode ─────────────────────────────────────────────────
   String _agentApprovalMode    = 'default'; // 'default'|'bypass'|'autopilot'
-  bool   _agentSandboxTerminal = true;
+  final bool   _agentSandboxTerminal = true;
 
   // ── User Settings ─────────────────────────────────────────────────
   bool   _usAudioNotif          = true;
@@ -1346,7 +1332,9 @@ class _SelectTypeState extends State<SelectType>
                               ),
                             ),
 
-
+                              // ── Status bar — right of activity bar ──
+                              _buildStatusBar(context, appTheme,
+                                  sidebarActive: _sidebarState >= 1),
                             ],
                           ),
                         ),
@@ -1354,9 +1342,6 @@ class _SelectTypeState extends State<SelectType>
                     ),
                     ), // ColoredBox
                   ),
-// ── Status bar ────────────────────────────────────────
-                  _buildStatusBar(context, appTheme,
-                      sidebarActive: _sidebarState >= 1),
                 ],
               ),
               // ── Floating agent overlay ──────────────────────────────
@@ -1976,12 +1961,12 @@ class _SelectTypeState extends State<SelectType>
                         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                         decoration: BoxDecoration(
                           color: isDownloading
-                              ? Colors.blue.withOpacity(0.2)
+                              ? Colors.blue.withValues(alpha: 0.2)
                               : isAvailable
-                                  ? Colors.green.withOpacity(0.2)
+                                  ? Colors.green.withValues(alpha: 0.2)
                                   : isError
-                                      ? Colors.red.withOpacity(0.2)
-                                      : Colors.grey.withOpacity(0.2),
+                                      ? Colors.red.withValues(alpha: 0.2)
+                                      : Colors.grey.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isDownloading
@@ -3766,7 +3751,7 @@ class _SelectTypeState extends State<SelectType>
                   return BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 4 * t, sigmaY: 4 * t),
                     child: ColoredBox(
-                      color: Colors.black.withOpacity(0.25 * t),
+                      color: Colors.black.withValues(alpha: 0.25 * t),
                       child: child!,
                     ),
                   );
@@ -3815,8 +3800,8 @@ class _SelectTypeState extends State<SelectType>
                               height: 32,
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? Colors.white.withOpacity(0.08)
-                                    : Colors.black.withOpacity(0.05),
+                                    ? Colors.white.withValues(alpha: 0.08)
+                                    : Colors.black.withValues(alpha: 0.05),
                                 borderRadius: BorderRadius.circular(9),
                                 border: Border.all(
                                     color: _wsSearchFocused
@@ -4339,8 +4324,11 @@ class _SelectTypeState extends State<SelectType>
                 final isActive = i == activeIdx;
                 return GestureDetector(
                   onTap: () => setState(() {
-                    if (isPrimary) _activeTabIdx = i;
-                    else _splitTabIdx = i;
+                    if (isPrimary) {
+                      _activeTabIdx = i;
+                    } else {
+                      _splitTabIdx = i;
+                    }
                   }),
                   child: Container(
                     height: 35,
@@ -4442,7 +4430,7 @@ class _SelectTypeState extends State<SelectType>
     final fgDim = isDark ? Colors.grey[500]! : Colors.grey[500]!;
     final bg = isDark ? const Color(0xff252526) : const Color(0xfff3f3f3);
     final shortcutStyle = TextStyle(fontSize: 11, color: fgDim);
-    PopupMenuItem<String> _mi(String value, String label, [String? shortcut]) {
+    PopupMenuItem<String> mi(String value, String label, [String? shortcut]) {
       return PopupMenuItem<String>(value: value,
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(label, style: TextStyle(fontSize: 13, color: fg)),
@@ -4456,34 +4444,34 @@ class _SelectTypeState extends State<SelectType>
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       items: [
         // Group 1_close
-        _mi('close', 'Close', 'Ctrl+W'),
-        _mi('close_others', 'Close Others', 'Ctrl+K Ctrl+W'),
-        _mi('close_right', 'Close to the Right'),
-        _mi('close_saved', 'Close Saved', 'Ctrl+K U'),
-        _mi('close_all', 'Close All', 'Ctrl+K W'),
+        mi('close', 'Close', 'Ctrl+W'),
+        mi('close_others', 'Close Others', 'Ctrl+K Ctrl+W'),
+        mi('close_right', 'Close to the Right'),
+        mi('close_saved', 'Close Saved', 'Ctrl+K U'),
+        mi('close_all', 'Close All', 'Ctrl+K W'),
         const PopupMenuDivider(height: 1),
         // Group 1_open
-        _mi('reopen', 'Reopen Editor With...'),
+        mi('reopen', 'Reopen Editor With...'),
         const PopupMenuDivider(height: 1),
         // Group 3_preview
-        _mi('keep_open', 'Keep Open'),
-        _mi('pin', 'Pin'),
-        _mi('unpin', 'Unpin'),
+        mi('keep_open', 'Keep Open'),
+        mi('pin', 'Pin'),
+        mi('unpin', 'Unpin'),
         const PopupMenuDivider(height: 1),
         // Group 5_split
-        _mi('split_right', 'Split Right', 'Ctrl+\\'),
-        _mi('split_down', 'Split Down'),
+        mi('split_right', 'Split Right', 'Ctrl+\\'),
+        mi('split_down', 'Split Down'),
         const PopupMenuDivider(height: 1),
         // Group 7_new_window
-        _mi('move_new_window', 'Move into New Window'),
-        _mi('copy_new_window', 'Copy into New Window'),
+        mi('move_new_window', 'Move into New Window'),
+        mi('copy_new_window', 'Copy into New Window'),
         const PopupMenuDivider(height: 1),
         // Group 11_share
-        _mi('share', 'Share'),
+        mi('share', 'Share'),
         const PopupMenuDivider(height: 1),
         // Extra
-        _mi('show_opened', 'Show Opened Editors'),
-        _mi('enable_preview', 'Enable Preview Editors'),
+        mi('show_opened', 'Show Opened Editors'),
+        mi('enable_preview', 'Enable Preview Editors'),
       ],
     ).then((value) {
       if (value == null) return;
@@ -4501,7 +4489,11 @@ class _SelectTypeState extends State<SelectType>
             setState(() {
               tabs.clear();
               tabs.add(kept);
-              if (isPrimary) _activeTabIdx = 0; else _splitTabIdx = 0;
+              if (isPrimary) {
+                _activeTabIdx = 0;
+              } else {
+                _splitTabIdx = 0;
+              }
             });
           }
           break;
@@ -4517,7 +4509,11 @@ class _SelectTypeState extends State<SelectType>
             final kept = tabs.isNotEmpty ? <_TabDef>[tabs.first] : <_TabDef>[];
             tabs.clear();
             tabs.addAll(kept);
-            if (isPrimary) _activeTabIdx = 0; else _splitTabIdx = 0;
+            if (isPrimary) {
+              _activeTabIdx = 0;
+            } else {
+              _splitTabIdx = 0;
+            }
           });
           break;
         case 'close_all':
@@ -5114,7 +5110,7 @@ class _SelectTypeState extends State<SelectType>
                               child: Builder(builder: (_) {
                                 final selCfg = selectedConfig is Map
                                     ? Map<String, dynamic>.from(
-                                        selectedConfig as Map)
+                                        selectedConfig)
                                     : null;
                                 final modelLabel = selCfg != null
                                     ? (selCfg['modelName'] ??
@@ -5245,16 +5241,16 @@ class _SelectTypeState extends State<SelectType>
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                     decoration: BoxDecoration(
                       color: estTokens > 80000
-                          ? Colors.red.withOpacity(0.15)
+                          ? Colors.red.withValues(alpha: 0.15)
                           : estTokens > 40000
-                              ? Colors.orange.withOpacity(0.15)
-                              : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                              ? Colors.orange.withValues(alpha: 0.15)
+                              : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05)),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: estTokens > 80000
-                            ? Colors.red.withOpacity(0.3)
+                            ? Colors.red.withValues(alpha: 0.3)
                             : estTokens > 40000
-                                ? Colors.orange.withOpacity(0.3)
+                                ? Colors.orange.withValues(alpha: 0.3)
                                 : (isDark ? Colors.white10 : Colors.black12),
                         width: 1,
                       ),
@@ -5488,7 +5484,7 @@ class _SelectTypeState extends State<SelectType>
                 ),
               ),
             ]),
-            if (extra != null) extra!,
+            if (extra != null) extra,
           ],
         ),
       ),
@@ -5566,7 +5562,7 @@ class _SelectTypeState extends State<SelectType>
             Switch(
               value: value,
               onChanged: onChanged,
-              activeColor: _kAccent,
+              activeThumbColor: _kAccent,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ]),
@@ -7654,8 +7650,9 @@ class _SelectTypeState extends State<SelectType>
     void flushRun() {
       if (run.isEmpty) return;
       if (isActiveMsg) {
-        for (var k = 0; k < run.length; k++)
+        for (var k = 0; k < run.length; k++) {
           widgets.add(renderEvent(runStart + k, run[k]));
+        }
       } else {
         final captured = List<Map<String, dynamic>>.from(run);
         final startIdx = runStart;
@@ -7820,8 +7817,9 @@ class _SelectTypeState extends State<SelectType>
       while (stack.isNotEmpty) {
         final d = stack.removeLast();
         await for (final ent in d.list(followLinks: false)) {
-          if (ent is Directory) stack.add(ent);
-          else if (ent is File && path.basename(ent.path) != 'meta.json') {
+          if (ent is Directory) {
+            stack.add(ent);
+          } else if (ent is File && path.basename(ent.path) != 'meta.json') {
             final rel = path.relative(ent.path, from: Directory(srcPath).path);
             final target = File(path.join(ws, rel));
             try { await target.parent.create(recursive: true); await ent.copy(target.path); restored++; } catch (_) {}
@@ -8082,15 +8080,17 @@ class _SelectTypeState extends State<SelectType>
             if (bt == 'thinking') {
               final th = ((b['thinking'] as String?) ?? '').trim();
               if (th.isEmpty) continue;
-              buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('\n', '\n> '));
+              buf.writeln('> 🧠 Réflexion : ${th.replaceAll('\n', '\n> ')}');
               buf.writeln();
             } else if (bt == 'toolCall') {
               final nm = ((b['name'] ?? b['toolName']) ?? '').toString();
               final res = (((b['result'] as String?) ?? '')).trim();
-              buf.writeln('- ⚙️ `' + nm + '`');
+              buf.writeln('- ⚙️ `$nm`');
               if (res.isNotEmpty) {
                 buf.writeln('  ```');
-                for (final line in res.split('\n').take(40)) buf.writeln('  ' + line);
+                for (final line in res.split('\n').take(40)) {
+                  buf.writeln('  $line');
+                }
                 buf.writeln('  ```');
               }
               buf.writeln();
@@ -8104,7 +8104,7 @@ class _SelectTypeState extends State<SelectType>
         } else {
           final th = (msg['thinking'] as String? ?? '').trim();
           if (th.isNotEmpty) {
-            buf.writeln('> 🧠 Réflexion : ' + th.replaceAll('\n', '\n> '));
+            buf.writeln('> 🧠 Réflexion : ${th.replaceAll('\n', '\n> ')}');
             buf.writeln();
           }
           final t = cleanExport(text);

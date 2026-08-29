@@ -202,7 +202,7 @@ class PandaLogStore {
   /// Write a crash report directly (bypasses buffer).
   Future<void> writeCrashReport(PandaLogEvent event) async {
     try {
-      final crashDir = Directory('${pandaLogsDir}/crash');
+      final crashDir = Directory('$pandaLogsDir/crash');
       if (!crashDir.existsSync()) await crashDir.create(recursive: true);
 
       final ts = event.timestamp
@@ -335,7 +335,7 @@ class PandaLogStore {
   /// Clear only crash reports.
   Future<void> clearCrashReports() async {
     try {
-      final dir = Directory('${pandaLogsDir}/crash');
+      final dir = Directory('$pandaLogsDir/crash');
       if (dir.existsSync()) {
         await dir.delete(recursive: true);
         await dir.create(recursive: true);

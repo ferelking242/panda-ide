@@ -15,7 +15,6 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/constants.dart';
 import '../models/ai_model_entry.dart';
-import '../models/device_profile.dart';
 
 
 

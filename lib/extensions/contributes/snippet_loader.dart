@@ -49,7 +49,7 @@ class VsSnippet {
 
   Map<String, dynamic> toCompletionItem() => {
     'label': prefix,
-    'detail': '${name} (snippet)',
+    'detail': '$name (snippet)',
     'documentation': description,
     'insertText': bodyText,
     'kind': 15, // Snippet

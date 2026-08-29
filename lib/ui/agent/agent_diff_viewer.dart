@@ -196,13 +196,13 @@ class _AgentDiffViewerState extends State<AgentDiffViewer> {
                               const SizedBox(height: 4),
                               ...hunk.oldLines.map((line) => Container(
                                 width: double.infinity,
-                                color: Colors.red.withOpacity(0.15),
+                                color: Colors.red.withValues(alpha: 0.15),
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 child: Text('- $line', style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.red)),
                               )),
                               ...hunk.newLines.map((line) => Container(
                                 width: double.infinity,
-                                color: Colors.green.withOpacity(0.15),
+                                color: Colors.green.withValues(alpha: 0.15),
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 child: Text('+ $line', style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.green)),
                               )),

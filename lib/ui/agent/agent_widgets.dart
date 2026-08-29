@@ -4,9 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/broken_icons.dart';
 import 'package:markdown_widget/markdown_widget.dart';
-import '../../utils/themes.dart';
 import '../agent_runner.dart' show AgentPhase;
-import '../panda_ai_ui/components.dart' show LoadingStateWidget;
 import 'agent_models.dart';
 import 'beui/beui_theme.dart';
 
@@ -37,7 +35,7 @@ class ActiveActivityCard extends StatefulWidget {
   final bool isDark;
   final Color fg;
   final Color muted;
-  const ActiveActivityCard({required this.activity, required this.isDark, required this.fg, required this.muted});
+  const ActiveActivityCard({super.key, required this.activity, required this.isDark, required this.fg, required this.muted});
   @override
   State<ActiveActivityCard> createState() => ActiveActivityCardState();
 }
@@ -113,7 +111,7 @@ class ActivityHistoryEntry extends StatelessWidget {
   final Color fg;
   final Color muted;
   final VoidCallback onToggle;
-  const ActivityHistoryEntry({required this.event, required this.isDark, required this.fg, required this.muted, required this.onToggle});
+  const ActivityHistoryEntry({super.key, required this.event, required this.isDark, required this.fg, required this.muted, required this.onToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +180,7 @@ class AgentActivityFeed extends StatelessWidget {
   final bool isDark;
   final Color fg;
   final Color muted;
-  const AgentActivityFeed({required this.controller, required this.isDark, required this.fg, required this.muted});
+  const AgentActivityFeed({super.key, required this.controller, required this.isDark, required this.fg, required this.muted});
 
   @override
   Widget build(BuildContext context) {
@@ -207,7 +205,7 @@ class ReflectionBox extends StatefulWidget {
   final Color fg;
   final Color muted;
 
-  const ReflectionBox({
+  const ReflectionBox({super.key, 
     required this.content,
     required this.isActive,
     required this.isDark,
@@ -315,7 +313,7 @@ class AgentToolCallBlock extends StatefulWidget {
   final bool showResultInline;
   final VoidCallback? onOpenInEditor;
 
-  const AgentToolCallBlock({
+  const AgentToolCallBlock({super.key, 
     required this.toolName,
     required this.args,
     required this.result,
@@ -343,17 +341,25 @@ class AgentToolCallBlockState extends State<AgentToolCallBlock> {
   static IconData _iconFor(String name) {
     if (name.contains('read') || name.contains('Read')) return Broken.document_text;
     if (name.contains('write') || name.contains('Write') ||
-        name.contains('edit') || name.contains('Edit')) return Broken.edit;
+        name.contains('edit') || name.contains('Edit')) {
+      return Broken.edit;
+    }
     if (name.contains('delete') || name.contains('Delete')) return Broken.trash;
     if (name.contains('shell') || name.contains('Shell') ||
-        name.contains('command') || name.contains('Command')) return Broken.command_square;
+        name.contains('command') || name.contains('Command')) {
+      return Broken.command_square;
+    }
     if (name.contains('git') || name.contains('Git')) return Broken.code_circle;
     if (name.contains('search') || name.contains('Search') ||
         name.contains('grep') || name.contains('Grep') ||
-        name.contains('glob') || name.contains('Glob')) return Broken.search_normal;
+        name.contains('glob') || name.contains('Glob')) {
+      return Broken.search_normal;
+    }
     if (name.contains('list') || name.contains('List')) return Broken.folder;
     if (name.contains('web') || name.contains('Web') ||
-        name.contains('link') || name.contains('Link')) return Broken.global;
+        name.contains('link') || name.contains('Link')) {
+      return Broken.global;
+    }
     return Broken.code_1;
   }
 
@@ -649,7 +655,7 @@ class ToolOutputBlock extends StatefulWidget {
   final Color fg;
   final Color muted;
 
-  const ToolOutputBlock({
+  const ToolOutputBlock({super.key, 
     required this.output,
     required this.isDark,
     required this.fg,
@@ -738,7 +744,7 @@ class AnimatedOrb extends StatefulWidget {
   final AgentPhase phase;
   final Color color;
 
-  const AnimatedOrb({required this.phase, required this.color});
+  const AnimatedOrb({super.key, required this.phase, required this.color});
 
   @override
   State<AnimatedOrb> createState() => AnimatedOrbState();
@@ -819,8 +825,11 @@ class _OrbPainter extends CustomPainter {
         final radiusOffset = math.sin((progress * 4 * math.pi) + angle * 3) * 1.5;
         final r = baseRadius + radiusOffset;
         final p = Offset(center.dx + math.cos(angle) * r, center.dy + math.sin(angle) * r);
-        if (i == 0) path.moveTo(p.dx, p.dy);
-        else path.lineTo(p.dx, p.dy);
+        if (i == 0) {
+          path.moveTo(p.dx, p.dy);
+        } else {
+          path.lineTo(p.dx, p.dy);
+        }
       }
       path.close();
       canvas.drawPath(path, paint);
@@ -852,7 +861,7 @@ class AgentPhaseChip extends StatefulWidget {
   final Color      fg;
   final Color      muted;
 
-  const AgentPhaseChip({
+  const AgentPhaseChip({super.key, 
     required this.phase,
     required this.isDark,
     this.toolName = '',
@@ -973,7 +982,7 @@ class AgentPhaseChipState extends State<AgentPhaseChip> {
 /// Curseur clignotant animé pendant le streaming.
 class BlinkingCursor extends StatefulWidget {
   final Color color;
-  const BlinkingCursor({required this.color});
+  const BlinkingCursor({super.key, required this.color});
 
   @override
   State<BlinkingCursor> createState() => BlinkingCursorState();
@@ -1026,7 +1035,7 @@ class MsgActionBtn extends StatelessWidget {
   final VoidCallback onTap;
   final Color    muted;
 
-  const MsgActionBtn({
+  const MsgActionBtn({super.key, 
     required this.icon,
     required this.label,
     required this.onTap,
@@ -1058,7 +1067,7 @@ class AgentMarkdownView extends StatelessWidget {
   final bool isError;
   final bool isStreaming;
 
-  const AgentMarkdownView({
+  const AgentMarkdownView({super.key, 
     required this.markdown,
     required this.isDark,
     required this.fg,
@@ -1185,7 +1194,7 @@ class AgentToolCallsGroup extends StatefulWidget {
   final Color fg;
   final Color muted;
 
-  const AgentToolCallsGroup({
+  const AgentToolCallsGroup({super.key, 
     required this.toolCalls,
     required this.isStreaming,
     required this.currentTool,
@@ -1349,7 +1358,7 @@ class SpinningSquareIndicator extends StatefulWidget {
   final Color color;
   final double size;
 
-  const SpinningSquareIndicator({
+  const SpinningSquareIndicator({super.key, 
     this.color = const Color(0xff9c27b0),
     this.size = 11,
   });
@@ -1438,8 +1447,9 @@ Widget agentToolIconWidget(String name, double size, Color color) {
     return Text('>_', style: TextStyle(fontSize: size + 1.5, height: 1.0, fontWeight: FontWeight.w800, fontFamily: 'monospace', color: color));
   }
   IconData icon;
-  if (n.contains('grep') || n.contains('search') || n.contains('glob') || n.contains('find')) icon = Broken.search_normal;
-  else if (n.contains('edit') || n.contains('write') || n.contains('save')) icon = Broken.edit;
+  if (n.contains('grep') || n.contains('search') || n.contains('glob') || n.contains('find')) {
+    icon = Broken.search_normal;
+  } else if (n.contains('edit') || n.contains('write') || n.contains('save')) icon = Broken.edit;
   else if (n.contains('read') || n.contains('open') || n.contains('view')) icon = Broken.document_text;
   else if (n.contains('git')) icon = Broken.code_circle;
   else if (n.contains('web') || n.contains('fetch') || n.contains('http') || n.contains('download')) icon = Broken.global;
@@ -1453,7 +1463,7 @@ class InlineMdText extends StatelessWidget {
   final String markdown;
   final TextStyle baseStyle;
   final TextStyle codeStyle;
-  const InlineMdText({required this.markdown, required this.baseStyle, required this.codeStyle});
+  const InlineMdText({super.key, required this.markdown, required this.baseStyle, required this.codeStyle});
 
   @override
   Widget build(BuildContext context) {
@@ -1462,8 +1472,9 @@ class InlineMdText extends StatelessWidget {
     var last = 0;
     for (final m in regex.allMatches(markdown)) {
       if (m.start > last) spans.add(TextSpan(text: markdown.substring(last, m.start)));
-      if (m.group(1) != null) spans.add(TextSpan(text: m.group(1), style: baseStyle.copyWith(fontWeight: FontWeight.w700)));
-      else if (m.group(2) != null) spans.add(TextSpan(text: m.group(2)));
+      if (m.group(1) != null) {
+        spans.add(TextSpan(text: m.group(1), style: baseStyle.copyWith(fontWeight: FontWeight.w700)));
+      } else if (m.group(2) != null) spans.add(TextSpan(text: m.group(2)));
       else if (m.group(3) != null) spans.add(TextSpan(text: m.group(3), style: codeStyle));
       last = m.end;
     }
@@ -1478,7 +1489,7 @@ class AgentActionStrip extends StatefulWidget {
   final Color fg;
   final Color muted;
   final WidgetBuilder buildExpanded;
-  const AgentActionStrip({required this.events, required this.isDark, required this.fg, required this.muted, required this.buildExpanded});
+  const AgentActionStrip({super.key, required this.events, required this.isDark, required this.fg, required this.muted, required this.buildExpanded});
   @override
   State<AgentActionStrip> createState() => AgentActionStripState();
 }
@@ -1555,7 +1566,7 @@ class AgentCheckpointCard extends StatefulWidget {
   final Color muted;
   final VoidCallback onRestore;
   final VoidCallback onOpenGit;
-  const AgentCheckpointCard({required this.data, required this.isDark, required this.fg, required this.muted, required this.onRestore, required this.onOpenGit});
+  const AgentCheckpointCard({super.key, required this.data, required this.isDark, required this.fg, required this.muted, required this.onRestore, required this.onOpenGit});
   @override
   State<AgentCheckpointCard> createState() => AgentCheckpointCardState();
 }

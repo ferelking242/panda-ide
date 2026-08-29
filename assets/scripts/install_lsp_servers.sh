@@ -1,7 +1,7 @@
 #!/bin/bash
 # ── install_lsp_servers.sh ──
-# Installs all supported LSP servers for Panda IDE inside PRoot Debian ARM64.
-# Run from Panda IDE terminal:  bash /root/.panda/scripts/install_lsp_servers.sh
+# Installs common LSP servers inside PRoot Debian ARM64.
+# TypeScript/JavaScript, HTML, CSS, JSON, Bash, Python, Dockerfile
 set -e
 
 CYAN='\033[0;36m'
@@ -16,99 +16,85 @@ warn() { echo -e "${YELLOW}[!]${NC} $*"; }
 err()  { echo -e "${RED}[✗]${NC} $*"; }
 
 if [ "$(id -u)" != "0" ]; then
-  err "Must run as root."
+  err "This script must run as root."
   exit 1
 fi
 
-log "Starting LSP server installation..."
+log "Installing LSP servers for Panda IDE..."
 
-# ── 1. Node.js (required for most LSP servers) ──────────────────────────
+# ── 1. Update apt ──
+apt-get update -qq 2>/dev/null || warn "apt update had warnings"
+
+# ── 2. Install Node.js if missing (needed for most LSP servers) ──
 if ! command -v node &>/dev/null; then
   log "Installing Node.js..."
-  apt-get update -qq 2>/dev/null || true
-  curl -fsSL https://deb.nodesource.com/setup_20.x 2>/dev/null | bash - 2>/dev/null || {
-    warn "NodeSource failed, trying apt..."
-    apt-get install -y -qq nodejs npm 2>/dev/null || true
-  }
-  apt-get install -y -qq nodejs 2>/dev/null || true
+  apt-get install -y -qq curl ca-certificates >/dev/null 2>&1
+  ARCH=$(uname -m)
+  case "$ARCH" in
+    aarch64) NODE_ARCH="linux-arm64" ;;
+    *)       NODE_ARCH="linux-arm64" ;;
+  esac
+  NODE_VERSION="20.18.1"
+  NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_ARCH}.tar.xz"
+  cd /tmp
+  curl -fSL "$NODE_URL" -o node.tar.xz 2>/dev/null
+  tar -xJf node.tar.xz -C /usr/local --strip-components=1
+  rm -f node.tar.xz
+  cd -
+  ok "Node.js $(node --version) installed"
 fi
 
-if command -v node &>/dev/null; then
-  ok "Node.js $(node --version) ready"
-else
-  err "Node.js not available — skipping npm-based LSP servers"
-fi
+# ── 3. TypeScript + JSON + HTML + CSS (via npm) ──
+log "Installing TypeScript LSP..."
+npm install -g typescript-language-server typescript 2>&1 | tail -2
+ok "TypeScript LSP installed"
 
-# ── 2. npm-based LSP servers (all at once) ─────────────────────────────
-if command -v npm &>/dev/null; then
-  log "Installing npm LSP servers (typescript, json, html, css, yaml, bash, docker, markdown)..."
-  npm install -g \
-    typescript-language-server \
-    typescript \
-    vscode-langservers-extracted \
-    yaml-language-server \
-    bash-language-server \
-    dockerfile-language-server-nodejs \
-    markdown-language-server \
-    2>&1 | tail -5
+log "Installing HTML/CSS/JSON LSP servers..."
+npm install -g vscode-langservers-extracted 2>&1 | tail -2
+ok "HTML/CSS/JSON LSP servers installed"
 
-  ok "npm LSP servers installed"
-else
-  warn "npm not available — skipping npm-based LSP servers"
-fi
+# ── 4. Bash LSP ──
+log "Installing Bash LSP..."
+npm install -g bash-language-server 2>&1 | tail -2
+ok "Bash LSP installed"
 
-# ── 3. Python LSP Server ───────────────────────────────────────────────
-if command -v python3 &>/dev/null && command -v pip3 &>/dev/null; then
-  log "Installing python-lsp-server..."
-  pip3 install python-lsp-server 2>&1 | tail -3
-  ok "Python LSP server installed"
+# ── 5. Dockerfile LSP ──
+log "Installing Dockerfile LSP..."
+npm install -g dockerfile-language-server-nodejs 2>&1 | tail -2
+ok "Dockerfile LSP installed"
+
+# ── 6. YAML LSP ──
+log "Installing YAML LSP..."
+npm install -g yaml-language-server 2>&1 | tail -2
+ok "YAML LSP installed"
+
+# ── 7. Python LSP ──
+log "Installing Python LSP..."
+if command -v pip3 &>/dev/null; then
+  pip3 install python-lsp-server 2>&1 | tail -2
+  ok "Python LSP installed"
 elif command -v python3 &>/dev/null; then
-  warn "pip3 not found — installing via get-pip..."
-  python3 -m ensurepip 2>/dev/null || curl -sS https://bootstrap.pypa.io/get-pip.py | python3 2>/dev/null
-  python3 -m pip install python-lsp-server 2>&1 | tail -3
-  ok "Python LSP server installed"
+  python3 -m pip install python-lsp-server 2>&1 | tail -2
+  ok "Python LSP installed"
 else
-  warn "Python3 not available — skipping Python LSP server"
+  warn "Python not found, skipping Python LSP"
 fi
 
-# ── 4. clangd (C/C++) ──────────────────────────────────────────────────
-if ! command -v clangd &>/dev/null; then
-  log "Installing clangd..."
-  apt-get install -y -qq clangd 2>/dev/null || true
-fi
+# ── 8. clangd (C/C++) ──
+log "Installing clangd (C/C++)..."
+apt-get install -y -qq clangd 2>/dev/null || warn "clangd install failed"
+ok "clangd installed"
 
-if command -v clangd &>/dev/null; then
-  ok "clangd $(clangd --version 2>/dev/null | head -1) ready"
-else
-  warn "clangd not available"
-fi
-
-# ── Summary ─────────────────────────────────────────────────────────────
 echo ""
 ok "════════════════════════════════════════════════"
-ok "  LSP server installation complete!"
-ok ""
-ok "  Installed servers:"
-
-check_server() {
-  local cmd=$1
-  local name=$2
-  if command -v "$cmd" &>/dev/null; then
-    echo -e "  ${GREEN}✓${NC} $name"
-  else
-    echo -e "  ${RED}✗${NC} $name (not installed)"
-  fi
-}
-
-check_server typescript-language-server "TypeScript/JavaScript"
-check_server vscode-json-language-server "JSON"
-check_server vscode-html-language-server "HTML"
-check_server vscode-css-language-server "CSS"
-check_server pylsp "Python"
-check_server clangd "C/C++"
-check_server bash-language-server "Bash"
-check_server docker-langserver "Dockerfile"
-check_server yaml-language-server "YAML"
-check_server markdown-language-server "Markdown"
-
+ok "  LSP servers installed!"
+ok "  Restart the editor to activate LSP."
 ok "════════════════════════════════════════════════"
+echo ""
+echo "Installed servers:"
+typescript-language-server --version 2>/dev/null && echo "  TypeScript ✓"
+vscode-json-language-server --version 2>/dev/null && echo "  JSON ✓"
+vscode-html-language-server --version 2>/dev/null && echo "  HTML ✓"
+vscode-css-language-server --version 2>/dev/null && echo "  CSS ✓"
+bash-language-server --version 2>/dev/null && echo "  Bash ✓"
+clangd --version 2>/dev/null && echo "  C/C++ ✓"

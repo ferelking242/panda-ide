@@ -5,10 +5,10 @@ class MobileTouchToolbar extends StatelessWidget {
   final List<String> symbols;
 
   const MobileTouchToolbar({
-    Key? key,
+    super.key,
     required this.controller,
     this.symbols = const ['{', '}', '[', ']', '(', ')', ';', '=', '=>', '\$', '"', "'", '<', '>', ':', '+', '-', '/', '*', '_', '|', '&', '!', '?'],
-  }) : super(key: key);
+  });
 
   void _insertSymbol(String symbol) {
     final selection = controller.selection;

@@ -1,4 +1,3 @@
-import 'dart:convert';
 
 /// Base abstract class for all typed agent output blocks.
 sealed class AgentBlock {
