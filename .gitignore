@@ -57,3 +57,4 @@ output.apksattached_assets/
 
 # VS Code source clone used for UI analysis (microsoft/vscode, MIT)
 /reference/
+workspace/
