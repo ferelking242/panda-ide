@@ -3,17 +3,16 @@
 
 id: dev.panda.device
 name: Panda Device
-version: "1.0.0"
+version: "1.1.0"
 author: "Ferelking"
 description: |
   Assistant de développement sur appareil — façon Shizuku.
 
   1. Ouvre les Options développeur Android et guide le Débogage sans fil
-  2. Détecte le port d'appairage + capture le code à 6 chiffres
-     (notification d'aide comme Shizuku pendant la saisie)
-  3. Appaire et connecte adb automatiquement (le téléphone est sa propre machine de dev)
-  4. Vérifie le SDK Flutter ; si absent → installation avec progression dans son UI
-  5. Bouton ▶ Run : flutter run sur l'appareil détecté (hot reload r/R)
+  2. Saisie manuelle du port + code d'appairage (comme Shizuku)
+  3. Appaire et connecte adb automatiquement
+  4. Vérifie le SDK Flutter ; si absent → installation avec progression
+  5. Bouton ▶ Run : flutter run sur l'appareil détecté
 
 license: MIT
 repository: https://github.com/ferelking242/panda-ide

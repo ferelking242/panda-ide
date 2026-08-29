@@ -2,7 +2,7 @@
 ///
 /// Workflow façon Shizuku :
 ///   1. Ouvre les Options développeur Android (intent)
-///   2. Guide l'appairage WiFi + notification d'aide pour le code
+///   2. Guide l'appairage WiFi + saisie manuelle du code
 ///   3. `adb pair` + `adb connect` automatiques
 ///   4. Vérifie / installe Flutter SDK avec progression
 ///   5. ▶ Run : flutter run sur l'appareil
@@ -23,7 +23,7 @@ class PandaDeviceExtension extends PandaExtension {
   String get name => 'Panda Device';
 
   @override
-  String get version => '1.0.0';
+  String get version => '1.1.0';
 
   AdbService? _adb;
   FlutterSetup? _flutter;
@@ -59,7 +59,6 @@ class PandaDeviceExtension extends PandaExtension {
     context.commands.register('$id.status', (_) => showStatus());
 
     context.logger.info('Panda Device activé');
-    // État initial asynchrone (ne bloque pas l'activation)
     unawaited(refreshStatus());
   }
 
@@ -81,7 +80,6 @@ class PandaDeviceExtension extends PandaExtension {
       return;
     }
 
-    // Déjà connecté ? → passe direct à Flutter
     if (await _adb!.hasConnectedDevice()) {
       ctx.logger.info('Appareil déjà connecté');
       await ensureFlutter();
@@ -90,64 +88,126 @@ class PandaDeviceExtension extends PandaExtension {
 
     // Étape 1 — ouvrir les options développeur
     final goSettings = await ctx.window.showConfirmation(
-      'Panda va ouvrir les Options développeur.\n\n'
-      'Active « Débogage sans fil », puis tape « Associer l\'appareil '
-      'avec un code » — garde la popup ouverte.',
+      'Étape 1: Active le Débogage sans fil\n\n'
+      'Panda va ouvrir les Options développeur.\n'
+      'Active "Débogage sans fil" puis appuie sur\n'
+      '"Associer l\'appareil avec un code d\'association".',
       title: 'Panda Device — Appairage',
     );
     if (!goSettings) return;
     await _adb!.openDeveloperSettings();
+  }
 
-    // Étape 2 — saisie guidée du port + code (comme Shizuku)
+  // ── Ouvrir les options développeur ────────────────────────────────
+
+  Future<void> openDeveloperSettings() async {
+    await _adb!.openDeveloperSettings();
+    _state.add(DeviceState(
+      message: 'Options développeur ouvertes — active Débogage sans fil',
+    ));
+  }
+
+  // ── Saisie du code d'appairage ────────────────────────────────────
+
+  Future<void> enterPairingCode() async {
+    final ctx = _ctx!;
+
+    if (!await _adb!.isAvailable()) {
+      await ctx.window.showWarning('adb introuvable — installez-le d\'abord');
+      return;
+    }
+
+    // Demander le port d'appairage
     final portStr = await ctx.window.showInputBox(const InputBoxOptions(
-      prompt:
-          'Port d\'APPAIRAGE affiché dans la popup\n(ex: 44851 — pas celui '
-          'de l\'écran principal !)',
+      prompt: 'Port d\'APPAIRAGE affiché dans la popup\n'
+          '(ex: 44851 — pas le port de l\'écran principal !)',
       title: 'Port d\'appairage',
       placeHolder: '44851',
     ));
     if (portStr == null || int.tryParse(portStr.trim()) == null) return;
 
+    // Demander le code à 6 chiffres
     final code = await ctx.window.showInputBox(const InputBoxOptions(
-      prompt: 'Code d\'appairage à 6 chiffres',
+      prompt: 'Code d\'appairage à 6 chiffres\n'
+          '(affiché dans la popup "Associer l\'appareil")',
       title: 'Code WiFi Debugging',
       placeHolder: '041602',
     ));
-    if (code == null) return;
+    if (code == null || code.trim().isEmpty) return;
 
-    // Notification pendant que l'utilisateur regarde la popup
-    unawaited(ctx.window.showInformation(
-      'Saisis maintenant dans Panda Device — la popup doit rester ouverte.',
+    // Appairer
+    _state.add(DeviceState(
+      message: 'Appairage en cours (port ${portStr.trim()})…',
+      allLogs: ['Port appairage: ${portStr.trim()}'],
     ));
 
-    // Étape 3 — appairer (loopback d'abord, puis IP WiFi en fallback)
-    _state.add(DeviceState(message: 'Appairage en cours…'));
-    final paired = await _adb!.pair(port: portStr.trim(), code: code.trim());
+    final paired = await _adb!.pair(
+      port: portStr.trim(),
+      code: code.trim(),
+    );
+
     if (!paired) {
       await ctx.window.showError(
         'Échec de l\'appairage.\n'
-        'Vérifie port/code et relance (la popup expire en ~60 s).',
+        'Vérifie:\n'
+        '• Le port est bien celui de la popup (pas l\'écran principal)\n'
+        '• Le code fait bien 6 chiffres\n'
+        '• La popup est encore ouverte (expire en ~60s)',
       );
       return;
     }
 
-    // Étape 4 — connecter avec le port de l'écran principal
-    final debugPort = await ctx.window.showInputBox(InputBoxOptions(
-      prompt:
-          'Port de DÉBOGAGE (écran principal Débogage sans fil)\n'
-          'IP affichée : ${_adb!.wifiIp ?? 'voir écran'}',
-      title: 'Connexion adb',
-      defaultValue: _adb!.lastDebugPort,
+    _state.add(DeviceState(
+      message: 'Appairé ! Maintenant connecte le port de débogage.',
     ));
-    if (debugPort == null) return;
 
-    _state.add(DeviceState(message: 'Connexion…'));
-    final connected = await _adb!.connect(port: debugPort.trim());
-    if (!connected) {
-      await ctx.window.showError('adb connect a échoué — réessaie.');
+    await ctx.window.showInformation(
+      '✅ Appairage réussi !\n\n'
+      'Maintenant, note le PORT de DÉBOGAGE affiché\n'
+      'sur l\'écran principal "Débogage sans fil"\n'
+      '(pas la popup d\'appairage).',
+    );
+  }
+
+  // ── Saisie du port de débogage ────────────────────────────────────
+
+  Future<void> enterDebugPort() async {
+    final ctx = _ctx!;
+
+    if (!await _adb!.isAvailable()) {
+      await ctx.window.showWarning('adb introuvable');
       return;
     }
 
+    final debugPort = await ctx.window.showInputBox(InputBoxOptions(
+      prompt: 'Port de DÉBOGAGE\n'
+          '(affiché sur l\'écran "Débogage sans fil")\n'
+          'IP: ${_adb!.wifiIp ?? "voir écran"}',
+      title: 'Connexion adb',
+      defaultValue: _adb!.lastDebugPort,
+      placeHolder: '5555',
+    ));
+    if (debugPort == null || debugPort.trim().isEmpty) return;
+
+    _state.add(DeviceState(
+      message: 'Connexion sur port ${debugPort.trim()}…',
+    ));
+
+    final connected = await _adb!.connect(port: debugPort.trim());
+    if (!connected) {
+      await ctx.window.showError(
+        'adb connect a échoué.\n'
+        'Vérifie:\n'
+        '• Le port est bien celui de l\'écran principal\n'
+        '• Le téléphone est sur le même WiFi\n'
+        '• Le débogage sans fil est actif',
+      );
+      return;
+    }
+
+    _state.add(DeviceState(
+      message: '📱 Appareil connecté !',
+    ));
     await ctx.window.showInformation('📱 Appareil connecté !');
     await ensureFlutter();
   }
@@ -155,7 +215,7 @@ class PandaDeviceExtension extends PandaExtension {
   /// Appairage seul.
   Future<void> pairFlow() async {
     await _adb!.openDeveloperSettings();
-    await runWizard(); // même flux, isAvailable/connected déjà gérés
+    await runWizard();
   }
 
   // ── Flutter SDK ────────────────────────────────────────────────────
@@ -164,7 +224,11 @@ class PandaDeviceExtension extends PandaExtension {
     _state.add(DeviceState(message: 'Vérification Flutter…'));
     if (await _flutter!.isInstalled()) {
       final v = await _flutter!.version();
-      _state.add(DeviceState(message: 'Flutter $v ✓', progress: 100));
+      _state.add(DeviceState(
+        message: 'Flutter $v ✓',
+        progress: 100,
+        flutterVersion: v,
+      ));
       await _ctx!.window.showInformation('Flutter $v est prêt 🐼');
       return;
     }
@@ -173,7 +237,11 @@ class PandaDeviceExtension extends PandaExtension {
     final ok = await _flutter!.install();
     if (ok) {
       final v = await _flutter!.version();
-      _state.add(DeviceState(message: 'Flutter $v installé ✓', progress: 100));
+      _state.add(DeviceState(
+        message: 'Flutter $v installé ✓',
+        progress: 100,
+        flutterVersion: v,
+      ));
       await _ctx!.window.showInformation('Flutter $v installé avec succès 🎉');
     } else {
       _state.add(DeviceState(message: 'Installation échouée — réessaie'));
@@ -208,14 +276,16 @@ class PandaDeviceExtension extends PandaExtension {
     _state.add(DeviceState(
       message: 'adb:${adbOk ? '✓' : '✗'} · device:'
           '${device == true ? '✓' : '✗'} · flutter:$flutter',
+      flutterVersion: flutter != '?' ? flutter : null,
     ));
   }
 
   Future<void> showStatus() async {
     await refreshStatus();
     await _ctx!.window.showInformation(
-        _lastMessage ?? 'Panda Device — statut inconnu',
-        actions: ['Réappairer', 'Installer Flutter']);
+      _lastMessage ?? 'Panda Device — statut inconnu',
+      actions: ['Réappairer', 'Installer Flutter'],
+    );
   }
 
   String? _lastMessage;
@@ -226,6 +296,14 @@ class DeviceState {
   final String? message;
   final int? progress; // 0..100
   final String? logLine;
+  final String? flutterVersion;
+  final List<String>? allLogs;
 
-  const DeviceState({this.message, this.progress, this.logLine});
+  const DeviceState({
+    this.message,
+    this.progress,
+    this.logLine,
+    this.flutterVersion,
+    this.allLogs,
+  });
 }
