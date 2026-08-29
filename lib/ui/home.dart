@@ -7347,7 +7347,7 @@ class _SelectTypeState extends State<SelectType>
         final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user') ? i - 1 : -1;
 
         if (isMe) {
-          return BeUIMessage(
+          final userMsgWidget = BeUIMessage(
             role: BeUIMessageRole.user,
             isGrouped: false,
             child: BeUIMessageBubble(
@@ -7356,6 +7356,15 @@ class _SelectTypeState extends State<SelectType>
               expandable: false,
               animateIn: false,
             ),
+          );
+          return _SwipeActionPanel(
+            onCopy: () {
+              Clipboard.setData(ClipboardData(text: text));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Copié !', style: TextStyle(fontSize: 12)), duration: Duration(seconds: 1)),
+              );
+            },
+            child: userMsgWidget,
           );
         }
 
@@ -7418,7 +7427,7 @@ class _SelectTypeState extends State<SelectType>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Activity feed: history + active card
-              if (_activityCtrl.history.isNotEmpty || _activityCtrl.activeActivity != null)
+              if ((isActiveMsg || _agentGenerating) && (_activityCtrl.history.isNotEmpty || _activityCtrl.activeActivity != null))
                 AgentActivityFeed(controller: _activityCtrl, isDark: isDark, fg: fg, muted: muted),
               if (!isStreaming && msg['checkpoint'] != null)
                 AgentCheckpointCard(
