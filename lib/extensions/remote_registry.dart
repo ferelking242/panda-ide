@@ -244,16 +244,22 @@ class RemoteExtensionRegistry {
     if (!await root.exists()) return [];
     final ids = <String>[];
     await for (final e in root.list()) {
-      if (e is Directory &&
-          await File(p.join(e.path, 'panda.yaml')).exists()) {
-        ids.add(p.basename(e.path));
+      if (e is Directory) {
+        final hasPanda = await File(p.join(e.path, 'panda.yaml')).exists();
+        final hasVsix = await File(p.join(e.path, 'package.json')).exists();
+        if (hasPanda || hasVsix) {
+          ids.add(p.basename(e.path));
+        }
       }
     }
     return ids;
   }
 
-  Future<bool> isInstalled(String id) =>
-      File(p.join(installRoot, id, 'panda.yaml')).exists();
+  Future<bool> isInstalled(String id) async {
+    final dir = p.join(installRoot, id);
+    return await File(p.join(dir, 'panda.yaml')).exists() ||
+        await File(p.join(dir, 'package.json')).exists();
+  }
 
   // ── HTTP helpers ─────────────────────────────────────────────────
 

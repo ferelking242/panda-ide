@@ -314,7 +314,7 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
                       Icon(Icons.star_rounded, size: 15, color: Colors.amber),
                     ],
                   ]),
-                  Text('${_installedVersions[e.id] ?? e.version} · ${e.author ?? 'anonyme'}',
+                  Text('${e.latestVersion.isNotEmpty ? e.latestVersion : e.version} · ${e.author ?? 'anonyme'}',
                       style: TextStyle(
                           fontSize: 12, color: cs.onSurfaceVariant)),
                 ])),
