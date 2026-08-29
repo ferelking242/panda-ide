@@ -1184,7 +1184,7 @@ class _SelectTypeState extends State<SelectType>
             child: Scaffold(
             key: _scaffoldKey,
             resizeToAvoidBottomInset: false,
-            backgroundColor: appTheme.isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
+            backgroundColor: appTheme.isDark ? const Color(0xff0d0e10) : const Color(0xffdedede),
 
             // ── Drawer (unchanged behaviour) ──────────────────────────────
             drawer: Drawer(
@@ -7466,28 +7466,7 @@ class _SelectTypeState extends State<SelectType>
                   ),
                 ),
 
-              // Loader chip - only while actively streaming, never after done
-              if (isActiveMsg && _agentGenerating && !hasVisibleTimeline && _activityCtrl.activeActivity == null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: BeUILoadingState(
-                    label: _agentPhase == AgentPhase.thinking
-                        ? 'Réflexion en cours…'
-                        : _agentPhase == AgentPhase.streaming
-                            ? 'Génération…'
-                            : _agentPhase == AgentPhase.error
-                                ? 'Erreur'
-                                : 'Travail en cours…',
-                    variant: _agentPhase == AgentPhase.thinking
-                        ? BeUILoadingVariant.shimmer
-                        : _agentPhase == AgentPhase.streaming
-                            ? BeUILoadingVariant.progress
-                            : BeUILoadingVariant.cycling,
-                    color: _agentPhase == AgentPhase.error
-                        ? Colors.redAccent
-                        : BeUIColors.accentOf(isDark),
-                  ),
-                ),
+              // (Génération badge removed — ActivityFeed handles status display)
 
               // Action row (copy + retry) — shown after generation
               if (!isStreaming && (text.isNotEmpty || isError))
