@@ -5,6 +5,7 @@
 /// dispo comme vue autonome (route dédiée).
 library;
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -85,16 +86,33 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
     }
   }
 
-  /// Lit la version installée directement dans le panda.yaml local.
+  /// Lit la version installée — panda.yaml (.panda) OU package.json (.vsix).
   Future<String?> _readInstalledVersion(String id) async {
+    final root = '\${RemoteExtensionRegistry.instance.installRoot}/\$id';
+    // .panda format
     try {
-      final f = File(
-          '\${RemoteExtensionRegistry.instance.installRoot}/\$id/panda.yaml');
-      if (!await f.exists()) return null;
-      return (await PandaManifest.fromFile(f.path)).version;
-    } catch (_) {
-      return null;
-    }
+      final f = File('$root/panda.yaml');
+      if (await f.exists()) return (await PandaManifest.fromFile(f.path)).version;
+    } catch (_) {}
+    // .vsix format (package.json)
+    try {
+      final f = File('$root/package.json');
+      if (await f.exists()) {
+        final content = await f.readAsString();
+        final json = jsonDecode(content) as Map<String, dynamic>;
+        return json['version']?.toString();
+      }
+    } catch (_) {}
+    // Fallback: si le dossier existe et a un entry point, c'est installé
+    try {
+      final dir = Directory(root);
+      if (await dir.exists()) {
+        final hasEntry = await File('$root/extension.js').exists() ||
+            await File('$root/lib/extension.dart').exists();
+        if (hasEntry) return '1.0.0';
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> _install(RegistryEntry entry) async {
@@ -119,7 +137,16 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
         }
       }
       final path = await RemoteExtensionRegistry.instance.install(entry);
-      await NativeExtensionLoader.instance.load(path);
+      // Détecter le format: .vsix (package.json) vs .panda (panda.yaml)
+      final isVsix = await File('$path/package.json').exists();
+      if (isVsix) {
+        // .vsix: charger via le Node.js ExtensionHost
+        // L'extension sera activée au prochain démarrage ou via une commande
+        print('[Marketplace] .vsix extension installée: ${entry.id}');
+      } else {
+        // .panda: charger via le Dart NativeExtensionLoader
+        await NativeExtensionLoader.instance.load(path);
+      }
       if (!mounted) return;
       setState(() {
         _installed.add(entry.id);
@@ -146,7 +173,8 @@ class _PandaRegistrySectionState extends State<PandaRegistrySection>
   Future<void> _uninstall(RegistryEntry entry) async {
     setState(() => _busy.add(entry.id));
     try {
-      await NativeExtensionLoader.instance.unload(entry.id);
+      // Ignorer les erreurs de unload (l'extension .vsix n'est pas dans le NativeExtensionLoader)
+      try { await NativeExtensionLoader.instance.unload(entry.id); } catch (_) {}
       await RemoteExtensionRegistry.instance.uninstall(entry.id);
       if (mounted) {
         setState(() {
