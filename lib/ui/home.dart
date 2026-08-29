@@ -4064,44 +4064,9 @@ class _SelectTypeState extends State<SelectType>
                     top: BorderSide(color: border, width: 1),
                   )),
               child: Column(children: [
-                // Resize handle at top of bottom panel.
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onVerticalDragStart: (_) {},
-                  onVerticalDragUpdate: (details) {
-                    final maxH = MediaQuery.of(context).size.height - 160;
-                    setState(() {
-                      _bottomPanelHeight =
-                          (_bottomPanelHeight - details.delta.dy).clamp(100.0, maxH);
-                    });
-                  },
-                  onVerticalDragEnd: (_) {},
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.resizeRow,
-                    child: Container(
-                      width: double.infinity,
-                      height: 20,
-                      color: Colors.transparent,
-                      alignment: Alignment.center,
-                      child: Container(
-                        width: 46,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: border,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                // Separator line
+                // ── Line 1: Main panel tabs ──
                 Container(
-                  height: 1,
-                  color: border,
-                ),
-                // Tab strip
-                Container(
-                  height: 30,
+                  height: 32,
                   color: tabBg,
                   child: Row(children: [
                     ...List.generate(tabNames.length, (i) {
@@ -4113,6 +4078,12 @@ class _SelectTypeState extends State<SelectType>
                               horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: active ? bg : Colors.transparent,
+                            border: Border(
+                              bottom: BorderSide(
+                                color: active ? const Color(0xff007acc) : Colors.transparent,
+                                width: 2,
+                              ),
+                            ),
                           ),
                           child: Text(tabNames[i],
                               style: TextStyle(
@@ -4152,6 +4123,43 @@ class _SelectTypeState extends State<SelectType>
                       ),
                   ]),
                 ),
+                // ── Line 2: Terminal sub-tabs (only when Terminal tab active) ──
+                if (_bottomPanelTab == 0 && !kIsWeb)
+                  Container(
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xff2d2d2d) : const Color(0xffe8e8e8),
+                      border: Border(
+                        bottom: BorderSide(color: border, width: 0.5),
+                      ),
+                    ),
+                    child: Row(children: [
+                      const SizedBox(width: 8),
+                      Icon(Icons.terminal, size: 12, color: fg),
+                      const SizedBox(width: 4),
+                      Text('Terminal', style: TextStyle(fontSize: 10, color: fg, fontWeight: FontWeight.w500)),
+                      const SizedBox(width: 8),
+                      // New terminal button
+                      InkWell(
+                        onTap: _openTerminalTab,
+                        borderRadius: BorderRadius.circular(4),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Icon(Icons.add, size: 12, color: fg),
+                        ),
+                      ),
+                      const Spacer(),
+                      // Kill terminal button
+                      InkWell(
+                        onTap: () => setState(() => _bottomPanelOpen = false),
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          child: Icon(Icons.close, size: 11, color: fg),
+                        ),
+                      ),
+                    ]),
+                  ),
                 // ── Problems toolbar (search + filter + actions) ───────────
                 if (_bottomPanelTab == 1)
                   Container(
