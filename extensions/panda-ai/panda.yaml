@@ -3,15 +3,15 @@
 
 id: dev.panda.ai
 name: Panda AI
-version: "1.0.0"
+version: "1.1.0"
 author: "Ferelking"
 description: |
-  Panda AI — Dashboard et gateway pour l'IA dans Panda IDE.
+  Panda AI — Gateway + Dashboard Next.js pour l'IA dans Panda IDE.
 
-  1. Installe le serveur Python (FastAPI/uvicorn) depuis GitHub
-  2. Vérifie Python, pip, et les dépendances système
-  3. Démarre le serveur Gateway (API OpenAI-compatible)
-  4. Lance le dashboard Next.js dans un WebView intégré
+  1. Installe Python, pip, et les dépendances dans le rootfs
+  2. Clone panda-ai depuis GitHub
+  3. Lance le serveur uvicorn (API OpenAI-compatible) en headless
+  4. Affiche le dashboard Next.js dans un WebView intégré
   5. Gère ChatGPT, Claude, et Panda Open Gateway
 
 license: MIT
@@ -30,7 +30,7 @@ activation:
 
 # Permissions requises
 permissions:
-  - terminal        # exécuter python/pip dans le rootfs
+  - terminal        # exécuter python/pip/git dans le rootfs
   - network         # télécharger panda-ai depuis GitHub
   - storage         # cache d'installation ($appDir/gateway)
   - notifications   # état du serveur
@@ -77,10 +77,6 @@ contributes:
       default: "chatgpt"
       values: ["chatgpt", "claude", "pandagateway"]
       description: "Provider IA par défaut"
-    dev.panda.ai.headless:
-      type: boolean
-      default: true
-      description: "Lancer Chromium en headless (pas de fenêtre)"
 
   icons:
     activity_bar:

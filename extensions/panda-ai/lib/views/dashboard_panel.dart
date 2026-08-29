@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../extension.dart';
 
 /// Dashboard panel for Panda AI extension — sidebar view.
+/// Shows server status, actions, and log output.
 class DashboardPanel extends StatelessWidget {
   final PandaAiExtension extension;
 
@@ -43,7 +44,7 @@ class DashboardPanel extends StatelessWidget {
                                 .textTheme
                                 .titleMedium
                                 ?.copyWith(fontWeight: FontWeight.w600)),
-                        Text('Gateway + Dashboard',
+                        Text('v1.1.0 — Gateway + Dashboard',
                             style: Theme.of(context).textTheme.bodySmall),
                       ],
                     ),
@@ -65,31 +66,31 @@ class DashboardPanel extends StatelessWidget {
                 _ActionTile(
                   icon: Icons.download_rounded,
                   title: 'Installer le Gateway',
-                  subtitle: 'Télécharge panda-ai depuis GitHub',
+                  subtitle: 'Clone panda-ai + pip install',
                   onTap: () => extension.installGateway(),
                 ),
                 _ActionTile(
                   icon: Icons.play_arrow_rounded,
                   title: 'Démarrer le serveur',
-                  subtitle: 'Lance uvicorn sur le port 8000',
+                  subtitle: 'Lance uvicorn sur :8000',
                   onTap: () => extension.startServer(),
                 ),
                 _ActionTile(
                   icon: Icons.stop_rounded,
                   title: 'Arrêter le serveur',
-                  subtitle: 'Stoppe le processus Python',
+                  subtitle: 'Stoppe le processus',
                   onTap: () => extension.stopServer(),
                 ),
                 _ActionTile(
                   icon: Icons.open_in_browser_rounded,
                   title: 'Ouvrir le Dashboard',
-                  subtitle: 'Accède au dashboard Next.js',
+                  subtitle: 'Dashboard Next.js sur :8000',
                   onTap: () => extension.openDashboard(),
                 ),
                 _ActionTile(
                   icon: Icons.info_outline_rounded,
                   title: 'Statut',
-                  subtitle: 'Vérifie Python, pip, et le gateway',
+                  subtitle: 'Vérifie Python, pip, gateway',
                   onTap: () => extension.showStatus(),
                 ),
 
@@ -99,7 +100,9 @@ class DashboardPanel extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -108,6 +111,41 @@ class DashboardPanel extends StatelessWidget {
                       fontFamily: 'monospace',
                       fontSize: 11,
                     ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Info ──
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.blue.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Comment ça marche',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: 6),
+                      Text(
+                        '1. Installe Python + git dans le terminal\n'
+                        '2. Cliquez "Installer" pour cloner panda-ai\n'
+                        '3. Configurez .env avec votre clé API\n'
+                        '4. Cliquez "Démarrer" pour lancer le serveur\n'
+                        '5. Le dashboard est accessible sur :8000',
+                        style: TextStyle(fontSize: 11, height: 1.4),
+                      ),
+                    ],
                   ),
                 ),
               ],

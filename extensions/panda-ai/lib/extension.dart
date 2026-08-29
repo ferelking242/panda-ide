@@ -1,11 +1,11 @@
 /// Panda AI — Extension entry point.
 ///
 /// Workflow:
-///   1. Vérifie Python + pip dans le rootfs
-///   2. Télécharge panda-ai depuis GitHub (ou depuis les assets bundled)
+///   1. Vérifie Python + pip dans le rootfs PRoot
+///   2. Clone panda-ai depuis GitHub
 ///   3. Installe les dépendances Python (pip install)
-///   4. Démarre le serveur uvicorn (API OpenAI-compatible)
-///   5. Lance le dashboard Next.js dans un WebView
+///   4. Démarre le serveur uvicorn (API OpenAI-compatible) en headless
+///   5. Affiche le dashboard Next.js dans un WebView
 library panda_ai;
 
 import 'dart:async';
@@ -23,7 +23,7 @@ class PandaAiExtension extends PandaExtension {
   String get name => 'Panda AI';
 
   @override
-  String get version => '1.0.0';
+  String get version => '1.1.0';
 
   GatewayManager? _manager;
   ExtensionContext? _ctx;
@@ -38,8 +38,6 @@ class PandaAiExtension extends PandaExtension {
     _ctx = context;
     _manager = GatewayManager(
       terminal: context.terminal,
-      storage: context.storage,
-      network: context.network,
       logger: context.logger,
       onLog: (line) => _state.add(AiState(logLine: line)),
       onStatus: (status) => _state.add(AiState(status: status)),
@@ -52,7 +50,6 @@ class PandaAiExtension extends PandaExtension {
     context.commands.register('$id.status', (_) => showStatus());
 
     context.logger.info('Panda AI activé');
-    // Vérification asynchrone au démarrage
     unawaited(_checkEnvironment());
   }
 
@@ -67,32 +64,29 @@ class PandaAiExtension extends PandaExtension {
   Future<void> _checkEnvironment() async {
     _state.add(AiState(message: 'Vérification de l\'environnement…'));
 
-    // 1. Python
     final python = await _manager!.findPython();
     if (python == null) {
       _state.add(AiState(
-        message: 'Python introuvable',
+        message: 'Python introuvable — installez via le terminal',
         status: AiStatus.error,
       ));
       return;
     }
-    _state.add(AiState(message: 'Python: $python ✓'));
+    _state.add(AiState(message: 'Python ✓'));
 
-    // 2. pip
     final pip = await _manager!.findPip();
     if (pip == null) {
       _state.add(AiState(
-        message: 'pip introuvable',
+        message: 'pip introuvable — installez via le terminal',
         status: AiStatus.warning,
       ));
       return;
     }
-    _state.add(AiState(message: 'pip: $pip ✓'));
+    _state.add(AiState(message: 'pip ✓'));
 
-    // 3. Gateway installé ?
-    final installed = await GatewayInstaller.isInstalled();
+    final installed = await GatewayInstaller.isInstalled(_ctx!.terminal);
     if (installed) {
-      final version = await GatewayInstaller.getInstalledVersion();
+      final version = await GatewayInstaller.getInstalledVersion(_ctx!.terminal);
       _state.add(AiState(
         message: 'Gateway installé (v$version)',
         status: AiStatus.ready,
@@ -109,8 +103,7 @@ class PandaAiExtension extends PandaExtension {
 
   Future<void> openDashboard() async {
     if (_manager == null || !_manager!.isRunning) {
-      // Vérifier l'installation d'abord
-      final installed = await GatewayInstaller.isInstalled();
+      final installed = await GatewayInstaller.isInstalled(_ctx!.terminal);
       if (!installed) {
         final go = await _ctx!.window.showConfirmation(
           'Panda AI n\'est pas installé.\n\n'
@@ -120,14 +113,10 @@ class PandaAiExtension extends PandaExtension {
         if (!go) return;
         await installGateway();
       }
-
-      // Démarrer le serveur
       await startServer();
     }
-
-    // Le dashboard est accessible via le WebView dans dashboard_panel.dart
     _state.add(AiState(
-      message: 'Dashboard prêt',
+      message: 'Dashboard prêt — port 8000',
       status: AiStatus.running,
     ));
   }
@@ -139,13 +128,13 @@ class PandaAiExtension extends PandaExtension {
     ));
 
     try {
-      await GatewayInstaller.install(
+      final ok = await GatewayInstaller.install(
+        terminal: _ctx!.terminal,
         onProgress: (msg) => _state.add(AiState(logLine: msg)),
       );
 
-      final installed = await GatewayInstaller.isInstalled();
-      if (installed) {
-        final version = await GatewayInstaller.getInstalledVersion();
+      if (ok) {
+        final version = await GatewayInstaller.getInstalledVersion(_ctx!.terminal);
         _state.add(AiState(
           message: 'Gateway installé (v$version) ✓',
           status: AiStatus.ready,
@@ -169,9 +158,7 @@ class PandaAiExtension extends PandaExtension {
       message: 'Démarrage du serveur…',
       status: AiStatus.starting,
     ));
-
-    final dir = await GatewayInstaller.getInstallDir();
-    await _manager!.start(dir);
+    await _manager!.start();
   }
 
   Future<void> stopServer() async {
@@ -183,15 +170,14 @@ class PandaAiExtension extends PandaExtension {
   }
 
   Future<void> showStatus() async {
-    final installed = await GatewayInstaller.isInstalled();
+    final installed = await GatewayInstaller.isInstalled(_ctx!.terminal);
     final python = await _manager?.findPython();
     final running = _manager?.isRunning ?? false;
 
     final status = [
       'Python: ${python != null ? "✓" : "✗"}',
       'Gateway: ${installed ? "✓" : "✗"}',
-      'Serveur: ${running ? "✓" : "✗"}',
-      if (running) 'Port: ${_manager!.apiPort}',
+      'Serveur: ${running ? "✓ (port 8000)" : "✗"}',
     ].join('\n');
 
     await _ctx!.window.showInformation(
@@ -200,7 +186,6 @@ class PandaAiExtension extends PandaExtension {
     );
   }
 
-  /// Setter le provider (chatgpt/claude/pandagateway).
   void setProvider(String provider) {
     _manager?.setProvider(provider);
     _state.add(AiState(provider: provider));
@@ -214,12 +199,7 @@ class AiState {
   final String? logLine;
   final String? provider;
 
-  const AiState({
-    this.message,
-    this.status,
-    this.logLine,
-    this.provider,
-  });
+  const AiState({this.message, this.status, this.logLine, this.provider});
 }
 
 /// Statuts possibles du gateway.
