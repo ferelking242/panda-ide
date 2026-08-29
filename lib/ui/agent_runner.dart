@@ -551,6 +551,7 @@ $toolLines
           toolSchemas,
           allowWrites: agentMode == 'agent',
           agentMode: agentMode,
+          workspacePath: workspacePath,
           blocks: _BlockSequencer(),
           eventBus: eventBus,
         );
@@ -564,6 +565,7 @@ $toolLines
           toolSchemas,
           allowWrites: agentMode == 'agent',
           agentMode: agentMode,
+          workspacePath: workspacePath,
           blocks: _BlockSequencer(),
           eventBus: eventBus,
         );
@@ -599,7 +601,7 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks, AgentEventBus? eventBus}
+    {required bool allowWrites, String agentMode = 'agent', String workspacePath = '', _BlockSequencer? blocks, AgentEventBus? eventBus}
   ) async {
     final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
@@ -785,7 +787,7 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent', _BlockSequencer? blocks, AgentEventBus? eventBus}
+    {required bool allowWrites, String agentMode = 'agent', String workspacePath = '', _BlockSequencer? blocks, AgentEventBus? eventBus}
   ) async {
     final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
