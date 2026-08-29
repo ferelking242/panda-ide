@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 
 // ── Enums ──────────────────────────────────────────────────────────────────
@@ -48,12 +47,14 @@ String toolHumanLabel(String toolName, Map<String, dynamic> args) {
     if (cmd.contains('git push')) return 'Push vers GitHub\u2026';
     if (cmd.contains('git commit')) return 'Cr\u00e9ation du commit\u2026';
     if (cmd.contains('git pull')) return 'Pull en cours\u2026';
-    if (cmd.contains('npm install') || cmd.contains('bun install') || cmd.contains('pip install'))
+    if (cmd.contains('npm install') || cmd.contains('bun install') || cmd.contains('pip install')) {
       return 'Installation des d\u00e9pendances\u2026';
+    }
     if (cmd.contains('flutter build')) return 'Build en cours\u2026';
     if (cmd.contains('flutter test') || cmd.contains('dart test')) return 'Tests en cours\u2026';
-    if (cmd.contains('flutter pub get') || cmd.contains('dart pub get'))
+    if (cmd.contains('flutter pub get') || cmd.contains('dart pub get')) {
       return 'R\u00e9solution des d\u00e9pendances\u2026';
+    }
     if (cmd.contains('rm ') || cmd.contains('del ')) return 'Suppression\u2026';
     if (cmd.contains('mkdir')) return 'Cr\u00e9ation de dossier\u2026';
     if (cmd.contains('cp ') || cmd.contains('mv ')) return 'D\u00e9placement\u2026';
@@ -63,17 +64,21 @@ String toolHumanLabel(String toolName, Map<String, dynamic> args) {
     return preview.isEmpty ? 'Ex\u00e9cution\u2026' : 'Ex\u00e9cution: $preview';
   }
   if (n.contains('read') || n.contains('open') || n.contains('view')) return 'Lecture du fichier\u2026';
-  if (n.contains('write') || n.contains('edit') || n.contains('save') || n.contains('multi'))
+  if (n.contains('write') || n.contains('edit') || n.contains('save') || n.contains('multi')) {
     return '\u00c9dition du fichier\u2026';
-  if (n.contains('search') || n.contains('grep') || n.contains('glob') || n.contains('find'))
+  }
+  if (n.contains('search') || n.contains('grep') || n.contains('glob') || n.contains('find')) {
     return 'Recherche\u2026';
+  }
   if (n.contains('list') || n.contains('dir')) return 'Exploration du dossier\u2026';
-  if (n.contains('web') || n.contains('fetch') || n.contains('http') || n.contains('url'))
+  if (n.contains('web') || n.contains('fetch') || n.contains('http') || n.contains('url')) {
     return 'Recherche sur internet\u2026';
+  }
   if (n.contains('git')) return 'Commande Git\u2026';
   if (n.contains('delete') || n.contains('remove')) return 'Suppression\u2026';
-  if (n.contains('agent') || n.contains('task') || n.contains('delegate'))
+  if (n.contains('agent') || n.contains('task') || n.contains('delegate')) {
     return 'D\u00e9l\u00e9gation\u2026';
+  }
   return 'Action en cours\u2026';
 }
 

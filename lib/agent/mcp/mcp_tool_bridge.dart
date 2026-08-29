@@ -46,7 +46,7 @@ class McpToolBridge {
           execute: (args) async {
             try {
               final result = await _client.callTool(server, mcpTool.name, args);
-              return ToolResult.ok(result?.toString() ?? '');
+              return ToolResult.ok(result.toString() ?? '');
             } catch (e) {
               return ToolResult.fail('MCP error: $e');
             }

@@ -1,5 +1,6 @@
 /// TerminalBridge — singleton qui permet au terminal d'envoyer
 /// du texte sélectionné directement à l'agent Panda et d'accéder aux sorties terminal.
+library;
 
 class TerminalBridge {
   TerminalBridge._();

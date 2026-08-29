@@ -17,7 +17,7 @@ class GatewayManager extends ChangeNotifier {
   String _statusMessage = 'Gateway arrêté';
   final List<String> _logs = [];
   Process? _pythonProcess;
-  int _apiPort = 8000;
+  final int _apiPort = 8000;
   String _provider = 'chatgpt';
   String _token = '';
   String _installedVersion = 'unknown';

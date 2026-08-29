@@ -2,6 +2,7 @@
 ///
 /// All state changes in the agent runtime emit events through [AgentEventBus].
 /// The UI listens to these events to update without coupling to the engine.
+library;
 
 // ── Base ───────────────────────────────────────────────────────────────────
 

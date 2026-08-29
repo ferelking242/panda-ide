@@ -23,7 +23,7 @@ class ExtensionHostHealth {
     ));
 
     // 2. host.js
-    final hostJsExists = await File(ExtensionHostSetup.hostJsPath).existsSync();
+    final hostJsExists = File(ExtensionHostSetup.hostJsPath).existsSync();
     checks.add(ExtensionHostCheck(
       name: 'Extension Host (host.js)',
       passed: hostJsExists,
@@ -34,7 +34,7 @@ class ExtensionHostHealth {
     ));
 
     // 3. IPC bridge JS
-    final ipcJsExists = await File('${ExtensionHostSetup.hostDir}/ipc.js').existsSync();
+    final ipcJsExists = File('${ExtensionHostSetup.hostDir}/ipc.js').existsSync();
     checks.add(ExtensionHostCheck(
       name: 'IPC Bridge (ipc.js)',
       passed: ipcJsExists,
@@ -43,7 +43,7 @@ class ExtensionHostHealth {
     ));
 
     // 4. VSCode API shim
-    final vscodeJsExists = await File('${ExtensionHostSetup.hostDir}/api/vscode.js').existsSync();
+    final vscodeJsExists = File('${ExtensionHostSetup.hostDir}/api/vscode.js').existsSync();
     checks.add(ExtensionHostCheck(
       name: 'VS Code API (vscode.js)',
       passed: vscodeJsExists,
@@ -70,7 +70,7 @@ class ExtensionHostHealth {
     ));
 
     // 7. Directory structure
-    final extDirExists = await Directory(extensionDir).existsSync();
+    final extDirExists = Directory(extensionDir).existsSync();
     checks.add(ExtensionHostCheck(
       name: 'Extensions Directory',
       passed: extDirExists,

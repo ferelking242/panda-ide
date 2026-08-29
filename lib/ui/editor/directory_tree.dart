@@ -1,34 +1,13 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:code_forge/code_forge.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:flutter_json/flutter_json.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:http/http.dart' as http;
-import '../../utils/llama_wrapper.dart';
-import 'package:markdown_widget/config/configs.dart';
-import 'package:markdown_widget/widget/all.dart';
 import 'package:path/path.dart' as path;
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:percent_indicator/linear_percent_indicator.dart';
-import 'package:re_highlight/re_highlight.dart' show Mode;
-import 'package:re_highlight/styles/atom-one-dark.dart';
-import 'package:panda/utils/agentic_tools.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../bloc/repo_bloc/repo_bloc.dart';
 import '../../bloc/ui_bloc/ui_bloc.dart';
-import '../../terminal/terminal.dart';
-import '../../utils/ai.dart';
-import '../../utils/copilot_chat.dart';
 import '../../utils/functions.dart';
-import '../../utils/languages.dart';
 import '../../utils/themes.dart';
-import '../../utils/constants.dart';
 
 // File tree viewer
 // Extracted from widgets.dart
@@ -427,7 +406,7 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
         Overlay.of(context).context.findRenderObject() as RenderBox;
     final tc = widget.appTheme.selectScreenCardTextColor;
 
-    Widget _item(IconData icon, String label, {Color? color, bool enabled = true}) {
+    Widget item(IconData icon, String label, {Color? color, bool enabled = true}) {
       final c = color ?? tc;
       return Row(children: [
         Icon(icon, size: 18, color: c),
@@ -445,20 +424,20 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
       items: <PopupMenuEntry<dynamic>>[
         // ── New ──
         if (widget.enableCreateFileOption)
-          PopupMenuItem<dynamic>(child: _item(Icons.add_circle_outline, 'New File...'),
+          PopupMenuItem<dynamic>(child: item(Icons.add_circle_outline, 'New File...'),
             onTap: () => Future.delayed(Duration.zero, () => startCreating(path.dirname(file.path), false))),
         if (widget.enableCreateFolderOption)
-          PopupMenuItem<dynamic>(child: _item(Icons.create_new_folder_outlined, 'New Folder...'),
+          PopupMenuItem<dynamic>(child: item(Icons.create_new_folder_outlined, 'New Folder...'),
             onTap: () => Future.delayed(Duration.zero, () => startCreating(path.dirname(file.path), true))),
         const PopupMenuDivider(),
         // ── Copy paths ──
-        PopupMenuItem<dynamic>(child: _item(Icons.content_copy, 'Copy Path'),
+        PopupMenuItem<dynamic>(child: item(Icons.content_copy, 'Copy Path'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: file.path));
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Path copied'), duration: Duration(seconds: 1)));
           }),
-        PopupMenuItem<dynamic>(child: _item(Icons.copy_outlined, 'Copy Relative Path'),
+        PopupMenuItem<dynamic>(child: item(Icons.copy_outlined, 'Copy Relative Path'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: path.relative(file.path, from: widget.rootPath)));
             ScaffoldMessenger.of(context).showSnackBar(
@@ -466,13 +445,13 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
           }),
         const PopupMenuDivider(),
         // ── Cut / Copy ──
-        PopupMenuItem<dynamic>(child: _item(Icons.content_cut, 'Cut'),
+        PopupMenuItem<dynamic>(child: item(Icons.content_cut, 'Cut'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: 'cut:\${file.path}'));
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Cut \${path.basename(file.path)}'), duration: const Duration(seconds: 1)));
           }),
-        PopupMenuItem<dynamic>(child: _item(Icons.copy, 'Copy'),
+        PopupMenuItem<dynamic>(child: item(Icons.copy, 'Copy'),
           onTap: () {
             Clipboard.setData(ClipboardData(text: 'copy:\${file.path}'));
             ScaffoldMessenger.of(context).showSnackBar(
@@ -480,14 +459,14 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
           }),
         const PopupMenuDivider(),
         // ── Open in terminal ──
-        PopupMenuItem<dynamic>(child: _item(Icons.terminal, 'Open in Terminal'), enabled: false),
+        PopupMenuItem<dynamic>(enabled: false, child: item(Icons.terminal, 'Open in Terminal')),
         const PopupMenuDivider(),
         // ── Modify ──
         if (widget.enableRenameFileOption)
-          PopupMenuItem<dynamic>(child: _item(Icons.edit, 'Rename (F2)'),
+          PopupMenuItem<dynamic>(child: item(Icons.edit, 'Rename (F2)'),
             onTap: () => Future.delayed(Duration.zero, () => startRenaming(file.path))),
         if (widget.enableDeleteFileOption)
-          PopupMenuItem<dynamic>(child: _item(Icons.delete_outline, 'Delete (Del)', color: Colors.red[300]),
+          PopupMenuItem<dynamic>(child: item(Icons.delete_outline, 'Delete (Del)', color: Colors.red[300]),
             onTap: () => _showDeleteFileConfirmation(context, file)),
       ],
     );

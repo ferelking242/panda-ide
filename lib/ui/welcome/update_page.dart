@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../core/broken_icons.dart';
 import '../../services/android_update_service.dart';
 import '../../utils/themes.dart';
-import '../../utils/constants.dart';
 
 /// Full-page update view (check, download, install).
 class UpdatePage extends StatelessWidget {

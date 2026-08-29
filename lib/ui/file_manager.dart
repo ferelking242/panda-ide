@@ -9,18 +9,13 @@
 ///   - File size + date display
 ///   - Quick access sidebar
 library;
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_archive/flutter_archive.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../utils/constants.dart';
-import '../utils/functions.dart';
-import '../utils/languages.dart';
 import '../utils/themes.dart';
 import 'editor_page.dart';
 

@@ -21,7 +21,7 @@
 ///   }
 /// }
 /// ```
-library panda_sdk;
+library;
 
 import 'dart:async';
 

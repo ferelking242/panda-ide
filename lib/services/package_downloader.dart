@@ -130,75 +130,73 @@ class PackageDownloader {
         return;
       }
 
-      if (pfdConfig != null) {
-        final pfdOk = await _ensurePfdInstalled(
-          context: context,
-          index: index,
-          downloadBloc: downloadBloc,
-          config: pfdConfig,
-        );
+      final pfdOk = await _ensurePfdInstalled(
+        context: context,
+        index: index,
+        downloadBloc: downloadBloc,
+        config: pfdConfig,
+      );
 
-        if (!pfdOk) {
-          // Fallback to direct HTTP if URL available
-          if (url.isNotEmpty) {
-            final archivePath = '$tempDir/$archiveName';
-            await _httpDownload(
-              context: context,
-              index: index,
-              downloadBloc: downloadBloc,
-              catalogCubit: catalogCubit,
-              url: url,
-              archivePath: archivePath,
-              archiveName: archiveName,
-              extractDir: isExtension ? extensionDir : runtimesDir,
-              runtimeParentName: packageParentName,
-              extensionMetadata: extensionMetadata,
-              isExtension: isExtension,
-            );
-          } else {
-            downloadBloc.clearProgress(index);
-          }
-          return;
-        }
-
-        if (!pfdConfig.requiresExtraction) {
-          final ok = await _finalizeModuleOnly(
+      if (!pfdOk) {
+        // Fallback to direct HTTP if URL available
+        if (url.isNotEmpty) {
+          final archivePath = '$tempDir/$archiveName';
+          await _httpDownload(
             context: context,
             index: index,
             downloadBloc: downloadBloc,
             catalogCubit: catalogCubit,
-            config: pfdConfig,
-            packageParentName: packageParentName,
+            url: url,
+            archivePath: archivePath,
+            archiveName: archiveName,
+            extractDir: isExtension ? extensionDir : runtimesDir,
+            runtimeParentName: packageParentName,
             extensionMetadata: extensionMetadata,
             isExtension: isExtension,
           );
-          if (!ok) downloadBloc.clearProgress(index);
-          return;
+        } else {
+          downloadBloc.clearProgress(index);
         }
+        return;
+      }
 
-        // Has archive: stage from PFD then extract
-        final stagedName = pfdConfig.assetArchiveName;
-        if (stagedName == null || stagedName.isEmpty) {
-          _showSnack(context, '${pfdConfig.displayName} is missing archive config.');
-          downloadBloc.clearProgress(index);
-          return;
-        }
-        final archivePath = '$tempDir/$stagedName';
-        final staged = await _stagePfdArchive(context: context, config: pfdConfig, archivePath: archivePath);
-        if (!staged) {
-          downloadBloc.clearProgress(index);
-          return;
-        }
-        await _extractArchive(
+      if (!pfdConfig.requiresExtraction) {
+        final ok = await _finalizeModuleOnly(
+          context: context,
+          index: index,
           downloadBloc: downloadBloc,
           catalogCubit: catalogCubit,
-          index: index,
-          archivePath: archivePath,
-          extractDir: isExtension ? extensionDir : runtimesDir,
-          archiveName: stagedName,
-          runtimeParentName: packageParentName,
+          config: pfdConfig,
+          packageParentName: packageParentName,
+          extensionMetadata: extensionMetadata,
+          isExtension: isExtension,
         );
+        if (!ok) downloadBloc.clearProgress(index);
+        return;
       }
+
+      // Has archive: stage from PFD then extract
+      final stagedName = pfdConfig.assetArchiveName;
+      if (stagedName == null || stagedName.isEmpty) {
+        _showSnack(context, '${pfdConfig.displayName} is missing archive config.');
+        downloadBloc.clearProgress(index);
+        return;
+      }
+      final archivePath = '$tempDir/$stagedName';
+      final staged = await _stagePfdArchive(context: context, config: pfdConfig, archivePath: archivePath);
+      if (!staged) {
+        downloadBloc.clearProgress(index);
+        return;
+      }
+      await _extractArchive(
+        downloadBloc: downloadBloc,
+        catalogCubit: catalogCubit,
+        index: index,
+        archivePath: archivePath,
+        extractDir: isExtension ? extensionDir : runtimesDir,
+        archiveName: stagedName,
+        runtimeParentName: packageParentName,
+      );
     } finally {
       _globalActiveIndexes.remove(index);
     }
@@ -522,10 +520,18 @@ class PackageDownloader {
     for (final d in [dynload, engines, ossl]) {
       if (!Directory(d).existsSync()) await Directory(d).create(recursive: true);
     }
-    for (final m in _pythonDynload)         await _symlink('$dynload/$m', '$shared/$m');
-    for (final e in _pythonLibSymlinks.entries) await _symlink('$libDir2/${e.key}', '$shared/${e.value}');
-    for (final m in _pythonEngines)          await _symlink('$engines/$m', '$shared/$m');
-    for (final m in _pythonOssl)             await _symlink('$ossl/$m', '$shared/$m');
+    for (final m in _pythonDynload) {
+      await _symlink('$dynload/$m', '$shared/$m');
+    }
+    for (final e in _pythonLibSymlinks.entries) {
+      await _symlink('$libDir2/${e.key}', '$shared/${e.value}');
+    }
+    for (final m in _pythonEngines) {
+      await _symlink('$engines/$m', '$shared/$m');
+    }
+    for (final m in _pythonOssl) {
+      await _symlink('$ossl/$m', '$shared/$m');
+    }
   }
 
   static Future<void> _copyJavaLibraries() async {
@@ -571,7 +577,9 @@ class PackageDownloader {
     await _symlink('$libDir/libicudata.so.78', '$shared/libicudata.so');
     final rustlibDir = '$runtimesDir/rust/lib/rustlib/aarch64-linux-android/lib';
     if (!Directory(rustlibDir).existsSync()) await Directory(rustlibDir).create(recursive: true);
-    for (final lib in _rustOtherLibs) await _symlink('$rustlibDir/$lib', '$shared/$lib');
+    for (final lib in _rustOtherLibs) {
+      await _symlink('$rustlibDir/$lib', '$shared/$lib');
+    }
   }
 
   static Future<void> _createGoSymlinks() async {
@@ -585,7 +593,9 @@ class PackageDownloader {
     await _symlink('$goBin/gofmt',  '$shared/libgofmt.so');
     await _symlink('$binDir/go',    '$shared/libgo.so');
     await _symlink('$binDir/gofmt', '$shared/libgofmt.so');
-    for (final t in _goTools) await _symlink('$goTool/$t', '$shared/lib$t.so');
+    for (final t in _goTools) {
+      await _symlink('$goTool/$t', '$shared/lib$t.so');
+    }
   }
 
   static Future<void> _createRubySymlinks() async {
@@ -645,8 +655,9 @@ class PackageDownloader {
   static Future<void> _symlink(String link, String target) async {
     try {
       final t = await FileSystemEntity.type(link, followLinks: false);
-      if (t == FileSystemEntityType.file)        await File(link).delete();
-      else if (t == FileSystemEntityType.link)   await Link(link).delete();
+      if (t == FileSystemEntityType.file) {
+        await File(link).delete();
+      } else if (t == FileSystemEntityType.link)   await Link(link).delete();
       else if (t == FileSystemEntityType.directory) await Directory(link).delete(recursive: true);
       await Link(link).create(target, recursive: true);
     } catch (e) {

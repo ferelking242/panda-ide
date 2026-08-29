@@ -1,9 +1,7 @@
-import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
 import 'panda_logger.dart';
-import 'panda_log_level.dart';
 
 /// Global crash handler that captures uncaught Flutter/Dart errors.
 /// Chains with existing handlers instead of replacing them.

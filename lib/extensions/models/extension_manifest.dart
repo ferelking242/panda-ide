@@ -38,7 +38,7 @@ class ExtensionContributes {
   });
 
   factory ExtensionContributes.fromJson(Map<String, dynamic> json) {
-    List<Map<String, dynamic>> _list(String key) {
+    List<Map<String, dynamic>> list(String key) {
       final v = json[key];
       if (v is List) return v.whereType<Map<String, dynamic>>().toList();
       if (v is Map<String, dynamic>) {
@@ -59,21 +59,21 @@ class ExtensionContributes {
     }
 
     return ExtensionContributes(
-      commands: _list('commands'),
-      languages: _list('languages'),
-      grammars: _list('grammars'),
-      snippets: _list('snippets'),
-      themes: _list('themes'),
-      iconThemes: _list('iconThemes'),
-      keybindings: _list('keybindings'),
-      configuration: _list('configuration'),
-      menus: _list('menus'),
-      views: _list('views'),
-      viewsContainers: _list('viewsContainers'),
-      taskDefinitions: _list('taskDefinitions'),
-      debuggers: _list('debuggers'),
-      breakpoints: _list('breakpoints'),
-      problemMatchers: _list('problemMatchers'),
+      commands: list('commands'),
+      languages: list('languages'),
+      grammars: list('grammars'),
+      snippets: list('snippets'),
+      themes: list('themes'),
+      iconThemes: list('iconThemes'),
+      keybindings: list('keybindings'),
+      configuration: list('configuration'),
+      menus: list('menus'),
+      views: list('views'),
+      viewsContainers: list('viewsContainers'),
+      taskDefinitions: list('taskDefinitions'),
+      debuggers: list('debuggers'),
+      breakpoints: list('breakpoints'),
+      problemMatchers: list('problemMatchers'),
     );
   }
 
@@ -164,13 +164,13 @@ class ExtensionManifest {
     final name = json['name'] as String? ?? 'unknown';
     final publisher = json['publisher'] as String? ?? 'unknown';
 
-    List<String> _strings(String key) {
+    List<String> strings(String key) {
       final v = json[key];
       if (v is List) return v.whereType<String>().toList();
       return const [];
     }
 
-    Map<String, String> _strMap(String key) {
+    Map<String, String> strMap(String key) {
       final v = json[key];
       if (v is Map) {
         return v.map((k, val) => MapEntry(k.toString(), val.toString()));
@@ -188,21 +188,21 @@ class ExtensionManifest {
       main: json['main'] as String?,
       browser: json['browser'] as String?,
       icon: json['icon'] as String?,
-      categories: _strings('categories'),
-      keywords: _strings('keywords'),
+      categories: strings('categories'),
+      keywords: strings('keywords'),
       repository: (json['repository'] is Map)
           ? (json['repository'] as Map)['url'] as String?
           : json['repository'] as String?,
       homepage: json['homepage'] as String?,
-      engines: _strMap('engines'),
+      engines: strMap('engines'),
       activationEvents: ExtensionActivationEvents(
-        _strings('activationEvents'),
+        strings('activationEvents'),
       ),
       contributes: json['contributes'] is Map<String, dynamic>
           ? ExtensionContributes.fromJson(
               json['contributes'] as Map<String, dynamic>)
           : const ExtensionContributes(),
-      extensionDependencies: _strings('extensionDependencies'),
+      extensionDependencies: strings('extensionDependencies'),
       raw: json,
     );
   }

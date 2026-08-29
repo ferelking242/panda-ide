@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../core/fs/panda_file_system_provider.dart';
 import '../../core/workspace/panda_workspace.dart';
 
 class SearchMatchResult {
@@ -18,7 +17,7 @@ class SearchMatchResult {
 class GlobalSearchDialog extends StatefulWidget {
   final Function(String filePath, int lineNumber)? onFileSelected;
 
-  const GlobalSearchDialog({Key? key, this.onFileSelected}) : super(key: key);
+  const GlobalSearchDialog({super.key, this.onFileSelected});
 
   @override
   State<GlobalSearchDialog> createState() => _GlobalSearchDialogState();

@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'command_registry.dart';
-import 'config_store.dart';
 import 'debug_bridge.dart';
 import 'extension_exports_registry.dart';
 import 'extension_host_manager.dart';

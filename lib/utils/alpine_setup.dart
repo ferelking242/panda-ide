@@ -293,13 +293,13 @@ __panda_git() {
   local b
   b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return
   [ -n "\$(git status --porcelain 2>/dev/null)" ] && b="\$b *"
-  printf ' \033[38;5;141m %s\033[0m' "\$b"
+  printf ' 033[38;5;141m %s033[0m' "\$b"
 }
 __panda_prompt() {
   local code=\$?
-  local c='\033[38;5;75m'
-  [ "\$code" -ne 0 ] && c='\033[38;5;203m'
-  PS1="\033[38;5;110m╭─ \033[38;5;183m\w\033[0m\$(__panda_git) \033[38;5;110m[\${code}]\033[0m\\n\${c}╰─❯ \033[0m"
+  local c='033[38;5;75m'
+  [ "\$code" -ne 0 ] && c='033[38;5;203m'
+  PS1="033[38;5;110m╭─ 033[38;5;183mw033[0m\$(__panda_git) 033[38;5;110m[\${code}]033[0m\\n\${c}╰─❯ 033[0m"
 }
 PROMPT_COMMAND=__panda_prompt
 __panda_prompt

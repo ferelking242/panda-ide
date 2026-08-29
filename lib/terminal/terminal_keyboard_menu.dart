@@ -88,7 +88,7 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       }
     }
     if (isAltActive) {
-      seq = '\x1b' + seq;
+      seq = '\x1b$seq';
     }
     widget.onSendSequence(seq);
     _resetModifiers();

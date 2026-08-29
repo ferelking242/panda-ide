@@ -60,8 +60,9 @@ class BeUIHumanLabels {
       if (cmd.contains('git clone')) return 'Cloning…';
       if (cmd.contains('git push')) return 'Push vers GitHub…';
       if (cmd.contains('git commit')) return 'Création du commit…';
-      if (cmd.contains('npm install') || cmd.contains('pip install'))
+      if (cmd.contains('npm install') || cmd.contains('pip install')) {
         return 'Installation des dépendances…';
+      }
       if (cmd.contains('flutter build')) return 'Build en cours…';
       if (cmd.contains('flutter test')) return 'Tests en cours…';
       final preview =
@@ -69,13 +70,16 @@ class BeUIHumanLabels {
       return preview.isEmpty ? 'Exécution…' : 'Exécution : $preview';
     }
     if (n.contains('read')) return 'Lecture du fichier…';
-    if (n.contains('write') || n.contains('edit') || n.contains('multi'))
+    if (n.contains('write') || n.contains('edit') || n.contains('multi')) {
       return 'Édition du fichier…';
-    if (n.contains('search') || n.contains('grep') || n.contains('glob'))
+    }
+    if (n.contains('search') || n.contains('grep') || n.contains('glob')) {
       return 'Recherche…';
+    }
     if (n.contains('list') || n.contains('dir')) return 'Exploration…';
-    if (n.contains('web') || n.contains('fetch') || n.contains('http'))
+    if (n.contains('web') || n.contains('fetch') || n.contains('http')) {
       return 'Recherche internet…';
+    }
     if (n.contains('git')) return 'Commande Git…';
     if (n.contains('delete')) return 'Suppression…';
     return 'Action en cours…';
@@ -83,12 +87,14 @@ class BeUIHumanLabels {
 
   static IconData iconForTool(String name) {
     final n = name.toLowerCase();
-    if (n.contains('shell') || n.contains('command'))
+    if (n.contains('shell') || n.contains('command')) {
       return Icons.terminal;
+    }
     if (n.contains('read')) return Icons.article_outlined;
     if (n.contains('write') || n.contains('edit')) return Icons.edit;
-    if (n.contains('search') || n.contains('grep'))
+    if (n.contains('search') || n.contains('grep')) {
       return Icons.search;
+    }
     if (n.contains('list')) return Icons.folder;
     if (n.contains('web') || n.contains('fetch')) return Icons.language;
     if (n.contains('git')) return Icons.code;

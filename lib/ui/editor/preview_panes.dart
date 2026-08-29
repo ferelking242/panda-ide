@@ -2,27 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:code_forge/code_forge.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_pdfview/flutter_pdfview.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path/path.dart' as path;
-import 'package:vector_math/vector_math_64.dart' hide Colors;
-import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
-import 'package:panda/ui/mdview.dart';
-import 'package:panda/utils/constants.dart';
-import '../webview.dart';
-import '../../bloc/ui_bloc/ui_bloc.dart';
-import '../../extensions/extension_host.dart';
-import '../../terminal/terminal.dart';
-import '../../utils/languages.dart';
 import '../../utils/functions.dart';
 import '../../utils/themes.dart';
-import 'status_bar.dart';
-import '../widgets.dart';
 
 // Preview panes (Image, SVG, PDF)
 // Extracted from editor_page.dart

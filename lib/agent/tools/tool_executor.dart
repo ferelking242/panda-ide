@@ -2,7 +2,6 @@ import 'dart:async';
 
 import '../events/agent_event.dart';
 import '../events/agent_event_bus.dart';
-import 'tool_definition.dart';
 import 'tool_registry.dart';
 
 /// Executes tool calls with permission checking and event emission.
@@ -72,7 +71,7 @@ class ToolExecutor {
         ));
         return 'Error: ${result.error}';
       }
-    } catch (e, stack) {
+    } catch (e) {
       stopwatch.stop();
       _eventBus.emit(AgentToolFailed(
         toolId: toolId,

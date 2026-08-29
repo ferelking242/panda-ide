@@ -10,9 +10,9 @@ library;
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import '../utils/panda_log.dart';
+import '../utils/extractors.dart';
 
 /// Supported language → server mapping.
 class LspServerInfo {
@@ -172,22 +172,47 @@ class LspService {
     PandaLog.i('LspService', 'LSP service initialized');
   }
 
-  /// Detect which servers are installed (runs async, populates cache).
+  /// Detect which servers are installed by checking filesystem.
+  /// Uses common paths in PRoot rootfs rather than running shell commands.
   Future<void> _detectInstalled() async {
+    final runtimesDir = await _getRuntimesDir();
     for (final entry in kLspServers.entries) {
-      try {
-        final result = await Process.run(
-          '/system/bin/sh',
-          ['-c', entry.value._check],
-          environment: {'PATH': '/usr/local/bin:/usr/bin:/bin'},
-        );
-        final installed = result.exitCode == 0 && result.stdout.toString().trim().isNotEmpty;
-        _installedCache[entry.key] = installed;
-      } catch (_) {
-        _installedCache[entry.key] = false;
-      }
+      _installedCache[entry.key] = _checkServerInstalled(entry.value, runtimesDir);
     }
     PandaLog.i('LspService', 'LSP detection complete: ${_installedCache.entries.where((e) => e.value).map((e) => e.key).join(', ')}');
+  }
+
+  static Future<String> _getRuntimesDir() async {
+    try {
+      final nativeLib = await NativeChannel.getLibraryPath();
+      // runtimesDir is typically <nativeLib>/../runtimes or similar
+      return p.dirname(p.dirname(nativeLib));
+    } catch (_) {
+      return '/data/user/0/com.panda.ide/app_flutter/runtimes';
+    }
+  }
+
+  bool _checkServerInstalled(LspServerInfo info, String runtimesDir) {
+    switch (info.languageId) {
+      case 'typescript':
+      case 'json':
+      case 'html':
+      case 'css':
+      case 'yaml':
+      case 'bash':
+      case 'dockerfile':
+        // Check npm global bins
+        final npmBin = '$runtimesDir/node/bin/${info.serverCommand}';
+        return File(npmBin).existsSync() || File('/usr/local/bin/${info.serverCommand}').existsSync();
+      case 'python':
+        return File('/usr/local/bin/pylsp').existsSync() || File('/usr/bin/pylsp').existsSync();
+      case 'c_cpp':
+        return File('/usr/bin/clangd').existsSync() || File('/usr/local/bin/clangd').existsSync();
+      case 'dart':
+        return File('$runtimesDir/dart/bin/dartaotruntime').existsSync();
+      default:
+        return false;
+    }
   }
 
   /// Get the language ID for a file extension.

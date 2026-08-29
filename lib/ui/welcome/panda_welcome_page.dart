@@ -5,16 +5,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
 import '../../bloc/repo_bloc/repo_bloc.dart';
 import '../../core/broken_icons.dart';
-import '../../core/workspace/panda_workspace.dart';
 import '../../utils/themes.dart';
 import '../../utils/languages.dart';
 import '../../extensions/ui/marketplace_page.dart';
 import '../panda_surface.dart';
 import '../menu_screen.dart';
-import '../github_page.dart';
-import '../package_manager_page.dart';
 import '../../bloc/ui_bloc/ui_bloc.dart';
-import '../../bloc/repo_bloc/repo_bloc.dart';
 
 /// VS Code-style welcome page: Hero, Start section, Recent projects, Walkthroughs.
 class PandaWelcomePage extends StatelessWidget {
@@ -442,7 +438,7 @@ class _WalkthroughCardState extends State<_WalkthroughCard> {
         : (_hovered ? const Color(0xffe8eaed) : const Color(0xfff3f3f3));
     final border =
         widget.isDark ? const Color(0xff3c3c3c) : const Color(0xffdddddd);
-    const Color _kAccent = Color(0xff76b4ea);
+    const Color kAccent = Color(0xff76b4ea);
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -469,10 +465,10 @@ class _WalkthroughCardState extends State<_WalkthroughCard> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: _kAccent.withValues(alpha: 0.12),
+                color: kAccent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(widget.icon, color: _kAccent, size: 20),
+              child: Icon(widget.icon, color: kAccent, size: 20),
             ),
             const SizedBox(width: 14),
             Expanded(

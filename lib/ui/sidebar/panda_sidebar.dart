@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../core/broken_icons.dart';
-import '../../ui/home_models.dart';
 import '../../utils/themes.dart';
 
 /// VS Code-style sidebar panel container.

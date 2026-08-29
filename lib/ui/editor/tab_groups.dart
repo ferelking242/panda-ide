@@ -51,7 +51,7 @@ class TabManager extends ChangeNotifier {
   final List<EditorGroup> _groups = [];
   final List<String> _tabHistory = [];
   int _activeGroupIndex = 0;
-  int _maxTabsPerGroup = 20;
+  final int _maxTabsPerGroup = 20;
 
   List<EditorGroup> get groups => _groups;
   int get activeGroupIndex => _activeGroupIndex;
@@ -554,7 +554,7 @@ class _EditorTabBarState extends State<EditorTabBar> {
           ),
 
           // Split buttons
-          Container(
+          SizedBox(
             width: 36,
             height: 36,
             child: PopupMenuButton(

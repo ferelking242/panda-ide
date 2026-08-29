@@ -55,14 +55,14 @@ class PandaActivityBar extends StatelessWidget {
     final selColor = isDark ? _kActivitySelDark : _kActivitySelLight;
 
     final topItems = <RailItem>[
-      RailItem(icon: Broken.element_3, label: 'Explorateur', idx: 1),
-      RailItem(icon: Broken.search_normal, label: 'Rechercher', idx: 2),
+      RailItem(icon: Icons.folder, label: 'Explorateur', idx: 1),
+      RailItem(icon: Icons.search, label: 'Rechercher', idx: 2),
       RailItem(
-          icon: Broken.programming_arrows, label: 'Contrôle Git', idx: 3),
+          icon: Icons.account_tree, label: 'Contrôle Git', idx: 3),
       RailItem(
-          icon: Broken.play_circle, label: 'Exécuter / Debug', idx: 4),
+          icon: Icons.bug_report, label: 'Exécuter / Debug', idx: 4),
       RailItem(icon: Icons.device_hub, label: 'Tunnel', idx: 5),
-      RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
+      RailItem(icon: Icons.extension, label: 'Marketplace', idx: 6),
       RailItem(icon: Icons.psychology, label: 'Panda Agent', idx: 10),
       RailItem(icon: Broken.cpu, label: 'Gateway AI', idx: 7),
       RailItem(icon: Broken.global, label: 'Navigateur', idx: 8),
@@ -169,7 +169,7 @@ class PandaActivityBar extends StatelessWidget {
           // ── Bottom: Settings ─────────────────────────────────────
           _ActivityBtnEx(
             item: RailItem(
-                icon: Broken.setting_3, label: 'Parametres', idx: 99),
+                icon: Icons.settings, label: 'Parametres', idx: 99),
             selected: false,
             iconColor: iconColor,
             selColor: selColor,
@@ -231,12 +231,12 @@ class PandaActivityBar extends StatelessWidget {
                     const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
                 decoration: BoxDecoration(
                   color: isDownloading
-                      ? Colors.blue.withOpacity(0.2)
+                      ? Colors.blue.withValues(alpha: 0.2)
                       : isAvailable
-                          ? Colors.green.withOpacity(0.2)
+                          ? Colors.green.withValues(alpha: 0.2)
                           : isError
-                              ? Colors.red.withOpacity(0.2)
-                              : Colors.grey.withOpacity(0.2),
+                              ? Colors.red.withValues(alpha: 0.2)
+                              : Colors.grey.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
                     color: isDownloading

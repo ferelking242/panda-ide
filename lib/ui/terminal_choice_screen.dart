@@ -361,7 +361,7 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
                 'Select the Linux environment for your terminal.\n'
                 'Rootfs is downloaded on first use.',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
+                  color: Colors.white.withValues(alpha: 0.5),
                   fontSize: 13,
                   height: 1.4,
                 ),
@@ -410,7 +410,7 @@ class _TerminalChoiceScreenState extends State<TerminalChoiceScreen>
                 const SizedBox(height: 8),
                 Text(_installStatus,
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                        color: Colors.white.withValues(alpha: 0.5), fontSize: 12)),
               ],
 
               // Error with chevron
@@ -504,7 +504,7 @@ class _ErrorPanel extends StatelessWidget {
           color: const Color(0xFF2D1520),
           borderRadius: BorderRadius.circular(10),
           border:
-              Border.all(color: const Color(0xFFCF6679).withOpacity(0.3)),
+              Border.all(color: const Color(0xFFCF6679).withValues(alpha: 0.3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -608,10 +608,10 @@ class _DistroCard extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: brand.primary.withOpacity(0.12),
+                color: brand.primary.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: brand.primary.withOpacity(0.25),
+                  color: brand.primary.withValues(alpha: 0.25),
                   width: 1.5,
                 ),
               ),
@@ -641,7 +641,7 @@ class _DistroCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: brand.primary.withOpacity(0.15),
+                            color: brand.primary.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -659,7 +659,7 @@ class _DistroCard extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.12),
+                            color: Colors.green.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Text('Installed',
@@ -683,7 +683,7 @@ class _DistroCard extends StatelessWidget {
                       Text(
                         '${detail.size}  ${detail.libc}',
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.4), fontSize: 11),
+                            color: Colors.white.withValues(alpha: 0.4), fontSize: 11),
                       ),
                       const Spacer(),
                       // Detail chevron
@@ -695,12 +695,12 @@ class _DistroCard extends StatelessWidget {
                             Text(
                               'Details',
                               style: TextStyle(
-                                  color: brand.primary.withOpacity(0.7),
+                                  color: brand.primary.withValues(alpha: 0.7),
                                   fontSize: 11),
                             ),
                             Icon(Icons.chevron_right,
                                 size: 16,
-                                color: brand.primary.withOpacity(0.7)),
+                                color: brand.primary.withValues(alpha: 0.7)),
                           ],
                         ),
                       ),
@@ -713,7 +713,7 @@ class _DistroCard extends StatelessWidget {
             if (onDelete != null)
               IconButton(
                 icon: const Icon(Icons.delete_outline, size: 18),
-                color: Colors.red.withOpacity(0.6),
+                color: Colors.red.withValues(alpha: 0.6),
                 onPressed: onDelete,
                 tooltip: 'Remove',
               )
@@ -876,7 +876,7 @@ class AlpineLogoPainter extends CustomPainter {
 
     // Snow cap (small white triangle)
     final capPaint = Paint()
-      ..color = Colors.white.withOpacity(0.9)
+      ..color = Colors.white.withValues(alpha: 0.9)
       ..style = PaintingStyle.fill;
     final capPath = Path()
       ..moveTo(cx, cy - s * 0.85)
@@ -997,12 +997,12 @@ class _DistroDetailPage extends StatelessWidget {
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
                           colors: [
-                            brand.primary.withOpacity(0.25),
-                            brand.primary.withOpacity(0.05),
+                            brand.primary.withValues(alpha: 0.25),
+                            brand.primary.withValues(alpha: 0.05),
                           ],
                         ),
                         border: Border.all(
-                            color: brand.primary.withOpacity(0.4), width: 2),
+                            color: brand.primary.withValues(alpha: 0.4), width: 2),
                       ),
                       child: Center(
                         child: DistroLogo(type: type, size: 44),
@@ -1021,7 +1021,7 @@ class _DistroDetailPage extends StatelessWidget {
                     Text(
                       detail.version,
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.4), fontSize: 14),
+                          color: Colors.white.withValues(alpha: 0.4), fontSize: 14),
                     ),
                     const SizedBox(height: 12),
                     // Chips
@@ -1056,7 +1056,7 @@ class _DistroDetailPage extends StatelessWidget {
                   Text(
                     'OVERVIEW',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1),
@@ -1065,7 +1065,7 @@ class _DistroDetailPage extends StatelessWidget {
                   Text(
                     detail.overview,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
+                      color: Colors.white.withValues(alpha: 0.7),
                       fontSize: 14,
                       height: 1.6,
                     ),
@@ -1076,7 +1076,7 @@ class _DistroDetailPage extends StatelessWidget {
                   Text(
                     'BEST FOR',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1),
@@ -1085,10 +1085,10 @@ class _DistroDetailPage extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: brand.primary.withOpacity(0.1),
+                      color: brand.primary.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                          color: brand.primary.withOpacity(0.2)),
+                          color: brand.primary.withValues(alpha: 0.2)),
                     ),
                     child: Row(
                       children: [
@@ -1113,7 +1113,7 @@ class _DistroDetailPage extends StatelessWidget {
                   Text(
                     'ADVANTAGES',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1),
@@ -1125,13 +1125,13 @@ class _DistroDetailPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(Icons.check_circle,
-                                color: Colors.green.withOpacity(0.7),
+                                color: Colors.green.withValues(alpha: 0.7),
                                 size: 16),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(p,
                                   style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
+                                      color: Colors.white.withValues(alpha: 0.8),
                                       fontSize: 13,
                                       height: 1.4)),
                             ),
@@ -1144,7 +1144,7 @@ class _DistroDetailPage extends StatelessWidget {
                   Text(
                     'LIMITATIONS',
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.3),
+                        color: Colors.white.withValues(alpha: 0.3),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1),
@@ -1156,13 +1156,13 @@ class _DistroDetailPage extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(Icons.warning_amber,
-                                color: Colors.orange.withOpacity(0.7),
+                                color: Colors.orange.withValues(alpha: 0.7),
                                 size: 16),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(c,
                                   style: TextStyle(
-                                      color: Colors.white.withOpacity(0.8),
+                                      color: Colors.white.withValues(alpha: 0.8),
                                       fontSize: 13,
                                       height: 1.4)),
                             ),
@@ -1196,13 +1196,13 @@ class _InfoChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: brand.bg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: brand.border.withOpacity(0.3)),
+        border: Border.all(color: brand.border.withValues(alpha: 0.3)),
       ),
       child: Column(
         children: [
           Text(label,
               style: TextStyle(
-                  color: Colors.white.withOpacity(0.4),
+                  color: Colors.white.withValues(alpha: 0.4),
                   fontSize: 9,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5)),

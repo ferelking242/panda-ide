@@ -54,7 +54,7 @@ class _LaunchConfigPageState extends State<LaunchConfigPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.debug, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
+                      Icon(Icons.bug_report, size: 48, color: cs.onSurfaceVariant.withValues(alpha: 0.3)),
                       const SizedBox(height: 12),
                       Text('No launch configurations', style: TextStyle(color: cs.onSurfaceVariant)),
                       const SizedBox(height: 8),
@@ -114,7 +114,7 @@ class _LaunchConfigPageState extends State<LaunchConfigPage> {
       case 'flutter': return Icons.phone_android;
       case 'dart': return Icons.code;
       case 'node': return Icons.javascript;
-      case 'python': return Icons.python;
+      case 'python': return Icons.code;
       default: return Icons.bug_report;
     }
   }
@@ -184,7 +184,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _type,
+            initialValue: _type,
             decoration: const InputDecoration(labelText: 'Type', isDense: true),
             items: const [
               DropdownMenuItem(value: 'flutter', child: Text('Flutter')),
@@ -196,7 +196,7 @@ class _AddConfigSheetState extends State<_AddConfigSheet> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _request,
+            initialValue: _request,
             decoration: const InputDecoration(labelText: 'Request', isDense: true),
             items: const [
               DropdownMenuItem(value: 'launch', child: Text('Launch')),

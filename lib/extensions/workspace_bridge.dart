@@ -10,11 +10,9 @@
 ///
 /// Ce bridge est appelé par ExtensionApiRouter._routeWorkspace().
 library;
-import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'config_store.dart';
-import 'fs_bridge.dart';
 
 
 
@@ -208,7 +206,7 @@ class WorkspaceBridge {
     // Conversion glob → RegExp basique
     final regexStr = pattern
         .replaceAll('.', r'\.')
-        .replaceAll('**/', '(.*\/)?')
+        .replaceAll('**/', '(.*/)?')
         .replaceAll('**', '.*')
         .replaceAll('*', '[^/]*')
         .replaceAll('?', '[^/]');

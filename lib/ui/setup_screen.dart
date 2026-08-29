@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../utils/debian_setup.dart';
@@ -39,11 +37,7 @@ class _SetupStep {
   _SetupStep({
     required this.label,
     required this.description,
-    this.completed = false,
-    this.active = false,
-    this.failed = false,
-    this.error,
-  });
+  }) : completed = false, active = false, failed = false;
 }
 
 /// SetupScreen — First-time AND subsequent setup screen for Panda IDE.
@@ -352,7 +346,7 @@ class _SetupScreenState extends State<SetupScreen>
   }
 
   Future<void> _setupAlpine(Stopwatch sw) async {
-    final debianDir = Directory('${runtimesDir}/alpine-linux');
+    final debianDir = Directory('$runtimesDir/alpine-linux');
     final marker = File('${debianDir.path}/.panda-rootfs-version');
 
     if (DebianSetup.isRootfsComplete() && await marker.exists()) {
@@ -500,7 +494,7 @@ class _SetupScreenState extends State<SetupScreen>
     await _refreshDartRuntimeSymlinks(sharedPath);
 
     // ── Alpine runtime files ──
-    final debianDir = '${runtimesDir}/alpine-linux';
+    final debianDir = '$runtimesDir/alpine-linux';
     if (await Directory(debianDir).exists()) {
       try {
         await DebianSetup.ensureDebianRuntimeFiles();

@@ -378,7 +378,7 @@ class _SettingItemWidget extends StatelessWidget {
         return Switch(
           value: (value as bool?) ?? (item.defaultValue as bool?) ?? false,
           onChanged: onChanged,
-          activeColor: const Color(0xFF0066B8),
+          activeThumbColor: const Color(0xFF0066B8),
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         );
 
@@ -555,7 +555,7 @@ class _NoSettings extends StatelessWidget {
             const Icon(Icons.settings_outlined, size: 48, color: Colors.grey),
             const SizedBox(height: 12),
             Text(
-              '$extensionName',
+              extensionName,
               style: Theme.of(context).textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),

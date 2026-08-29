@@ -8,19 +8,12 @@
 library;
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:percent_indicator/percent_indicator.dart';
 import '../models/marketplace_extension.dart';
 import '../open_vsx_client.dart';
 import '../extension_registry.dart';
 import 'panda_registry_page.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
-import '../../bloc/ui_bloc/ui_bloc.dart';
-import '../../utils/constants.dart';
-import '../../utils/languages.dart' as lang;
-import '../../local_models/ui/local_models_page.dart';
 
 
 
@@ -76,7 +69,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
   int _totalSize = 0;
   bool _loadingMore = false;
   String _selectedCategory = 'All';
-  String _sortBy = 'relevance';
+  final String _sortBy = 'relevance';
   final Map<String, _InstallState> _installStates = {};
   Timer? _debounce;
 
@@ -877,7 +870,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                           ),
                         const SizedBox(width: 12),
                         // Stats
-                        _statBadge(Icons.star_rounded, '${ext.averageRating?.toStringAsFixed(1) ?? "—"}', Colors.amber[600]!),
+                        _statBadge(Icons.star_rounded, ext.averageRating?.toStringAsFixed(1) ?? "—", Colors.amber[600]!),
                         const SizedBox(width: 8),
                         _statBadge(Icons.download_rounded, _formatDownloads(ext.downloadCount), cs.onSurfaceVariant),
                       ],

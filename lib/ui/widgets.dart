@@ -3,6 +3,7 @@
 /// for better architecture (VS Code-style).
 ///
 /// This file re-exports everything for backward compatibility.
+library;
 
 // ── Editor components ──
 export 'editor/code_editor.dart';

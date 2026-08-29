@@ -22,7 +22,6 @@
 ///   * Entry kinds (error/warning/prominent/remote/offline) use the
 ///     darkened backgrounds computed from theme.ts.
 library;
-import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import '../../extensions/language_feature_router.dart';
 import '../../extensions/ui/status_bar_manager.dart';
@@ -274,16 +273,16 @@ class PandaStatusBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.cancel_outlined, size: 13),
+          const Icon(Icons.error, size: 13),
           const SizedBox(width: 3),
           Text(packNumber(errorCount)),
           const SizedBox(width: 8),
-          const Icon(Icons.warning_amber_outlined, size: 13),
+          const Icon(Icons.warning, size: 13),
           const SizedBox(width: 3),
           Text(packNumber(warningCount)),
           if (infoCount > 0) ...[
             const SizedBox(width: 8),
-            const Icon(Icons.info_outline, size: 13),
+            const Icon(Icons.info, size: 13),
             const SizedBox(width: 3),
             Text(packNumber(infoCount)),
           ],
@@ -300,7 +299,7 @@ class PandaStatusBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.call_split_rounded, size: 13),
+          const Icon(Icons.merge_type, size: 13),
           const SizedBox(width: 3),
           Text(branchName!),
         ],
@@ -344,7 +343,7 @@ class PandaStatusBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.computer_outlined, size: 13),
+          const Icon(Icons.computer, size: 13),
           const SizedBox(width: 3),
           Text(remoteName!),
         ],
@@ -433,7 +432,7 @@ class PandaStatusBar extends StatelessWidget {
           ? Stack(
               clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.notifications_off_outlined, size: 14),
+                const Icon(Icons.notifications_off, size: 14),
                 if (hasActivity)
                   Positioned(
                     right: -2,
@@ -446,11 +445,11 @@ class PandaStatusBar extends StatelessWidget {
               ? Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    const Icon(Icons.notifications_none, size: 14),
+                    const Icon(Icons.notifications, size: 14),
                     Positioned(right: -2, top: -1, child: _bellDot()),
                   ],
                 )
-              : const Icon(Icons.notifications_none, size: 14),
+              : const Icon(Icons.notifications, size: 14),
     );
   }
 
@@ -593,30 +592,30 @@ class PandaStatusBar extends StatelessWidget {
   if (match == null) return (null, raw);
 
   const map = <String, IconData>{
-    'error': Icons.cancel_outlined,
-    'warning': Icons.warning_amber_outlined,
-    'info': Icons.info_outline,
-    'bell': Icons.notifications_none,
+    'error': Icons.error,
+    'warning': Icons.warning,
+    'info': Icons.info,
+    'bell': Icons.notifications,
     'sync': Icons.sync,
     'check': Icons.check,
-    'pass': Icons.check_circle_outline,
-    'circle-check': Icons.check_circle_outline,
-    'cloud': Icons.cloud_outlined,
-    'cloud-upload': Icons.cloud_upload_outlined,
-    'cloud-download': Icons.cloud_download_outlined,
-    'remote': Icons.computer_outlined,
+    'pass': Icons.check_circle,
+    'circle-check': Icons.check_circle,
+    'cloud': Icons.cloud,
+    'cloud-upload': Icons.cloud_upload,
+    'cloud-download': Icons.cloud_download,
+    'remote': Icons.computer,
     'terminal': Icons.terminal,
-    'git-branch': Icons.call_split_rounded,
-    'account': Icons.account_circle_outlined,
-    'beaker': Icons.science_outlined,
-    'rocket': Icons.rocket_launch_outlined,
+    'git-branch': Icons.merge_type,
+    'account': Icons.account_circle,
+    'beaker': Icons.science,
+    'rocket': Icons.rocket_launch,
     'zap': Icons.bolt,
-    'shield': Icons.shield_outlined,
+    'shield': Icons.shield,
     'loading': Icons.refresh,
-    'debug-start': Icons.play_arrow_outlined,
-    'debug-stop': Icons.stop_outlined,
-    'play': Icons.play_arrow_outlined,
-    'server': Icons.dns_outlined,
+    'debug-start': Icons.play_arrow,
+    'debug-stop': Icons.stop,
+    'play': Icons.play_arrow,
+    'server': Icons.dns,
     'broadcast': Icons.podcasts,
   };
   final icon = map[match.group(1)];

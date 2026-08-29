@@ -187,7 +187,7 @@ class IconThemeLoader {
         );
       });
 
-      Map<String, String> _strMap(String key) {
+      Map<String, String> strMap(String key) {
         final m = json[key] as Map<String, dynamic>? ?? {};
         return m.map((k, v) => MapEntry(k.toLowerCase(), v.toString()));
       }
@@ -197,10 +197,10 @@ class IconThemeLoader {
         extensionId: extensionId,
         sourcePath: baseDir,
         definitions: definitions,
-        fileNames: _strMap('fileNames'),
-        fileExtensions: _strMap('fileExtensions'),
-        folderNames: _strMap('folderNames'),
-        folderNamesExpanded: _strMap('folderNamesExpanded'),
+        fileNames: strMap('fileNames'),
+        fileExtensions: strMap('fileExtensions'),
+        folderNames: strMap('folderNames'),
+        folderNamesExpanded: strMap('folderNamesExpanded'),
         file: json['file'] as String?,
         folder: json['folder'] as String?,
         folderExpanded: json['folderExpanded'] as String?,

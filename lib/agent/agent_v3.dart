@@ -4,6 +4,7 @@
 /// ```dart
 /// import 'package:panda/agent/agent_v3.dart';
 /// ```
+library;
 
 // Events
 export 'events/agent_event.dart';

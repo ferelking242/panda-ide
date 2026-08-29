@@ -1,4 +1,3 @@
-import '../gateway/panda_remote_gateway.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -7,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 
-import '../core/broken_icons.dart';
 import '../gateway/gateway_installer.dart';
 import '../gateway/gateway_manager.dart';
 import '../gateway/gateway_webview_bridge.dart';

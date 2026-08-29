@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 /// VS Code-style context menu triggered by long press on mobile.
 class MobileContextMenu extends StatelessWidget {

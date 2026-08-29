@@ -249,7 +249,7 @@ class _ExtensionListItem extends StatelessWidget {
                   value: ext.isEnabled,
                   onChanged: onToggle,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  activeColor: const Color(0xFF0066B8),
+                  activeThumbColor: const Color(0xFF0066B8),
                 ),
               ],
             ),

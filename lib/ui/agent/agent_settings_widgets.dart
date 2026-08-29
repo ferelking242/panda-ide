@@ -64,7 +64,7 @@ class _SubAgentCard extends StatelessWidget {
             width: 36,
             child: Switch(
               value: config.enabled,
-              activeColor: _kAccent,
+              activeThumbColor: _kAccent,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               onChanged: (v) =>
                   orch.updateSubAgent(config.id, (s) => s.enabled = v),
@@ -80,7 +80,7 @@ class _SubAgentCard extends StatelessWidget {
             style: TextStyle(fontSize: 9.5, color: muted)),
         const SizedBox(height: 3),
         DropdownButtonFormField<String>(
-          value: cfgOptions.any((c) => c.key == config.modelCfgKey)
+          initialValue: cfgOptions.any((c) => c.key == config.modelCfgKey)
               ? config.modelCfgKey
               : (cfgOptions.isNotEmpty ? cfgOptions.first.key : null),
           dropdownColor: isDark ? const Color(0xff252526) : Colors.white,
@@ -117,7 +117,7 @@ class _SubAgentCard extends StatelessWidget {
                   style: TextStyle(fontSize: 9.5, color: muted)),
               const SizedBox(height: 3),
               DropdownButtonFormField<String>(
-                value: profiles.any((p) => p.id == config.keyProfileId)
+                initialValue: profiles.any((p) => p.id == config.keyProfileId)
                     ? config.keyProfileId
                     : null,
                 dropdownColor: isDark ? const Color(0xff252526) : Colors.white,
@@ -160,7 +160,7 @@ class _SubAgentCard extends StatelessWidget {
                   width: 36,
                   child: Switch(
                     value: config.autoRotate,
-                    activeColor: _kAccent,
+                    activeThumbColor: _kAccent,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     onChanged: (v) =>
                         orch.updateSubAgent(config.id, (s) => s.autoRotate = v),
@@ -204,8 +204,8 @@ class _SettingsCard extends StatelessWidget {
   final EdgeInsets padding;
   const _SettingsCard({
     required this.isDark, required this.card, required this.border,
-    required this.child, this.padding = const EdgeInsets.all(14),
-  });
+    required this.child,
+  }) : padding = const EdgeInsets.all(14);
 
   @override
   Widget build(BuildContext context) => Container(
@@ -897,11 +897,11 @@ class _ChatToolCallBlock extends StatefulWidget {
   const _ChatToolCallBlock({
     required this.toolName,
     required this.status,
-    this.result,
-    this.args,
     required this.isDark,
     required this.fg,
     required this.muted,
+    this.result,
+    this.args,
   });
   @override
   State<_ChatToolCallBlock> createState() => _ChatToolCallBlockState();
@@ -914,7 +914,9 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
   IconData _iconFor(String name) {
     if (name == 'runShellCommand') return Broken.code_1;
     if (name.startsWith('write') || name.startsWith('edit') ||
-        name.startsWith('replace') || name.startsWith('insert')) return Broken.edit;
+        name.startsWith('replace') || name.startsWith('insert')) {
+      return Broken.edit;
+    }
     if (name.startsWith('read')) return Broken.document_1;
     if (name.startsWith('delete')) return Broken.trash;
     if (name.startsWith('list') || name.startsWith('glob')) return Broken.folder_2;
@@ -1681,7 +1683,7 @@ class _RotationMonitorState extends State<_RotationMonitor> {
             width: 34,
             child: Switch(
               value: brain.autoRotateSync(pDef.id),
-              activeColor: _kAccent,
+              activeThumbColor: _kAccent,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               onChanged: (v) => brain.setAutoRotate(pDef.id, v),
             ),
@@ -1699,7 +1701,7 @@ class _RotationMonitorState extends State<_RotationMonitor> {
     final isActive = brain.activeProfileId(providerId) == profile.id && !brain.autoRotateSync(providerId);
     final cooling = stats != null && stats.isCoolingDown;
     final statusLabel = cooling
-        ? (stats!.quotaResetAt != null && stats.quotaResetAt!.isAfter(DateTime.now())
+        ? (stats.quotaResetAt != null && stats.quotaResetAt!.isAfter(DateTime.now())
             ? 'quota → reset ${stats.quotaResetLabel}'
             : 'cooldown ${stats.cooldownRemaining}')
         : (profile.enabled ? 'prête' : 'désactivée');
@@ -1754,7 +1756,7 @@ class _RotationMonitorState extends State<_RotationMonitor> {
           width: 34,
           child: Switch(
             value: profile.enabled,
-            activeColor: _kAccent,
+            activeThumbColor: _kAccent,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             onChanged: (v) => brain.setProfileEnabled(providerId, profile.id, v),
           ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../core/broken_icons.dart';
 import '../../utils/themes.dart';
 
 /// Shows when no tabs are open — Panda logo ghost + hint text.

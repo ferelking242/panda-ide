@@ -3,28 +3,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:code_forge/code_forge.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:dartssh2/dartssh2.dart';
-import 'package:diff_match_patch/diff_match_patch.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_archive/flutter_archive.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:percent_indicator/percent_indicator.dart';
-import 'package:panda/utils/themes.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as path;
-import '../../terminal/terminal.dart';
 import '../constants.dart';
-import '../languages.dart';
-import '../editors/edit_hunks.dart';
 
 // SSH utilities: login, key management, keygen
 // Extracted from functions.dart

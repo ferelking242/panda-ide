@@ -237,11 +237,7 @@ class DebianSetup {
           final outFile = File(destPath);
           await outFile.parent.create(recursive: true);
           final content = file.content;
-          if (content is List<int>) {
-            await outFile.writeAsBytes(content, flush: true);
-          } else if (content != null) {
-            await outFile.writeAsBytes(List<int>.from(content), flush: true);
-          }
+          await outFile.writeAsBytes(content, flush: true);
           filesWritten++;
         } else {
           await Directory(destPath).create(recursive: true);
@@ -436,7 +432,7 @@ __panda_git() {
     local b
     b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return 0
     [ -n "\$(git status --porcelain 2>/dev/null)" ] && b="\$b *"
-    echo -ne "\033[38;5;141m\$b\033[0m"
+    echo -ne "033[38;5;141m\$b033[0m"
 }
 
   __panda_ps() {
@@ -446,11 +442,11 @@ __panda_git() {
         "\$HOME"/*) p="~\${PWD#\$HOME}" ;;
         *) p="\$PWD" ;;
     esac
-    echo -ne "\001\033[38;5;110m\002╭─ \001\033[38;5;183m\002\$p\001\033[0m\002"
+    echo -ne "001033[38;5;110m002╭─ 001033[38;5;183m002\$p001033[0m002"
     local g="\$(\$__panda_git)"
     [ -n "\$g" ] && echo -ne " \$g"
     echo -ne "\n"
-    echo -ne "\001\033[38;5;110m\002╰─❯ \001\033[0m\002"
+    echo -ne "001033[38;5;110m002╰─❯ 001033[0m002"
   }
 PS1='\$(__panda_ps)'
 ''';

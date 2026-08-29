@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import '../extension_host_health.dart';
 import '../extension_host_manager.dart';
-import '../extension_registry.dart';
 import '../node_runtime.dart';
-import '../extension_host_setup.dart';
 
 /// Extension host status and diagnostics page.
 class ExtensionHostStatusPage extends StatefulWidget {

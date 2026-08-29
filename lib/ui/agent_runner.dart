@@ -6,6 +6,7 @@
 ///
 /// Supporte également le tool calling : quand un BuildContext et un workspacePath
 /// sont fournis, l'agent peut exécuter des commandes shell, lire/écrire des fichiers, etc.
+library;
 
 import 'dart:async';
 import 'dart:convert';

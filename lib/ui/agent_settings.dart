@@ -15,22 +15,16 @@ import '../bloc/ui_bloc/ui_bloc.dart';
 import '../bloc/repo_bloc/repo_bloc.dart';
 import '../core/broken_icons.dart';
 import '../utils/ai.dart';
-import '../utils/constants.dart';
 import '../utils/agentic_tool_catalog.dart';
 import '../utils/copilot_chat.dart';
 import '../utils/panda_log.dart';
 import '../utils/subagent_orchestrator.dart';
 import '../utils/api_key_rotation.dart';
-import '../utils/agent_history_service.dart';
 import 'agent_runner.dart';
-import 'agent/agent_diff_viewer.dart';
-import 'agent/agent_rooms_page.dart';
-import 'agent/provider_models.dart';
 import 'package:markdown_widget/widget/all.dart';
 import 'package:markdown_widget/config/configs.dart';
 import 'package:path_provider/path_provider.dart';
 import '../utils/ai_provider_logos.dart';
-import '../utils/agent_export_service.dart';
 import 'widgets.dart';
 
 part 'agent/agent_settings_widgets.dart';
@@ -72,7 +66,7 @@ class _AgentSettingsState extends State<AgentSettings>
 
   // ── Chat tab state ──────────────────────────────────────────────────────
   final List<Map<String, dynamic>> _chatMessages = [];
-  String _currentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
+  final String _currentSessionId = DateTime.now().millisecondsSinceEpoch.toString();
   String? _attachedImageBase64;
   final _chatInputCtrl  = TextEditingController();
   final _chatScrollCtrl = ScrollController();
@@ -1191,7 +1185,7 @@ class _AgentSettingsState extends State<AgentSettings>
 
     final aiBloc  = context.read<AIBloc>();
     final newCfg  = Map<String, dynamic>.from(aiBloc.state.config);
-    final modelId = 'agent_${_selectedProviderId}';
+    final modelId = 'agent_$_selectedProviderId';
 
     final existingMap = newCfg[modelId] is Map ? Map<String, dynamic>.from(newCfg[modelId] as Map) : <String, dynamic>{};
     final List<Map<String, dynamic>> apiKeys = (existingMap['apiKeys'] as List?)
@@ -2063,10 +2057,12 @@ class _AgentSettingsState extends State<AgentSettings>
                               _chatMessages[i - 1]['text'] as String? ?? '';
                           if (userText.isEmpty) return;
                           setState(() {
-                            if (i < _chatMessages.length)
+                            if (i < _chatMessages.length) {
                               _chatMessages.removeAt(i);
-                            if ((i - 1) < _chatMessages.length)
+                            }
+                            if ((i - 1) < _chatMessages.length) {
                               _chatMessages.removeAt(i - 1);
+                            }
                             _chatInputCtrl.text = userText;
                           });
                           _chatSend();
@@ -2151,7 +2147,7 @@ class _AgentSettingsState extends State<AgentSettings>
                 border: border,
                 trailing: Switch(
                   value: enabled,
-                  activeColor: _kAccent,
+                  activeThumbColor: _kAccent,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   onChanged: (v) {
                     final updated = Map<String, bool>.from(selections)..[item.spec.name] = v;
@@ -2610,7 +2606,7 @@ class _AgentSettingsState extends State<AgentSettings>
                 const Spacer(),
                 Switch(
                   value: _memoryEnabled,
-                  activeColor: _kAccent,
+                  activeThumbColor: _kAccent,
                   onChanged: (v) { setState(() => _memoryEnabled = v); _saveMemorySettings(); },
                 ),
               ]),
@@ -2724,7 +2720,7 @@ class _AgentSettingsState extends State<AgentSettings>
                 contentPadding: EdgeInsets.zero,
                 title: Text('Rendu Markdown', style: TextStyle(fontSize: 12, color: fg)),
                 value: true,
-                activeColor: _kAccent,
+                activeThumbColor: _kAccent,
                 onChanged: (_) {},
               ),
             ],
@@ -3113,7 +3109,7 @@ class _AgentSettingsState extends State<AgentSettings>
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
-                value: selectedSub,
+                initialValue: selectedSub,
                 dropdownColor: Colors.grey[900],
                 style: const TextStyle(fontSize: 12, color: Colors.white),
                 decoration: InputDecoration(

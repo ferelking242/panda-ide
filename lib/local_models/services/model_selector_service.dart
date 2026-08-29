@@ -14,7 +14,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_model_entry.dart';
 import '../services/catalog_service.dart';
 import '../services/model_download_manager.dart';
-import 'lru_cache_service.dart';
 
 
 
@@ -113,7 +112,7 @@ class ModelSelectorService {
     // Récupère les fiches des modèles installés
     final candidates = <_Candidate>[];
     for (final inst in installed) {
-      final entry = _findEntry(catalog!, inst.modelId);
+      final entry = _findEntry(catalog, inst.modelId);
       if (entry == null) continue;
       final score = _scoreForTask(entry, inst, task);
       candidates.add(_Candidate(entry: entry, installed: inst, score: score));
@@ -175,8 +174,9 @@ class ModelSelectorService {
       case IdeTask.codeCompletion:
         score += caps.codingScore * 15.0;          // coding ×15 (0-75)
         if (!caps.vision) score += 10;             // bonus légerté visuelle
-        if (entry.quantizations.any((q) => q.level == inst.quantLevel && q.sizeGb < 3.0))
+        if (entry.quantizations.any((q) => q.level == inst.quantLevel && q.sizeGb < 3.0)) {
           score += 10;                             // bonus modèle léger = rapide
+        }
         break;
 
       case IdeTask.agentChat:
