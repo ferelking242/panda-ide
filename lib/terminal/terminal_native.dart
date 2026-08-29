@@ -1912,6 +1912,22 @@ class _SetupTerminalState extends State<SetupTerminal> {
     );
   }
 
+  // ── Deploy & run install script from assets ───────────────────────────────
+  Future<void> _installClaudeCode() async {
+    try {
+      // Write script to appDir (bind-mounted in PRoot)
+      final scriptDir = Directory('$appDir/scripts');
+      if (!scriptDir.existsSync()) await scriptDir.create(recursive: true);
+      final dest = File('${scriptDir.path}/install_claude_code.sh');
+      final data = await rootBundle.load('assets/scripts/install_claude_code.sh');
+      await dest.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      // Make executable inside PRoot (chmod via the active PTY)
+      sendToPty('chmod +x ${scriptDir.path}/install_claude_code.sh && bash ${scriptDir.path}/install_claude_code.sh\n');
+    } catch (e) {
+      PandaLog.e('Terminal', 'Failed to deploy install script: $e');
+    }
+  }
+
   // ── Helper: popup menu item ──────────────────────────────────────────────
   Widget _menuItem(IconData icon, String label, bool isDark) {
     final fg = isDark ? Colors.white.withValues(alpha: 0.85) : const Color(0xff1a1a1a);
@@ -2074,6 +2090,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 case 'font_reset':
                   _onTerminalFontSizeChanged(14);
                   break;
+                case 'install_claude':
+                  _installClaudeCode();
+                  break;
               }
             },
             itemBuilder: (_) => [
@@ -2102,6 +2121,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
               PopupMenuItem(
                 value: 'font_reset',
                 child: _menuItem(Icons.format_size_rounded, 'Réinitialiser police', isDark),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'install_claude',
+                child: _menuItem(Icons.auto_awesome_rounded, 'Installer Claude Code', isDark),
               ),
             ],
           ),
