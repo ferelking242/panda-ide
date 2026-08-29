@@ -421,7 +421,7 @@ fi
 # Fix Android group warnings (groups command fails for UID-based GIDs)
 if [ -f /etc/group ]; then
   for g in 1077 3003 9997 20658 50658; do
-    grep -q "^_g$g:" /etc/group 2>/dev/null || echo "_g$g:x:$g:" >> /etc/group 2>/dev/null
+    grep -q "^_g\$g:" /etc/group 2>/dev/null || echo "_g\$g:x:\$g:" >> /etc/group 2>/dev/null
   done
 fi
 alias ls='ls --color=auto'

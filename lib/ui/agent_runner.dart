@@ -497,7 +497,7 @@ $toolLines
           : (agenticTools?.getTools(
                 readAccessOnly: agentMode != 'agent',
               ) ??
-          const <Map<String, dynamic>>[];
+              const <Map<String, dynamic>>[]);
 
       // ── Génération dynamique du system prompt (V3 ContextManager) ──────
       final basePrompt = await _buildSystemPrompt(workspacePath, toolSchemas, agentMode: agentMode);
