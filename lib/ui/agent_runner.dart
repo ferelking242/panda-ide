@@ -27,6 +27,15 @@ import '../utils/pandarules_service.dart';
 import '../utils/agent_history_service.dart';
 import '../utils/agent_settings_service.dart';
 import '../utils/agent_thinking_parser.dart';
+import '../agent/tools/tool_registry.dart';
+import '../agent/tools/tool_executor.dart';
+import '../agent/tools/native_tool_bridge.dart';
+import '../agent/context/context_manager.dart';
+import '../agent/sessions/session_manager.dart';
+import '../agent/runtime/retry_manager.dart';
+import '../agent/runtime/error_classifier.dart';
+import '../agent/agents/agent_registry.dart';
+import '../agent/modes/mode_registry.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,6 +101,25 @@ class _BlockSequencer {
 
 class AgentRunner {
   http.Client? _client;
+
+  /// V3 agent components
+  final ToolRegistry toolRegistry = ToolRegistry();
+  late final ToolExecutor toolExecutor;
+  final ContextManager contextManager = ContextManager();
+  final SessionManager sessionManager = SessionManager();
+  final RetryManager retryManager = RetryManager();
+  final ErrorClassifier errorClassifier = ErrorClassifier();
+  final AgentRegistry agentRegistry = AgentRegistry();
+  final ModeRegistry modeRegistry = ModeRegistry();
+
+  final AgentEventBus _eventBus = AgentEventBus();
+
+  AgentRunner() {
+    toolExecutor = ToolExecutor(
+      registry: toolRegistry,
+      eventBus: _eventBus,
+    );
+  }
 
   void cancel() {
     try {
@@ -412,23 +440,66 @@ $toolLines
               approvalMode: approvalMode,
             )
           : null;
-      final toolSchemas = agenticTools?.getTools(
-            readAccessOnly: agentMode != 'agent',
-          ) ??
+
+      // Register native tools in V3 ToolRegistry
+      if (context != null && toolRegistry.count == 0) {
+        NativeToolBridge.registerAll(
+          registry: toolRegistry,
+          context: context,
+          workspacePath: workspacePath,
+          onConfirmRequired: onConfirmRequired,
+          approvalMode: approvalMode,
+        );
+      }
+
+      final toolSchemas = toolRegistry.count > 0
+          ? toolRegistry.getSchemas(mode: agentMode)
+          : (agenticTools?.getTools(
+                readAccessOnly: agentMode != 'agent',
+              ) ??
           const <Map<String, dynamic>>[];
 
-      // ── Génération dynamique du system prompt ───────────────────────────
+      // ── Génération dynamique du system prompt (V3 ContextManager) ──────
       final basePrompt = await _buildSystemPrompt(workspacePath, toolSchemas, agentMode: agentMode);
+      
+      // Enrich context with V3 ContextManager
+      String enrichedContext = '';
+      if (workspacePath.isNotEmpty) {
+        try {
+          final agentContext = await contextManager.build(
+            workspacePath: workspacePath,
+            userRequest: messages.isNotEmpty ? (messages.last['content']?.toString() ?? '') : '',
+            conversationHistory: messages,
+          );
+          if (agentContext.usagePercent > 0.1) {
+            enrichedContext = '\n\n## CONTEXTE PROJET (auto-généré)\n${agentContext.buildString()}';
+          }
+        } catch (_) {}
+      }
+      
       final systemPrompt = (systemPromptOverride == null ||
               systemPromptOverride.trim().isEmpty)
-          ? basePrompt
-          : '$basePrompt\n\n## CONTEXTE PERSONNALISÉ\n$systemPromptOverride';
+          ? '$basePrompt$enrichedContext'
+          : '$basePrompt$enrichedContext\n\n## CONTEXTE PERSONNALISÉ\n$systemPromptOverride';
+
+      // Save session start
+      final sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
+      await sessionManager.save(AgentSessionData(
+        id: sessionId,
+        title: messages.isNotEmpty ? (messages.last['content']?.toString() ?? 'Session').substring(0, 50) : 'Session',
+        mode: agentMode,
+        model: model.runtimeType.toString(),
+        messages: messages,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ));
 
       PandaLog.i(
         'AgentRunner',
         'Starting run — provider=${model.runtimeType} '
         'mode=$agentMode tools=${agenticTools != null} '
-        'toolCount=${toolSchemas.length} workspace=$workspacePath',
+        'toolCount=${toolSchemas.length} workspace=$workspacePath '
+        'sessionId=$sessionId',
       );
       if (model is Gemini) {
         await _runGemini(
@@ -459,10 +530,16 @@ $toolLines
       }
     } catch (e) {
       terminalError = true;
-      PandaLog.e('AgentRunner', 'Uncaught error in _run', error: e);
+      final classified = ErrorClassifier.classify(e);
+      PandaLog.e('AgentRunner', 'Uncaught error in _run [category=${classified.category}]', error: e);
       eventBus?.emit(AgentError(taskId: '', error: e.toString()));
       if (!ctrl.isClosed) {
-        ctrl.add(AgentChunk(phase: AgentPhase.error, text: e.toString()));
+        final errorMsg = classified.suggestion.isNotEmpty
+            ? '${e.toString()}
+
+Suggestion: ${classified.suggestion}'
+            : e.toString();
+        ctrl.add(AgentChunk(phase: AgentPhase.error, text: errorMsg));
       }
     } finally {
       _client?.close();
@@ -584,16 +661,23 @@ $toolLines
 
         ctrl.add(AgentChunk(phase: AgentPhase.toolRunning, toolName: name, toolArgs: args, blockId: seq.next('tool')));
         eventBus?.emit(AgentToolStarted(toolId: name, toolName: name, args: args));
+        _eventBus.emit(AgentToolStarted(toolId: name, toolName: name, args: args));
         PandaLog.toolCall('Gemini', name, args);
 
-        final result = await _dispatchTool(
-          tools,
-          name,
-          args,
-          allowWrites: allowWrites,
-          agentMode: agentMode,
-        )
-            .timeout(const Duration(seconds: 150), onTimeout: () {
+        // Use V3 ToolExecutor when available, fallback to old dispatch
+        String result;
+        if (toolRegistry.has(name)) {
+          result = await toolExecutor.execute(name, args);
+        } else {
+          result = await _dispatchTool(
+            tools,
+            name,
+            args,
+            allowWrites: allowWrites,
+            agentMode: agentMode,
+          );
+        }
+        result = result.timeout(const Duration(seconds: 150), onTimeout: () {
           PandaLog.w('Gemini', 'Tool $name timed out after 150 s');
           return 'Error: tool $name exceeded 150 s timeout';
         });
@@ -850,6 +934,10 @@ $toolLines
     Map<String, dynamic> args,
     {required bool allowWrites, String agentMode = 'agent'}
   ) async {
+    // Use V3 ToolExecutor when available
+    if (toolRegistry.has(functionName)) {
+      return await toolExecutor.execute(functionName, args);
+    }
     try {
       const mutatingTools = {
         'writeFile',
