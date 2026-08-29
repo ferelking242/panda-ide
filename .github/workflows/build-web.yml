@@ -56,6 +56,12 @@ jobs:
         # Cette commande est idempotente : elle crée web/ sans toucher au reste.
         run: flutter create . --platforms web
 
+      - name: Inject dark CSS background
+        # Ajoute un fond noir au body pour éviter l'écran gris Flutter web.
+        run: |
+          sed -i 's|</head>|  <style>html,body{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden}flt-glass-pane{background:#000}</style>\n</head>|' web/index.html
+          echo "Dark background CSS injected into web/index.html"
+
       - name: Build Web
         run: |
           flutter build web \
