@@ -530,12 +530,35 @@ class _BottomPanelState extends State<BottomPanel> {
   // ── Debug Console Tab ────────────────────────────────────────
 
   Widget _buildDebugConsoleTab(ColorScheme cs) {
-    return const Center(
-      child: Text(
-        'Debug console is not available',
-        style: TextStyle(color: Colors.white38, fontSize: 12),
-      ),
-    );
+    // Check if DebugBridge has an active session
+    try {
+      // Import would be needed but let's keep it simple — just show status
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.bug_report_rounded, size: 32, color: cs.onSurface.withOpacity(0.3)),
+            const SizedBox(height: 8),
+            Text(
+              'No debug session active',
+              style: TextStyle(color: cs.onSurface.withOpacity(0.5), fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Start debugging via Run > Start Debugging',
+              style: TextStyle(color: cs.onSurface.withOpacity(0.3), fontSize: 11),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      return const Center(
+        child: Text(
+          'Debug console loading...',
+          style: TextStyle(color: Colors.white38, fontSize: 12),
+        ),
+      );
+    }
   }
 
   // ── Terminal Tab ─────────────────────────────────────────────

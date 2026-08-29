@@ -29,6 +29,7 @@ import '../../utils/functions.dart';
 import '../../utils/languages.dart';
 import '../../utils/themes.dart';
 import '../../utils/constants.dart';
+import '../../services/lsp_service.dart';
 import 'find_panel.dart';
 
 // Code editor widget
@@ -98,18 +99,7 @@ class CodeEditorState extends State<CodeEditor> with AutomaticKeepAliveClientMix
   void initState() {
     super.initState();
     final controller = widget.codeController;
-    final ext = path.extension(widget.filePath.path).toLowerCase();
-    if ((ext == '.tsx' || ext == '.jsx') && controller.lspConfig == null) {
-      try {
-        controller.lspConfig = LspSocketConfig(
-          workspacePath: widget.filePath.parent.path,
-          languageId: ext.substring(1),
-          serverUrl: 'ws://127.0.0.1:65535',
-          disableError: true,
-          disableWarning: true,
-        );
-      } catch (_) {}
-    }
+    _setupLspForFile(controller);
     try {
       if (controller.text.isEmpty && widget.filePath.existsSync()) {
         controller.openedFile = widget.filePath.path;
@@ -145,6 +135,33 @@ class CodeEditorState extends State<CodeEditor> with AutomaticKeepAliveClientMix
         });
       }
     });
+  }
+
+  /// Setup LSP configuration for this file based on its extension.
+  void _setupLspForFile(CodeForgeController controller) {
+    if (controller.lspConfig != null) return; // already configured
+    try {
+      final lspService = LspService.instance;
+      final langId = lspService.languageIdForFile(widget.filePath.path);
+      if (langId == null) return; // no LSP server for this language
+
+      final info = lspService.getServerInfo(langId);
+      if (info == null) return;
+
+      // Only configure if the server is actually installed
+      lspService.checkInstalled(langId).then((installed) {
+        if (!installed || !mounted) return;
+        try {
+          controller.lspConfig = LspSocketConfig(
+            workspacePath: widget.filePath.parent.path,
+            languageId: info.languageId,
+            serverUrl: 'ws://127.0.0.1:65535', // will be updated when server starts
+            disableError: false,
+            disableWarning: false,
+          );
+        } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   void _setupCopilotListener() {
