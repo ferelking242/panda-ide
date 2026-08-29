@@ -36,6 +36,16 @@ import '../agent/runtime/retry_manager.dart';
 import '../agent/runtime/error_classifier.dart';
 import '../agent/agents/agent_registry.dart';
 import '../agent/modes/mode_registry.dart';
+import '../agent/events/event_activity_bridge.dart';
+import '../agent/modes/plan_viewer.dart';
+import '../agent/agents/agent_status_widget.dart';
+import '../agent/agents/subagent_viewer.dart';
+import '../agent/subagents/subagent_manager.dart';
+import '../agent/context/history_compactor.dart';
+import '../agent/context/code_map.dart';
+import '../agent/verification/verification_pipeline.dart';
+import '../agent/verification/verification_viewer.dart';
+import '../agent/mcp/mcp_tool_bridge.dart';
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -111,6 +121,9 @@ class AgentRunner {
   final ErrorClassifier errorClassifier = ErrorClassifier();
   final AgentRegistry agentRegistry = AgentRegistry();
   final ModeRegistry modeRegistry = ModeRegistry();
+  SubagentManager? subagentManager;
+  McpToolBridge? mcpToolBridge;
+  EventActivityBridge? activityBridge;
 
   final AgentEventBus _eventBus = AgentEventBus();
 
@@ -199,6 +212,16 @@ class AgentRunner {
           ..writeln('Type : $projectType')
           ..writeln('Chemin : $workspacePath')
           ..writeln(extraCtx);
+
+        // V3 CodeMap: analyze code structure
+        try {
+          final codeStructure = await CodeMap.analyze(workspacePath);
+          if (codeStructure.classes.isNotEmpty || codeStructure.functions.isNotEmpty) {
+            projectSection
+              ..writeln()
+              ..writeln(codeStructure.toContextString());
+          }
+        } catch (_) {}
 
         try {
           final entries = dir
@@ -452,6 +475,23 @@ $toolLines
         );
       }
 
+      // Initialize SubagentManager
+      subagentManager ??= SubagentManager(
+        registry: agentRegistry,
+        eventBus: _eventBus,
+      );
+
+      // Initialize McpToolBridge and sync MCP tools
+      mcpToolBridge ??= McpToolBridge(registry: toolRegistry);
+      try {
+        await mcpToolBridge!.syncAll();
+      } catch (_) {}
+
+      // Initialize EventActivityBridge if eventBus available
+      if (eventBus != null && activityBridge == null) {
+        // ActivityBridge needs ActivityController from UI - skip for now
+      }
+
       final toolSchemas = toolRegistry.count > 0
           ? toolRegistry.getSchemas(mode: agentMode)
           : (agenticTools?.getTools(
@@ -637,6 +677,15 @@ Suggestion: ${classified.suggestion}'
       // No tool calls → done
       if (functionCalls.isEmpty || tools == null) return;
 
+      // Compact history if too long
+      if (conversationMessages.length > 50) {
+        conversationMessages = await HistoryCompactor.compact(
+          conversationMessages,
+          maxTokens: 8000,
+          summarize: (text) async => text.substring(0, text.length ~/ 2),
+        );
+      }
+
       // Add assistant turn to conversation
       conversationMessages.add({
         'role': 'assistant',
@@ -684,6 +733,25 @@ Suggestion: ${classified.suggestion}'
         PandaLog.toolResult('Gemini', name, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: name, toolResult: result));
         eventBus?.emit(AgentToolFinished(toolId: name, toolName: name, result: result));
+
+        // V3 Verification: run checks after mutating tool calls
+        if (allowWrites && ['writeFile', 'editFile', 'deleteFile'].contains(name)) {
+          final changedFile = args['filePath']?.toString() ?? '';
+          if (changedFile.isNotEmpty && workspacePath.isNotEmpty) {
+            try {
+              final vResult = await VerificationPipeline.run(
+                changedFiles: [changedFile],
+                workspacePath: workspacePath,
+                level: VerificationLevel.basic,
+              );
+              if (!vResult.passed) {
+                eventBus?.emit(AgentVerificationFailed(
+                  errors: vResult.errors,
+                ));
+              }
+            } catch (_) {}
+          }
+        }
         toolResults.add({
           'tool_call_id': name,
           'role': 'tool',
@@ -913,6 +981,25 @@ Suggestion: ${classified.suggestion}'
         PandaLog.toolResult('SSE', functionName, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: functionName, toolResult: result));
         eventBus?.emit(AgentToolFinished(toolId: functionName, toolName: functionName, result: result));
+
+        // V3 Verification: run checks after mutating tool calls
+        if (allowWrites && ['writeFile', 'editFile', 'deleteFile'].contains(functionName)) {
+          final changedFile = args['filePath']?.toString() ?? '';
+          if (changedFile.isNotEmpty && workspacePath.isNotEmpty) {
+            try {
+              final vResult = await VerificationPipeline.run(
+                changedFiles: [changedFile],
+                workspacePath: workspacePath,
+                level: VerificationLevel.basic,
+              );
+              if (!vResult.passed) {
+                eventBus?.emit(AgentVerificationFailed(
+                  errors: vResult.errors,
+                ));
+              }
+            } catch (_) {}
+          }
+        }
         toolResults.add(result);
       }
 
