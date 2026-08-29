@@ -18,8 +18,7 @@ class BeUIMessageScroller extends StatefulWidget {
   final double releaseThreshold;
   final EdgeInsetsGeometry? padding;
 
-  const BeUIMessageScroller({
-    super.key,
+  const BeUIMessageScroller({super.key,
     required this.itemCount,
     required this.itemBuilder,
     this.isStreaming = false,
@@ -98,18 +97,15 @@ class BeUIMessageScrollerState extends State<BeUIMessageScroller> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      color: isDark ? const Color(0xff0d0e10) : Colors.white,
-      child: Stack(
-        children: [
-          // ── Message list ──────────────────────────────────────
-          ListView.builder(
-            controller: _ctrl,
-            padding: widget.padding ?? const EdgeInsets.symmetric(vertical: 8),
-            itemCount: widget.itemCount,
-            itemBuilder: widget.itemBuilder,
-          ),
+    return Stack(
+      children: [
+        // ── Message list ──────────────────────────────────────
+        ListView.builder(
+          controller: _ctrl,
+          padding: widget.padding ?? const EdgeInsets.symmetric(vertical: 8),
+          itemCount: widget.itemCount,
+          itemBuilder: widget.itemBuilder,
+        ),
 
         // ── Jump to live button ───────────────────────────────
         AnimatedSlide(
@@ -163,7 +159,6 @@ class BeUIMessageScrollerState extends State<BeUIMessageScroller> {
           ),
         ),
       ],
-      ),
     );
   }
 }

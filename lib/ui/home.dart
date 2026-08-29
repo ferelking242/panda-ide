@@ -1184,7 +1184,7 @@ class _SelectTypeState extends State<SelectType>
             child: Scaffold(
             key: _scaffoldKey,
             resizeToAvoidBottomInset: false,
-            backgroundColor: appTheme.isDark ? const Color(0xff0d0e10) : const Color(0xffdedede),
+            backgroundColor: appTheme.isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
 
             // ── Drawer (unchanged behaviour) ──────────────────────────────
             drawer: Drawer(
@@ -4978,14 +4978,11 @@ class _SelectTypeState extends State<SelectType>
       children: [
         // ── Messages / history panel / empty state ──────────────────────
         Expanded(
-          child: Container(
-            color: isDark ? const Color(0xff0d0e10) : Colors.white,
-            child: _showHistoryPanel
-                ? _buildHistoryPanel(appTheme)
-                : (_agentMessages.isEmpty
-                    ? _buildAgentEmptyState(isDark, muted, fg)
-                    : _buildAgentMessages(isDark, fg, muted)),
-          ),
+          child: _showHistoryPanel
+              ? _buildHistoryPanel(appTheme)
+              : (_agentMessages.isEmpty
+                  ? _buildAgentEmptyState(isDark, muted, fg)
+                  : _buildAgentMessages(isDark, fg, muted)),
         ),
 
         // ── Integrated PromptBar with Docked layout ────────────────────
