@@ -4978,11 +4978,14 @@ class _SelectTypeState extends State<SelectType>
       children: [
         // ── Messages / history panel / empty state ──────────────────────
         Expanded(
-          child: _showHistoryPanel
-              ? _buildHistoryPanel(appTheme)
-              : (_agentMessages.isEmpty
-                  ? _buildAgentEmptyState(isDark, muted, fg)
-                  : _buildAgentMessages(isDark, fg, muted)),
+          child: Container(
+            color: isDark ? const Color(0xff0d0e10) : Colors.white,
+            child: _showHistoryPanel
+                ? _buildHistoryPanel(appTheme)
+                : (_agentMessages.isEmpty
+                    ? _buildAgentEmptyState(isDark, muted, fg)
+                    : _buildAgentMessages(isDark, fg, muted)),
+          ),
         ),
 
         // ── Integrated PromptBar with Docked layout ────────────────────
@@ -7463,9 +7466,8 @@ class _SelectTypeState extends State<SelectType>
                   ),
                 ),
 
-              // Loader chip tant qu'aucun evenement visible n'est affiche.
-              // Masqué si l'activity feed gère déjà l'affichage.
-              if (isActiveMsg && !hasVisibleTimeline && _activityCtrl.activeActivity == null)
+              // Loader chip - only while actively streaming, never after done
+              if (isActiveMsg && _agentGenerating && !hasVisibleTimeline && _activityCtrl.activeActivity == null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: BeUILoadingState(
@@ -11688,13 +11690,14 @@ class _SwipeActionPanelState extends State<_SwipeActionPanel>
         );
       },
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onHorizontalDragUpdate: (details) {
           final dx = details.primaryDelta ?? 0;
-          if (dx < -5) {
-            if (!_animCtrl.isAnimating && _animCtrl.value == 0) {
+          if (dx < -3) {
+            if (_animCtrl.value == 0) {
               _animCtrl.forward();
             }
-          } else if (dx > 5 && _animCtrl.value > 0) {
+          } else if (dx > 3 && _animCtrl.value > 0) {
             _animCtrl.reverse();
           }
         },

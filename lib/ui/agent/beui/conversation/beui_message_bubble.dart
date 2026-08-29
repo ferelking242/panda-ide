@@ -287,15 +287,14 @@ class _SwipeActionWrapperState extends State<_SwipeActionWrapper>
                 );
               },
               child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onHorizontalDragUpdate: (details) {
                   final dx = details.primaryDelta ?? 0;
-                  if (dx < -5) {
-                    // Swipe left → open actions if not already open
-                    if (!_animCtrl.isAnimating && _animCtrl.value == 0) {
+                  if (dx < -3) {
+                    if (_animCtrl.value == 0) {
                       _openActions();
                     }
-                  } else if (dx > 5 && _animCtrl.value > 0) {
-                    // Swipe right → close
+                  } else if (dx > 3 && _animCtrl.value > 0) {
                     _closeActions();
                   }
                 },
