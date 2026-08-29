@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:http/http.dart' as http;
 
 import '../core/broken_icons.dart';
 import '../gateway/gateway_installer.dart';
@@ -62,6 +63,15 @@ class _GatewayPanelState extends State<GatewayPanel>
   final _tokenCtrl = TextEditingController();
   bool _tokenVisible = false;
 
+  // Models
+  List<Map<String, String>> _models = [];
+  bool _modelsOpen = false;
+  bool _loadingModels = false;
+
+  // Cookie import state
+  String _cookieStatus = '';
+  bool _importingCookies = false;
+
   @override
   void initState() {
     super.initState();
@@ -77,6 +87,49 @@ class _GatewayPanelState extends State<GatewayPanel>
     _installed  = await GatewayInstaller.isInstalled();
     try { await _bridge.start(); } catch (_) {}
     await _detectPython();
+    await _fetchModels();
+    if (mounted) setState(() {});
+  }
+
+  // ── Fetch models from gateway ────────────────────────────────────────────
+  Future<void> _fetchModels() async {
+    if (!_manager.isRunning) return;
+    setState(() => _loadingModels = true);
+    try {
+      final resp = await http.get(
+        Uri.parse('http://127.0.0.1:${_manager.apiPort}/api/dashboard/models'),
+      ).timeout(const Duration(seconds: 5));
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body);
+        final list = (data['models'] as List).cast<Map<String, dynamic>>();
+        _models = list.map((m) => {
+          'id': (m['id'] ?? '').toString(),
+          'name': (m['name'] ?? '').toString(),
+        }).toList();
+      }
+    } catch (_) {}
+    _loadingModels = false;
+    if (mounted) setState(() {});
+  }
+
+  // ── Import cookies from text ─────────────────────────────────────────────
+  Future<void> _importCookies(String raw) async {
+    if (raw.trim().isEmpty) return;
+    setState(() { _importingCookies = true; _cookieStatus = 'Import en cours…'; });
+    try {
+      final cookies = json.decode(raw);
+      final cookieList = cookies is List ? cookies : [cookies];
+      final resp = await http.post(
+        Uri.parse('http://127.0.0.1:${_manager.apiPort}/api/dashboard/cookies'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'cookies': cookieList}),
+      ).timeout(const Duration(seconds: 15));
+      final data = json.decode(resp.body);
+      _cookieStatus = data['message'] ?? (data['ok'] ? '✅ Importé' : '❌ Erreur');
+    } catch (e) {
+      _cookieStatus = '❌ Erreur: $e';
+    }
+    _importingCookies = false;
     if (mounted) setState(() {});
   }
 
@@ -296,6 +349,7 @@ class _GatewayPanelState extends State<GatewayPanel>
   Widget _buildProviderBar(bool dark) {
     final surface = dark ? const Color(0xff1a2035) : const Color(0xfff8f9fd);
     final border  = dark ? _kBorder : _kBorderL;
+    final fg      = dark ? Colors.grey[300]! : Colors.grey[800]!;
 
     return Container(
       decoration: BoxDecoration(
@@ -306,39 +360,227 @@ class _GatewayPanelState extends State<GatewayPanel>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('PROVIDER', style: TextStyle(
+          Text('AI PROVIDER', style: TextStyle(
               fontSize: 10, fontWeight: FontWeight.w700,
               letterSpacing: 1.0, color: _kMuted)),
           const SizedBox(height: 8),
-          Row(children: [
-            _ProviderChip(
-              label: 'ChatGPT',
-              icon: Icons.chat_bubble_outline_rounded,
-              color: const Color(0xff10a37f),
-              selected: _manager.provider == 'chatgpt',
-              onTap: () { _manager.setProvider('chatgpt'); setState(() {}); },
+          SizedBox(
+            height: 32,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _allProviders.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (_, i) {
+                final p = _allProviders[i];
+                return _ProviderChip(
+                  label: p['label'] as String,
+                  logo: p['logo'] as String,
+                  color: p['color'] as Color,
+                  selected: _manager.provider == p['key'],
+                  onTap: () {
+                    _manager.setProvider(p['key'] as String);
+                    setState(() {});
+                    _fetchModels();
+                  },
+                );
+              },
             ),
-            const SizedBox(width: 8),
-            _ProviderChip(
-              label: 'Claude',
-              icon: Icons.psychology_outlined,
-              color: const Color(0xffb87333),
-              selected: _manager.provider == 'claude',
-              onTap: () { _manager.setProvider('claude'); setState(() {}); },
-            ),
-            const SizedBox(width: 8),
-            _ProviderChip(
-              label: 'Panda Gateway',
-              icon: Icons.router_rounded,
-              color: _kPanda,
-              selected: _manager.provider == 'pandagateway',
-              onTap: () { _manager.setProvider('pandagateway'); setState(() {}); },
-            ),
-          ]),
+          ),
+          const SizedBox(height: 12),
+          // ── Model selector (dropdown) ──────────────────────────────────
+          Text('MODEL FOR ${(_manager.provider ?? 'chatgpt').toUpperCase()}', style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w700,
+              letterSpacing: 1.0, color: _kMuted)),
+          const SizedBox(height: 6),
+          _buildModelDropdown(dark, fg),
+          const SizedBox(height: 12),
+          // ── Cookie import ──────────────────────────────────────────────
+          Text('COOKIE AUTHENTICATION', style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w700,
+              letterSpacing: 1.0, color: _kMuted)),
+          const SizedBox(height: 6),
+          Text('Import cookies from a logged-in browser session to bypass login.',
+              style: TextStyle(fontSize: 11, color: _kMuted)),
+          const SizedBox(height: 8),
+          _buildCookieSection(dark, fg),
         ],
       ),
     );
   }
+
+  // ── Model dropdown (3-column grid) ───────────────────────────────────────
+  Widget _buildModelDropdown(bool dark, Color fg) {
+    return GestureDetector(
+      onTap: () => setState(() => _modelsOpen = !_modelsOpen),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xff131720) : Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _modelsOpen ? _kAccent : (dark ? _kBorder : _kBorderL),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              if (_loadingModels)
+                const SizedBox(width: 12, height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 1.5, color: _kMuted))
+              else
+                Icon(Icons.smart_toy_outlined, size: 14, color: _kMuted),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_models.length} modèles disponibles',
+                  style: TextStyle(fontSize: 12, color: _kMuted),
+                ),
+              ),
+              Icon(
+                _modelsOpen ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                size: 18, color: _kMuted,
+              ),
+            ]),
+            if (_modelsOpen && _models.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  mainAxisSpacing: 4,
+                  crossAxisSpacing: 4,
+                  childAspectRatio: 3.0,
+                  children: _models.map((m) {
+                    final name = m['name'] ?? m['id'] ?? '';
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _kAccent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _kAccent.withValues(alpha: 0.2)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        name,
+                        style: const TextStyle(fontSize: 10, color: _kAccent),
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Cookie import section ────────────────────────────────────────────────
+  Widget _buildCookieSection(bool dark, Color fg) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xff131720) : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: dark ? _kBorder : _kBorderL),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            _GwButton(
+              icon: Icons.upload_rounded,
+              label: _importingCookies ? 'Import…' : 'Import cookies',
+              color: _kAccent,
+              enabled: !_importingCookies && _manager.isRunning,
+              loading: _importingCookies,
+              onTap: () => _showCookieImportDialog(dark),
+            ),
+            const SizedBox(width: 8),
+            _GwButton(
+              icon: Icons.download_rounded,
+              label: 'Export current',
+              color: _kMuted,
+              enabled: _manager.isRunning,
+              onTap: () async {
+                final resp = await http.get(
+                  Uri.parse('http://127.0.0.1:${_manager.apiPort}/api/dashboard/cookies'),
+                ).timeout(const Duration(seconds: 5));
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('${json.decode(resp.body)['count'] ?? 0} cookies exportées'),
+                        duration: const Duration(seconds: 2)),
+                  );
+                }
+              },
+            ),
+          ]),
+          if (_cookieStatus.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(_cookieStatus, style: TextStyle(
+              fontSize: 11,
+              color: _cookieStatus.startsWith('✅') ? _kGreen :
+                     _cookieStatus.startsWith('❌') ? _kRed : _kMuted,
+            )),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showCookieImportDialog(bool dark) {
+    final ctrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: dark ? _kSurface : _kSurfaceL,
+        title: const Text('Import Cookies', style: TextStyle(fontSize: 15)),
+        content: TextField(
+          controller: ctrl,
+          maxLines: 6,
+          style: TextStyle(fontSize: 12, fontFamily: 'monospace',
+              color: dark ? Colors.grey[300] : Colors.grey[800]),
+          decoration: InputDecoration(
+            hintText: '[{"name":"session","value":"...","domain":".chatgpt.com"}]',
+            hintStyle: TextStyle(fontSize: 11, color: _kMuted),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(color: dark ? _kBorder : _kBorderL),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx),
+              child: const Text('Annuler')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _importCookies(ctrl.text);
+            },
+            child: const Text('Importer', style: TextStyle(color: _kAccent)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Provider definitions with real brand logos ────────────────────────────
+  static const List<Map<String, dynamic>> _allProviders = [
+    {'key': 'chatgpt',     'label': 'ChatGPT',      'logo': '🤖', 'color': Color(0xff10a37f)},
+    {'key': 'claude',      'label': 'Claude',       'logo': '🧠', 'color': Color(0xffb87333)},
+    {'key': 'gemini',      'label': 'Gemini',       'logo': '✦',  'color': Color(0xff4285f4)},
+    {'key': 'deepseek',    'label': 'DeepSeek',     'logo': '🔮', 'color': Color(0xff4d6bfe)},
+    {'key': 'grok',        'label': 'Grok',         'logo': '⚡', 'color': Color(0xff1da1f2)},
+    {'key': 'mistral',     'label': 'Mistral',      'logo': '🌀', 'color': Color(0xffff7000)},
+    {'key': 'qwen',        'label': 'Qwen',         'logo': '💎', 'color': Color(0xff6200ea)},
+    {'key': 'kimi',        'label': 'Kimi',         'logo': '🌙', 'color': Color(0xff00bfa5)},
+    {'key': 'pandagateway','label': 'Panda Gateway', 'logo': '🐼', 'color': _kPanda},
+  ];
 
   // ── Token row (Panda Open Gateway) ────────────────────────────────────────
   Widget _buildTokenRow(bool dark) {
@@ -714,12 +956,12 @@ class _PythonBadge extends StatelessWidget {
 
 class _ProviderChip extends StatelessWidget {
   final String label;
-  final IconData icon;
+  final String logo;
   final Color color;
   final bool selected;
   final VoidCallback onTap;
   const _ProviderChip({
-    required this.label, required this.icon, required this.color,
+    required this.label, required this.logo, required this.color,
     required this.selected, required this.onTap,
   });
 
@@ -739,7 +981,7 @@ class _ProviderChip extends StatelessWidget {
           ),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 13, color: selected ? color : _kMuted),
+          Text(logo, style: const TextStyle(fontSize: 14)),
           const SizedBox(width: 5),
           Text(
             label,
@@ -749,6 +991,16 @@ class _ProviderChip extends StatelessWidget {
               color: selected ? color : _kMuted,
             ),
           ),
+          if (selected) ...[
+            const SizedBox(width: 4),
+            Container(
+              width: 6, height: 6,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
         ]),
       ),
     );
