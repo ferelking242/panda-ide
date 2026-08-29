@@ -7428,6 +7428,19 @@ class _SelectTypeState extends State<SelectType>
                   onOpenGit: _openGithubTab,
                 ),
 
+              // Timeline events (thinking, tool calls, text blocks)
+              if (timeline.isNotEmpty)
+                ..._buildAgentTimelineWidgets(
+                  timeline,
+                  isActiveMsg: isActiveMsg,
+                  lastThinkingIdx: lastThinkingIdx,
+                  lastTextIdx: lastTextIdx,
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                  isError: isError,
+                ),
+
               // Ancien format : message sans blocs mais avec du texte.
               if (blocks.isEmpty && text.trim().isNotEmpty)
                 Padding(
@@ -11616,3 +11629,130 @@ class AttachmentPreviewCard extends StatelessWidget {
 // Agent UI helpers
 // ═════════════════════════════════════════════════════════════════════════════
 
+// Swipe action panel for assistant messages
+class _SwipeActionPanel extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onCopy;
+  final VoidCallback? onRetry;
+
+  const _SwipeActionPanel({
+    required this.child,
+    this.onCopy,
+    this.onRetry,
+  });
+
+  @override
+  State<_SwipeActionPanel> createState() => _SwipeActionPanelState();
+}
+
+class _SwipeActionPanelState extends State<_SwipeActionPanel>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animCtrl;
+  static const _actionPanelWidth = 160.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isDark ? const Color(0xff8b5cf6) : const Color(0xff6366f1);
+
+    return AnimatedBuilder(
+      animation: _animCtrl,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: Offset(-_animCtrl.value * _actionPanelWidth, 0),
+          child: child,
+        );
+      },
+      child: GestureDetector(
+        onHorizontalDragUpdate: (details) {
+          final dx = details.primaryDelta ?? 0;
+          if (dx < -5) {
+            if (!_animCtrl.isAnimating && _animCtrl.value == 0) {
+              _animCtrl.forward();
+            }
+          } else if (dx > 5 && _animCtrl.value > 0) {
+            _animCtrl.reverse();
+          }
+        },
+        onHorizontalDragEnd: (details) {
+          if (_animCtrl.value > 0 && _animCtrl.value < 0.5) {
+            _animCtrl.reverse();
+          } else if (_animCtrl.value >= 0.5) {
+            _animCtrl.forward();
+          }
+        },
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              right: 0,
+              top: 0,
+              bottom: 0,
+              width: _actionPanelWidth,
+              child: FadeTransition(
+                opacity: _animCtrl,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (widget.onCopy != null)
+                      _SwipeActionBtn(icon: Icons.copy_rounded, label: 'Copier', color: accent, onTap: () { _animCtrl.reverse(); widget.onCopy?.call(); }),
+                    if (widget.onRetry != null)
+                      _SwipeActionBtn(icon: Icons.refresh_rounded, label: 'Réessayer', color: const Color(0xFFEF5350), onTap: () { _animCtrl.reverse(); widget.onRetry?.call(); }),
+                  ],
+                ),
+              ),
+            ),
+            widget.child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SwipeActionBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _SwipeActionBtn({required this.icon, required this.label, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 72,
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)),
+          ],
+        ),
+      ),
+    );
+  }
+}
