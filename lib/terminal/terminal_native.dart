@@ -97,12 +97,7 @@ class _TwoFingerPinchRecognizer extends OneSequenceGestureRecognizer {
   String get debugDescription => 'two finger pinch zoom';
 }
 
-// ── Exit banner data ─────────────────────────────────────────────────────────
-class _ExitBannerData {
-  final int exitCode;
-  final String sessionTitle;
-  _ExitBannerData({required this.exitCode, required this.sessionTitle});
-}
+
 
 class SetupTerminal extends StatefulWidget {
   final String projectDir;
@@ -388,9 +383,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   int _selectedSuggestionIndex = 0;
   List<String> _pathBinaries = [];
 
-  // ── Feature 1: Exit code banner ────────────────────────────────────────────
-  final ValueNotifier<_ExitBannerData?> _exitBannerNotifier = ValueNotifier(null);
-  Timer? _exitBannerTimer;
+
 
   // ── Modifier state for keyboard menu (shared, never replaces onOutput) ──
   bool _modCtrl = false;
@@ -416,7 +409,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   }
 
   void _onPinchUpdate(double scale) {
-    final newSize = (_pinchBaseFontSize * scale).clamp(8.0, 40.0);
+    final newSize = (_pinchBaseFontSize * scale).clamp(4.0, 40.0);
     if ((newSize - _sessionBloc.state.fontSize).abs() >= 0.35) {
       _onTerminalFontSizeChanged(newSize);
     }
@@ -712,7 +705,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   }
 
   void _onTerminalFontSizeChanged(double fontSize) {
-    if (fontSize < 8) fontSize = 8;
+    if (fontSize < 4) fontSize = 4;
     if (fontSize > 40) fontSize = 40;
     _sessionBloc.add(UpdateTerminalFontSize(fontSize: fontSize));
     _saveTerminalFontSize(fontSize);
@@ -735,7 +728,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         if (f.existsSync()) endpoint = f.readAsStringSync().trim();
       } catch (_) {}
 
-      final env = <String, String>{...sessionEnv, if (endpoint.isNotEmpty) 'ADB_ENDPOINT': endpoint};
+      final env = <String, String>{...sessionEnv, 'LC_ALL': 'C', 'LANG': 'C', if (endpoint.isNotEmpty) 'ADB_ENDPOINT': endpoint};
       final hostArgs = <String>[
         '-0',
         '--link2symlink',
@@ -876,7 +869,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
       // LD_LIBRARY_PATH doit pointer vers le dossier des libs natives de
       // l'APK : PRoot y trouve libtalloc.so / libandroid-shmem.so, et
       // PROOT_LOADER designe le loader embarque (libproot-loader.so).
-      final sessionEnv = await DebianSetup.prootSessionEnvironment();
+      final sessionEnv = <String, String>{
+        ...await DebianSetup.prootSessionEnvironment(),
+        // Suppress locale / groups warnings on Alpine where locales are not installed
+        'LC_ALL': 'C',
+        'LANG': 'C',
+      };
       PandaLog.i('Terminal', 'Starting PRoot PTY', body: 'bin=$prootBin args=${prootArgs.length} env=${sessionEnv.keys.join(',')}');
 
       final process = Pty.start(
@@ -1467,8 +1465,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     for (final runtime in _sessionRuntimes.values) {
       runtime.terminal.onOutput = null;
     }
-    _exitBannerTimer?.cancel();
-    _exitBannerNotifier.dispose();
+
     super.dispose();
   }
 
@@ -2300,76 +2297,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      actions: [
-                        // Font size controls
-                        IconButton(
-                          tooltip: 'Police −',
-                          onPressed: () => _onTerminalFontSizeChanged(state.fontSize - 1),
-                          icon: const Icon(Icons.text_decrease, size: 18),
-                        ),
-                        IconButton(
-                          tooltip: 'Police +',
-                          onPressed: () => _onTerminalFontSizeChanged(state.fontSize + 1),
-                          icon: const Icon(Icons.text_increase, size: 18),
-                        ),
-                        // Feature 3: 3-dot menu ⋯
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert_rounded, size: 20),
-                          tooltip: 'Plus d\'options',
-                          color: isDark ? const Color(0xff252526) : Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            side: BorderSide(
-                              color: activeTerminalTheme.theme.selection,
-                              width: 0.5,
-                            ),
-                          ),
-                          onSelected: (value) async {
-                            switch (value) {
-                              case 'fullscreen':
-                                setState(() => _isFullscreen = true);
-                                break;
-                              case 'split_h':
-                                await _enableSplitView(Axis.horizontal);
-                                break;
-                              case 'split_v':
-                                await _enableSplitView(Axis.vertical);
-                                break;
-                              case 'close_split':
-                                setState(() { _isSplitView = false; _splitSessionId = null; });
-                                break;
-                              case 'font_reset':
-                                _onTerminalFontSizeChanged(14);
-                                break;
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            PopupMenuItem(
-                              value: 'fullscreen',
-                              child: _menuItem(Icons.fullscreen_rounded, 'Plein écran', isDark),
-                            ),
-                            if (!_isSplitView) ...[
-                              PopupMenuItem(
-                                value: 'split_h',
-                                child: _menuItem(Icons.vertical_split_rounded, 'Split horizontal', isDark),
-                              ),
-                              PopupMenuItem(
-                                value: 'split_v',
-                                child: _menuItem(Icons.horizontal_split_rounded, 'Split vertical', isDark),
-                              ),
-                            ] else
-                              PopupMenuItem(
-                                value: 'close_split',
-                                child: _menuItem(Icons.close_fullscreen_rounded, 'Fermer le split', isDark),
-                              ),
-                            PopupMenuItem(
-                              value: 'font_reset',
-                              child: _menuItem(Icons.format_size_rounded, 'Réinitialiser police', isDark),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 4),
-                      ],
+                      actions: const [SizedBox.shrink()],
                     ),
               body: Column(
                 children: [

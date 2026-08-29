@@ -27,6 +27,7 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
   bool isCtrlActive = false;
   bool isAltActive = false;
   bool isShiftActive = false;
+  bool _isExpanded = true;  // collapse/expand toggle
 
   void _resetModifiers() {
     setState(() {
@@ -194,30 +195,52 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Dongle handle
-        Container(
-          height: 6,
-          color: const Color(0xff181818),
-          child: Center(
-            child: Container(
-              width: 40,
-              height: 3,
-              decoration: BoxDecoration(
-                color: const Color(0xff555555),
-                borderRadius: BorderRadius.circular(1.5),
-              ),
+        // Dongle handle (tap to collapse/expand)
+        GestureDetector(
+          onTap: () => setState(() => _isExpanded = !_isExpanded),
+          child: Container(
+            height: 20,
+            color: const Color(0xff181818),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 40,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: const Color(0xff555555),
+                    borderRadius: BorderRadius.circular(1.5),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                AnimatedRotation(
+                  turns: _isExpanded ? 0.5 : 0.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: const Icon(
+                    Icons.keyboard_arrow_down,
+                    size: 14,
+                    color: Color(0xff888888),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        // Keyboard bar
-        Container(
-          height: 44,
-          color: const Color(0xff181818),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              children: [
+        // Keyboard bar (2 rows when expanded)
+        if (_isExpanded)
+          Container(
+            color: const Color(0xff181818),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Row 1: modifiers + core keys + shortcuts
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
                 // ── Core keys ──
                 chip('ESC', () {
                   _resetModifiers();
@@ -230,16 +253,23 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
                 chip('SPC', () => _sendWithModifiers(' ')),
                 div(),
                 // ── Common Ctrl shortcuts (direct sequences) ──
-                shortcutChip('C^', '\x03'),   // SIGINT
-                shortcutChip('Z^', '\x1a'),   // SIGTSTP
-                shortcutChip('D^', '\x04'),   // EOF
-                shortcutChip('L^', '\x0c'),   // clear
-                shortcutChip('A^', '\x01'),   // home
-                shortcutChip('E^', '\x05'),   // end
-                shortcutChip('K^', '\x0b'),   // kill line
-                shortcutChip('U^', '\x15'),   // kill before
-                shortcutChip('W^', '\x17'),   // delete word
-                div(),
+                shortcutChip('CtrlC', '\x03'),   // SIGINT
+                shortcutChip('CtrlZ', '\x1a'),   // SIGTSTP
+                shortcutChip('CtrlD', '\x04'),   // EOF
+                shortcutChip('CtrlL', '\x0c'),   // clear
+                shortcutChip('CtrlA', '\x01'),   // home
+                shortcutChip('CtrlE', '\x05'),   // end
+                shortcutChip('CtrlK', '\x0b'),   // kill line
+                shortcutChip('CtrlU', '\x15'),   // kill before
+                shortcutChip('CtrlW', '\x17'),   // delete word
+              ],
+                    ),
+                  ),
+                  // Row 2: arrows + nav + special chars + copy/paste
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
                 // ── Arrows ──
                 iconChip(Icons.arrow_upward_rounded, () {
                   _resetModifiers();
@@ -307,9 +337,12 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
                 iconChip(Icons.copy_rounded, () => widget.onCopy?.call()),
                 iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
               ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
       ],
     );
   }
