@@ -17,7 +17,7 @@ class DebianSetup {
   static const String _debianDirName = 'debian-arm64';
   static const String rootfsVersion = 'debian-bookworm-arm64 v1';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-debian-profile v5';
+  static const String profileVersion = 'panda-debian-profile v6';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -413,8 +413,17 @@ class DebianSetup {
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export HOME="\${HOME:-/root}"
 export TERM="\${TERM:-xterm-256color}"
-export LANG=en_US.UTF-8
-export LC_ALL=en_US.UTF-8
+# Only set locale if available — avoids "cannot change locale" warnings
+if locale -a 2>/dev/null | grep -qi en_US.UTF-8; then
+  export LANG=en_US.UTF-8
+  export LC_ALL=en_US.UTF-8
+fi
+# Fix Android group warnings (groups command fails for UID-based GIDs)
+if [ -f /etc/group ]; then
+  for g in 1077 3003 9997 20658 50658; do
+    grep -q "^_g$g:" /etc/group 2>/dev/null || echo "_g$g:x:$g:" >> /etc/group 2>/dev/null
+  done
+fi
 alias ls='ls --color=auto'
 alias ll='ls -la --color=auto'
 alias la='ls -la'
