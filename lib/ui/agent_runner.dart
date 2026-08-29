@@ -575,9 +575,7 @@ $toolLines
       eventBus?.emit(AgentError(taskId: '', error: e.toString()));
       if (!ctrl.isClosed) {
         final errorMsg = classified.suggestion.isNotEmpty
-            ? '${e.toString()}
-
-Suggestion: ${classified.suggestion}'
+            ? '${e.toString()}\nSuggestion: ${classified.suggestion}'
             : e.toString();
         ctrl.add(AgentChunk(phase: AgentPhase.error, text: errorMsg));
       }
@@ -677,13 +675,16 @@ Suggestion: ${classified.suggestion}'
       // No tool calls → done
       if (functionCalls.isEmpty || tools == null) return;
 
-      // Compact history if too long
+      // Compact history if too long (in-place)
       if (conversationMessages.length > 50) {
-        conversationMessages = await HistoryCompactor.compact(
+        final compacted = await HistoryCompactor.compact(
           conversationMessages,
           maxTokens: 8000,
           summarize: (text) async => text.substring(0, text.length ~/ 2),
         );
+        conversationMessages
+          ..clear()
+          ..addAll(compacted);
       }
 
       // Add assistant turn to conversation
@@ -726,10 +727,15 @@ Suggestion: ${classified.suggestion}'
             agentMode: agentMode,
           );
         }
-        result = result.timeout(const Duration(seconds: 150), onTimeout: () {
+        // Wrap with timeout
+        final timedResult = await Future<String>.delayed(
+          Duration.zero,
+          () => Future.value(result),
+        ).timeout(const Duration(seconds: 150), onTimeout: () {
           PandaLog.w('Gemini', 'Tool $name timed out after 150 s');
           return 'Error: tool $name exceeded 150 s timeout';
         });
+        result = timedResult;
         PandaLog.toolResult('Gemini', name, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: name, toolResult: result));
         eventBus?.emit(AgentToolFinished(toolId: name, toolName: name, result: result));
