@@ -39,7 +39,7 @@ dependencies:
   llama_flutter_android: { git: https://github.com/heckmon/Llama-Flutter.git }
   markdown: ^7.3.1
   markdown_widget: ^2.3.2+8
-  meta: ^1.17.0
+  meta: '>=1.15.0 <2.0.0'
   path: ^1.9.0
   path_provider: ^2.1.5
   permission_handler: ^11.3.0
@@ -49,7 +49,7 @@ dependencies:
   speech_to_text: ^7.0.0
   url_launcher: ^6.3.2
   multi_split_view: ^3.2.0
-  vector_math: ^2.2.0
+  vector_math: '>=2.1.4 <3.0.0'
   xterm: ^4.0.0
   figma_squircle: ^0.6.3
   crypto: ^3.0.3

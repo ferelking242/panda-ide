@@ -1,5 +1,3 @@
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:panda/utils/pandarules_service.dart';
 /// AgentRunner — streaming AI runner pour Panda Agent.
 ///
 /// Supporte tous les providers existants (Gemini, OpenAI, Claude, OpenAI-compat,
@@ -24,9 +22,7 @@ import '../utils/agentic_tools.dart';
 import '../utils/panda_log.dart';
 import '../terminal/terminal_bridge.dart';
 import '../utils/pandarules_service.dart';
-import '../utils/agent_history_service.dart';
 import '../utils/agent_settings_service.dart';
-import '../utils/agent_thinking_parser.dart';
 import '../agent/tools/tool_registry.dart';
 import '../agent/tools/tool_executor.dart';
 import '../agent/tools/native_tool_bridge.dart';
@@ -37,14 +33,12 @@ import '../agent/runtime/error_classifier.dart';
 import '../agent/agents/agent_registry.dart';
 import '../agent/modes/mode_registry.dart';
 import '../agent/events/event_activity_bridge.dart';
-import '../agent/modes/plan_viewer.dart';
-import '../agent/agents/agent_status_widget.dart';
-import '../agent/agents/subagent_viewer.dart';
+
 import '../agent/subagents/subagent_manager.dart';
 import '../agent/context/history_compactor.dart';
 import '../agent/context/code_map.dart';
 import '../agent/verification/verification_pipeline.dart';
-import '../agent/verification/verification_viewer.dart';
+
 import '../agent/mcp/mcp_tool_bridge.dart';
 
 
@@ -526,7 +520,7 @@ $toolLines
       final sessionId = 'session_${DateTime.now().millisecondsSinceEpoch}';
       await sessionManager.save(AgentSessionData(
         id: sessionId,
-        title: messages.isNotEmpty ? (messages.last['content']?.toString() ?? 'Session').substring(0, 50) : 'Session',
+        title: messages.isNotEmpty ? ((messages.last['content']?.toString() ?? 'Session').length > 50 ? (messages.last['content']?.toString() ?? 'Session').substring(0, 50) : (messages.last['content']?.toString() ?? 'Session')) : 'Session',
         mode: agentMode,
         model: model.runtimeType.toString(),
         messages: messages,
