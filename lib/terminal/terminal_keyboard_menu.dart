@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
-// Terminal keyboard menu overlay
-// Extracted from terminal_native.dart
+// Terminal keyboard menu — compact single-row scrollable bar.
+// Provides: modifier toggle (Ctrl/Alt/Shift), ESC, arrows, PgUp/PgDn,
+// Home/End, Tab, common Ctrl shortcuts, special chars, copy/paste.
 
 class TerminalKeyboardMenu extends StatefulWidget {
   final Function(String) onSendSequence;
   final Function(bool ctrl, bool alt, bool shift, VoidCallback resetCallback)
-  onModifierChanged;
+      onModifierChanged;
   final VoidCallback? onCopy;
   final VoidCallback? onPaste;
 
@@ -33,59 +34,67 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       isAltActive = false;
       isShiftActive = false;
     });
+    _notifyModifiers();
+  }
+
+  void _notifyModifiers() {
+    widget.onModifierChanged(
+      isCtrlActive,
+      isAltActive,
+      isShiftActive,
+      _resetModifiers,
+    );
   }
 
   void _toggleCtrl() {
-    setState(() {
-      isCtrlActive = !isCtrlActive;
-      if (isCtrlActive) {
-        isAltActive = false;
-        isShiftActive = false;
-      }
-    });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
+    setState(() => isCtrlActive = !isCtrlActive);
+    _notifyModifiers();
   }
 
   void _toggleAlt() {
-    setState(() {
-      isAltActive = !isAltActive;
-      if (isAltActive) {
-        isCtrlActive = false;
-        isShiftActive = false;
-      }
-    });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
+    setState(() => isAltActive = !isAltActive);
+    _notifyModifiers();
   }
 
   void _toggleShift() {
-    setState(() {
-      isShiftActive = !isShiftActive;
-      if (isShiftActive) {
-        isCtrlActive = false;
-        isAltActive = false;
+    setState(() => isShiftActive = !isShiftActive);
+    _notifyModifiers();
+  }
+
+  /// Apply active modifiers to a character and send.
+  void _sendWithModifiers(String char) {
+    String seq = char;
+    if (isCtrlActive && char.length == 1) {
+      final c = char.toLowerCase();
+      final code = c.codeUnitAt(0);
+      if (code >= 97 && code <= 122) {
+        // a=0x01 .. z=0x1a
+        seq = String.fromCharCode(code - 96);
+      } else if (c == '[') {
+        seq = '\x1b';
+      } else if (c == '\\') {
+        seq = '\x1c';
+      } else if (c == ']') {
+        seq = '\x1d';
+      } else if (c == '^') {
+        seq = '\x1e';
+      } else if (c == '_') {
+        seq = '\x1f';
+      } else if (c == '?') {
+        seq = '\x7f'; // DEL
+      } else if (c == ' ') {
+        seq = '\x00'; // NUL
       }
-    });
-    widget.onModifierChanged(
-      isCtrlActive,
-      isAltActive,
-      isShiftActive,
-      _resetModifiers,
-    );
+    }
+    if (isAltActive) {
+      seq = '\x1b' + seq;
+    }
+    widget.onSendSequence(seq);
+    _resetModifiers();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Compact single-row scrollable keyboard bar — ~44px height vs old ~90px.
     const baseStyle = TextStyle(
       color: Colors.white,
       fontSize: 11.5,
@@ -98,11 +107,19 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       fontWeight: FontWeight.w600,
       letterSpacing: 0.1,
     );
+    const shortcutStyle = TextStyle(
+      color: Color(0xff90caf9),
+      fontSize: 10.5,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.1,
+    );
     const divColor = Color(0xff454545);
-    const chipBg   = Color(0xff2d2d2d);
+    const chipBg = Color(0xff2d2d2d);
     const activeBg = Color(0xff3a3000);
     const chipBorder = Color(0xff454545);
     const activeBorder = Color(0xffffd700);
+    const shortcutBg = Color(0xff1a2a3a);
+    const shortcutBorder = Color(0xff2a4a6a);
 
     Widget chip(String label, VoidCallback onTap, {bool active = false}) {
       return GestureDetector(
@@ -122,6 +139,29 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
           ),
           alignment: Alignment.center,
           child: Text(label, style: active ? activeStyle : baseStyle),
+        ),
+      );
+    }
+
+    /// Shortcut chip — sends a fixed control sequence directly (bypasses modifiers).
+    Widget shortcutChip(String label, String seq) {
+      return GestureDetector(
+        onTap: () {
+          _resetModifiers();
+          widget.onSendSequence(seq);
+        },
+        child: Container(
+          height: 28,
+          constraints: const BoxConstraints(minWidth: 34),
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+          decoration: BoxDecoration(
+            color: shortcutBg,
+            borderRadius: BorderRadius.circular(5),
+            border: Border.all(color: shortcutBorder, width: 0.8),
+          ),
+          alignment: Alignment.center,
+          child: Text(label, style: shortcutStyle),
         ),
       );
     }
@@ -154,7 +194,7 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Clean dongle handle bar
+        // Dongle handle
         Container(
           height: 6,
           color: const Color(0xff181818),
@@ -174,59 +214,103 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
           height: 44,
           color: const Color(0xff181818),
           child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
-          children: [
-            chip('ESC',   () => widget.onSendSequence('\x1b')),
-            chip('CTRL',  _toggleCtrl,  active: isCtrlActive),
-            chip('ALT',   _toggleAlt,   active: isAltActive),
-            chip('SHIFT', _toggleShift, active: isShiftActive),
-            chip('TAB',   () => widget.onSendSequence('\t')),
-            div(),
-            iconChip(Icons.arrow_upward_rounded,  () => widget.onSendSequence('\x1b[A')),
-            iconChip(Icons.arrow_downward_rounded, () => widget.onSendSequence('\x1b[B')),
-            iconChip(Icons.arrow_back_rounded,    () => widget.onSendSequence('\x1b[D')),
-            iconChip(Icons.arrow_forward_rounded, () => widget.onSendSequence('\x1b[C')),
-            div(),
-            chip('HOME',  () => widget.onSendSequence('\x1b[H')),
-            chip('END',   () => widget.onSendSequence('\x1b[F')),
-            chip('PgUp',  () => widget.onSendSequence('\x1b[5~')),
-            chip('PgDn',  () => widget.onSendSequence('\x1b[6~')),
-            div(),
-            chip('|',  () => widget.onSendSequence('|')),
-            chip('&',  () => widget.onSendSequence('&')),
-            chip(';',  () => widget.onSendSequence(';')),
-            chip('~',  () => widget.onSendSequence('~')),
-            chip('.',  () => widget.onSendSequence('.')),
-            chip('/',  () => widget.onSendSequence('/')),
-            chip('\\', () => widget.onSendSequence('\\')),
-            chip('`',  () => widget.onSendSequence('`')),
-            chip('"',  () => widget.onSendSequence('"')),
-            chip("'",  () => widget.onSendSequence("'")),
-            div(),
-            chip('(',  () => widget.onSendSequence('(')),
-            chip(')',  () => widget.onSendSequence(')')),
-            chip('{',  () => widget.onSendSequence('{')),
-            chip('}',  () => widget.onSendSequence('}')),
-            chip('[',  () => widget.onSendSequence('[')),
-            chip(']',  () => widget.onSendSequence(']')),
-            chip('!',  () => widget.onSendSequence('!')),
-            chip('#',  () => widget.onSendSequence('#')),
-            chip('%',  () => widget.onSendSequence('%')),
-            chip('^',  () => widget.onSendSequence('^')),
-            chip('@',  () => widget.onSendSequence('@')),
-            chip('*',  () => widget.onSendSequence('*')),
-            chip('>',  () => widget.onSendSequence('>')),
-            chip('<',  () => widget.onSendSequence('<')),
-            div(),
-            iconChip(Icons.copy_rounded,  () => widget.onCopy?.call()),
-            iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
-          ],
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                // ── Core keys ──
+                chip('ESC', () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b');
+                }),
+                chip('CTRL', _toggleCtrl, active: isCtrlActive),
+                chip('ALT', _toggleAlt, active: isAltActive),
+                chip('SHIFT', _toggleShift, active: isShiftActive),
+                chip('TAB', () => _sendWithModifiers('\t')),
+                chip('SPC', () => _sendWithModifiers(' ')),
+                div(),
+                // ── Common Ctrl shortcuts (direct sequences) ──
+                shortcutChip('C^', '\x03'),   // SIGINT
+                shortcutChip('Z^', '\x1a'),   // SIGTSTP
+                shortcutChip('D^', '\x04'),   // EOF
+                shortcutChip('L^', '\x0c'),   // clear
+                shortcutChip('A^', '\x01'),   // home
+                shortcutChip('E^', '\x05'),   // end
+                shortcutChip('K^', '\x0b'),   // kill line
+                shortcutChip('U^', '\x15'),   // kill before
+                shortcutChip('W^', '\x17'),   // delete word
+                div(),
+                // ── Arrows ──
+                iconChip(Icons.arrow_upward_rounded, () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[A');
+                }),
+                iconChip(Icons.arrow_downward_rounded, () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[B');
+                }),
+                iconChip(Icons.arrow_back_rounded, () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[D');
+                }),
+                iconChip(Icons.arrow_forward_rounded, () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[C');
+                }),
+                div(),
+                // ── Navigation ──
+                chip('HOME', () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[H');
+                }),
+                chip('END', () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[F');
+                }),
+                chip('PgUp', () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[5~');
+                }),
+                chip('PgDn', () {
+                  _resetModifiers();
+                  widget.onSendSequence('\x1b[6~');
+                }),
+                div(),
+                // ── Special chars ──
+                chip('|', () => _sendWithModifiers('|')),
+                chip('&', () => _sendWithModifiers('&')),
+                chip(';', () => _sendWithModifiers(';')),
+                chip('~', () => _sendWithModifiers('~')),
+                chip('.', () => _sendWithModifiers('.')),
+                chip('/', () => _sendWithModifiers('/')),
+                chip('\\', () => _sendWithModifiers('\\')),
+                chip('`', () => _sendWithModifiers('`')),
+                chip('"', () => _sendWithModifiers('"')),
+                chip("'", () => _sendWithModifiers("'")),
+                div(),
+                chip('(', () => _sendWithModifiers('(')),
+                chip(')', () => _sendWithModifiers(')')),
+                chip('{', () => _sendWithModifiers('{')),
+                chip('}', () => _sendWithModifiers('}')),
+                chip('[', () => _sendWithModifiers('[')),
+                chip(']', () => _sendWithModifiers(']')),
+                chip('!', () => _sendWithModifiers('!')),
+                chip('#', () => _sendWithModifiers('#')),
+                chip('%', () => _sendWithModifiers('%')),
+                chip('^', () => _sendWithModifiers('^')),
+                chip('@', () => _sendWithModifiers('@')),
+                chip('*', () => _sendWithModifiers('*')),
+                chip('>', () => _sendWithModifiers('>')),
+                chip('<', () => _sendWithModifiers('<')),
+                div(),
+                // ── Copy / Paste ──
+                iconChip(Icons.copy_rounded, () => widget.onCopy?.call()),
+                iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
+              ],
+            ),
+          ),
         ),
-      ),
-    ),
-    ],
-  );
+      ],
+    );
   }
 }
