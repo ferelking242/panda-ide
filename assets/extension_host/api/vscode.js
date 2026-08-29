@@ -683,6 +683,95 @@ function _makeTerminalProxy(name) {
   };
 }
 
+// ── vscode.panda — API custom Panda IDE (device, terminal, proot) ────────
+
+const panda = {
+  // ── Terminal PRoot ──
+  terminal: {
+    /** Exécute une commande dans le rootfs PRoot Linux */
+    exec: (command, options = {}) =>
+      ipc.callFlutter('panda.terminal.exec', [command, options]),
+    /** Envoie du texte brut au terminal actif */
+    sendText: (text) =>
+      ipc.callFlutter('panda.terminal.sendText', [text]),
+    /** Récupère la dernière sortie du terminal */
+    getOutput: (lines = 50) =>
+      ipc.callFlutter('panda.terminal.getOutput', [lines]),
+    /** Vérifie si PRoot est installé et prêt */
+    isReady: () =>
+      ipc.callFlutter('panda.terminal.isReady', []),
+  },
+
+  // ── Android Device (adb) ──
+  device: {
+    /** Ouvre les Options développeur Android */
+    openDeveloperSettings: () =>
+      ipc.callFlutter('panda.device.openDeveloperSettings', []),
+    /** Lance adb pair avec port et code */
+    pair: (port, code) =>
+      ipc.callFlutter('panda.device.pair', [port, code]),
+    /** Connecte adb au port de débogage */
+    connect: (port) =>
+      ipc.callFlutter('panda.device.connect', [port]),
+    /** Liste les appareils connectés */
+    listDevices: () =>
+      ipc.callFlutter('panda.device.listDevices', []),
+    /** Vérifie si adb est disponible */
+    isAdbAvailable: () =>
+      ipc.callFlutter('panda.device.isAdbAvailable', []),
+  },
+
+  // ── AI Gateway (Panda AI server) ──
+  gateway: {
+    /** Démarre le serveur Python uvicorn */
+    start: (provider = 'chatgpt') =>
+      ipc.callFlutter('panda.gateway.start', [provider]),
+    /** Arrête le serveur */
+    stop: () =>
+      ipc.callFlutter('panda.gateway.stop', []),
+    /** Statut du serveur */
+    status: () =>
+      ipc.callFlutter('panda.gateway.status', []),
+    /** Vérifie si Python est installé */
+    isPythonAvailable: () =>
+      ipc.callFlutter('panda.gateway.isPythonAvailable', []),
+    /** Clonne et installe panda-ai depuis GitHub */
+    install: () =>
+      ipc.callFlutter('panda.gateway.install', []),
+    /** URL du dashboard (WebView) */
+    dashboardUrl: () => 'http://127.0.0.1:8000',
+  },
+
+  // ── Proot (environnement Linux) ──
+  proot: {
+    /** Vérifie si le rootfs est installé */
+    isInstalled: () =>
+      ipc.callFlutter('panda.proot.isInstalled', []),
+    /** Installe le rootfs Debian */
+    install: () =>
+      ipc.callFlutter('panda.proot.install', []),
+    /** Exécute une commande dans proot */
+    run: (command) =>
+      ipc.callFlutter('panda.proot.run', [command]),
+    /** Récupère le chemin du rootfs */
+    rootfsPath: () =>
+      ipc.callFlutter('panda.proot.rootfsPath', []),
+  },
+
+  // ── Extensions (gestion depuis une extension) ──
+  extensions: {
+    /** Liste les extensions installées */
+    list: () =>
+      ipc.callFlutter('panda.extensions.list', []),
+    /** Active une extension par ID */
+    activate: (id) =>
+      ipc.callFlutter('panda.extensions.activate', [id]),
+    /** Désactive une extension */
+    deactivate: (id) =>
+      ipc.callFlutter('panda.extensions.deactivate', [id]),
+  },
+};
+
 // ── Export final du module `vscode` ───────────────────────────────────────
 
 module.exports = {
@@ -701,6 +790,7 @@ module.exports = {
   lm,
   chat,
   tests,
+  panda,
 
   // Types
   ...types,

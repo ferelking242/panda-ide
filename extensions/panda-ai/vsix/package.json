@@ -1,0 +1,62 @@
+{
+  "name": "panda-ai",
+  "displayName": "Panda AI",
+  "description": "AI Gateway — Serveur Python (FastAPI) dans le terminal PRoot. Connecte ChatGPT, Claude ou Panda Open Gateway. Dashboard intégré.",
+  "version": "1.1.0",
+  "publisher": "ferelking",
+  "license": "MIT",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["AI", "Other"],
+  "keywords": ["ai", "chatgpt", "claude", "gateway", "api"],
+  "icon": "icon.svg",
+  "activationEvents": [
+    "onCommand:panda-ai.install",
+    "onCommand:panda-ai.start",
+    "onCommand:panda-ai.stop",
+    "onCommand:panda-ai.status",
+    "onCommand:panda-ai.openDashboard"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "panda-ai.install", "title": "Panda AI: Install Gateway" },
+      { "command": "panda-ai.start", "title": "Panda AI: Start Server", "icon": "$(play)" },
+      { "command": "panda-ai.stop", "title": "Panda AI: Stop Server", "icon": "$(debug-stop)" },
+      { "command": "panda-ai.status", "title": "Panda AI: Show Status" },
+      { "command": "panda-ai.openDashboard", "title": "Panda AI: Open Dashboard" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "panda-ai",
+          "title": "Panda AI",
+          "icon": "icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "panda-ai": [
+        {
+          "id": "panda-ai.dashboard",
+          "name": "Panda AI Gateway",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Panda AI",
+      "properties": {
+        "panda-ai.provider": {
+          "type": "string",
+          "default": "chatgpt",
+          "enum": ["chatgpt", "claude", "gemini", "deepseek"],
+          "description": "Fournisseur AI principal"
+        },
+        "panda-ai.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Démarrer le serveur automatiquement"
+        }
+      }
+    }
+  }
+}
