@@ -21,7 +21,7 @@
 | `lib/utils/agent_thinking_parser.dart` | 80 | Parse <think> tags |
 | `lib/ui/agent/agent_models.dart` | 215 | AgentActivityEvent + Controller |
 | `lib/ui/agent/agent_widgets.dart` | 1601 | 29 widgets agent |
-| `lib/ui/agent/beui/` (15 fichiers) | ~2000 | Beautiful UI components (NON UTILISÉS) |
+| `lib/ui/agent/flow_ui/` | — | Flow UI components utilisés par l'agent |
 
 ### Ce qui Existe et Fonctionne
 
@@ -36,7 +36,7 @@
 | **Thinking Parser** | ✅ Fonctionnel | Parse <think>, <thought>, <reasoning> |
 | **Checkpoint Manager** | ✅ Fonctionnel | File snapshots pour rollback |
 | **Activity Feed** | ✅ Fonctionnel | AgentActivityController + widgets |
-| **BeUI Components** | ❌ Non utilisés | 15 composants créés mais jamais intégrés |
+| **Flow UI Components** | ✅ Intégrés | Messages, markdown, code, réflexion, erreurs et composer |
 
 ### Doublons Identifiés
 
@@ -170,8 +170,8 @@
 
 ### Phase 9 — UI Integration
 
-**Objectif** : Intégrer les BeUI components.
+**Objectif** : Étendre l'intégration Flow UI.
 
 1. Connecter AgentEventBus → Activity Feed
-2. Intégrer BeUI components dans l'agent UI
+2. Étendre les parties personnalisées Flow UI dans l'agent UI
 3. Ajouter Subagent Viewer + Verification Viewer

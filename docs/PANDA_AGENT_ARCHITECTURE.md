@@ -720,7 +720,7 @@ AgentFinished → UI met à jour
 | Rust parser | `native/rust/src/parser.rs` | tree-sitter |
 | Rust indexer | `native/rust/src/indexer.rs` | code indexer |
 | MCP servers | `mcp/servers/*.dart` | filesystem, git, search |
-| BeUI integration | `features/agent_ui/` | 15 composants |
+| Flow UI integration | `lib/ui/agent/flow_ui/` | Composants de chat et composer |
 
 ### P3 — Avancé (3-4 semaines)
 

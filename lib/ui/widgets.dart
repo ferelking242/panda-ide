@@ -73,16 +73,22 @@ export 'agent/agent_diff_viewer.dart';
 export 'agent/agent_slash_mentions_overlay.dart';
 export 'agent/provider_models.dart';
 
-// ── Agent BEUI compat (Flow UI bridge) ──
-export 'agent/beui_compat.dart';
+// ── Agent Flow UI ──
+export 'agent/panda_agent_flow_widgets.dart';
 export 'agent/flow_ui/widgets/flow_chat_view.dart';
 export 'agent/flow_ui/widgets/flow_composer.dart';
 export 'agent/flow_ui/widgets/flow_message.dart';
+export 'agent/flow_ui/widgets/flow_message_actions.dart';
+export 'agent/flow_ui/widgets/flow_pill.dart';
+export 'agent/flow_ui/widgets/flow_thread.dart';
 export 'agent/flow_ui/widgets/flow_markdown.dart';
 export 'agent/flow_ui/widgets/flow_code_block.dart';
 export 'agent/flow_ui/widgets/flow_thinking_indicator.dart';
 export 'agent/flow_ui/widgets/flow_shimmer_text.dart';
 export 'agent/flow_ui/widgets/flow_streaming_text.dart';
+export 'agent/flow_ui/models/flow_attachment.dart';
+export 'agent/flow_ui/models/flow_message_data.dart';
+export 'agent/flow_ui/models/flow_message_part.dart';
 export 'agent/flow_ui/theme/flow_theme.dart';
 export 'agent/flow_ui/theme/flow_colors.dart';
 
