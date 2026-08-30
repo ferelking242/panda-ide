@@ -39,7 +39,7 @@ Future<void> main() async {
     }
     // Initialize logging system (non-blocking, wrapped for safety)
     try {
-      await PandaLogger.init();
+      await PandaLogger.init().timeout(const Duration(seconds: 5));
     } catch (e) {
       // Logging failure must never prevent app startup
       debugPrint('[Main] Logger init failed: $e');
