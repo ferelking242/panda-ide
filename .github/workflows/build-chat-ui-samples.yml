@@ -1,0 +1,86 @@
+name: Build Chat UI Samples (APK)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'chat_ui_samples/**'
+      - '.github/workflows/build-chat-ui-samples.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'chat_ui_samples/**'
+      - '.github/workflows/build-chat-ui-samples.yml'
+  workflow_dispatch:
+
+jobs:
+  build-all:
+    name: Build ${{ matrix.sample }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sample: all-in-one
+            main_file: main.dart
+            package_suffix: all
+          - sample: basic
+            main_file: main_basic.dart
+            package_suffix: basic
+          - sample: streaming
+            main_file: main_streaming.dart
+            package_suffix: streaming
+          - sample: themed
+            main_file: main_themed.dart
+            package_suffix: themed
+          - sample: actions
+            main_file: main_actions.dart
+            package_suffix: actions
+          - sample: rich-widgets
+            main_file: main_rich_widgets.dart
+            package_suffix: richwidgets
+          - sample: rtl
+            main_file: main_rtl.dart
+            package_suffix: rtl
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter info
+        run: flutter doctor -v
+
+      - name: Install dependencies
+        working-directory: chat_ui_samples
+        run: flutter pub get
+
+      - name: Select main entry point
+        working-directory: chat_ui_samples
+        run: |
+          cp lib/main.dart lib/_original_main.dart
+          cp lib/${{ matrix.main_file }} lib/main.dart
+
+      - name: Set unique applicationId
+        working-directory: chat_ui_samples
+        run: |
+          sed -i \
+            "s|applicationId = \"com.example.flutter_gen_ai_chat_ui_example\"|applicationId = \"com.example.chatui.${{ matrix.package_suffix }}\"|" \
+            android/app/build.gradle.kts
+
+      - name: Build debug APK
+        working-directory: chat_ui_samples
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: chat-ui-${{ matrix.sample }}
+          path: chat_ui_samples/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
