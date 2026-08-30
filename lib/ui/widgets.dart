@@ -73,23 +73,18 @@ export 'agent/agent_diff_viewer.dart';
 export 'agent/agent_slash_mentions_overlay.dart';
 export 'agent/provider_models.dart';
 
-// ── Agent BEUI ──
-export 'agent/beui/approval/beui_approval_card.dart';
-export 'agent/beui/approval/beui_tool_approval.dart';
-export 'agent/beui/conversation/beui_message.dart';
-export 'agent/beui/conversation/beui_message_bubble.dart';
-export 'agent/beui/conversation/beui_message_scroller.dart';
-export 'agent/beui/conversation/beui_prompt_input.dart';
-export 'agent/beui/beui_theme.dart';
-export 'agent/beui/progress/beui_agent_activity.dart';
-export 'agent/beui/progress/beui_agent_loading_states.dart';
-export 'agent/beui/progress/beui_todo_list.dart';
-export 'agent/beui/response/beui_citations.dart';
-export 'agent/beui/response/beui_image_generation.dart';
-export 'agent/beui/response/beui_streaming_response.dart';
-export 'agent/beui/tools/beui_tool_result.dart';
-export 'agent/beui/tools/beui_code_block.dart';
-export 'agent/beui/tools/beui_file_diff.dart';
+// ── Agent BEUI compat (Flow UI bridge) ──
+export 'agent/beui_compat.dart';
+export 'agent/flow_ui/widgets/flow_chat_view.dart';
+export 'agent/flow_ui/widgets/flow_composer.dart';
+export 'agent/flow_ui/widgets/flow_message.dart';
+export 'agent/flow_ui/widgets/flow_markdown.dart';
+export 'agent/flow_ui/widgets/flow_code_block.dart';
+export 'agent/flow_ui/widgets/flow_thinking_indicator.dart';
+export 'agent/flow_ui/widgets/flow_shimmer_text.dart';
+export 'agent/flow_ui/widgets/flow_streaming_text.dart';
+export 'agent/flow_ui/theme/flow_theme.dart';
+export 'agent/flow_ui/theme/flow_colors.dart';
 
 // ── Browser ──
 export 'browser/browser_panel.dart';
