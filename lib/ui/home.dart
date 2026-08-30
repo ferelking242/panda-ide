@@ -1333,8 +1333,13 @@ class _SelectTypeState extends State<SelectType>
                             ),
 
                               // ── Status bar — right of activity bar ──
-                              _buildStatusBar(context, appTheme,
-                                  sidebarActive: _sidebarState >= 1),
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                child: _buildStatusBar(context, appTheme,
+                                    sidebarActive: _sidebarState >= 1),
+                              ),
                             ],
                           ),
                         ),
@@ -4727,7 +4732,7 @@ class _SelectTypeState extends State<SelectType>
   Widget _buildPandaAgentPanel(BuildContext context, AppTheme appTheme,
       {bool asPage = false}) {
     final isDark  = appTheme.isDark;
-    final panelBg = isDark ? const Color(0xff121316) : const Color(0xfffafafa);
+    final panelBg = isDark ? const Color(0xff181818) : const Color(0xfffafafa);
     final borderC = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
 
     // Watch AI state so chat input can access model info
@@ -4782,7 +4787,7 @@ class _SelectTypeState extends State<SelectType>
   Widget _buildAgentTabBar(
       BuildContext context, AppTheme appTheme, bool asPage) {
     final isDark    = appTheme.isDark;
-    final panelBg   = isDark ? const Color(0xff121316) : const Color(0xfffafafa);
+    final panelBg   = isDark ? const Color(0xff181818) : const Color(0xfffafafa);
     final borderC   = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
     final fg        = isDark ? Colors.grey[300]! : Colors.grey[800]!;
     final muted     = isDark ? Colors.grey[500]! : Colors.grey[500]!;
@@ -5491,7 +5496,7 @@ class _SelectTypeState extends State<SelectType>
   // ── User Settings page ────────────────────────────────────────────────────
   Widget _buildUserSettingsPage(BuildContext context, AppTheme appTheme) {
     final isDark  = appTheme.isDark;
-    final bg      = isDark ? const Color(0xff121316) : const Color(0xfffafafa);
+    final bg      = isDark ? const Color(0xff181818) : const Color(0xfffafafa);
     final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
     final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final border  = isDark ? const Color(0xff2e2e2e) : const Color(0xffe8e8e8);
@@ -5831,7 +5836,7 @@ class _SelectTypeState extends State<SelectType>
   // ── Tools tab content ─────────────────────────────────────────────────────
   Widget _buildToolsTabContent(BuildContext context, AppTheme appTheme) {
     final isDark  = appTheme.isDark;
-    final bg      = isDark ? const Color(0xff121316) : const Color(0xfffafafa);
+    final bg      = isDark ? const Color(0xff181818) : const Color(0xfffafafa);
     final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
     final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final border  = isDark ? const Color(0xff2e2e2e) : const Color(0xffe8e8e8);
@@ -5968,7 +5973,7 @@ class _SelectTypeState extends State<SelectType>
   // ── Tasks tab content ─────────────────────────────────────────────────────
   Widget _buildTasksTabContent(BuildContext context, AppTheme appTheme) {
     final isDark  = appTheme.isDark;
-    final bg      = isDark ? const Color(0xff121316) : const Color(0xfffafafa);
+    final bg      = isDark ? const Color(0xff181818) : const Color(0xfffafafa);
     final fg      = isDark ? Colors.grey[200]! : Colors.grey[900]!;
     final muted   = isDark ? Colors.grey[500]! : Colors.grey[600]!;
     final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffe5e5e5);

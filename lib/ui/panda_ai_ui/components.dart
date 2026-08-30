@@ -218,7 +218,7 @@ class _ThinkingWidgetState extends State<ThinkingWidget>
             const Divider(height: 1, thickness: 0.5),
             Container(
               padding: const EdgeInsets.all(12),
-              color: isDark ? const Color(0xff121316) : const Color(0xfffafafa),
+              color: isDark ? const Color(0xff181818) : const Color(0xfffafafa),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: widget.thoughts
@@ -1110,7 +1110,7 @@ class DiffTable extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xff121316) : const Color(0xfffafafa),
+        color: isDark ? const Color(0xff181818) : const Color(0xfffafafa),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: isDark ? const Color(0xff2d2d2d) : const Color(0xffe0e0e0), width: 0.5),
       ),
