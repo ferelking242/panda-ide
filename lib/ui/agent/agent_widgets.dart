@@ -1179,8 +1179,9 @@ class AgentMarkdownView extends StatelessWidget {
       ],
     );
 
-    return MarkdownBlock(
+    return MarkdownWidget(
       data: displayMarkdown,
+      shrinkWrap: true,
       config: config,
     );
   }

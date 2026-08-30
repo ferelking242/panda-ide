@@ -1332,9 +1332,14 @@ class _SelectTypeState extends State<SelectType>
                               ),
                             ),
 
-                              // ── Status bar — right of activity bar ──
-                              _buildStatusBar(context, appTheme,
-                                  sidebarActive: _sidebarState >= 1),
+                              // ── Status bar — right of activity bar, pinned to bottom ──
+                              Positioned(
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                child: _buildStatusBar(context, appTheme,
+                                    sidebarActive: _sidebarState >= 1),
+                              ),
                             ],
                           ),
                         ),
