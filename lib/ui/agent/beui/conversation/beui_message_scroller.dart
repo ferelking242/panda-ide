@@ -16,6 +16,7 @@ class BeUIMessageScroller extends StatefulWidget {
   final ScrollController? scrollController;
   final double releaseThreshold;
   final EdgeInsetsGeometry? padding;
+  final Color? backgroundColor;
 
   const BeUIMessageScroller({super.key,
     required this.itemCount,
@@ -24,6 +25,7 @@ class BeUIMessageScroller extends StatefulWidget {
     this.scrollController,
     this.releaseThreshold = 100,
     this.padding,
+    this.backgroundColor,
   });
 
   @override
@@ -96,68 +98,81 @@ class BeUIMessageScrollerState extends State<BeUIMessageScroller> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // ── Message list ──────────────────────────────────────
-        ListView.builder(
-          controller: _ctrl,
-          padding: widget.padding ?? const EdgeInsets.symmetric(vertical: 8),
-          itemCount: widget.itemCount,
-          itemBuilder: widget.itemBuilder,
-        ),
+    // Give the viewport an explicit surface. ListView itself is transparent;
+    // without this, any platform/default surface underneath can show through
+    // the empty part of a conversation as a large rectangle.
+    return ColoredBox(
+      color: widget.backgroundColor ??
+          Theme.of(context).scaffoldBackgroundColor,
+      child: Stack(
+        children: [
+          // ── Message list ──────────────────────────────────────
+          ListView.builder(
+            controller: _ctrl,
+            padding: widget.padding ?? const EdgeInsets.symmetric(vertical: 8),
+            itemCount: widget.itemCount,
+            itemBuilder: widget.itemBuilder,
+          ),
 
-        // ── Jump to live button ───────────────────────────────
-        AnimatedSlide(
-          offset: _showJumpButton ? Offset.zero : const Offset(0, 0.5),
-          duration: BeUIDurations.medium,
-          curve: BeUICurves.outCurve,
-          child: AnimatedOpacity(
-            opacity: _showJumpButton ? 1.0 : 0.0,
-            duration: BeUIDurations.medium,
-            child: Positioned(
-              bottom: 12,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: GestureDetector(
-                  onTap: jumpToLive,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: BeUIColors.accentOf(
-                        Theme.of(context).brightness == Brightness.dark,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.25),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.white),
-                        SizedBox(width: 2),
-                        Text(
-                          'Live',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+          // ── Jump to live button ───────────────────────────────
+          // Positioned must be a direct Stack child. Keeping it outside the
+          // animation widgets avoids invalid ParentData and stray layout
+          // regions on Flutter Web.
+          Positioned(
+            bottom: 12,
+            left: 0,
+            right: 0,
+            child: IgnorePointer(
+              ignoring: !_showJumpButton,
+              child: AnimatedSlide(
+                offset: _showJumpButton ? Offset.zero : const Offset(0, 0.5),
+                duration: BeUIDurations.medium,
+                curve: BeUICurves.outCurve,
+                child: AnimatedOpacity(
+                  opacity: _showJumpButton ? 1.0 : 0.0,
+                  duration: BeUIDurations.medium,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: jumpToLive,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: BeUIColors.accentOf(
+                            Theme.of(context).brightness == Brightness.dark,
                           ),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                      ],
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.keyboard_arrow_down, size: 14, color: Colors.white),
+                            SizedBox(width: 2),
+                            Text(
+                              'Live',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

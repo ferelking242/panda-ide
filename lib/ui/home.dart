@@ -7333,6 +7333,7 @@ class _SelectTypeState extends State<SelectType>
     return BeUIMessageScroller(
       scrollController: _agentScrollCtrl,
       isStreaming: _agentGenerating,
+      backgroundColor: isDark ? const Color(0xff181818) : const Color(0xfffafafa),
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       itemCount: _agentMessages.length,
       itemBuilder: (_, i) {
