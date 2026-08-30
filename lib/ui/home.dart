@@ -1170,7 +1170,7 @@ class _SelectTypeState extends State<SelectType>
             child: Scaffold(
             key: _scaffoldKey,
             resizeToAvoidBottomInset: false,
-            backgroundColor: appTheme.isDark ? const Color(0xff3c3c3c) : const Color(0xffdedede),
+            backgroundColor: appTheme.scaffoldBg,
 
             // ── Drawer (unchanged behaviour) ──────────────────────────────
             drawer: Drawer(
