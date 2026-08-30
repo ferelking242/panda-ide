@@ -64,8 +64,10 @@ jobs:
       - name: Select main entry point
         working-directory: chat_ui_samples
         run: |
-          cp lib/main.dart lib/_original_main.dart
-          cp lib/${{ matrix.main_file }} lib/main.dart
+          if [ "${{ matrix.main_file }}" != "main.dart" ]; then
+            cp lib/main.dart lib/_original_main.dart
+            cp lib/${{ matrix.main_file }} lib/main.dart
+          fi
 
       - name: Set unique applicationId
         working-directory: chat_ui_samples
