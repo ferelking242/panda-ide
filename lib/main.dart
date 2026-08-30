@@ -22,13 +22,21 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // RustLib uses dart:ffi / native Rust — skip on web to avoid runtime crash.
   if (!kIsWeb) {
-    await RustLib.init();
+    try {
+      await RustLib.init().timeout(const Duration(seconds: 8));
+    } catch (e) {
+      debugPrint('[Main] RustLib.init failed/timeout: $e');
+    }
   }
   // Shared storage roots and the extension host use Android-only paths and
   // native binaries. Keep iOS focused on the Flutter UI and Agent providers.
   final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
   if (isAndroid) {
-    await configureStorageRoots();
+    try {
+      await configureStorageRoots().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('[Main] configureStorageRoots failed/timeout: $e');
+    }
     // Initialize logging system (non-blocking, wrapped for safety)
     try {
       await PandaLogger.init();
@@ -66,11 +74,12 @@ Future<void> main() async {
       getModelSelected, () => jsonEncode(const {'code': '', 'chat': ''}));
   final sshServerList =
       await _safe(SSHInfo.getSavedSSHServers, () => <SSHInfo>[]);
-  final termuxInfo = await TermuxCubit.getSavedTermuxInfo();
+  final termuxInfo = await _safe(
+      TermuxCubit.getSavedTermuxInfo, () => null);
 
   // Initialize settings persistence (non-blocking, wrapped for safety)
   try {
-    await SettingsService.instance;
+    await SettingsService.instance.timeout(const Duration(seconds: 5));
   } catch (e) {
     debugPrint('[Main] SettingsService init failed: $e');
   }
@@ -104,7 +113,7 @@ Future<void> main() async {
 /// avant le premier frame.
 Future<T> _safe<T>(Future<T> Function() fn, T Function() fallback) async {
   try {
-    return await fn();
+    return await fn().timeout(const Duration(seconds: 5));
   } catch (e) {
     debugPrint('[Main] init failed, using fallback: $e');
     return fallback();
