@@ -64,8 +64,7 @@ import 'editor/status_bar.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
-import 'agent/agent_widgets.dart';
-import 'agent/panda_agent_beui.dart';
+import 'agent/beui_compat.dart';
 import '../agent/agent_v3.dart';
 
 
