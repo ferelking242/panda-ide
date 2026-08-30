@@ -80,6 +80,7 @@ export 'agent/beui/conversation/beui_message.dart';
 export 'agent/beui/conversation/beui_message_bubble.dart';
 export 'agent/beui/conversation/beui_message_scroller.dart';
 export 'agent/beui/conversation/beui_prompt_input.dart';
+export 'agent/beui/beui_theme.dart';
 export 'agent/beui/progress/beui_agent_activity.dart';
 export 'agent/beui/progress/beui_agent_loading_states.dart';
 export 'agent/beui/progress/beui_todo_list.dart';
@@ -87,7 +88,8 @@ export 'agent/beui/response/beui_citations.dart';
 export 'agent/beui/response/beui_image_generation.dart';
 export 'agent/beui/response/beui_streaming_response.dart';
 export 'agent/beui/tools/beui_tool_result.dart';
-export 'agent/beui/beui_theme.dart';
+export 'agent/beui/tools/beui_code_block.dart';
+export 'agent/beui/tools/beui_file_diff.dart';
 
 // ── Browser ──
 export 'browser/browser_panel.dart';

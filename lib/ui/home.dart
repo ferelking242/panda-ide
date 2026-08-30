@@ -65,6 +65,7 @@ import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
 import 'agent/agent_widgets.dart';
+import 'agent/panda_agent_beui.dart';
 import '../agent/agent_v3.dart';
 
 
@@ -1373,7 +1374,6 @@ class _SelectTypeState extends State<SelectType>
     bool sidebarActive = false,
   }) {
     final isDark = appTheme.isDark;
-    final actBg = isDark ? _kActivityBgDark : _kActivityBgLight;
 
     return BlocBuilder<RepoStatusBloc, RepoStatusState>(
       builder: (ctx, repoState) {
@@ -1389,6 +1389,9 @@ class _SelectTypeState extends State<SelectType>
             listenable: EditorStatusHub.instance,
             builder: (_, __) => WorkspaceDiagnosticsListener(
               builder: (dCtx, errors, warnings, infos) => PandaStatusBar(
+                background: isDark
+                    ? const Color(0xff1a1b1f)
+                    : const Color(0xfff5f5f7),
                 branchName: branch,
                 hasUpstream: loaded?.hasUpstream ?? false,
                 unpushedCount: loaded?.unpushedCount ?? 0,
@@ -1416,7 +1419,15 @@ class _SelectTypeState extends State<SelectType>
             ),
         );
 
-        return SizedBox(height: 22, child: editorBar);
+        return SizedBox(
+          height: 22,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(8),
+            ),
+            child: editorBar,
+          ),
+        );
       },
     );
   }
@@ -4040,20 +4051,29 @@ class _SelectTypeState extends State<SelectType>
         return BlocBuilder<AppThemeBloc, AppThemeState>(
           builder: (context, ts) {
             final isDark = ts.appTheme.isDark;
-            final bg     = isDark ? const Color(0xff1e1e1e) : const Color(0xfffefefe);
-            final tabBg  = isDark ? const Color(0xff252526) : const Color(0xffececec);
+            final bg     = isDark ? const Color(0xff1a1b1f) : const Color(0xfff5f5f7);
+            final tabBg  = isDark ? const Color(0xff252526) : const Color(0xffececf0);
             final fg     = isDark ? Colors.grey[400]! : Colors.grey[600]!;
             final selFg  = isDark ? Colors.grey[200]! : Colors.grey[900]!;
-            final border = isDark ? const Color(0xff444444) : const Color(0xffcccccc);
+            final border = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
             const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
-            return Container(
-              height: _bottomPanelHeight,
-              decoration: BoxDecoration(
-                  color: bg,
-                  border: Border(
-                    top: BorderSide(color: border, width: 1),
-                  )),
-              child: Column(children: [
+            return Padding(
+              // The status bar is an overlay at the bottom of the IDE. Keep a
+              // reserved strip here so it never covers panel content.
+              padding: const EdgeInsets.only(bottom: 22),
+              child: Container(
+                height: _bottomPanelHeight,
+                decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
+                    border: Border.all(color: border, width: 1)),
+                child: ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(11),
+                  ),
+                  child: Column(children: [
                 // ── Line 1: Main panel tabs ──
                 Container(
                   height: 32,
@@ -4237,8 +4257,10 @@ class _SelectTypeState extends State<SelectType>
                 Expanded(
                   child: _buildBottomPanelContent(context, ts.appTheme, isDark),
                 ),
-              ]),
-              ); // Container
+                  ]),
+                ),
+              ),
+            );
           },
         );
       }
@@ -4998,11 +5020,12 @@ class _SelectTypeState extends State<SelectType>
               _buildPromptQueueBar(isDark, fg, muted),
               Padding(
                 padding: const EdgeInsets.all(10),
-                child: PromptBar(
+                child: BeUIPromptInput(
                   controller: _agentInputCtrl,
                   isGenerating: _agentGenerating,
                   onSubmitted: _agentSend,
                   onCancel: _agentStop,
+                  isDark: isDark,
                   contextCards: _agentAttachments.asMap().entries.map((entry) {
                     final idx = entry.key;
                     final att = entry.value;
@@ -5013,7 +5036,6 @@ class _SelectTypeState extends State<SelectType>
                     );
                   }).toList(),
 
-                  recommendationCards: const [],
                   footer: Row(
                     children: [
                       // Attachment button
@@ -5137,79 +5159,6 @@ class _SelectTypeState extends State<SelectType>
                           ]),
                         ),
                       ),
-                      const Spacer(),
-
-                      // Send / Stop — animated square runner while agent works
-                      if (_agentGenerating)
-                        GestureDetector(
-                          onTap: () async {
-                            final action = await showDialog<String>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                backgroundColor: isDark ? const Color(0xff1e1e2e) : Colors.white,
-                                title: const Text("L'agent est en cours...",
-                                    style: TextStyle(fontSize: 15)),
-                                content: const Text(
-                                    "Que voulez-vous faire ?",
-                                    style: TextStyle(fontSize: 13)),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, 'queue'),
-                                    child: const Text('Ajouter à la file'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, 'stop'),
-                                    child: const Text('Arrêter et envoyer',
-                                        style: TextStyle(color: Colors.red)),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (action == 'stop') {
-                              _agentStop();
-                              await Future.delayed(const Duration(milliseconds: 300));
-                              _agentSend();
-                            } else if (action == 'queue') {
-                              final text = _agentInputCtrl.text.trim();
-                              if (text.isNotEmpty) {
-                                setState(() => _promptQueue.add(text));
-                                _agentInputCtrl.clear();
-                              }
-                            }
-                          },
-                          child: AnimatedBuilder(
-                            animation: _sendAnim,
-                            builder: (_, __) => Container(
-                              width: 30 + _sendAnim.value * 4,
-                              height: 30 + _sendAnim.value * 4,
-                              decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha: 0.15 + _sendAnim.value * 0.1),
-                                borderRadius: BorderRadius.circular(6 + _sendAnim.value * 2),
-                              ),
-                              child: const Icon(Icons.stop_rounded,
-                                  size: 18, color: Colors.redAccent),
-                            ),
-                          ),
-                        )
-                      else
-                        GestureDetector(
-                          onTap: _agentSend,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color:
-                                  _agentInputCtrl.text.trim().isEmpty
-                                      ? Colors.transparent
-                                      : _kAccent.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(Broken.send_2,
-                                size: 18,
-                                color: _agentInputCtrl.text.trim().isEmpty
-                                    ? muted
-                                    : Colors.white),
-                          ),
-                        ),
                     ],
                   ),
                 ),
@@ -7330,6 +7279,46 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Widget _buildAgentMessages(bool isDark, Color fg, Color muted) {
+    return PandaAgentBeUI(
+      messages: _agentMessages,
+      scrollController: _agentScrollCtrl,
+      isGenerating: _agentGenerating,
+      phase: _agentPhase.name,
+      activityController: _activityCtrl,
+      onRetry: _retryAgentMessage,
+      onToolApproval: (approved) => _pendingApprovalCompleter?.complete(approved),
+      onAlwaysAllowTools: () {
+        AgenticTools.allowAllCommandsThisSession = true;
+      },
+      onOpenTool: _openAgentToolTabForCall,
+      isDark: isDark,
+    );
+  }
+
+  void _retryAgentMessage(int agentIndex) {
+    if (agentIndex <= 0 ||
+        agentIndex >= _agentMessages.length ||
+        _agentGenerating ||
+        _agentMessages[agentIndex]['role'] != 'agent') {
+      return;
+    }
+    final userIndex = agentIndex - 1;
+    final userText = _agentMessages[userIndex]['role'] == 'user'
+        ? (_agentMessages[userIndex]['text'] as String? ?? '')
+        : '';
+    if (userText.isEmpty) return;
+
+    setState(() {
+      _agentMessages.removeAt(agentIndex);
+      if (userIndex < _agentMessages.length) {
+        _agentMessages.removeAt(userIndex);
+      }
+      _agentInputCtrl.text = userText;
+    });
+    _agentSend();
+  }
+
+  Widget _buildLegacyAgentMessages(bool isDark, Color fg, Color muted) {
     return BeUIMessageScroller(
       scrollController: _agentScrollCtrl,
       isStreaming: _agentGenerating,

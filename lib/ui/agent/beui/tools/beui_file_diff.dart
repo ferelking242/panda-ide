@@ -71,8 +71,8 @@ class _BeUIFileDiffState extends State<BeUIFileDiff> {
   @override
   Widget build(BuildContext context) {
     final accent = BeUIColors.accentOf(widget.isDark);
-    final fg = isDark ? Colors.grey[300]! : Colors.grey[700]!;
-    final muted = isDark ? Colors.grey[500]! : Colors.grey[500]!;
+    final fg = widget.isDark ? Colors.grey[300]! : Colors.grey[700]!;
+    final muted = widget.isDark ? Colors.grey[500]! : Colors.grey[500]!;
 
     final visible = widget.lines.take(widget.revealedCount).toList();
 

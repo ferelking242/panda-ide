@@ -16,6 +16,7 @@ class BeUIPromptInput extends StatefulWidget {
   final VoidCallback? onCancel;
   final String hintText;
   final Widget? footer;
+  final List<Widget> contextCards;
   final bool isDark;
 
   const BeUIPromptInput({
@@ -26,6 +27,7 @@ class BeUIPromptInput extends StatefulWidget {
     this.onCancel,
     this.hintText = 'Envoyer un message à l\'agent…',
     this.footer,
+    this.contextCards = const [],
     this.isDark = true,
   });
 
@@ -86,6 +88,15 @@ class _BeUIPromptInputState extends State<BeUIPromptInput>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (widget.contextCards.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: widget.contextCards,
+                  ),
+                ),
               TextField(
                 controller: _ctrl,
                 focusNode: _focus,
