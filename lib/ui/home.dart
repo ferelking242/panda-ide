@@ -64,6 +64,22 @@ import 'editor/status_bar.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
+import 'agent/agent_models.dart';
+import 'agent/panda_activity_dock.dart';
+import 'agent/flow_ui/widgets/flow_composer.dart';
+import 'agent/flow_ui/widgets/flow_thread.dart';
+import 'agent/flow_ui/widgets/flow_message.dart';
+import 'agent/flow_ui/widgets/flow_markdown.dart';
+import 'agent/flow_ui/widgets/flow_thinking_indicator.dart';
+import 'agent/flow_ui/widgets/flow_code_block.dart';
+import 'agent/flow_ui/widgets/flow_message_actions.dart';
+import 'agent/flow_ui/widgets/flow_greeting.dart';
+import 'agent/flow_ui/widgets/flow_shimmer_text.dart';
+import 'agent/flow_ui/models/flow_message_data.dart';
+import 'agent/flow_ui/models/flow_message_part.dart';
+import 'agent/flow_ui/models/flow_attachment.dart';
+import 'agent/flow_ui/theme/flow_theme.dart';
+import 'agent/agent_widgets.dart';
 import '../agent/agent_v3.dart';
 
 
@@ -5016,104 +5032,110 @@ class _SelectTypeState extends State<SelectType>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildPromptQueueBar(isDark, fg, muted),
-               Padding(
-                 padding: const EdgeInsets.all(10),
-                 child: FlowComposer(
-                   controller: _agentInputCtrl,
-                   isStreaming: _agentGenerating,
-                   onSend: (text) {
-                     _agentInputCtrl.text = text;
-                     _agentSend();
-                   },
-                   onStop: _agentStop,
-                   placeholder: 'Écrivez votre demande à Panda…',
-                   clearOnSend: true,
-                   attachments: [
-                     for (final attachment in _agentAttachments)
-                       FlowAttachment(
-                         id: (attachment['path']?.toString().isNotEmpty ?? false)
-                             ? attachment['path']!.toString()
-                             : attachment['name']?.toString() ?? '',
-                         label: attachment['name']?.toString(),
-                         kind: path.extension(
-                           attachment['name']?.toString() ?? '',
-                         ).replaceFirst('.', '').toUpperCase(),
-                       ),
-                   ],
-                   onRemoveAttachment: (id) => setState(
-                     () => _agentAttachments.removeWhere(
-                       (attachment) =>
-                           (attachment['path']?.toString().isNotEmpty ?? false)
-                               ? attachment['path']?.toString() == id
-                               : attachment['name']?.toString() == id,
-                     ),
-                   ),
-                   onAttach: () async {
-                     final result = await FilePicker.pickFiles(
-                       allowMultiple: true,
-                       type: FileType.any,
-                     );
-                     if (result == null || result.files.isEmpty || !mounted) {
-                       return;
-                     }
-                     setState(() {
-                       for (final file in result.files) {
-                         _agentAttachments.add({
-                           'name': file.name,
-                           'path': file.path ?? '',
-                         });
-                       }
-                     });
-                   },
-                   attachTooltip: 'Joindre un fichier',
-                   removeAttachmentTooltip: 'Retirer la pièce jointe',
-                   leadingActions: [
-                     IconButton(
-                       tooltip: 'Dicter (micro)',
-                       onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                         const SnackBar(
-                           content: Text('Dictée vocale — bientôt disponible.'),
-                           duration: Duration(seconds: 2),
-                         ),
-                       ),
-                       icon: const Icon(Icons.mic_none, size: 18),
-                     ),
-                     FlowPill(
-                       icon: Icons.tune,
-                       label: _agentChatMode == 'ask'
-                           ? 'Ask'
-                           : _agentChatMode == 'agent'
-                               ? 'Agent'
-                               : 'Plan',
-                       tooltip: 'Changer de mode',
-                       showLabel: true,
-                       onTap: () => _showModeSheet(context, appTheme),
-                     ),
-                   ],
-                   trailingActions: [
-                     FlowPill(
-                       icon: Icons.memory_outlined,
-                       label: missingKey
-                           ? 'No key configured'
-                           : (() {
-                               final config = selectedConfig is Map
-                                   ? Map<String, dynamic>.from(selectedConfig)
-                                   : null;
-                               final model = config?['modelName'] ??
-                                   config?['model'] ??
-                                   providerName;
-                               return model.toString().isEmpty
-                                   ? 'Modèle'
-                                   : model.toString();
-                             })(),
-                       tooltip: 'Changer de modèle',
-                       showLabel: true,
-                       enabled: !missingKey,
-                       onTap: () => _showModelPickerSheet(context, appTheme),
-                     ),
-                   ],
-                 ),
-               ),
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: FlowComposer(
+                  controller: _agentInputCtrl,
+                  onSend: (text) => _agentSend(),
+                  onStop: _agentStop,
+                  isStreaming: _agentGenerating,
+                  placeholder: "Écrire un message à Panda Agent...",
+                  submitOnEnter: true,
+                  attachments: _agentAttachments
+                      .map((a) => FlowAttachment(
+                            id: a['name'] ?? '',
+                            label: a['name'] ?? '',
+                          ))
+                      .toList(),
+                  onRemoveAttachment: (id) => setState(() {
+                    _agentAttachments.removeWhere((a) => a['name'] == id);
+                  }),
+
+                  leadingActions: [
+                      // Mode pill
+                      GestureDetector(
+                        onTap: () => _showModeSheet(context, appTheme),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xff3a3a3a)
+                                : const Color(0xffe0e0e0),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Broken.category, size: 11, color: muted),
+                            const SizedBox(width: 4),
+                            Text(
+                              _agentChatMode == 'ask'
+                                  ? 'Ask'
+                                  : _agentChatMode == 'agent'
+                                      ? 'Agent'
+                                      : 'Plan',
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  color: muted,
+                                  fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Broken.arrow_down_2, size: 10, color: muted),
+                          ]),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      // Model pill
+                      GestureDetector(
+                        onTap: () => _showModelPickerSheet(context, appTheme),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xff3a3a3a)
+                                : const Color(0xffe0e0e0),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Icon(Broken.cpu, size: 11, color: muted),
+                            const SizedBox(width: 4),
+                            ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth:
+                                    MediaQuery.sizeOf(context).width * 0.2,
+                              ),
+                              child: Builder(builder: (_) {
+                                final selCfg = selectedConfig is Map
+                                    ? Map<String, dynamic>.from(
+                                        selectedConfig)
+                                    : null;
+                                final modelLabel = selCfg != null
+                                    ? (selCfg['modelName'] ??
+                                            selCfg['model'] ??
+                                            providerName)
+                                        .toString()
+                                    : '';
+                                return Text(
+                                  missingKey
+                                      ? 'No key configured'
+                                      : (modelLabel.isEmpty ? 'Modèle' : modelLabel),
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: missingKey ? Colors.orange[400] : muted,
+                                      fontWeight: FontWeight.w500),
+                                );
+                              }),
+                            ),
+                            const SizedBox(width: 2),
+                            Icon(Broken.arrow_down_2, size: 10, color: muted),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           );
         }),
@@ -7230,18 +7252,7 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Widget _buildAgentMessages(bool isDark, Color fg, Color muted) {
-    return PandaAgentFlowChat(
-      messages: _agentMessages,
-      scrollController: _agentScrollCtrl,
-      isGenerating: _agentGenerating,
-      phase: _agentPhase.name,
-      onRetry: _retryAgentMessage,
-      onToolApproval: (approved) => _pendingApprovalCompleter?.complete(approved),
-      onAlwaysAllowTools: () {
-        AgenticTools.allowAllCommandsThisSession = true;
-      },
-      onOpenTool: _openAgentToolTabForCall,
-    );
+    return _buildLegacyAgentMessages(isDark, fg, muted);
   }
 
   void _retryAgentMessage(int agentIndex) {
@@ -7265,6 +7276,369 @@ class _SelectTypeState extends State<SelectType>
       _agentInputCtrl.text = userText;
     });
     _agentSend();
+  }
+
+  Widget _buildLegacyAgentMessages(bool isDark, Color fg, Color muted) {
+    return ListView.builder(
+      controller: _agentScrollCtrl,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+      itemCount: _agentMessages.length,
+      itemBuilder: (_, i) {
+        final msg    = _agentMessages[i];
+        final isMe   = msg['role'] == 'user';
+        final phase  = msg['phase'] as String? ?? 'done';
+        final text   = msg['text'] as String? ?? '';
+        final think  = msg['thinking'] as String? ?? '';
+        final isStreaming = phase == 'streaming';
+        final isError     = phase == 'error';
+        final blocks = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final calls  = (msg['toolCalls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+        final userMsgIdx = (i > 0 && _agentMessages[i - 1]['role'] == 'user') ? i - 1 : -1;
+
+        if (isMe) {
+          final userMsgWidget = FlowMessage(
+            FlowMessageData.text(
+              id: 'user_$i',
+              role: FlowMessageRole.user,
+              text: text,
+            ),
+          );
+          return _SwipeActionPanel(
+            onCopy: () {
+              Clipboard.setData(ClipboardData(text: text));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Copié !', style: TextStyle(fontSize: 12)), duration: Duration(seconds: 1)),
+              );
+            },
+            child: userMsgWidget,
+          );
+        }
+
+        // ── Agrégation chronologique ─────────────────────────────────────
+        // Raisonnements + appels d'outils sont absorbés dans UN groupe
+        // Réflexion persistant ; chaque bloc texte devient un Output
+        // indépendant rendu en dessous, un par un.
+        // Chaque entree de msg['blocks'] est un evenement independant :
+        // Reflexion, Call Tool (+ Output associe juste en dessous, hors de
+        // toute box Reflexion), et segments de reponse texte. Tous sont des
+        // FRERES rendus dans l'ordre chronologique reel du flux. Une
+        // nouvelle reflexion apres des outils cree une NOUVELLE box -
+        // jamais de fusion ni de conteneur parent.
+        final isActiveMsg = i == _agentMessages.length - 1 && _agentGenerating;
+
+        final timeline = List<Map<String, dynamic>>.from(blocks);
+        if (timeline.isEmpty) {
+          // Messages legacy sans blocs : reconstruis depuis les champs plats.
+          if (think.trim().isNotEmpty) {
+            timeline.add({'type': 'thinking', 'thinking': think});
+          }
+          for (final c in calls) {
+            timeline.add({'type': 'toolCall', ...c});
+          }
+        }
+
+        int lastThinkingIdx = -1;
+        int lastTextIdx = -1;
+        for (var bi = 0; bi < timeline.length; bi++) {
+          final bt = timeline[bi]['type'] as String? ?? '';
+          if (bt == 'thinking') lastThinkingIdx = bi;
+          if (bt == 'text') lastTextIdx = bi;
+        }
+
+        bool hasVisibleTimeline = false;
+        for (final b in timeline) {
+          final bt = b['type'] as String? ?? '';
+          if (bt == 'toolCall') {
+            hasVisibleTimeline = true;
+            break;
+          }
+          if (bt == 'thinking' &&
+              ((b['thinking'] as String?) ?? '').trim().isNotEmpty) {
+            hasVisibleTimeline = true;
+            break;
+          }
+          if (bt == 'text') {
+            final p = _extractThinkingFromText(b['text'] as String? ?? '', '');
+            if (p['text']!.trim().isNotEmpty) {
+              hasVisibleTimeline = true;
+              break;
+            }
+          }
+        }
+        if (blocks.isEmpty && text.trim().isNotEmpty) hasVisibleTimeline = true;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Activity feed: history + active card
+              if ((isActiveMsg || _agentGenerating) && (_activityCtrl.history.isNotEmpty || _activityCtrl.activeActivity != null))
+                PandaActivityDock(controller: _activityCtrl, isDark: isDark),
+              if (!isStreaming && msg['checkpoint'] != null)
+                AgentCheckpointCard(
+                  data: (msg['checkpoint'] as Map).cast<String, dynamic>(),
+                  isDark: isDark, fg: fg, muted: muted,
+                  onRestore: () { unawaited(_restoreAgentCheckpoint(msg['checkpoint'] as Map<String, dynamic>)); },
+                  onOpenGit: _openGithubTab,
+                ),
+
+              // Timeline events (thinking, tool calls, text blocks)
+              if (timeline.isNotEmpty)
+                ..._buildAgentTimelineWidgets(
+                  timeline,
+                  isActiveMsg: isActiveMsg,
+                  lastThinkingIdx: lastThinkingIdx,
+                  lastTextIdx: lastTextIdx,
+                  isDark: isDark,
+                  fg: fg,
+                  muted: muted,
+                  isError: isError,
+                ),
+
+              // Ancien format : message sans blocs mais avec du texte.
+              if (blocks.isEmpty && text.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+                  child: FlowMarkdown(
+                    text: _extractThinkingFromText(text, '')['text']!.trim(),
+                    isStreaming: isStreaming,
+                  ),
+                ),
+
+              // (Génération badge removed — ActivityFeed handles status display)
+
+              // Action row (copy + retry) — shown after generation
+              if (!isStreaming && (text.isNotEmpty || isError))
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (text.isNotEmpty)
+                        MsgActionBtn(
+                          icon: Broken.copy,
+                          label: 'Copier',
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: text));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Copié !', style: TextStyle(fontSize: 12)),
+                                duration: Duration(seconds: 1),
+                              ),
+                            );
+                          },
+                          muted: muted,
+                        ),
+                      if (userMsgIdx >= 0)
+                        MsgActionBtn(
+                          icon: Broken.refresh,
+                          label: 'Réessayer',
+                          onTap: () {
+                            final userText = _agentMessages[userMsgIdx]['text'] as String? ?? '';
+                            if (userText.isEmpty || _agentGenerating) {
+                              return;
+                            }
+                            setState(() {
+                              if (i < _agentMessages.length) {
+                                _agentMessages.removeAt(i);
+                              }
+                              if (userMsgIdx < _agentMessages.length) {
+                                _agentMessages.removeAt(userMsgIdx);
+                              }
+                              _agentInputCtrl.text = userText;
+                            });
+                            _agentSend();
+                          },
+                          muted: muted,
+                        ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Rend UN evenement de la timeline agent comme un bloc independant.
+  /// Les freres s'empilent dans l'ordre chronologique : une nouvelle
+  /// reflexion apres des outils cree une NOUVELLE box, jamais fusionnee,
+  /// et le tool call n'est JAMAIS un enfant de la Reflexion.
+  Widget _buildAgentTimelineEvent(
+    Map<String, dynamic> b, {
+    required int eventIndex,
+    required int lastThinkingIdx,
+    required int lastTextIdx,
+    required bool isActiveMsg,
+    required bool isDark,
+    required Color fg,
+    required Color muted,
+    required bool isError,
+  }) {
+    final bt = b['type'] as String? ?? '';
+
+    // -- Reflexion : phase de raisonnement autonome ------------------------
+    if (bt == 'thinking') {
+      final raw = ((b['thinking'] as String?) ?? '')
+          .replaceAll(
+              RegExp(r'Executing \d+ tool\(s\)\.\.\.', caseSensitive: false), '')
+          .replaceAll(RegExp(r'Tool call:.*', caseSensitive: false), '')
+          .trim();
+      if (raw.isEmpty) return const SizedBox.shrink();
+      return Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xff1a1e2a) : const Color(0xffeef2ff),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: (isDark ? const Color(0xff4a5a8a) : const Color(0xffb0c4de)).withValues(alpha: 0.4),
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isActiveMsg && _agentPhase == AgentPhase.thinking && eventIndex == lastThinkingIdx)
+              FlowThinkingIndicator(
+                active: true,
+                color: isDark ? const Color(0xff6a8aff) : const Color(0xff3366cc),
+                size: 14,
+              )
+            else
+              Icon(Icons.psychology, size: 14, color: muted),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                raw,
+                style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.8), height: 1.5),
+                maxLines: (isActiveMsg && _agentPhase == AgentPhase.thinking && eventIndex == lastThinkingIdx) ? null : 4,
+                overflow: (isActiveMsg && _agentPhase == AgentPhase.thinking && eventIndex == lastThinkingIdx) ? null : TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // -- Call Tool (+ son Output, hors de toute Reflexion) -----------------
+    if (bt == 'toolCall') {
+      final name =
+          (b['name'] as String?) ?? (b['toolName'] as String?) ?? '';
+      final args = (b['args'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final result = b['result'] as String?;
+      final status = b['status'] as String? ?? 'done';
+
+      if (status == 'pending_approval' || status == 'pending') {
+        return BeUIToolApproval(
+          toolName: name,
+          args: args,
+          onAllow: () => _pendingApprovalCompleter?.complete(true),
+          onAlways: () {
+            AgenticTools.allowAllCommandsThisSession = true;
+            _pendingApprovalCompleter?.complete(true);
+          },
+          onDeny: () => _pendingApprovalCompleter?.complete(false),
+          isDark: isDark,
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AgentToolCallBlock(
+            toolName: name,
+            args: args,
+            result: result,
+            status: status,
+            isDark: isDark,
+            fg: fg,
+            muted: muted,
+            onOpenInEditor: () => _openAgentToolTabForCall(
+                name, args, result),
+            showResultInline: false,
+          ),
+          if (result != null && result.trim().isNotEmpty)
+            BeUIToolResult(
+              title: name.isNotEmpty ? name : 'outil',
+              output: result,
+              isRunning: false,
+              isDark: isDark,
+            ),
+        ],
+      );
+    }
+
+    // -- Segment de reponse texte (Output destine a l'utilisateur) ---------
+    if (bt == 'text') {
+      final p = _extractThinkingFromText(b['text'] as String? ?? '', '');
+      final t = p['text']!.trim();
+      if (t.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        child: FlowMarkdown(
+          text: t,
+          isStreaming: isActiveMsg &&
+              _agentPhase == AgentPhase.streaming &&
+              eventIndex == lastTextIdx,
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  // ── Agent timeline : groupes d’actions compressés ───────────────────────
+  List<Widget> _buildAgentTimelineWidgets(
+    List<Map<String, dynamic>> tl, {
+    required bool isActiveMsg,
+    required int lastThinkingIdx,
+    required int lastTextIdx,
+    required bool isDark,
+    required Color fg,
+    required Color muted,
+    required bool isError,
+  }) {
+    Widget renderEvent(int idx, Map<String, dynamic> b) =>
+        _buildAgentTimelineEvent(
+          b, eventIndex: idx, lastThinkingIdx: lastThinkingIdx,
+          lastTextIdx: lastTextIdx, isActiveMsg: isActiveMsg,
+          isDark: isDark, fg: fg, muted: muted, isError: isError,
+        );
+
+    final widgets = <Widget>[];
+    var run = <Map<String, dynamic>>[];
+    var runStart = 0;
+
+    void flushRun() {
+      if (run.isEmpty) return;
+      if (isActiveMsg) {
+        for (var k = 0; k < run.length; k++) {
+          widgets.add(renderEvent(runStart + k, run[k]));
+        }
+      } else {
+        final captured = List<Map<String, dynamic>>.from(run);
+        final startIdx = runStart;
+        widgets.add(AgentActionStrip(
+          events: captured, isDark: isDark, fg: fg, muted: muted,
+          buildExpanded: (ctx) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [for (var k = 0; k < captured.length; k++) renderEvent(startIdx + k, captured[k])],
+          ),
+        ));
+      }
+      run = <Map<String, dynamic>>[];
+    }
+
+    for (var i = 0; i < tl.length; i++) {
+      final bt = (tl[i]['type'] as String? ?? '');
+      if (bt == 'text') { flushRun(); widgets.add(renderEvent(i, tl[i])); }
+      else { if (run.isEmpty) runStart = i; run.add(tl[i]); }
+    }
+    flushRun();
+    return widgets;
   }
 
   static String _agentCmdFromArgs(Map<String, dynamic> args) {
@@ -7299,7 +7673,7 @@ class _SelectTypeState extends State<SelectType>
       color: isDark ? const Color(0xff141414) : Colors.white,
       child: ListView(padding: const EdgeInsets.all(14), children: [
         Row(children: [
-          Icon(pandaAgentToolIcon(data['title'] ?? ''), size: 15, color: fg),
+          agentToolIconWidget(data['title'] ?? '', 15, fg),
           const SizedBox(width: 8),
           Expanded(child: Text(data['title'] ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, fontFamily: 'monospace', color: fg))),
           InkWell(onTap: () { Clipboard.setData(ClipboardData(text: '$cmd\n\n$output')); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Copié !'), duration: Duration(seconds: 1))); }, borderRadius: BorderRadius.circular(4), child: Padding(padding: const EdgeInsets.all(6), child: Icon(Broken.copy, size: 14, color: muted))),
@@ -7308,13 +7682,13 @@ class _SelectTypeState extends State<SelectType>
         if (cmd.isNotEmpty) ...[
           Text('COMMANDE', style: TextStyle(fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: muted)),
           const SizedBox(height: 4),
-           SelectableText(pandaWrapLongTokensForDisplay(cmd), style: TextStyle(fontSize: 12, height: 1.5, fontFamily: 'monospace', color: fg)),
+          SelectableText(wrapLongTokensForDisplay(cmd), style: TextStyle(fontSize: 12, height: 1.5, fontFamily: 'monospace', color: fg)),
           const SizedBox(height: 18),
         ],
         if (output.trim().isNotEmpty) ...[
           Text('SORTIE', style: TextStyle(fontSize: 10, letterSpacing: 1.2, fontWeight: FontWeight.w700, color: muted)),
           const SizedBox(height: 4),
-           SelectableText(pandaWrapLongTokensForDisplay(output.trim()), style: TextStyle(fontSize: 11, height: 1.5, fontFamily: 'monospace', color: fg.withValues(alpha: 0.85))),
+          SelectableText(wrapLongTokensForDisplay(output.trim()), style: TextStyle(fontSize: 11, height: 1.5, fontFamily: 'monospace', color: fg.withValues(alpha: 0.85))),
         ],
       ]),
     );
@@ -8599,17 +8973,8 @@ class _SelectTypeState extends State<SelectType>
   }
 
   Future<void> _agentSend() async {
-    final draft = _agentInputCtrl.text.trim();
-    if (draft.isEmpty && _agentAttachments.isEmpty) return;
-    final attachmentSummary = _agentAttachments
-        .map((attachment) => attachment['name']?.trim() ?? '')
-        .where((name) => name.isNotEmpty)
-        .join(', ');
-    final text = draft.isEmpty
-        ? 'Pièces jointes : $attachmentSummary'
-        : attachmentSummary.isEmpty
-            ? draft
-            : '$draft\n\nPièces jointes : $attachmentSummary';
+    final text = _agentInputCtrl.text.trim();
+    if (text.isEmpty) return;
     if (_agentGenerating) {
       // Auto-queue if text is non-empty (dialog handled by send button above)
       return;
@@ -8827,18 +9192,8 @@ class _SelectTypeState extends State<SelectType>
       'projectMemory=${projectMemory.isNotEmpty}',
     );
 
-    final outgoingAttachments = _agentAttachments
-        .map((attachment) => <String, String>{
-              'name': attachment['name'] ?? '',
-              'path': attachment['path'] ?? '',
-            })
-        .toList();
     setState(() {
-      _agentMessages.add({
-        'role': 'user',
-        'text': text,
-        'attachments': outgoingAttachments,
-      });
+      _agentMessages.add({'role': 'user', 'text': text});
       _agentMessages.add({
         'role': 'agent',
         'text': '',
@@ -8849,7 +9204,6 @@ class _SelectTypeState extends State<SelectType>
       });
       _agentTurnStartedAt = DateTime.now();
       _agentInputCtrl.clear();
-      _agentAttachments.clear();
       _agentGenerating  = true;
       _agentPhase       = AgentPhase.streaming;
       _activityCtrl.startRun();
@@ -10935,7 +11289,7 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                     // Spinning Square Indicator when running
                     if (isRunning) ...[
                       const SizedBox(width: 6),
-                      const PandaAgentFlowSpinner(color: _kAccent, size: 10),
+                      const SpinningSquareIndicator(color: _kAccent, size: 10),
                       const SizedBox(width: 4),
                       Text(
                         activeStatusText,
@@ -10985,13 +11339,13 @@ class _ReplitStepBarState extends State<_ReplitStepBar> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    ...toolCalls.map((call) => PandaAgentFlowToolCard(
+                    ...toolCalls.map((call) => AgentToolCallBlock(
                           toolName: call['name'] as String? ?? call['toolName'] as String? ?? '',
                           args: (call['args'] as Map?)?.cast<String, dynamic>() ?? {},
                           result: call['result'] as String?,
                           status: call['status'] as String? ?? 'done',
-                          dark: isDark,
-                          foreground: widget.fg,
+                          isDark: isDark,
+                          fg: widget.fg,
                           muted: widget.muted,
                         )),
                   ],

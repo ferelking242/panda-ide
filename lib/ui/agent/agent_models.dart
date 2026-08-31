@@ -218,3 +218,39 @@ class AgentActivityController {
     _notify();
   }
 }
+
+// ── Utility functions ─────────────────────────────────────────────────────
+
+Widget agentToolIconWidget(String name, double size, Color color) {
+  final lower = name.toLowerCase();
+  IconData icon;
+  if (lower.contains('read') || lower.contains('file')) {
+    icon = Icons.description_outlined;
+  } else if (lower.contains('write') || lower.contains('create')) {
+    icon = Icons.edit_note;
+  } else if (lower.contains('search') || lower.contains('grep') || lower.contains('find')) {
+    icon = Icons.search;
+  } else if (lower.contains('terminal') || lower.contains('bash') || lower.contains('exec') || lower.contains('run')) {
+    icon = Icons.terminal;
+  } else if (lower.contains('git')) {
+    icon = Icons.account_tree;
+  } else if (lower.contains('delete') || lower.contains('remove')) {
+    icon = Icons.delete_outline;
+  } else if (lower.contains('list') || lower.contains('dir')) {
+    icon = Icons.folder_open;
+  } else {
+    icon = Icons.build_outlined;
+  }
+  return Icon(icon, size: size, color: color);
+}
+
+String wrapLongTokensForDisplay(String text) {
+  if (text.isEmpty) return text;
+  return text
+      .replaceAll('/', '/\u200B')
+      .replaceAll('\\', '\\\u200B')
+      .replaceAll('.', '.\u200B')
+      .replaceAll('-', '-\u200B')
+      .replaceAll('_', '_\u200B')
+      .replaceAll(':', ':\u200B');
+}

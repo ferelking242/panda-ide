@@ -54,6 +54,7 @@ dependencies:
   vector_math: '>=2.1.4 <3.0.0'
   xterm: ^4.0.0
   figma_squircle: ^0.6.3
+  thinking_orbs_flutter: ^1.0.0
   crypto: ^3.0.3
   flutter_local_notifications: ^18.0.1
 
