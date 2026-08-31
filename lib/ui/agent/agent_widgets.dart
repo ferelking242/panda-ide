@@ -240,6 +240,52 @@ class SpinningSquareIndicator extends StatefulWidget {
   State<SpinningSquareIndicator> createState() => _SpinningSquareIndicatorState();
 }
 
+class _SpinningSquareIndicatorState extends State<SpinningSquareIndicator> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.rotate(
+          angle: _controller.value * 2 * 3.14159,
+          child: Container(
+            width: widget.size,
+            height: widget.size,
+            decoration: BoxDecoration(
+              border: Border.all(color: widget.color, width: 1.5),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AgentActionStripState extends State<AgentActionStrip> {
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.shrink();
+  }
+}
+
 class AgentCheckpointCard extends StatelessWidget {
   final Map<String, dynamic> data;
   final bool isDark;

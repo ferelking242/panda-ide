@@ -65,6 +65,7 @@ class PandaActivityDock extends StatelessWidget {
                   isDark: isDark,
                   fg: fg,
                   muted: muted,
+                  onToggleExpand: () => controller.toggleExpand(event.id),
                 )),
 
           // Active activity — animated, fixed at bottom
@@ -182,12 +183,14 @@ class _CompletedActivityRow extends StatelessWidget {
   final bool isDark;
   final Color fg;
   final Color muted;
+  final VoidCallback? onToggleExpand;
 
   const _CompletedActivityRow({
     required this.event,
     required this.isDark,
     required this.fg,
     required this.muted,
+    this.onToggleExpand,
   });
 
   @override
@@ -219,9 +222,7 @@ class _CompletedActivityRow extends StatelessWidget {
     }
 
     return InkWell(
-      onTap: event.toolResult != null
-          ? () => controller.toggleExpand(event.id)
-          : null,
+      onTap: event.toolResult != null ? onToggleExpand : null,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         child: Row(

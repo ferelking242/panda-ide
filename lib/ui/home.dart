@@ -5135,7 +5135,6 @@ class _SelectTypeState extends State<SelectType>
                     ],
                   ),
                 ),
-              ),
             ],
           );
         }),
