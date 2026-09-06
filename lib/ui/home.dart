@@ -4079,14 +4079,17 @@ class _SelectTypeState extends State<SelectType>
                 height: _bottomPanelHeight,
                 decoration: BoxDecoration(
                     color: bg,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(12),
-                    ),
-                    border: Border.all(color: border, width: 1)),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: border, width: 1),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.12),
+                        blurRadius: 16,
+                        offset: const Offset(0, -4),
+                      ),
+                    ]),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(11),
-                  ),
+                  borderRadius: BorderRadius.circular(15),
                   child: Column(children: [
                 // ── Line 1: Main panel tabs ──
                 Container(
