@@ -5,3 +5,4 @@
 - [Panda Agent provider navigation](panda-agent-provider-navigation.md) — keep provider configuration in the embedded provider-only page and resolve it from the Agent profile.
 - [Flutter validation environment](flutter-validation-environment.md) — the shell may lack Flutter/Dart even for a Flutter project; check before running analyzer commands.
 - [Alpine rootfs packaging](alpine-rootfs-packaging.md) — ship the official Alpine tarball and extract it with static BusyBox; public storage is never the active workspace.
+- [GitHub Pages Flutter preview](github-pages-flutter-preview.md) — automated screenshots may stop on the splash frame before the routed UI appears.
