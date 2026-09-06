@@ -1435,13 +1435,14 @@ class _SelectTypeState extends State<SelectType>
             ),
         );
 
-        return SizedBox(
-          height: 22,
-          child: ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(8),
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
+          child: SizedBox(
+            height: 22,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: editorBar,
             ),
-            child: editorBar,
           ),
         );
       },
@@ -4065,7 +4066,7 @@ class _SelectTypeState extends State<SelectType>
             return Padding(
               // The status bar is an overlay at the bottom of the IDE. Keep a
               // reserved strip here so it never covers panel content.
-              padding: const EdgeInsets.only(bottom: 22),
+              padding: const EdgeInsets.only(bottom: 26),
               child: Container(
                 height: _bottomPanelHeight,
                 decoration: BoxDecoration(
