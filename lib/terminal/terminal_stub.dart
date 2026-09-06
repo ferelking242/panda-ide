@@ -4,6 +4,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'terminal_keyboard_menu.dart';
 export 'terminal_keyboard_menu.dart';
 
 // ── SetupTerminal ─────────────────────────────────────────────────────────────
