@@ -33,7 +33,6 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
 
   static const _surface = Color(0xff17181b);
   static const _key = Color(0xff2b2d32);
-  static const _keyPressed = Color(0xff3b4d61);
   static const _border = Color(0xff42454d);
   static const _blueBorder = Color(0xff4f83b6);
   static const _blueText = Color(0xffc7e3ff);
@@ -315,54 +314,53 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _surface,
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(16),
-          bottom: Radius.circular(10),
+    return Padding(
+      // The outside breathing room is what makes all four corners visible,
+      // matching the rounded workspace bar instead of looking edge-to-edge.
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black54,
+              blurRadius: 12,
+              offset: Offset(0, -3),
+            ),
+          ],
         ),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black54,
-            blurRadius: 12,
-            offset: Offset(0, -3),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(16),
-          bottom: Radius.circular(10),
-        ),
-        child: SafeArea(
-          top: false,
-          minimum: const EdgeInsets.only(bottom: 2),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // A small handle gives touch users an obvious affordance without
-              // consuming a second permanent row in the compact layout.
-              GestureDetector(
-                onTap: () => setState(() => _isExpanded = !_isExpanded),
-                child: SizedBox(
-                  height: 7,
-                  child: Center(
-                    child: Container(
-                      width: 34,
-                      height: 3,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.25),
-                        borderRadius: BorderRadius.circular(99),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.only(bottom: 2),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // A small handle gives touch users an obvious affordance without
+                // consuming a second permanent row in the compact layout.
+                GestureDetector(
+                  onTap: () => setState(() => _isExpanded = !_isExpanded),
+                  child: SizedBox(
+                    height: 7,
+                    child: Center(
+                      child: Container(
+                        width: 34,
+                        height: 3,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              _primaryRow(),
-              _expandedRows(),
-            ],
+                _primaryRow(),
+                _expandedRows(),
+              ],
+            ),
           ),
         ),
       ),
