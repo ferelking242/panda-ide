@@ -153,7 +153,9 @@ class _SelectTypeState extends State<SelectType>
   // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
   int  _sidebarState     = 1;
   bool _rightPanelOpen   = false;
-  bool _bottomPanelOpen  = false;
+  // Keep the terminal preview visible on Web so the deployed Pages build
+  // exposes the design directly. Native keeps the traditional closed panel.
+  bool _bottomPanelOpen  = kIsWeb;
   /// Anchor used to attach popup menus directly under the "Espace de travail"
   /// box so they never appear detached or clipped by screen edges.
   final GlobalKey _workspaceBoxKey = GlobalKey();
@@ -1571,17 +1573,6 @@ class _SelectTypeState extends State<SelectType>
 
   /// Contenu de l'onglet Terminal en mode étendu.
   Widget _buildTerminalTabPage(AppTheme appTheme) {
-    if (kIsWeb) {
-      return Center(
-        child: Text(
-          'Le terminal n\'est pas disponible dans la version web.',
-          style: TextStyle(
-            fontSize: 12,
-            color: appTheme.isDark ? const Color(0xffcfcfcf) : const Color(0xff333333),
-          ),
-        ),
-      );
-    }
     return Container(
       color: appTheme.isDark ? const Color(0xff1e1e1e) : const Color(0xfffefefe),
       child: EmbeddedTerminal(
@@ -4287,14 +4278,6 @@ class _SelectTypeState extends State<SelectType>
         final fg = isDark ? const Color(0xffcfcfcf) : const Color(0xff333333);
         switch (_bottomPanelTab) {
           case 0: // Terminal
-            if (kIsWeb) {
-              return Center(
-                child: Text(
-                  'Le terminal n\'est pas disponible dans la version web.',
-                  style: TextStyle(fontSize: 12, color: fg),
-                ),
-              );
-            }
             return EmbeddedTerminal(
               projectDir: _currentWorkspaceDir ?? '/',
               showKeyboardMenu: true,
