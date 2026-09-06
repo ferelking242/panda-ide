@@ -1,11 +1,10 @@
-// ── Web terminal preview ─────────────────────────────────────────────────────
-// The real PTY is native-only, but the web build should still expose the same
-// terminal surface so GitHub Pages can be used to review the UI.
+// ── Web stub — terminal unavailable on web platform ──────────────────────────
+// This file is selected by terminal.dart conditional export when compiling for
+// dart:html (web). It provides empty / no-op implementations of every class
+// that the rest of the codebase imports from terminal.dart.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'terminal_keyboard_menu.dart';
-export 'terminal_keyboard_menu.dart';
 
 // ── SetupTerminal ─────────────────────────────────────────────────────────────
 class SetupTerminal extends StatelessWidget {
@@ -29,12 +28,22 @@ class SetupTerminal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xff08090b),
-      body: _WebTerminalPreview(showKeyboardMenu: showKeyboardMenu),
+    return const Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.terminal, size: 48, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('Terminal not available on web',
+                style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      ),
     );
   }
 }
+
 // ── EmbeddedTerminal ──────────────────────────────────────────────────────────
 class EmbeddedTerminal extends StatelessWidget {
   final String projectDir;
@@ -51,151 +60,9 @@ class EmbeddedTerminal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _WebTerminalPreview(
-      showKeyboardMenu: showKeyboardMenu,
-    );
-  }
-}
-
-class _WebTerminalPreview extends StatefulWidget {
-  final bool showKeyboardMenu;
-
-  const _WebTerminalPreview({required this.showKeyboardMenu});
-
-  @override
-  State<_WebTerminalPreview> createState() => _WebTerminalPreviewState();
-}
-
-class _WebTerminalPreviewState extends State<_WebTerminalPreview> {
-  final _lines = <String>[
-    'Panda Terminal  •  Web preview',
-    '',
-    r'~ $ echo "Panda Terminal OK"',
-    'Panda Terminal OK',
-    r'~ $ pwd',
-    '/workspace',
-    r'~ $ git status --short',
-    ' M lib/terminal/terminal_keyboard_menu.dart',
-    ' M lib/ui/home.dart',
-    r'~ $ _',
-  ];
-
-  void _sendSequence(String sequence) {
-    if (sequence.isEmpty) return;
-    final visible = sequence
-        .replaceAll('\x1b[A', '↑')
-        .replaceAll('\x1b[B', '↓')
-        .replaceAll('\x1b[C', '→')
-        .replaceAll('\x1b[D', '←')
-        .replaceAll('\x1b', 'ESC')
-        .replaceAll('\n', '↵')
-        .replaceAll('\t', 'TAB');
-    setState(() {
-      _lines
-        ..removeLast()
-        ..add('~ $visible')
-        ..add(r'~ $ _');
-    });
-  }
-
-  Widget _sessionHeader(BuildContext context) {
-    return Container(
-      height: 38,
-      decoration: const BoxDecoration(
-        color: Color(0xff17191d),
-        border: Border(
-          bottom: BorderSide(color: Color(0xff30343b), width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            height: 38,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: const BoxDecoration(
-              color: Color(0xff0d0f12),
-              border: Border(
-                bottom: BorderSide(color: Color(0xff6d79ff), width: 2),
-              ),
-            ),
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Icons.terminal_rounded, size: 15, color: Color(0xff9da6ff)),
-                SizedBox(width: 7),
-                Text(
-                  'Terminal',
-                  style: TextStyle(
-                    color: Color(0xffe9ebf0),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(width: 10),
-                Icon(Icons.close_rounded, size: 14, color: Color(0xff777d88)),
-              ],
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Nouvelle session',
-            onPressed: () {},
-            icon: const Icon(Icons.add_rounded, size: 18, color: Color(0xff9097a3)),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-          ),
-          IconButton(
-            tooltip: 'Options du terminal',
-            onPressed: () {},
-            icon: const Icon(Icons.more_horiz_rounded, size: 19, color: Color(0xff9097a3)),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xff050607),
-      child: Column(
-        children: [
-          _sessionHeader(context),
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-              itemCount: _lines.length,
-              itemBuilder: (context, index) {
-                final line = _lines[index];
-                final isCommand = line.startsWith('~ \$');
-                final isOutput = line == 'Panda Terminal OK';
-                return Text(
-                  line,
-                  style: TextStyle(
-                    color: isCommand
-                        ? const Color(0xff9da6ff)
-                        : isOutput
-                            ? const Color(0xff82d99d)
-                            : const Color(0xffd7d9de),
-                    fontFamily: 'jetBrainsMono',
-                    fontSize: 12,
-                    height: 1.45,
-                  ),
-                );
-              },
-            ),
-          ),
-          if (widget.showKeyboardMenu)
-            TerminalKeyboardMenu(
-              onSendSequence: _sendSequence,
-              onModifierChanged: (ctrl, alt, shift, reset) {},
-              onCopy: () {},
-              onPaste: () {},
-            ),
-        ],
-      ),
+    return const Center(
+      child: Text('Terminal not available on web',
+          style: TextStyle(color: Colors.grey)),
     );
   }
 }
@@ -294,4 +161,11 @@ class TerminalSessionBloc
     on<UpdateTerminalSessionStatus>((e, emit) {});
     on<UpdateTerminalFontSize>((e, emit) {});
   }
+}
+
+// ── TerminalKeyboardMenu ──────────────────────────────────────────────────────
+class TerminalKeyboardMenu extends StatelessWidget {
+  const TerminalKeyboardMenu({super.key});
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }

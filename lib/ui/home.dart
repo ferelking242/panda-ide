@@ -153,9 +153,7 @@ class _SelectTypeState extends State<SelectType>
   // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
   int  _sidebarState     = 1;
   bool _rightPanelOpen   = false;
-  // Keep the terminal preview visible on Web so the deployed Pages build
-  // exposes the design directly. Native keeps the traditional closed panel.
-  bool _bottomPanelOpen  = kIsWeb;
+  bool _bottomPanelOpen  = false;
   /// Anchor used to attach popup menus directly under the "Espace de travail"
   /// box so they never appear detached or clipped by screen edges.
   final GlobalKey _workspaceBoxKey = GlobalKey();
@@ -1405,9 +1403,9 @@ class _SelectTypeState extends State<SelectType>
             listenable: EditorStatusHub.instance,
             builder: (_, __) => WorkspaceDiagnosticsListener(
               builder: (dCtx, errors, warnings, infos) => PandaStatusBar(
-                background: isDark
-                    ? const Color(0xff1a1b1f)
-                    : const Color(0xfff5f5f7),
+                // The downbar sits directly on the editor surface. Do not
+                // paint an extra capsule behind the status icons.
+                background: Colors.transparent,
                 branchName: branch,
                 hasUpstream: loaded?.hasUpstream ?? false,
                 unpushedCount: loaded?.unpushedCount ?? 0,
@@ -1435,15 +1433,10 @@ class _SelectTypeState extends State<SelectType>
             ),
         );
 
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 4),
-          child: SizedBox(
-            height: 22,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: editorBar,
-            ),
-          ),
+        return SizedBox(
+          width: double.infinity,
+          height: 22,
+          child: editorBar,
         );
       },
     );
@@ -1574,6 +1567,19 @@ class _SelectTypeState extends State<SelectType>
 
   /// Contenu de l'onglet Terminal en mode étendu.
   Widget _buildTerminalTabPage(AppTheme appTheme) {
+    if (kIsWeb) {
+      return Center(
+        child: Text(
+          'Le terminal n\'est pas disponible dans la version web.',
+          style: TextStyle(
+            fontSize: 12,
+            color: appTheme.isDark
+                ? const Color(0xffcfcfcf)
+                : const Color(0xff333333),
+          ),
+        ),
+      );
+    }
     return Container(
       color: appTheme.isDark ? const Color(0xff1e1e1e) : const Color(0xfffefefe),
       child: EmbeddedTerminal(
@@ -4066,22 +4072,19 @@ class _SelectTypeState extends State<SelectType>
             return Padding(
               // The status bar is an overlay at the bottom of the IDE. Keep a
               // reserved strip here so it never covers panel content.
-              padding: const EdgeInsets.only(bottom: 26),
+              padding: const EdgeInsets.only(bottom: 22),
               child: Container(
                 height: _bottomPanelHeight,
                 decoration: BoxDecoration(
                     color: bg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: border, width: 1),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.32 : 0.12),
-                        blurRadius: 16,
-                        offset: const Offset(0, -4),
-                      ),
-                    ]),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
+                    ),
+                    border: Border.all(color: border, width: 1)),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(11),
+                  ),
                   child: Column(children: [
                 // ── Line 1: Main panel tabs ──
                 Container(
@@ -4279,6 +4282,14 @@ class _SelectTypeState extends State<SelectType>
         final fg = isDark ? const Color(0xffcfcfcf) : const Color(0xff333333);
         switch (_bottomPanelTab) {
           case 0: // Terminal
+            if (kIsWeb) {
+              return Center(
+                child: Text(
+                  'Le terminal n\'est pas disponible dans la version web.',
+                  style: TextStyle(fontSize: 12, color: fg),
+                ),
+              );
+            }
             return EmbeddedTerminal(
               projectDir: _currentWorkspaceDir ?? '/',
               showKeyboardMenu: true,
