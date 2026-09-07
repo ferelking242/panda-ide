@@ -209,6 +209,7 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Full screen mode ─────────────────────────────────────
   bool _fullScreen = false;
+  int _sidebarStateBeforeFullScreen = 1;
 
   // ── Resizable panels ──────────────────────────────────────
   final double _bottomPanelHeight = 220;
@@ -1610,6 +1611,22 @@ class _SelectTypeState extends State<SelectType>
     // Fallback: check if the current active tab is itself a project tab.
     final cfg = _activeEditorConfig();
     return (cfg != null && cfg.isProject) ? cfg.rootDir : null;
+  }
+
+  void _toggleFullScreen() {
+    setState(() {
+      if (_fullScreen) {
+        _fullScreen = false;
+        _sidebarState = _sidebarStateBeforeFullScreen;
+        return;
+      }
+
+      _sidebarStateBeforeFullScreen = _sidebarState;
+      _fullScreen = true;
+      _sidebarState = 0;
+      _rightPanelOpen = false;
+      _bottomPanelOpen = false;
+    });
   }
 
   /// Ouvre le terminal comme onglet plein écran de l'éditeur (mode étendu).
@@ -3764,7 +3781,7 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
 
-          // ── RIGHT: 4 buttons ─────────────────────────────────────────
+          // ── RIGHT: layout and panel controls ──────────────────────────
           // 1 — ouvrir/fermer le panneau gauche
           _hdrBtn(
             Broken.sidebar_left,
@@ -3800,7 +3817,14 @@ class _SelectTypeState extends State<SelectType>
             _bottomPanelOpen ? _kAccent : fg,
             () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
           ),
-          // 4 — panneau droit (style « sidebar right » ; plein écran
+          // Ouvre le terminal comme onglet de l’éditeur, sans panneau docké.
+          _hdrBtn(
+            Icons.open_in_new_rounded,
+            'Ouvrir le terminal dans un onglet',
+            fg,
+            _openTerminalTab,
+          ),
+          // panneau droit (style « sidebar right » ; plein écran
           // reste accessible dans le menu workspace)
           _hdrBtn(
             Broken.sidebar_right,
@@ -4077,6 +4101,10 @@ class _SelectTypeState extends State<SelectType>
       ],
     ).then((value) {
       if (value == null) return;
+      if (value == 'full_screen') {
+        _toggleFullScreen();
+        return;
+      }
       setState(() {
         if (value == 'sidebar_left') {
           if (_sidebarState == 2) {
@@ -4314,14 +4342,7 @@ class _SelectTypeState extends State<SelectType>
           _openFlutterDeviceTab();
           break;
         case 'full_screen':
-          setState(() {
-            _fullScreen = !_fullScreen;
-            if (_fullScreen) {
-              _sidebarState = 0;
-              _rightPanelOpen = false;
-              _bottomPanelOpen = false;
-            }
-          });
+          _toggleFullScreen();
           break;
         case 'open_folder':
         case 'new_project':

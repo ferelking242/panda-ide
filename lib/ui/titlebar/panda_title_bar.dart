@@ -14,6 +14,7 @@ class PandaTitleBar extends StatelessWidget {
   final VoidCallback onToggleSidebar;
   final VoidCallback onToggleBottomPanel;
   final VoidCallback onToggleRightPanel;
+  final VoidCallback onToggleFullScreen;
   final VoidCallback onOpenAgentTab;
   final VoidCallback onShowWorkspaceMenu;
   final GlobalKey workspaceBoxKey;
@@ -30,6 +31,7 @@ class PandaTitleBar extends StatelessWidget {
     required this.onToggleSidebar,
     required this.onToggleBottomPanel,
     required this.onToggleRightPanel,
+    required this.onToggleFullScreen,
     required this.onOpenAgentTab,
     required this.onShowWorkspaceMenu,
     required this.workspaceBoxKey,
@@ -240,6 +242,7 @@ class PandaTitleBar extends StatelessWidget {
         }
       }
       if (value == 'panel_bottom') onToggleBottomPanel();
+      if (value == 'full_screen') onToggleFullScreen();
     });
   }
 

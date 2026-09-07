@@ -1298,9 +1298,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
               return const SizedBox.shrink();
 
             return Stack(
+              clipBehavior: Clip.none,
               children: [
                 // ── Poignées de sélection ────────────────────────────────
-                ..._buildSelectionHandles(runtime),
+                ..._buildSelectionHandles(runtime, overlayCtx),
                 // ── Barre d'actions compacte ─────────────────────────────
                 Positioned(
                   left: 0,
@@ -1330,21 +1331,25 @@ class _SetupTerminalState extends State<SetupTerminal> {
                         },
                         onPanUpdate: (details) =>
                             _dragSelectionToolbar(overlayCtx, details.delta),
-                        child: Material(
-                          elevation: 6,
-                          borderRadius: BorderRadius.circular(14),
-                          color: const Color(0xdd1c1c1e),
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Material(
+                              elevation: 6,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: const Color(0x2effffff),
+                              color: const Color(0xdd1c1c1e),
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: const Color(0x2effffff),
+                                  ),
                               ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
                                  Padding(
                                    padding: const EdgeInsets.symmetric(
                                      horizontal: 3,
@@ -1392,7 +1397,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
                                   onTap: () =>
                                       runtime.controller.clearSelection(),
                                 ),
-                              ],
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -1470,14 +1477,21 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }
   }
 
-  List<Widget> _buildSelectionHandles(_TerminalRuntime runtime) {
+  List<Widget> _buildSelectionHandles(
+    _TerminalRuntime runtime,
+    BuildContext overlayCtx,
+  ) {
     final (startPx, endPx) = _handlePositions(runtime);
     if (startPx == null || endPx == null) return const [];
+    final overlaySize = MediaQuery.sizeOf(overlayCtx);
+    final maxLeft = (overlaySize.width - 40).clamp(0.0, overlaySize.width);
+    final maxTop = (overlaySize.height - 30).clamp(0.0, overlaySize.height);
 
     Widget handle(Offset pos, bool isStart) {
+      final desiredTop = isStart ? pos.dy - 28 : pos.dy + 2;
       return Positioned(
-        left: pos.dx - 20,
-        top: isStart ? pos.dy - 28 : pos.dy + 2,
+        left: (pos.dx - 20).clamp(0.0, maxLeft).toDouble(),
+        top: desiredTop.clamp(0.0, maxTop).toDouble(),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onPanUpdate: (details) =>
@@ -1488,10 +1502,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
             height: 30,
             child: Center(
               child: Container(
-                width: 13,
-                height: 13,
+                width: 12,
+                height: 12,
                 decoration: BoxDecoration(
-                  color: const Color(0xff4c8dff),
+                  color: const Color(0xff4c8dff).withValues(alpha: 0.92),
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 1.5),
                   boxShadow: const [
@@ -1710,7 +1724,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
           child: TerminalView(
             runtime.terminal,
             readOnly: widget.readOnly,
-            padding: EdgeInsets.zero,
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
             controller: runtime.controller,
             focusNode: runtime.focusNode,
             autofocus: session.id == state.activeSessionId,
@@ -1768,7 +1782,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
               child: TerminalView(
                 r.terminal,
                 readOnly: widget.readOnly,
-                padding: EdgeInsets.zero,
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
                 controller: r.controller,
                 focusNode: r.focusNode,
                 autofocus: isActive,
