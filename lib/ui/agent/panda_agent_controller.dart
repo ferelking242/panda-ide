@@ -4,12 +4,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../utils/ai.dart';
 import '../../utils/copilot_chat.dart';
 import '../../utils/panda_log.dart';
 import '../agent_runner.dart';
+import 'flow_ui/models/flow_attachment.dart';
 
 /// Owns Panda Agent state and transport.
 ///
@@ -26,6 +28,8 @@ class PandaAgentController extends ChangeNotifier {
   final ScrollController scrollController = ScrollController();
   final AgentRunner runner = AgentRunner();
   final List<Map<String, dynamic>> messages = <Map<String, dynamic>>[];
+  final SpeechToText speech = SpeechToText();
+  final List<FlowAttachment> pendingAttachments = <FlowAttachment>[];
 
   StreamSubscription<AgentChunk>? _subscription;
   Completer<bool>? _approval;
@@ -37,6 +41,7 @@ class PandaAgentController extends ChangeNotifier {
 
   AgentPhase phase = AgentPhase.idle;
   bool isGenerating = false;
+  bool isListening = false;
   String chatMode = 'ask';
   String approvalMode = 'default';
   String conversationTitle = 'Nouvelle conversation';
@@ -51,10 +56,64 @@ class PandaAgentController extends ChangeNotifier {
       AgentPhase.toolRunning => _currentTool.isEmpty
           ? 'Exécution en cours…'
           : 'Exécution de $_currentTool',
-      AgentPhase.streaming => 'Réponse en cours…',
+      AgentPhase.streaming => 'Flux actif…',
       AgentPhase.error => 'La génération a échoué',
       _ => 'Traitement en cours…',
     };
+  }
+
+  void addAttachments(Iterable<FlowAttachment> attachments) {
+    for (final attachment in attachments) {
+      if (attachment.id.isEmpty ||
+          pendingAttachments.any((item) => item.id == attachment.id)) {
+        continue;
+      }
+      pendingAttachments.add(attachment);
+    }
+    notifyListeners();
+  }
+
+  void removeAttachment(String id) {
+    pendingAttachments.removeWhere((attachment) => attachment.id == id);
+    notifyListeners();
+  }
+
+  Future<void> toggleListening() async {
+    if (isListening) {
+      await speech.stop();
+      isListening = false;
+      notifyListeners();
+      return;
+    }
+
+    final available = await speech.initialize(
+      onStatus: (status) {
+        if (status == 'notListening' || status == 'done') {
+          isListening = false;
+          notifyListeners();
+        }
+      },
+      onError: (_) {
+        isListening = false;
+        notifyListeners();
+      },
+    );
+    if (!available) return;
+
+    isListening = true;
+    notifyListeners();
+    await speech.listen(
+      onResult: (result) {
+        inputController.value = inputController.value.copyWith(
+          text: result.recognizedWords,
+          selection: TextSelection.collapsed(
+            offset: result.recognizedWords.length,
+          ),
+          composing: TextRange.empty,
+        );
+        notifyListeners();
+      },
+    );
   }
 
   MapEntry<String, dynamic>? selectedProfile(AIState state) {
@@ -96,14 +155,17 @@ class PandaAgentController extends ChangeNotifier {
     String? text,
   }) async {
     final prompt = (text ?? inputController.text).trim();
-    if (prompt.isEmpty || isGenerating) return;
+    final attachments = List<FlowAttachment>.of(pendingAttachments);
+    if ((prompt.isEmpty && attachments.isEmpty) || isGenerating) return;
 
     final requestId = ++_requestSerial;
     isGenerating = true;
     phase = AgentPhase.thinking;
     lastError = null;
     if (messages.isEmpty && conversationTitle == 'Nouvelle conversation') {
-      conversationTitle = _smartTitle(prompt);
+      conversationTitle = _smartTitle(
+        prompt.isEmpty ? (attachments.first.label ?? 'Pièce jointe') : prompt,
+      );
     }
     notifyListeners();
 
@@ -130,11 +192,29 @@ class PandaAgentController extends ChangeNotifier {
       ];
 
       final history = _historyForModel();
-      history.add(<String, dynamic>{'role': 'user', 'content': prompt});
+      final attachmentSummary = attachments
+          .map((attachment) => attachment.label ?? attachment.id)
+          .where((name) => name.trim().isNotEmpty)
+          .join(', ');
+      final modelPrompt = [
+        if (prompt.isNotEmpty) prompt,
+        if (attachmentSummary.isNotEmpty)
+          '[Pièces jointes: $attachmentSummary]',
+      ].join('\n');
+      history.add(<String, dynamic>{'role': 'user', 'content': modelPrompt});
       messages
         ..add(<String, dynamic>{
           'role': 'user',
           'text': prompt,
+           'attachments': attachments
+               .map(
+                 (attachment) => <String, dynamic>{
+                   'path': attachment.id,
+                   'name': attachment.label ?? attachment.id,
+                   'mimeType': attachment.mimeType,
+                 },
+               )
+               .toList(),
           'phase': 'done',
         })
         ..add(<String, dynamic>{
@@ -146,6 +226,7 @@ class PandaAgentController extends ChangeNotifier {
           'blocks': <Map<String, dynamic>>[],
         });
       inputController.clear();
+      pendingAttachments.clear();
       _streamBuffer = '';
       _visibleStreamBuffer = '';
       _currentTool = '';
@@ -587,6 +668,7 @@ class PandaAgentController extends ChangeNotifier {
   void dispose() {
     runner.cancel();
     unawaited(_subscription?.cancel());
+    unawaited(speech.stop());
     _approval?.complete(false);
     inputController.removeListener(notifyListeners);
     inputController.dispose();

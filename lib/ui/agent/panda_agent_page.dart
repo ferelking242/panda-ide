@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../bloc/ui_bloc/ui_bloc.dart';
+import '../../bloc/ui_bloc/ui_event.dart';
 import '../../utils/ai.dart';
 import '../agent/flow_ui/widgets/flow_chat_view.dart';
 import '../agent/flow_ui/widgets/flow_composer.dart';
 import '../agent/flow_ui/widgets/flow_greeting.dart';
+import '../agent/flow_ui/widgets/flow_model_selector.dart';
+import '../agent/flow_ui/widgets/flow_pill.dart';
+import '../agent/flow_ui/styles/flow_pill_style.dart';
+import '../agent/flow_ui/models/flow_attachment_options.dart';
 import '../agent/flow_ui/widgets/flow_suggestion.dart';
+import '../agent_runner.dart';
 import 'panda_agent_controller.dart';
 import 'panda_agent_activity.dart';
 import 'panda_agent_flow_widgets.dart';
@@ -37,6 +43,21 @@ class PandaAgentPage extends StatelessWidget {
         final model = controller.modelName(config);
         final missingKey = controller.providerNeedsKey(provider) &&
             Models.resolveApiKey(config ?? const <String, dynamic>{}).isEmpty;
+        final modelOptions = aiState.config.entries
+            .where((entry) => entry.value is Map)
+            .map(
+              (entry) {
+                final value = Map<String, dynamic>.from(entry.value as Map);
+                final name = controller.modelName(value);
+                final providerName = controller.providerName(value);
+                return FlowModelOption(
+                  id: entry.key,
+                  label: name.isEmpty ? entry.key : name,
+                  description: providerName.isEmpty ? null : providerName,
+                );
+              },
+            )
+            .toList();
 
         final thread = controller.messages.isEmpty
             ? null
@@ -77,18 +98,13 @@ class PandaAgentPage extends StatelessWidget {
           aboveComposer: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (controller.isGenerating)
+              if (controller.isGenerating &&
+                  controller.phase != AgentPhase.streaming)
                 PandaAgentActivity(
                   key: const ValueKey('panda-agent-live-status'),
                   phase: controller.phase,
                   label: controller.activityLabel,
                 ),
-              _statusBar(
-                context,
-                provider: provider,
-                model: model,
-                missingKey: missingKey,
-              ),
             ],
           ),
           composer: FlowComposer(
@@ -102,86 +118,76 @@ class PandaAgentPage extends StatelessWidget {
             onStop: controller.stop,
             placeholder: 'Écrire un message à Panda Agent…',
             submitOnEnter: true,
+            maxLines: 3,
+            padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+            attachments: controller.pendingAttachments,
+            onAttachmentsPicked: controller.addAttachments,
+            onAttachmentsPasted: controller.addAttachments,
+            onRemoveAttachment: controller.removeAttachment,
+            attachmentOptions: FlowAttachmentOptions.any,
+            attachTooltip: 'Ajouter un fichier ou une image',
             leadingActions: [
-              _pill(
-                context,
+              FlowPill(
                 icon: Icons.tune,
                 label: controller.chatMode.toUpperCase(),
+                tooltip: 'Mode ${controller.chatMode}',
+                showLabel: false,
                 onTap: () => _showModes(context),
+              ),
+              FlowPill(
+                icon: Icons.verified_user_outlined,
+                label: controller.approvalMode == 'autopilot'
+                    ? 'AUTO'
+                    : 'APP',
+                tooltip: 'Mode d’approbation',
+                showLabel: false,
+                onTap: () => _showApprovalModes(context),
+              ),
+              if (missingKey)
+                FlowPill(
+                  icon: Icons.warning_amber_rounded,
+                  label: 'Provider',
+                  tooltip: 'Provider non configuré',
+                  showLabel: false,
+                  style: const FlowPillStyle(
+                    iconColor: Colors.amber,
+                    borderColor: Colors.amber,
+                  ),
+                  onTap: onOpenProviders,
+                ),
+            ],
+            trailingActions: [
+              if (modelOptions.isNotEmpty)
+                FlowModelSelector(
+                  models: modelOptions,
+                  selectedId: aiState.modelSelected['chat']?.toString(),
+                  onSelected: (id) {
+                    final selected = Map<String, dynamic>.from(
+                      aiState.modelSelected,
+                    )..['chat'] = id;
+                    context.read<AIBloc>().add(ModelSelectEvent(selected));
+                  },
+                  tooltip: model.isEmpty ? 'Choisir un modèle' : model,
+                  sheetTitle: 'Choisir un modèle',
+                ),
+              IconButton(
+                tooltip: controller.isListening
+                    ? 'Arrêter la dictée'
+                    : 'Dicter un message',
+                onPressed: controller.toggleListening,
+                icon: Icon(
+                  controller.isListening ? Icons.mic : Icons.mic_none,
+                  size: 19,
+                  color: controller.isListening
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                visualDensity: VisualDensity.compact,
               ),
             ],
           ),
         );
       },
-    );
-  }
-
-  Widget _statusBar(
-    BuildContext context, {
-    required String provider,
-    required String model,
-    required bool missingKey,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: Row(
-        children: [
-          Icon(
-            missingKey ? Icons.warning_amber_rounded : Icons.memory_outlined,
-            size: 14,
-            color: missingKey ? colors.error : colors.onSurfaceVariant,
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              missingKey
-                  ? 'Aucune clé configurée — ouvrez Providers'
-                  : (model.isEmpty ? (provider.isEmpty ? 'Provider' : provider) : model),
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: missingKey ? colors.error : colors.onSurfaceVariant,
-              ),
-            ),
-          ),
-          if (missingKey && onOpenProviders != null)
-            IconButton(
-              tooltip: 'Ouvrir Providers',
-              icon: const Icon(Icons.open_in_new, size: 15),
-              onPressed: onOpenProviders,
-              visualDensity: VisualDensity.compact,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _pill(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    final colors = Theme.of(context).colorScheme;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: colors.onSurfaceVariant),
-            const SizedBox(width: 4),
-            Text(label, style: TextStyle(fontSize: 10, color: colors.onSurfaceVariant)),
-          ],
-        ),
-      ),
     );
   }
 
@@ -217,6 +223,36 @@ class PandaAgentPage extends StatelessWidget {
                 onTap: () {
                   Navigator.pop(context);
                   onOpenProviders!();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showApprovalModes(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final mode in const [
+              ('default', 'Demander une approbation', 'Valider les outils sensibles'),
+              ('autopilot', 'Toujours autoriser', 'Exécuter sans interrompre le flux'),
+            ])
+              ListTile(
+                leading: Icon(
+                  mode.$1 == controller.approvalMode
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                ),
+                title: Text(mode.$2),
+                subtitle: Text(mode.$3),
+                onTap: () {
+                  controller.setApprovalMode(mode.$1);
+                  Navigator.pop(context);
                 },
               ),
           ],

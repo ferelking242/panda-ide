@@ -656,7 +656,7 @@ class _FlowComposerState extends State<FlowComposer> {
         child: Padding(
           padding: const EdgeInsets.all(_attachPadding),
           child: Icon(
-            Icons.attach_file,
+            Icons.add,
             size: _attachIconSize,
             color: foreground,
           ),

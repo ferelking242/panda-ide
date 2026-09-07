@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'flow_ui/models/flow_attachment.dart';
 import 'flow_ui/models/flow_message_data.dart';
 import 'flow_ui/models/flow_message_part.dart';
+import 'flow_ui/widgets/flow_markdown.dart';
 import 'flow_ui/widgets/flow_message_actions.dart';
 import 'flow_ui/widgets/flow_thread.dart';
 
@@ -125,13 +128,76 @@ class PandaAgentFlowChat extends StatelessWidget {
 
   static String _withoutThinking(String value) {
     if (value.trim().isEmpty) return '';
-    return value
+    final withoutThinking = value
         .replaceAll(
           RegExp(r'<(think|thought)>[\s\S]*?(?:</\1>|$)',
               caseSensitive: false),
           '',
         )
         .trim();
+    return _normalizeMarkup(withoutThinking);
+  }
+
+  static String _normalizeMarkup(String value) {
+    var normalized = value
+        .replaceAll(
+          RegExp(r'<pre[^>]*>\s*<code[^>]*>', caseSensitive: false),
+          '\n```\n',
+        )
+        .replaceAll(
+          RegExp(r'</code>\s*</pre>', caseSensitive: false),
+          '\n```\n',
+        )
+        .replaceAll(
+          RegExp(r'<br\s*/?>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'</?(p|div|section|article|blockquote)>', caseSensitive: false),
+          '\n\n',
+        )
+        .replaceAll(
+          RegExp(r'<h[1-6][^>]*>', caseSensitive: false),
+          '### ',
+        )
+        .replaceAll(
+          RegExp(r'</h[1-6]>', caseSensitive: false),
+          '\n\n',
+        )
+        .replaceAll(
+          RegExp(r'<li[^>]*>', caseSensitive: false),
+          '- ',
+        )
+        .replaceAll(
+          RegExp(r'</li>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'<(strong|b)[^>]*>', caseSensitive: false),
+          '**',
+        )
+        .replaceAll(
+          RegExp(r'</(strong|b)>', caseSensitive: false),
+          '**',
+        )
+        .replaceAll(
+          RegExp(r'<(em|i)[^>]*>', caseSensitive: false),
+          '*',
+        )
+        .replaceAll(
+          RegExp(r'</(em|i)>', caseSensitive: false),
+          '*',
+        )
+        .replaceAll(
+          RegExp(r'<code[^>]*>', caseSensitive: false),
+          '`',
+        )
+        .replaceAll(
+          RegExp(r'</code>', caseSensitive: false),
+          '`',
+        )
+        .replaceAll(RegExp(r'<[^>]+>'), '');
+    return normalized.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
   }
 
   static String? _attachmentKind(String? name) {
@@ -278,6 +344,15 @@ class PandaAgentFlowToolCard extends StatelessWidget {
     return args.values.map((value) => value?.toString() ?? '').join(' ');
   }
 
+  String get _formattedArgs {
+    if (args.isEmpty) return '';
+    try {
+      return const JsonEncoder.withIndent('  ').convert(args);
+    } catch (_) {
+      return args.toString();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final approval = status == 'pending' || status == 'pending_approval';
@@ -364,21 +439,23 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                 color: dark ? Colors.black26 : Colors.white70,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: SelectableText(
-                pandaWrapLongTokensForDisplay(result!.trim()),
+              child: FlowMarkdown(
+                text: result!.trim(),
                 style: TextStyle(
                   color: foreground.withValues(alpha: 0.82),
                   fontSize: 11,
                   height: 1.4,
-                  fontFamily: 'monospace',
                 ),
+                charactersPerSecond: 1000,
               ),
             ),
           ],
           if (approval) ...[
             const SizedBox(height: 8),
             Text(
-              args.isEmpty ? 'Cette action demande votre autorisation.' : args.toString(),
+              args.isEmpty
+                  ? 'Cette action demande votre autorisation.'
+                  : _formattedArgs,
               style: TextStyle(
                 color: foreground.withValues(alpha: 0.75),
                 fontSize: 11,
