@@ -81,6 +81,8 @@ import 'agent/flow_ui/models/flow_attachment.dart';
 import 'agent/flow_ui/theme/flow_theme.dart';
 import 'agent/agent_widgets.dart';
 import '../agent/agent_v3.dart';
+import 'agent/panda_agent_controller.dart';
+import 'agent/panda_agent_page.dart';
 
 
 
@@ -186,6 +188,7 @@ class _SelectTypeState extends State<SelectType>
   final _agentInputCtrl  = TextEditingController();
   final _agentScrollCtrl = ScrollController();
   final List<Map<String,dynamic>> _agentMessages = [];
+  late final PandaAgentController _pandaAgentController;
 
   // ── Notifications ──────────────────────────────────────────
   int _unreadNotifications = 0;
@@ -369,6 +372,7 @@ class _SelectTypeState extends State<SelectType>
   @override
   void initState() {
     super.initState();
+    _pandaAgentController = PandaAgentController();
     _activityCtrl.setOnUpdate(() { if (mounted) setState(() {}); });
     _eventActivityBridge = EventActivityBridge(
       eventBus: _agentEventBus,
@@ -473,6 +477,7 @@ class _SelectTypeState extends State<SelectType>
   void dispose() {
     TerminalBridge.instance.onSendToAgent = null;
     WidgetsBinding.instance.removeObserver(this);
+    _pandaAgentController.dispose();
     createFileController.dispose();
     _agentInputCtrl.dispose();
     _agentScrollCtrl.dispose();
@@ -4984,8 +4989,29 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
-  // ── Chat tab content (existing chat UI) ───────────────────────────────────
+  // ── Chat tab content ───────────────────────────────────────────────────────
+  //
+  // Panda Agent is intentionally hosted by its own page/controller. The home
+  // shell only decides where the page is displayed and supplies the current
+  // workspace; it no longer owns the conversation renderer.
   Widget _buildChatTabContent(
+      BuildContext context, AppTheme appTheme, bool asPage) {
+    return PandaAgentPage(
+      controller: _pandaAgentController,
+      workspacePath: () => _currentWorkspaceDir ?? _activeProjectDir() ?? '',
+      onOpenProviders: () {
+        setState(() {
+          _agentPanelPrevTab = _agentPanelTab;
+          _agentPanelTab = 4;
+        });
+      },
+    );
+  }
+
+  // ── Legacy chat UI kept temporarily for history migration only ────────────
+  // No route calls this method. Conversation rendering belongs to
+  // PandaAgentPage/PandaAgentFlowChat.
+  Widget _buildLegacyChatTabContent(
       BuildContext context, AppTheme appTheme, bool asPage) {
     final isDark     = appTheme.isDark;
     final borderC    = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
@@ -8955,7 +8981,7 @@ class _SelectTypeState extends State<SelectType>
 
   /// Reçoit du texte depuis le terminal (via TerminalBridge) et l'envoie à l'agent.
   void _sendToAgentFromBridge(String text) {
-    if (!mounted || _agentGenerating) return;
+    if (!mounted || _pandaAgentController.isGenerating) return;
     // Ouvre le panel agent si fermé
     final bool isMobile = MediaQuery.of(context).size.width < 600;
     if (isMobile) {
@@ -8965,8 +8991,13 @@ class _SelectTypeState extends State<SelectType>
         setState(() => _rightPanelOpen = true);
       }
     }
-    _agentInputCtrl.text = text;
-    _agentSend();
+    _pandaAgentController.inputController.text = text;
+    final aiState = context.read<AIBloc>().state;
+    unawaited(_pandaAgentController.send(
+      context: context,
+      aiState: aiState,
+      workspacePath: _currentWorkspaceDir ?? _activeProjectDir() ?? '',
+    ));
   }
 
   Future<void> _agentSend() async {
