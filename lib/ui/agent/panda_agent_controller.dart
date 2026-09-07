@@ -231,7 +231,9 @@ class PandaAgentController extends ChangeNotifier {
       _visibleStreamBuffer = '';
       _currentTool = '';
       _turnFinalized = false;
-      phase = AgentPhase.streaming;
+      // Keep the persistent activity row in "Starting/Thinking" until the
+      // first model chunk arrives. The message itself is streaming, but the
+      // visible phase should not skip the opening analysis state.
       notifyListeners();
 
       await _subscription?.cancel();
@@ -477,9 +479,12 @@ class PandaAgentController extends ChangeNotifier {
     switch (chunk.phase) {
       case AgentPhase.thinking:
         phase = AgentPhase.thinking;
-        // Reasoning tokens are internal model data. Keep them out of the
-        // conversation so they cannot be shown or replayed on the next turn.
-        message['thinking'] = '';
+        final thinking = chunk.text.trim();
+        if (thinking.isNotEmpty) {
+          message['thinking'] =
+              '${message['thinking'] ?? ''}${chunk.text}';
+          _appendBlock(blocks, 'thinking', {'thinking': chunk.text});
+        }
       case AgentPhase.toolRunning:
         phase = AgentPhase.toolRunning;
         _currentTool = chunk.toolName ?? 'outil';

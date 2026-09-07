@@ -2,16 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../bloc/ui_bloc/ui_bloc.dart';
-import '../../utils/ai.dart';
 import '../agent/flow_ui/widgets/flow_chat_view.dart';
 import '../agent/flow_ui/widgets/flow_composer.dart';
 import '../agent/flow_ui/widgets/flow_greeting.dart';
 import '../agent/flow_ui/widgets/flow_model_selector.dart';
 import '../agent/flow_ui/widgets/flow_pill.dart';
-import '../agent/flow_ui/styles/flow_pill_style.dart';
 import '../agent/flow_ui/models/flow_attachment_options.dart';
 import '../agent/flow_ui/widgets/flow_suggestion.dart';
 import 'panda_agent_controller.dart';
+import 'panda_agent_composer_extras.dart';
 import 'panda_agent_flow_widgets.dart';
 
 class PandaAgentPage extends StatelessWidget {
@@ -36,10 +35,7 @@ class PandaAgentPage extends StatelessWidget {
         final config = profile?.value is Map
             ? Map<String, dynamic>.from(profile!.value as Map)
             : null;
-        final provider = controller.providerName(config);
         final model = controller.modelName(config);
-        final missingKey = controller.providerNeedsKey(provider) &&
-            Models.resolveApiKey(config ?? const <String, dynamic>{}).isEmpty;
         final modelOptions = aiState.config.entries
             .where((entry) => entry.value is Map)
             .map(
@@ -55,6 +51,9 @@ class PandaAgentPage extends StatelessWidget {
               },
             )
             .toList();
+        final pendingRevision = controller.messages.isEmpty
+            ? 0
+            : ((controller.messages.last['blocks'] as List?)?.length ?? 0);
 
         final thread = controller.messages.isEmpty
             ? null
@@ -63,6 +62,7 @@ class PandaAgentPage extends StatelessWidget {
                 scrollController: controller.scrollController,
                 isGenerating: controller.isGenerating,
                 phase: controller.phase.name,
+                currentTool: controller.currentTool,
                 onRetry: controller.retry,
                 onToolApproval: controller.resolveApproval,
                 onAlwaysAllowTools: () => controller.setApprovalMode('autopilot'),
@@ -92,6 +92,13 @@ class PandaAgentPage extends StatelessWidget {
               ),
             ],
           ),
+          aboveComposer: PandaAgentPendingChangesBar(
+            key: ValueKey(
+              'pending-$pendingRevision-${controller.phase.name}-${controller.messages.length}',
+            ),
+            workspacePath: workspacePath(),
+            revision: pendingRevision,
+          ),
           composer: FlowComposer(
             controller: controller.inputController,
             isStreaming: controller.isGenerating,
@@ -113,35 +120,16 @@ class PandaAgentPage extends StatelessWidget {
             attachTooltip: 'Ajouter un fichier ou une image',
             leadingActions: [
               FlowPill(
-                icon: Icons.tune,
-                label: controller.chatMode.toUpperCase(),
+                icon: Icons.auto_awesome,
+                label: controller.chatMode == 'agent'
+                    ? 'Agent'
+                    : controller.chatMode == 'plan'
+                        ? 'Plan'
+                        : 'Ask',
                 tooltip: 'Mode ${controller.chatMode}',
-                showLabel: false,
+                showLabel: true,
                 onTap: () => _showModes(context),
               ),
-              FlowPill(
-                icon: Icons.verified_user_outlined,
-                label: controller.approvalMode == 'autopilot'
-                    ? 'AUTO'
-                    : 'APP',
-                tooltip: 'Mode d’approbation',
-                showLabel: false,
-                onTap: () => _showApprovalModes(context),
-              ),
-              if (missingKey)
-                FlowPill(
-                  icon: Icons.warning_amber_rounded,
-                  label: 'Provider',
-                  tooltip: 'Provider non configuré',
-                  showLabel: false,
-                  style: const FlowPillStyle(
-                    iconColor: Colors.amber,
-                    borderColor: Colors.amber,
-                  ),
-                  onTap: onOpenProviders,
-                ),
-            ],
-            trailingActions: [
               if (modelOptions.isNotEmpty)
                 FlowModelSelector(
                   models: modelOptions,
@@ -156,6 +144,15 @@ class PandaAgentPage extends StatelessWidget {
                   tooltip: model.isEmpty ? 'Choisir un modèle' : model,
                   sheetTitle: 'Choisir un modèle',
                 ),
+              if (modelOptions.isEmpty)
+                FlowPill(
+                  icon: Icons.memory_outlined,
+                  label: model.isEmpty ? 'Model' : model,
+                  showLabel: true,
+                  tooltip: 'Modèle actuel',
+                ),
+            ],
+            trailingActions: [
               IconButton(
                 tooltip: controller.isListening
                     ? 'Arrêter la dictée'
@@ -171,6 +168,10 @@ class PandaAgentPage extends StatelessWidget {
                 visualDensity: VisualDensity.compact,
               ),
             ],
+          ),
+          belowComposer: PandaAgentComposerFooter(
+            approvalMode: controller.approvalMode,
+            onApprovalTap: () => _showApprovalModes(context),
           ),
         );
       },
@@ -200,15 +201,6 @@ class PandaAgentPage extends StatelessWidget {
                 onTap: () {
                   controller.setMode(mode.$1);
                   Navigator.pop(context);
-                },
-              ),
-            if (onOpenProviders != null)
-              ListTile(
-                leading: const Icon(Icons.key_outlined),
-                title: const Text('Configurer les providers'),
-                onTap: () {
-                  Navigator.pop(context);
-                  onOpenProviders!();
                 },
               ),
           ],

@@ -52,6 +52,7 @@ class FlowChatView extends StatefulWidget {
     this.thread,
     this.header,
     this.aboveComposer,
+    this.belowComposer,
     this.empty = false,
     this.greeting,
     this.suggestions,
@@ -75,6 +76,7 @@ class FlowChatView extends StatefulWidget {
              composer != null ||
              header != null ||
              aboveComposer != null ||
+              belowComposer != null ||
              greeting != null ||
              suggestions != null,
          'FlowChatView was built with nothing to show, which renders a '
@@ -113,6 +115,9 @@ class FlowChatView extends StatefulWidget {
   /// Between the thread and the composer — a scrolling starter strip, a
   /// notice, anything the host wants pinned above the input.
   final Widget? aboveComposer;
+
+  /// Optional status/control row rendered directly below the composer card.
+  final Widget? belowComposer;
 
   /// The zero state: no messages yet. The thread gives way to [greeting]
   /// and [suggestions] — on wide layouts the composer lifts to the vertical
@@ -636,6 +641,10 @@ class _FlowChatViewState extends State<FlowChatView> {
         if (widget.aboveComposer != null) const SizedBox(height: _composerGap),
         widget.composer!,
       ],
+      if (widget.belowComposer != null) ...[
+        if (widget.composer != null) const SizedBox(height: 6),
+        widget.belowComposer!,
+      ],
     ];
 
     // Gaps only between the pieces actually present, so a host without a
@@ -680,6 +689,7 @@ class _FlowChatViewState extends State<FlowChatView> {
     final suggestions = widget.empty ? widget.suggestions : null;
     if (widget.composer == null &&
         widget.aboveComposer == null &&
+        widget.belowComposer == null &&
         suggestions == null) {
       return const [];
     }
@@ -723,6 +733,12 @@ class _FlowChatViewState extends State<FlowChatView> {
         column.add(const SizedBox(height: _suggestionsGapCompact));
       }
       column.add(widget.composer!);
+    }
+    if (widget.belowComposer != null) {
+      if (column.isNotEmpty) {
+        column.add(const SizedBox(height: 6));
+      }
+      column.add(widget.belowComposer!);
     }
 
     return [
