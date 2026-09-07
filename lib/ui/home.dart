@@ -64,7 +64,6 @@ import 'editor/status_bar.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
-import 'agent/agent_models.dart';
 import 'agent/panda_activity_dock.dart';
 import 'agent/flow_ui/widgets/flow_composer.dart';
 import 'agent/flow_ui/widgets/flow_thread.dart';
@@ -1369,9 +1368,8 @@ class _SelectTypeState extends State<SelectType>
                   ),
                 ],
               ),
-              // ── Floating agent overlay ──────────────────────────────
-              if (_agentFloating)
-                _buildFloatingAgentOverlay(appTheme),
+              // Agent chat is rendered only through PandaAgentPage in the
+              // panel above; the former floating legacy overlay is disabled.
                 ],
               ),
             ),
@@ -8054,7 +8052,7 @@ class _SelectTypeState extends State<SelectType>
         buf.writeln(text);
         buf.writeln();
       } else {
-        buf.writeln('## 🐼 Panda Agent');
+        buf.writeln('## Agent');
         buf.writeln();
         final blocksX = (msg['blocks'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
         String cleanExport(String s) {
@@ -8068,12 +8066,12 @@ class _SelectTypeState extends State<SelectType>
             if (bt == 'thinking') {
               final th = ((b['thinking'] as String?) ?? '').trim();
               if (th.isEmpty) continue;
-              buf.writeln('> 🧠 Réflexion : ${th.replaceAll('\n', '\n> ')}');
-              buf.writeln();
+              // Private reasoning is never exported.
+              continue;
             } else if (bt == 'toolCall') {
               final nm = ((b['name'] ?? b['toolName']) ?? '').toString();
               final res = (((b['result'] as String?) ?? '')).trim();
-              buf.writeln('- ⚙️ `$nm`');
+              buf.writeln('- `$nm`');
               if (res.isNotEmpty) {
                 buf.writeln('  ```');
                 for (final line in res.split('\n').take(40)) {
@@ -8092,8 +8090,7 @@ class _SelectTypeState extends State<SelectType>
         } else {
           final th = (msg['thinking'] as String? ?? '').trim();
           if (th.isNotEmpty) {
-            buf.writeln('> 🧠 Réflexion : ${th.replaceAll('\n', '\n> ')}');
-            buf.writeln();
+            // Private reasoning is never exported.
           }
           final t = cleanExport(text);
           if (t.isNotEmpty) buf.writeln(t);

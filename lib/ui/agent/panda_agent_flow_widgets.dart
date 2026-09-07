@@ -251,7 +251,7 @@ class PandaAgentFlowChat extends StatelessWidget {
               if (index != null) onRetry!(index);
             },
       retryLabel: 'Réessayer',
-      thinkingLabel: 'Panda réfléchit…',
+      thinkingLabel: 'Analyse en cours…',
       markdown: true,
     );
   }

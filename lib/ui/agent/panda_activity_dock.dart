@@ -8,11 +8,11 @@ import 'agent_models.dart';
 /// Layout:
 /// ```
 /// ┌──────────────────────────────────────┐
-/// │  🐼 thinking · Analyse de la demande │  ← active (top, animated)
+/// │  Analyse de la demande                  │  ← active (top, animated)
 /// ├──────────────────────────────────────┤
-/// │  🐼 Cloning dépôt           ✓ done  │  ← completed (scrollable history)
-/// │  🐼 execute cmd · git clone  ✓ done  │
-/// │  🐼 working · Installation   ✓ done  │
+/// │  Cloning dépôt             ✓ done       │  ← completed (scrollable history)
+/// │  execute cmd · git clone   ✓ done       │
+/// │  Installation              ✓ done       │
 /// └──────────────────────────────────────┘
 /// [FlowComposer]                              ← input at bottom
 /// ```
@@ -107,10 +107,6 @@ class _ActiveActivityRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
-          // 🐼 emoji
-          const Text('🐼', style: TextStyle(fontSize: 14)),
-          const SizedBox(width: 8),
-
           // Thinking indicator or shimmer text based on type
           if (event.type == AgentActivityType.thinking)
             FlowThinkingIndicator(
@@ -227,9 +223,6 @@ class _CompletedActivityRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         child: Row(
           children: [
-            const Text('🐼', style: TextStyle(fontSize: 12)),
-            const SizedBox(width: 8),
-
             // Tool icon
             if (event.toolName != null)
               agentToolIconWidget(event.toolName!, 12, muted)

@@ -43,6 +43,20 @@ class PandaAgentController extends ChangeNotifier {
   String? lastError;
 
   bool get hasPendingApproval => _approval != null;
+  String get currentTool => _currentTool;
+
+  String get activityLabel {
+    if (_currentTool.isNotEmpty) {
+      return 'Exécution de $_currentTool';
+    }
+    return switch (phase) {
+      AgentPhase.thinking => 'Analyse en cours…',
+      AgentPhase.toolRunning => 'Exécution en cours…',
+      AgentPhase.streaming => 'Réponse en cours…',
+      AgentPhase.error => 'La génération a échoué',
+      _ => 'Traitement en cours…',
+    };
+  }
 
   MapEntry<String, dynamic>? selectedProfile(AIState state) {
     final selectedId = state.modelSelected['chat']?.toString();
@@ -236,8 +250,6 @@ class PandaAgentController extends ChangeNotifier {
       }
       if (role != 'agent') continue;
       final parts = <String>[];
-      final thinking = message['thinking']?.toString() ?? '';
-      if (thinking.isNotEmpty) parts.add('[reasoning]\n$thinking');
       final blocks = (message['blocks'] as List?)
               ?.whereType<Map>()
               .map((block) => Map<String, dynamic>.from(block)) ??
@@ -380,8 +392,9 @@ class PandaAgentController extends ChangeNotifier {
       case AgentPhase.thinking:
         phase = AgentPhase.thinking;
         _thinkingBuffer += chunk.text;
-        message['thinking'] = _thinkingBuffer;
-        _appendBlock(blocks, 'thinking', {'thinking': chunk.text});
+        // Reasoning tokens are internal model data. Keep them out of the
+        // conversation so they cannot be shown or replayed on the next turn.
+        message['thinking'] = '';
       case AgentPhase.toolRunning:
         phase = AgentPhase.toolRunning;
         _currentTool = chunk.toolName ?? 'outil';
@@ -408,8 +421,7 @@ class PandaAgentController extends ChangeNotifier {
         _streamBuffer += chunk.text;
         final clean = _stripThinking(_streamBuffer);
         message['text'] = clean.text;
-        message['thinking'] = clean.thinking;
-        _appendBlock(blocks, 'text', {'text': chunk.text});
+        message['thinking'] = '';
       case AgentPhase.done:
         _finish(requestId);
       case AgentPhase.error:
@@ -459,7 +471,7 @@ class PandaAgentController extends ChangeNotifier {
       } else {
         messages.last['phase'] = 'done';
       }
-      messages.last['thinking'] = _thinkingBuffer;
+      messages.last['thinking'] = '';
       messages.last['blocks'] = _blocks();
     }
     notifyListeners();

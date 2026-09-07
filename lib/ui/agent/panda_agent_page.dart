@@ -8,6 +8,7 @@ import '../agent/flow_ui/widgets/flow_composer.dart';
 import '../agent/flow_ui/widgets/flow_greeting.dart';
 import '../agent/flow_ui/widgets/flow_suggestion.dart';
 import 'panda_agent_controller.dart';
+import 'panda_agent_activity.dart';
 import 'panda_agent_flow_widgets.dart';
 
 class PandaAgentPage extends StatelessWidget {
@@ -73,11 +74,21 @@ class PandaAgentPage extends StatelessWidget {
               ),
             ],
           ),
-          aboveComposer: _statusBar(
-            context,
-            provider: provider,
-            model: model,
-            missingKey: missingKey,
+          aboveComposer: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (controller.isGenerating)
+                PandaAgentActivity(
+                  phase: controller.phase,
+                  label: controller.activityLabel,
+                ),
+              _statusBar(
+                context,
+                provider: provider,
+                model: model,
+                missingKey: missingKey,
+              ),
+            ],
           ),
           composer: FlowComposer(
             controller: controller.inputController,

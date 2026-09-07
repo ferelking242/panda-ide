@@ -6,7 +6,7 @@ class AgentExportService {
     String modelName = '',
   }) {
     final buffer = StringBuffer();
-    buffer.writeln('# 🐼 Panda Agent — Conversation Export');
+    buffer.writeln('# Agent — Conversation Export');
     buffer.writeln('**Date:** ${DateTime.now().toLocal().toString().split('.').first}');
     if (modelName.isNotEmpty) {
       buffer.writeln('**Modèle:** $modelName');
@@ -16,21 +16,16 @@ class AgentExportService {
     for (final m in messages) {
       final role = m['role']?.toString().toUpperCase() ?? 'USER';
       final text = m['text']?.toString() ?? m['content']?.toString() ?? '';
-      final thinking = m['thinking']?.toString() ?? '';
       final toolCalls = m['toolCalls'] as List?;
 
-      buffer.writeln('\n### 👤 $role');
-
-      if (thinking.isNotEmpty) {
-        buffer.writeln('\n> **🧠 Réflexion:**\n> ${thinking.replaceAll('\n', '\n> ')}');
-      }
+      buffer.writeln('\n### $role');
 
       if (text.isNotEmpty) {
         buffer.writeln('\n$text');
       }
 
       if (toolCalls != null && toolCalls.isNotEmpty) {
-        buffer.writeln('\n**🔧 Outils exécutés:**');
+        buffer.writeln('\n**Outils exécutés:**');
         for (final tc in toolCalls) {
           final name = tc['name'] ?? tc['toolName'] ?? 'tool';
           final result = tc['result'] ?? tc['content'] ?? '';
