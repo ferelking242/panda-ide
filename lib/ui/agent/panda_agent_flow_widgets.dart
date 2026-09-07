@@ -690,8 +690,8 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                   ),
                   child: Text(
                     _failed ? 'FAIL' : 'OK',
-                    color: _failed ? Colors.redAccent : Colors.green,
-                    style: const TextStyle(
+                    style: TextStyle(
+                      color: _failed ? Colors.redAccent : Colors.green,
                       fontSize: 9,
                       fontWeight: FontWeight.w800,
                       letterSpacing: 0.3,

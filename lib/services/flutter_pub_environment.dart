@@ -6,26 +6,25 @@
 /// a stable, private cache namespace.
 library;
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
 class FlutterPubEnvironment {
   FlutterPubEnvironment._();
 
   static const String cacheRoot = '/root/.panda-pub-cache';
   static const String cacheVersion = 'v1';
 
-  /// Returns a deterministic, path-safe cache key without adding a hashing
-  /// dependency to the mobile runtime.
+  /// Returns a deterministic, path-safe cache key on both native and web.
   static String cacheKeyForProject(String projectPath) {
     final normalized = projectPath.trim().replaceAll('\\', '/');
     if (normalized.isEmpty) return 'default-$cacheVersion';
 
-    // FNV-1a 64-bit. Dart integers are arbitrary precision, so this remains
-    // deterministic on all supported targets.
-    var hash = 0xcbf29ce484222325;
-    for (final codeUnit in normalized.codeUnits) {
-      hash ^= codeUnit;
-      hash = (hash * 0x100000001b3) & 0xffffffffffffffff;
-    }
-    return '$cacheVersion-${hash.toRadixString(16).padLeft(16, '0')}';
+    // Use the existing crypto dependency instead of 64-bit integer literals:
+    // dart2js cannot represent those literals exactly in JavaScript.
+    final digest = sha1.convert(utf8.encode(normalized)).toString();
+    return '$cacheVersion-${digest.substring(0, 16)}';
   }
 
   static String cachePathForProject(String projectPath) =>
