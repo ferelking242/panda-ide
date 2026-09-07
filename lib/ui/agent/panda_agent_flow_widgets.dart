@@ -173,6 +173,42 @@ class PandaAgentFlowChat extends StatelessWidget {
           '\n',
         )
         .replaceAll(
+          RegExp(r'<(?:ul|ol)[^>]*>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'</(?:ul|ol)>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'<(?:table|thead|tbody)[^>]*>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'</(?:table|thead|tbody)>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'<tr[^>]*>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'</tr>', caseSensitive: false),
+          '\n',
+        )
+        .replaceAll(
+          RegExp(r'<t[dh][^>]*>', caseSensitive: false),
+          '| ',
+        )
+        .replaceAll(
+          RegExp(r'</t[dh]>', caseSensitive: false),
+          ' | ',
+        )
+        .replaceAll(
+          RegExp(r'<hr\s*/?>', caseSensitive: false),
+          '\n---\n',
+        )
+        .replaceAll(
           RegExp(r'<(strong|b)[^>]*>', caseSensitive: false),
           '**',
         )
@@ -197,7 +233,15 @@ class PandaAgentFlowChat extends StatelessWidget {
           '`',
         )
         .replaceAll(RegExp(r'<[^>]+>'), '');
-    return normalized.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+    return normalized
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 
   static String? _attachmentKind(String? name) {
@@ -205,6 +249,19 @@ class PandaAgentFlowChat extends StatelessWidget {
     final dot = name.lastIndexOf('.');
     if (dot < 0 || dot == name.length - 1) return null;
     return name.substring(dot + 1).toUpperCase();
+  }
+
+  static Map<String, dynamic> _toolArgs(Object? value) {
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is String && value.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        // Keep the card usable even when a provider sends malformed JSON.
+      }
+    }
+    return <String, dynamic>{};
   }
 
   Widget _buildCustomPart(
@@ -219,12 +276,17 @@ class PandaAgentFlowChat extends StatelessWidget {
     final foreground = Theme.of(context).colorScheme.onSurface;
     final muted = foreground.withValues(alpha: 0.58);
 
+    final rawResult = data['result']?.toString();
+    final normalizedResult = rawResult == null
+        ? null
+        : _normalizeMarkup(_withoutThinking(rawResult));
+    final args = _toolArgs(data['args'] ?? data['arguments']);
+
     return switch (part.type) {
       'tool' => PandaAgentFlowToolCard(
           toolName: (data['name'] ?? data['toolName'] ?? 'outil').toString(),
-          args: (data['args'] as Map?)?.cast<String, dynamic>() ??
-              const <String, dynamic>{},
-          result: data['result']?.toString(),
+          args: args,
+          result: normalizedResult,
           status: (data['status'] ?? 'done').toString(),
           dark: dark,
           foreground: foreground,
@@ -245,9 +307,8 @@ class PandaAgentFlowChat extends StatelessWidget {
               ? null
               : () => onOpenTool!(
                     (data['name'] ?? data['toolName'] ?? '').toString(),
-                    (data['args'] as Map?)?.cast<String, dynamic>() ??
-                        const <String, dynamic>{},
-                    data['result']?.toString(),
+                    args,
+                    normalizedResult,
                   ),
         ),
       _ => const SizedBox.shrink(),

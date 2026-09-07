@@ -349,7 +349,8 @@ class _FlowComposerState extends State<FlowComposer> {
   static const double _contentInset = 18;
   static const double _actionInset = 10;
   static const double _attachmentGap = 12;
-  static const double _fieldGap = 16;
+  // Keep the action row close to the field on narrow mobile composers.
+  static const double _fieldGap = 8;
   static const double _leadingGap = 4;
   static const double _trailingGap = 8;
 
@@ -358,9 +359,9 @@ class _FlowComposerState extends State<FlowComposer> {
   static const double _pillGap = 8;
   static const double _mobilePillGap = 6;
 
-  /// The field's floor, sized so an empty composer stands at the design's
-  /// 116px: 19 + 38 + 16 (gap) + 32 (action row) + 11.
-  static const double _fieldMinHeight = 38;
+  /// The field's floor for the compressed composer: a 34px input followed by
+  /// the compact action row and the reduced inter-row gap.
+  static const double _fieldMinHeight = 34;
 
   /// The design's outline: a 1px hairline over the ink, sweeping from the
   /// top-left toward the bottom-right where it thins — 14% → 8% at rest,
@@ -1015,36 +1016,51 @@ class _FlowComposerState extends State<FlowComposer> {
                       ),
                       child: Row(
                         children: [
-                          // The built-in attach affordance leads the row; being
-                          // outside the loop keeps the pill-pair gap logic
-                          // reading only the host's actions.
-                          if (widget.attachmentsEnabled &&
-                              (widget.onAttach != null ||
-                                  widget.onAttachmentsPicked != null)) ...[
-                            _buildAttachButton(context),
-                            const SizedBox(width: _leadingGap),
-                          ],
-                          for (
-                            var i = 0;
-                            i < widget.leadingActions.length;
-                            i++
-                          ) ...[
-                            widget.leadingActions[i],
-                            // Two neighbouring pills read as a set and take the
-                            // design's wider step — 8, closing to 6 on phones —
-                            // while everything else keeps the action row's 4.
-                            SizedBox(
-                              width:
-                                  i + 1 < widget.leadingActions.length &&
-                                      widget.leadingActions[i] is FlowPill &&
-                                      widget.leadingActions[i + 1] is FlowPill
-                                  ? (_isMobile(context)
-                                        ? _mobilePillGap
-                                        : _pillGap)
-                                  : _leadingGap,
+                          // Keep the primary controls on the right while
+                          // allowing optional left-side actions to scroll
+                          // inside the card instead of overflowing it.
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // The built-in attach affordance leads the
+                                  // row; being outside the loop keeps the
+                                  // pill-pair gap logic local to host actions.
+                                  if (widget.attachmentsEnabled &&
+                                      (widget.onAttach != null ||
+                                          widget.onAttachmentsPicked !=
+                                              null)) ...[
+                                    _buildAttachButton(context),
+                                    const SizedBox(width: _leadingGap),
+                                  ],
+                                  for (
+                                    var i = 0;
+                                    i < widget.leadingActions.length;
+                                    i++
+                                  ) ...[
+                                    widget.leadingActions[i],
+                                    // Two neighbouring pills read as a set
+                                    // and take the design's wider step.
+                                    SizedBox(
+                                      width:
+                                          i + 1 <
+                                                  widget.leadingActions.length &&
+                                              widget.leadingActions[i]
+                                                  is FlowPill &&
+                                              widget.leadingActions[i + 1]
+                                                  is FlowPill
+                                          ? (_isMobile(context)
+                                                ? _mobilePillGap
+                                                : _pillGap)
+                                          : _leadingGap,
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
-                          ],
-                          const Spacer(),
+                          ),
                           for (final action in widget.trailingActions) ...[
                             action,
                             const SizedBox(width: _trailingGap),

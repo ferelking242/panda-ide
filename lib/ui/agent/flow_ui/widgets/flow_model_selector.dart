@@ -72,6 +72,7 @@ class FlowModelSelector extends StatefulWidget {
     required this.models,
     this.selectedId,
     this.onSelected,
+    this.compact = false,
     this.efforts = const <FlowEffortOption>[],
     this.selectedEffortId,
     this.onEffortSelected,
@@ -102,6 +103,11 @@ class FlowModelSelector extends StatefulWidget {
   /// Called with the chosen option's id — from [models] or [moreModels]
   /// alike. Null disables the selector.
   final ValueChanged<String>? onSelected;
+
+  /// Uses a compact trigger with a shortened model name while keeping the
+  /// full name in the tooltip and selection sheet. This is useful when the
+  /// composer is narrow.
+  final bool compact;
 
   /// Effort levels, in order. Empty hides the effort section and the
   /// trigger's effort label.
@@ -377,28 +383,61 @@ class _FlowModelSelectorState extends State<FlowModelSelector> {
             hoverColor: colors.surfaceContainer,
             child: Padding(
               padding: _triggerPadding,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    _selected?.label ?? '',
-                    style: context.flowTypography.labelMedium.copyWith(
-                      color: labelColor,
+              child: widget.compact
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.memory_outlined,
+                          size: 16,
+                          color: labelColor,
+                        ),
+                        const SizedBox(width: 4),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 56),
+                          child: Text(
+                            _selected?.label ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.flowTypography.labelMedium.copyWith(
+                              color: labelColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Icon(
+                          Icons.expand_more,
+                          size: 11,
+                          color: effortForeground,
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _selected?.label ?? '',
+                          style: context.flowTypography.labelMedium.copyWith(
+                            color: labelColor,
+                          ),
+                        ),
+                        if (effort != null) ...[
+                          const SizedBox(width: _gap),
+                          Text(
+                            effort.label,
+                            style: context.flowTypography.labelMedium.copyWith(
+                              color: effortForeground,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(width: _gap),
+                        Icon(
+                          Icons.expand_more,
+                          size: 12,
+                          color: effortForeground,
+                        ),
+                      ],
                     ),
-                  ),
-                  if (effort != null) ...[
-                    const SizedBox(width: _gap),
-                    Text(
-                      effort.label,
-                      style: context.flowTypography.labelMedium.copyWith(
-                        color: effortForeground,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(width: _gap),
-                  Icon(Icons.expand_more, size: 12, color: effortForeground),
-                ],
-              ),
             ),
           ),
         );

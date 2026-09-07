@@ -11,9 +11,7 @@ import '../agent/flow_ui/widgets/flow_pill.dart';
 import '../agent/flow_ui/styles/flow_pill_style.dart';
 import '../agent/flow_ui/models/flow_attachment_options.dart';
 import '../agent/flow_ui/widgets/flow_suggestion.dart';
-import '../agent_runner.dart';
 import 'panda_agent_controller.dart';
-import 'panda_agent_activity.dart';
 import 'panda_agent_flow_widgets.dart';
 
 class PandaAgentPage extends StatelessWidget {
@@ -94,18 +92,6 @@ class PandaAgentPage extends StatelessWidget {
               ),
             ],
           ),
-          aboveComposer: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (controller.isGenerating &&
-                  controller.phase != AgentPhase.streaming)
-                PandaAgentActivity(
-                  key: const ValueKey('panda-agent-live-status'),
-                  phase: controller.phase,
-                  label: controller.activityLabel,
-                ),
-            ],
-          ),
           composer: FlowComposer(
             controller: controller.inputController,
             isStreaming: controller.isGenerating,
@@ -117,8 +103,8 @@ class PandaAgentPage extends StatelessWidget {
             onStop: controller.stop,
             placeholder: 'Écrire un message à Panda Agent…',
             submitOnEnter: true,
-            maxLines: 3,
-            padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
+            maxLines: 2,
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
             attachments: controller.pendingAttachments,
             onAttachmentsPicked: controller.addAttachments,
             onAttachmentsPasted: controller.addAttachments,
@@ -160,6 +146,7 @@ class PandaAgentPage extends StatelessWidget {
                 FlowModelSelector(
                   models: modelOptions,
                   selectedId: aiState.modelSelected['chat']?.toString(),
+                  compact: true,
                   onSelected: (id) {
                     final selected = Map<String, dynamic>.from(
                       aiState.modelSelected,
