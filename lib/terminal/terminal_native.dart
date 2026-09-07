@@ -97,8 +97,6 @@ class _TwoFingerPinchRecognizer extends OneSequenceGestureRecognizer {
   String get debugDescription => 'two finger pinch zoom';
 }
 
-
-
 class SetupTerminal extends StatefulWidget {
   final String projectDir;
   final List<String> args;
@@ -115,7 +113,7 @@ class SetupTerminal extends StatefulWidget {
     this.readOnly = false,
     this.sshId,
     this.termuxId,
-    this.commandToExecuteInSSH
+    this.commandToExecuteInSSH,
   });
 
   @override
@@ -220,7 +218,7 @@ class TerminalSessionState {
   TerminalSessionState({
     required this.sessions,
     required this.activeSessionId,
-    this.fontSize = 13.0
+    this.fontSize = 13.0,
   });
 
   TerminalSessionState copyWith({
@@ -232,15 +230,23 @@ class TerminalSessionState {
     return TerminalSessionState(
       sessions: sessions ?? this.sessions,
       activeSessionId: clearActive
-        ? null
-        : activeSessionId ?? this.activeSessionId,
-      fontSize: fontSize ?? this.fontSize
+          ? null
+          : activeSessionId ?? this.activeSessionId,
+      fontSize: fontSize ?? this.fontSize,
     );
   }
 }
 
-class TerminalSessionBloc extends Bloc<TerminalSessionEvent, TerminalSessionState> {
-  TerminalSessionBloc({double initialFontSize = 13}) : super(TerminalSessionState(sessions: [], activeSessionId: null, fontSize: initialFontSize)) {
+class TerminalSessionBloc
+    extends Bloc<TerminalSessionEvent, TerminalSessionState> {
+  TerminalSessionBloc({double initialFontSize = 13})
+    : super(
+        TerminalSessionState(
+          sessions: [],
+          activeSessionId: null,
+          fontSize: initialFontSize,
+        ),
+      ) {
     on<CreateTerminalSession>((event, emit) {
       final newSession = TerminalSessionMeta(
         id: event.id,
@@ -262,12 +268,16 @@ class TerminalSessionBloc extends Bloc<TerminalSessionEvent, TerminalSessionStat
     });
 
     on<DeleteTerminalSession>((event, emit) {
-      final sessions = state.sessions.where((session) => session.id != event.id).toList();
+      final sessions = state.sessions
+          .where((session) => session.id != event.id)
+          .toList();
       if (sessions.isEmpty) {
         emit(state.copyWith(sessions: sessions, clearActive: true));
         return;
       }
-      final activeId = state.activeSessionId == event.id ? sessions.first.id : state.activeSessionId;
+      final activeId = state.activeSessionId == event.id
+          ? sessions.first.id
+          : state.activeSessionId;
       emit(state.copyWith(sessions: sessions, activeSessionId: activeId));
     });
 
@@ -313,7 +323,7 @@ class _TerminalRuntime {
   }
 
   void stopProcess() {
-    if(sshSession != null){
+    if (sshSession != null) {
       sshSession!.kill(SSHSignal.KILL);
     }
     if (pty != null) {
@@ -377,13 +387,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
   final ValueNotifier<int> _selectionUiTick = ValueNotifier<int>(0);
   Timer? _selectionUiSyncTimer;
   final GlobalKey _terminalHostKey = GlobalKey();
+  Offset? _selectionToolbarOffset;
 
   final ValueNotifier<List<String>?> _suggestionsNotifier = ValueNotifier(null);
   final ScrollController _suggestionScrollController = ScrollController();
   int _selectedSuggestionIndex = 0;
   List<String> _pathBinaries = [];
-
-
 
   // ── Modifier state for keyboard menu (shared, never replaces onOutput) ──
   bool _modCtrl = false;
@@ -424,7 +433,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _sessionBloc = TerminalSessionStore.instance.bloc ??= TerminalSessionBloc(
       initialFontSize: _terminalFontSizeFromConfig(),
     );
-    sshServerList = context.read<SSHServersCubit>().state.serverList.where((server) => server.isConnected).toList();
+    sshServerList = context
+        .read<SSHServersCubit>()
+        .state
+        .serverList
+        .where((server) => server.isConnected)
+        .toList();
     termuxInfo = context.read<TermuxCubit>().state.termInfo;
     _pageController = PageController(initialPage: 0);
     _bootstrapTerminalPage();
@@ -444,8 +458,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
         .where((r) => r.isProot)
         .toList();
     if (live.isNotEmpty && _sessionBloc.state.sessions.isNotEmpty) {
-      _sessionBloc.add(SetActiveTerminalSession(
-          _sessionBloc.state.activeSessionId ?? live.first.sessionId));
+      _sessionBloc.add(
+        SetActiveTerminalSession(
+          _sessionBloc.state.activeSessionId ?? live.first.sessionId,
+        ),
+      );
       // Re-attach onOutput for live sessions — dispose() nulled it,
       // but the PTY is still alive. Without this, user input goes nowhere.
       for (final r in live) {
@@ -463,15 +480,24 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 }
               }
               if (_modResetCallback != null) _modResetCallback!();
-              _modCtrl = false; _modAlt = false; _modShift = false; _modResetCallback = null;
+              _modCtrl = false;
+              _modAlt = false;
+              _modShift = false;
+              _modResetCallback = null;
             } else if (_modAlt) {
               sequence = '\x1b$data';
               if (_modResetCallback != null) _modResetCallback!();
-              _modCtrl = false; _modAlt = false; _modShift = false; _modResetCallback = null;
+              _modCtrl = false;
+              _modAlt = false;
+              _modShift = false;
+              _modResetCallback = null;
             } else if (_modShift) {
               sequence = data.toUpperCase();
               if (_modResetCallback != null) _modResetCallback!();
-              _modCtrl = false; _modAlt = false; _modShift = false; _modResetCallback = null;
+              _modCtrl = false;
+              _modAlt = false;
+              _modShift = false;
+              _modResetCallback = null;
             } else {
               sequence = data;
             }
@@ -492,15 +518,15 @@ class _SetupTerminalState extends State<SetupTerminal> {
       args: widget.args,
       makeActive: true,
       title: 'Session 1',
-      externalServer: ((){
+      externalServer: (() {
         final sshId = widget.sshId;
         final termuxId = widget.termuxId;
         if (sshId != null) {
           return sshServerList.singleWhere((server) => server.id == sshId);
-        } else if(termuxId != null) {
+        } else if (termuxId != null) {
           return termuxInfo;
         }
-      })()
+      })(),
     );
   }
 
@@ -581,6 +607,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }
     await _startPty(runtime);
   }
+
   void _terminateSession(String sessionId) {
     final runtime = _sessionRuntimes[sessionId];
     if (runtime == null || !runtime.isRunning) return;
@@ -653,15 +680,16 @@ class _SetupTerminalState extends State<SetupTerminal> {
   // ── Feature 1: show exit code banner ────────────────────────────────────
   void _showExitBanner(String sessionId, int code) {
     if (!mounted) return;
-    final meta = _sessionBloc.state.sessions
-        .firstWhere((s) => s.id == sessionId,
-            orElse: () => TerminalSessionMeta(
-                  id: sessionId,
-                  title: 'Terminal',
-                  createdAt: DateTime.now(),
-                  isRunning: false,
-                ));
-                
+    final meta = _sessionBloc.state.sessions.firstWhere(
+      (s) => s.id == sessionId,
+      orElse: () => TerminalSessionMeta(
+        id: sessionId,
+        title: 'Terminal',
+        createdAt: DateTime.now(),
+        isRunning: false,
+      ),
+    );
+
     if (code != 0) {
       PandaNotifications.show(
         context: context,
@@ -674,16 +702,23 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   double _terminalFontSizeFromConfig() {
     try {
-      final raw = context.read<ConfigBloc>().state.codeForgeConfig['terminalFontSize'];
+      final raw = context
+          .read<ConfigBloc>()
+          .state
+          .codeForgeConfig['terminalFontSize'];
       if (raw is num) return raw.toDouble();
-      if (raw is String) return double.tryParse(raw) ?? kDefaultTerminalFontSize;
+      if (raw is String)
+        return double.tryParse(raw) ?? kDefaultTerminalFontSize;
     } catch (_) {}
     return kDefaultTerminalFontSize;
   }
 
   String _terminalFontFamilyFromConfig() {
     try {
-      final raw = context.read<ConfigBloc>().state.codeForgeConfig['fontFamily'];
+      final raw = context
+          .read<ConfigBloc>()
+          .state
+          .codeForgeConfig['fontFamily'];
       if (raw is String && raw.trim().isNotEmpty) {
         final value = raw.trim();
         if (value.toLowerCase().contains('jetbrains')) return 'jetBrainsMonoNF';
@@ -695,7 +730,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   Future<void> _saveTerminalFontSize(double fontSize) async {
     final configState = context.read<ConfigBloc>().state;
-    final currentConfig = Map<String, dynamic>.from(configState.codeForgeConfig);
+    final currentConfig = Map<String, dynamic>.from(
+      configState.codeForgeConfig,
+    );
     currentConfig['terminalFontSize'] = fontSize;
 
     final prefs = await SharedPreferences.getInstance();
@@ -728,18 +765,27 @@ class _SetupTerminalState extends State<SetupTerminal> {
         if (f.existsSync()) endpoint = f.readAsStringSync().trim();
       } catch (_) {}
 
-      final env = <String, String>{...sessionEnv, 'LC_ALL': 'C', 'LANG': 'C', if (endpoint.isNotEmpty) 'ADB_ENDPOINT': endpoint};
+      final env = <String, String>{
+        ...sessionEnv,
+        'LC_ALL': 'C',
+        'LANG': 'C',
+        if (endpoint.isNotEmpty) 'ADB_ENDPOINT': endpoint,
+      };
       final hostArgs = <String>[
         '-0',
         '--link2symlink',
         '--sysvipc',
         '--rootfs=$rootfsDir',
-        '-b', '/dev',
-        '-b', '/proc',
-        '-b', '/sys',
+        '-b',
+        '/dev',
+        '-b',
+        '/proc',
+        '-b',
+        '/sys',
         if (Directory(tempDir).existsSync()) ...['-b', '$tempDir:/tmp'],
         if (Directory(appDir).existsSync()) ...['-b', appDir],
-        '-w', '/root',
+        '-w',
+        '/root',
         '/bin/sh',
         '-c',
         'adb start-server >/dev/null 2>&1 || true; '
@@ -747,9 +793,17 @@ class _SetupTerminalState extends State<SetupTerminal> {
             'adb connect "\$ADB_ENDPOINT" >/dev/null 2>&1 || true; fi; '
             'exec sleep infinity',
       ];
-      _sharedAdbHost = await Process.start(prootBin, hostArgs,
-          environment: env, workingDirectory: appDir, mode: ProcessStartMode.detached);
-      PandaLog.i('Terminal', 'Shared adb server host started${endpoint.isNotEmpty ? " (endpoint=$endpoint)" : ""}');
+      _sharedAdbHost = await Process.start(
+        prootBin,
+        hostArgs,
+        environment: env,
+        workingDirectory: appDir,
+        mode: ProcessStartMode.detached,
+      );
+      PandaLog.i(
+        'Terminal',
+        'Shared adb server host started${endpoint.isNotEmpty ? " (endpoint=$endpoint)" : ""}',
+      );
     } catch (e) {
       PandaLog.w('Terminal', 'Shared adb host failed (non fatal): $e');
     }
@@ -757,7 +811,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   // ── PRoot + Alpine session ─────────────────────────────────────────────────
 
-  Future<void> _startProotSession(_TerminalRuntime runtime, {List<String> args = const []}) async {
+  Future<void> _startProotSession(
+    _TerminalRuntime runtime, {
+    List<String> args = const [],
+  }) async {
     final activeType = await RootfsManager.getActiveTerminal();
     final rootfsDir = (await RootfsManager.rootfsDir(activeType)).path;
     final sw = Stopwatch()..start();
@@ -765,13 +822,24 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (!await RootfsManager.isInstalled(activeType)) {
       // Alpine should have been extracted during SettingUpScreen.
       // If we're here, the extraction failed or was skipped.
-      PandaLog.e('Terminal', 'Linux rootfs incomplete — cannot start PRoot session');
+      PandaLog.e(
+        'Terminal',
+        'Linux rootfs incomplete — cannot start PRoot session',
+      );
       runtime.terminal.write('\r\n\x1b[31m[Linux non configuré]\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[31m  Le rootfs Linux n\'a pas été extrait correctement.\x1b[0m\r\n');
+      runtime.terminal.write(
+        '\x1b[31m  Le rootfs Linux n\'a pas été extrait correctement.\x1b[0m\r\n',
+      );
       runtime.terminal.write('\x1b[33m  Solution:\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m    1. Fermer et relancer Panda IDE\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m    2. L\'extraction se fera automatiquement\x1b[0m\r\n');
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      runtime.terminal.write(
+        '\x1b[33m    1. Fermer et relancer Panda IDE\x1b[0m\r\n',
+      );
+      runtime.terminal.write(
+        '\x1b[33m    2. L\'extraction se fera automatiquement\x1b[0m\r\n',
+      );
+      _sessionBloc.add(
+        UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
+      );
       return;
     }
     PandaLog.d('Terminal', 'Linux rootfs verified complete');
@@ -780,23 +848,43 @@ class _SetupTerminalState extends State<SetupTerminal> {
     PandaLog.i('Terminal', 'Locating PRoot binary in rootfs=$rootfsDir');
     final prootBin = await DebianSetup.locateProotBinary(rootfsDir);
     if (prootBin == null) {
-      PandaLog.e('Terminal', 'PRoot binary not found or incompatible (nativeLibDir checked)');
+      PandaLog.e(
+        'Terminal',
+        'PRoot binary not found or incompatible (nativeLibDir checked)',
+      );
       final nativeLib = await DebianSetup.nativeLibDir();
-      PandaLog.e('Terminal', 'nativeLibDir=$nativeLib, prootExists=${File("$nativeLib/libproot.so").existsSync()}');
-      runtime.terminal.write('\r\n\x1b[31m[PRoot introuvable ou incompatible]\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[31m  Le binaire libproot.so est introuvable ou ne fonctionne pas.\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m  Dossier libs natives: $nativeLib\x1b[0m\r\n');
+      PandaLog.e(
+        'Terminal',
+        'nativeLibDir=$nativeLib, prootExists=${File("$nativeLib/libproot.so").existsSync()}',
+      );
+      runtime.terminal.write(
+        '\r\n\x1b[31m[PRoot introuvable ou incompatible]\x1b[0m\r\n',
+      );
+      runtime.terminal.write(
+        '\x1b[31m  Le binaire libproot.so est introuvable ou ne fonctionne pas.\x1b[0m\r\n',
+      );
+      runtime.terminal.write(
+        '\x1b[33m  Dossier libs natives: $nativeLib\x1b[0m\r\n',
+      );
       runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[36m  Essayez de réinstaller ou de vider le cache Alpine\x1b[0m\r\n');
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      runtime.terminal.write(
+        '\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n',
+      );
+      runtime.terminal.write(
+        '\x1b[36m  Essayez de réinstaller ou de vider le cache Alpine\x1b[0m\r\n',
+      );
+      _sessionBloc.add(
+        UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
+      );
       return;
     }
     PandaLog.i('Terminal', 'PRoot binary found: $prootBin');
     final loaderPath = await DebianSetup.prootLoaderPath();
     if (loaderPath == null) {
       PandaLog.w('Terminal', 'PRoot loader (libproot-loader.so) not found');
-      runtime.terminal.write('\r\n\x1b[33m[Avertissement: loader PRoot (libproot-loader.so) absent du dossier de libs natives.]\x1b[0m\r\n');
+      runtime.terminal.write(
+        '\r\n\x1b[33m[Avertissement: loader PRoot (libproot-loader.so) absent du dossier de libs natives.]\x1b[0m\r\n',
+      );
     }
 
     // Serveur adb partagé démarré AVANT la session (survit aux terminaux)
@@ -809,7 +897,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
     // le repertoire de travail de la session.
     // Termux behaviour: no project open -> silent session in ~ (/root).
     // The project (when any) is bind-mounted at /root/workspace.
-    final projectReadable = widget.projectDir.trim().isNotEmpty &&
+    final projectReadable =
+        widget.projectDir.trim().isNotEmpty &&
         DebianSetup.isDirAccessible(widget.projectDir);
 
     try {
@@ -829,7 +918,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
         try {
           final host = hostPath.split(':').first;
           if (Directory(host).existsSync() || File(host).existsSync()) {
-            final target = guestPath != null ? '$hostPath:$guestPath' : hostPath;
+            final target = guestPath != null
+                ? '$hostPath:$guestPath'
+                : hostPath;
             prootArgs.addAll(['-b', target]);
           }
         } catch (_) {}
@@ -859,12 +950,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         addConditionalBind(widget.projectDir, DebianSetup.workspaceMount);
       }
 
-      prootArgs.addAll([
-        '-w', '/root',
-        '/bin/bash',
-        '-l',
-        ...args,
-      ]);
+      prootArgs.addAll(['-w', '/root', '/bin/bash', '-l', ...args]);
 
       // LD_LIBRARY_PATH doit pointer vers le dossier des libs natives de
       // l'APK : PRoot y trouve libtalloc.so / libandroid-shmem.so, et
@@ -877,7 +963,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
         'LC_ALL': 'C',
         'LANG': 'C',
       };
-      PandaLog.i('Terminal', 'Starting PRoot PTY', body: 'bin=$prootBin args=${prootArgs.length} env=${sessionEnv.keys.join(',')}');
+      PandaLog.i(
+        'Terminal',
+        'Starting PRoot PTY',
+        body:
+            'bin=$prootBin args=${prootArgs.length} env=${sessionEnv.keys.join(',')}',
+      );
 
       final process = Pty.start(
         prootBin,
@@ -889,22 +980,35 @@ class _SetupTerminalState extends State<SetupTerminal> {
       );
 
       runtime.pty = process;
-      PandaLog.i('Terminal', 'PRoot PTY started successfully in ${sw.elapsedMilliseconds}ms, session=${runtime.sessionId}');
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true));
+      PandaLog.i(
+        'Terminal',
+        'PRoot PTY started successfully in ${sw.elapsedMilliseconds}ms, session=${runtime.sessionId}',
+      );
+      _sessionBloc.add(
+        UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true),
+      );
       // Notification persistante « Panda IDE working » → anti-kill Android
       const MethodChannel('com.panda.ide').invokeMethod('startKeepAlive');
 
       process.output
-        .cast<List<int>>()
-        .transform(const Utf8Decoder(allowMalformed: true))
-        .listen(runtime.terminal.write);
+          .cast<List<int>>()
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .listen(runtime.terminal.write);
 
       process.exitCode.then((code) {
-        PandaLog.i('Terminal', 'PRoot session ended with exit code $code', body: 'session=${runtime.sessionId}');
+        PandaLog.i(
+          'Terminal',
+          'PRoot session ended with exit code $code',
+          body: 'session=${runtime.sessionId}',
+        );
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
         runtime.pty = null;
-        runtime.terminal.write('\r\n\r\n[Alpine session ended with exit code $code]');
-        _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+        runtime.terminal.write(
+          '\r\n\r\n[Alpine session ended with exit code $code]',
+        );
+        _sessionBloc.add(
+          UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
+        );
         _showExitBanner(runtime.sessionId, code);
       });
 
@@ -960,9 +1064,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
       runtime.terminal.write('\r\n\x1b[31m[Erreur PRoot / Alpine]\x1b[0m\r\n');
       runtime.terminal.write('\x1b[31m  $e\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
-      runtime.terminal.write('\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n');
+      runtime.terminal.write(
+        '\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n',
+      );
       runtime.terminal.write('\x1b[33m    /panda-ide/Logs/crash/\x1b[0m\r\n');
-      _sessionBloc.add(UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false));
+      _sessionBloc.add(
+        UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
+      );
     }
   }
 
@@ -977,7 +1085,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       await _startProotSession(runtime, args: args);
       return;
     }
-    if(externalServer.client != null){
+    if (externalServer.client != null) {
       final terminal = runtime.terminal;
       final session = await externalServer.client!.shell(
         pty: SSHPtyConfig(
@@ -993,12 +1101,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
       terminal.onResize = (w, h, pw, ph) {
         session.resizeTerminal(w, h, pw, ph);
       };
-      
-      if(widget.termuxId != null) {
+
+      if (widget.termuxId != null) {
         session.write(utf8.encode("cd ${widget.projectDir}\n"));
       }
-      
-      if(widget.commandToExecuteInSSH != null){
+
+      if (widget.commandToExecuteInSSH != null) {
         session.write(utf8.encode("${widget.commandToExecuteInSSH}\n"));
       }
 
@@ -1007,14 +1115,14 @@ class _SetupTerminalState extends State<SetupTerminal> {
       };
 
       session.stdout
-        .cast<List<int>>()
-        .transform(Utf8Decoder())
-        .listen(terminal.write);
+          .cast<List<int>>()
+          .transform(Utf8Decoder())
+          .listen(terminal.write);
 
       session.stderr
-        .cast<List<int>>()
-        .transform(Utf8Decoder())
-        .listen(terminal.write);
+          .cast<List<int>>()
+          .transform(Utf8Decoder())
+          .listen(terminal.write);
 
       session.done.then((_) {
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
@@ -1162,6 +1270,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   void _showSelectionUI() {
     _hideSelectionUI();
     if (!mounted) return;
+    _selectionToolbarOffset = null;
 
     final runtime = _activeRuntime();
     if (runtime == null) return;
@@ -1173,7 +1282,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
         return ValueListenableBuilder<int>(
           valueListenable: _selectionUiTick,
           builder: (context, _, __) {
-            if (runtime.controller.selection == null) return const SizedBox.shrink();
+            if (runtime.controller.selection == null)
+              return const SizedBox.shrink();
 
             return Stack(
               children: [
@@ -1185,56 +1295,67 @@ class _SetupTerminalState extends State<SetupTerminal> {
                   right: 0,
                   bottom: MediaQuery.of(overlayCtx).viewInsets.bottom + 48,
                   child: Center(
-                    child: Material(
-                      elevation: 6,
-                      borderRadius: BorderRadius.circular(14),
-                      color: const Color(0xdd1c1c1e),
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
+                    child: Transform.translate(
+                      offset: _selectionToolbarOffset ?? Offset.zero,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanUpdate: (details) =>
+                            _dragSelectionToolbar(overlayCtx, details.delta),
+                        child: Material(
+                          elevation: 6,
                           borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0x2effffff)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _toolbarIconButton(
-                              icon: Icons.select_all_rounded,
-                              tooltip: 'Tout sélectionner',
-                              onTap: () => _selectAll(runtime),
+                          color: const Color(0xdd1c1c1e),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: const Color(0x2effffff),
+                              ),
                             ),
-                            _toolbarIconButton(
-                              icon: Icons.copy_rounded,
-                              tooltip: 'Copier la sélection',
-                              onTap: () => _copySelection(runtime),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _toolbarIconButton(
+                                  icon: Icons.select_all_rounded,
+                                  tooltip: 'Tout sélectionner',
+                                  onTap: () => _selectAll(runtime),
+                                ),
+                                _toolbarIconButton(
+                                  icon: Icons.copy_rounded,
+                                  tooltip: 'Copier la sélection',
+                                  onTap: () => _copySelection(runtime),
+                                ),
+                                _toolbarIconButton(
+                                  icon: Icons.paste_rounded,
+                                  tooltip: 'Coller',
+                                  onTap: () => _pasteIntoTerminal(runtime),
+                                ),
+                                _toolbarIconButton(
+                                  icon: Icons.manage_search_rounded,
+                                  tooltip: 'Rechercher dans le projet',
+                                  onTap: () => _grepSelection(runtime),
+                                ),
+                                _toolbarIconButton(
+                                  icon: Icons.auto_awesome,
+                                  tooltip: "Envoyer à l'agent",
+                                  onTap: () {
+                                    final text = _selectedText(runtime);
+                                    if (text.isNotEmpty) {
+                                      TerminalBridge.instance.sendToAgent(text);
+                                    }
+                                    runtime.controller.clearSelection();
+                                  },
+                                ),
+                                _toolbarIconButton(
+                                  icon: Icons.close_rounded,
+                                  tooltip: 'Fermer',
+                                  onTap: () =>
+                                      runtime.controller.clearSelection(),
+                                ),
+                              ],
                             ),
-                            _toolbarIconButton(
-                              icon: Icons.paste_rounded,
-                              tooltip: 'Coller',
-                              onTap: () => _pasteIntoTerminal(runtime),
-                            ),
-                            _toolbarIconButton(
-                              icon: Icons.manage_search_rounded,
-                              tooltip: 'Rechercher dans le projet',
-                              onTap: () => _grepSelection(runtime),
-                            ),
-                            _toolbarIconButton(
-                              icon: Icons.auto_awesome,
-                              tooltip: "Envoyer à l'agent",
-                              onTap: () {
-                                final text = _selectedText(runtime);
-                                if (text.isNotEmpty) {
-                                  TerminalBridge.instance.sendToAgent(text);
-                                }
-                                runtime.controller.clearSelection();
-                              },
-                            ),
-                            _toolbarIconButton(
-                              icon: Icons.close_rounded,
-                              tooltip: 'Fermer',
-                              onTap: () => runtime.controller.clearSelection(),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -1250,12 +1371,29 @@ class _SetupTerminalState extends State<SetupTerminal> {
     overlay.insert(_selectionToolbarOverlay!);
 
     // Les poignées doivent suivre la sélection pendant le scroll / layout.
-    _selectionUiSyncTimer ??= Timer.periodic(const Duration(milliseconds: 250), (_) {
-      _selectionUiTick.value++;
-    });
+    _selectionUiSyncTimer ??= Timer.periodic(
+      const Duration(milliseconds: 250),
+      (_) {
+        _selectionUiTick.value++;
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_selectionToolbarOverlay != null) _selectionUiTick.value++;
     });
+  }
+
+  void _dragSelectionToolbar(BuildContext overlayCtx, Offset delta) {
+    final size = MediaQuery.of(overlayCtx).size;
+    final current = _selectionToolbarOffset ?? Offset.zero;
+    final horizontalLimit = ((size.width - 280) / 2).clamp(0.0, size.width);
+    final verticalLimit = (size.height - 100).clamp(40.0, size.height);
+    _selectionToolbarOffset = Offset(
+      (current.dx + delta.dx)
+          .clamp(-horizontalLimit, horizontalLimit)
+          .toDouble(),
+      (current.dy + delta.dy).clamp(-verticalLimit, verticalLimit).toDouble(),
+    );
+    _selectionUiTick.value++;
   }
 
   /// RenderTerminal de la vue active — donne accès à la conversion
@@ -1284,7 +1422,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
       final range = sel.normalized;
       final startPx = rt.localToGlobal(rt.getOffset(range.begin));
       final endCol = range.end.x > 0 ? range.end.x - 1 : range.end.x;
-      final endPx = rt.localToGlobal(rt.getOffset(CellOffset(endCol, range.end.y + 1)));
+      final endPx = rt.localToGlobal(
+        rt.getOffset(CellOffset(endCol, range.end.y + 1)),
+      );
       return (startPx, endPx);
     } catch (_) {
       return (null, null);
@@ -1359,7 +1499,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final buffer = runtime.terminal.buffer;
     final rows = buffer.lines.length;
     if (rows <= 0) return;
-    final cols = runtime.terminal.viewWidth > 0 ? runtime.terminal.viewWidth : 80;
+    final cols = runtime.terminal.viewWidth > 0
+        ? runtime.terminal.viewWidth
+        : 80;
     try {
       runtime.controller.setSelection(
         buffer.createAnchorFromOffset(CellOffset(0, 0)),
@@ -1424,7 +1566,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
         child: SizedBox(
           width: 34,
           height: 32,
-          child: Icon(icon, size: 16, color: Colors.white.withValues(alpha: 0.92)),
+          child: Icon(
+            icon,
+            size: 16,
+            color: Colors.white.withValues(alpha: 0.92),
+          ),
         ),
       ),
     );
@@ -1476,8 +1622,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildSingleTerminalPage(TerminalSessionState state, TerminalThemePreset activeTheme) {
-    if (state.sessions.isEmpty) return const Center(child: CircularProgressIndicator());
+  Widget _buildSingleTerminalPage(
+    TerminalSessionState state,
+    TerminalThemePreset activeTheme,
+  ) {
+    if (state.sessions.isEmpty)
+      return const Center(child: CircularProgressIndicator());
     return PageView.builder(
       controller: _pageController,
       physics: state.sessions.length <= 1
@@ -1500,13 +1650,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
           gestures: {
             _TwoFingerPinchRecognizer:
                 GestureRecognizerFactoryWithHandlers<_TwoFingerPinchRecognizer>(
-              () => _TwoFingerPinchRecognizer(),
-              (instance) {
-                instance.onStart = _onPinchStart;
-                instance.onUpdate = _onPinchUpdate;
-                instance.onEnd = _onPinchEnd;
-              },
-            ),
+                  () => _TwoFingerPinchRecognizer(),
+                  (instance) {
+                    instance.onStart = _onPinchStart;
+                    instance.onUpdate = _onPinchUpdate;
+                    instance.onEnd = _onPinchEnd;
+                  },
+                ),
           },
           child: TerminalView(
             runtime.terminal,
@@ -1530,9 +1680,14 @@ class _SetupTerminalState extends State<SetupTerminal> {
     );
   }
 
-  Widget _buildSplitTerminalView(TerminalSessionState state, TerminalThemePreset activeTheme) {
+  Widget _buildSplitTerminalView(
+    TerminalSessionState state,
+    TerminalThemePreset activeTheme,
+  ) {
     final primary = _sessionRuntimes[state.activeSessionId];
-    final splitRuntime = _splitSessionId != null ? _sessionRuntimes[_splitSessionId] : null;
+    final splitRuntime = _splitSessionId != null
+        ? _sessionRuntimes[_splitSessionId]
+        : null;
 
     Widget termView(_TerminalRuntime? r, bool isActive) {
       if (r == null) return const Center(child: CircularProgressIndicator());
@@ -1553,15 +1708,14 @@ class _SetupTerminalState extends State<SetupTerminal> {
             borderRadius: BorderRadius.circular(5),
             child: RawGestureDetector(
               gestures: {
-                _TwoFingerPinchRecognizer: GestureRecognizerFactoryWithHandlers<
-                    _TwoFingerPinchRecognizer>(
-                  () => _TwoFingerPinchRecognizer(),
-                  (instance) {
-                    instance.onStart = _onPinchStart;
-                    instance.onUpdate = _onPinchUpdate;
-                    instance.onEnd = _onPinchEnd;
-                  },
-                ),
+                _TwoFingerPinchRecognizer:
+                    GestureRecognizerFactoryWithHandlers<
+                      _TwoFingerPinchRecognizer
+                    >(() => _TwoFingerPinchRecognizer(), (instance) {
+                      instance.onStart = _onPinchStart;
+                      instance.onUpdate = _onPinchUpdate;
+                      instance.onEnd = _onPinchEnd;
+                    }),
               },
               child: TerminalView(
                 r.terminal,
@@ -1599,7 +1753,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   Future<void> _enableSplitView(Axis axis) async {
     if (_isSplitView && _splitAxis == axis) {
-      setState(() { _isSplitView = false; _splitSessionId = null; });
+      setState(() {
+        _isSplitView = false;
+        _splitSessionId = null;
+      });
       return;
     }
     // Create a new session for the split pane
@@ -1712,7 +1869,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.9),
                                     fontSize: 14,
-                                     fontFamily: _terminalFontFamilyFromConfig(),
+                                    fontFamily: _terminalFontFamilyFromConfig(),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1921,10 +2078,14 @@ class _SetupTerminalState extends State<SetupTerminal> {
       final scriptDir = Directory('$appDir/scripts');
       if (!scriptDir.existsSync()) await scriptDir.create(recursive: true);
       final dest = File('${scriptDir.path}/install_claude_code.sh');
-      final data = await rootBundle.load('assets/scripts/install_claude_code.sh');
+      final data = await rootBundle.load(
+        'assets/scripts/install_claude_code.sh',
+      );
       await dest.writeAsBytes(data.buffer.asUint8List(), flush: true);
       // Make executable inside PRoot (chmod via the active PTY)
-      sendToPty('chmod +x ${scriptDir.path}/install_claude_code.sh && bash ${scriptDir.path}/install_claude_code.sh\n');
+      sendToPty(
+        'chmod +x ${scriptDir.path}/install_claude_code.sh && bash ${scriptDir.path}/install_claude_code.sh\n',
+      );
     } catch (e) {
       PandaLog.e('Terminal', 'Failed to deploy install script: $e');
     }
@@ -1936,9 +2097,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
       final scriptDir = Directory('$appDir/scripts');
       if (!scriptDir.existsSync()) await scriptDir.create(recursive: true);
       final dest = File('${scriptDir.path}/install_lsp_servers.sh');
-      final data = await rootBundle.load('assets/scripts/install_lsp_servers.sh');
+      final data = await rootBundle.load(
+        'assets/scripts/install_lsp_servers.sh',
+      );
       await dest.writeAsBytes(data.buffer.asUint8List(), flush: true);
-      sendToPty('chmod +x ${scriptDir.path}/install_lsp_servers.sh && bash ${scriptDir.path}/install_lsp_servers.sh\n');
+      sendToPty(
+        'chmod +x ${scriptDir.path}/install_lsp_servers.sh && bash ${scriptDir.path}/install_lsp_servers.sh\n',
+      );
     } catch (e) {
       PandaLog.e('Terminal', 'Failed to deploy LSP install script: $e');
     }
@@ -1946,7 +2111,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   // ── Helper: popup menu item ──────────────────────────────────────────────
   Widget _menuItem(IconData icon, String label, bool isDark) {
-    final fg = isDark ? Colors.white.withValues(alpha: 0.85) : const Color(0xff1a1a1a);
+    final fg = isDark
+        ? Colors.white.withValues(alpha: 0.85)
+        : const Color(0xff1a1a1a);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1966,8 +2133,12 @@ class _SetupTerminalState extends State<SetupTerminal> {
   ) {
     final isDark = appTheme.isDark;
     final bgColor = terminalPreset.theme.background;
-    final activeTabColor = terminalPreset.theme.background.withValues(alpha: 0.78);
-    final inactiveTextColor = terminalPreset.theme.foreground.withValues(alpha: 0.55);
+    final activeTabColor = terminalPreset.theme.background.withValues(
+      alpha: 0.78,
+    );
+    final inactiveTextColor = terminalPreset.theme.foreground.withValues(
+      alpha: 0.55,
+    );
     final activeTextColor = terminalPreset.theme.foreground;
     final accentColor = terminalPreset.theme.cursor;
     final terminalBorder = terminalPreset.theme.selection;
@@ -1976,12 +2147,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       height: 38,
       decoration: BoxDecoration(
         color: bgColor,
-        border: Border(
-          bottom: BorderSide(
-            color: terminalBorder,
-            width: 1,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: terminalBorder, width: 1)),
       ),
       child: Row(
         children: [
@@ -2007,7 +2173,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
                     }
                   },
                   child: Container(
-                    constraints: const BoxConstraints(minWidth: 90, maxWidth: 180),
+                    constraints: const BoxConstraints(
+                      minWidth: 90,
+                      maxWidth: 180,
+                    ),
                     padding: const EdgeInsets.symmetric(horizontal: 10),
                     decoration: BoxDecoration(
                       color: isActive ? activeTabColor : Colors.transparent,
@@ -2016,10 +2185,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                           color: isActive ? accentColor : Colors.transparent,
                           width: 2,
                         ),
-                        right: BorderSide(
-                           color: terminalBorder,
-                          width: 0.5,
-                        ),
+                        right: BorderSide(color: terminalBorder, width: 0.5),
                       ),
                     ),
                     child: Row(
@@ -2040,9 +2206,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
                           child: Text(
                             session.title,
                             style: TextStyle(
-                              color: isActive ? activeTextColor : inactiveTextColor,
+                              color: isActive
+                                  ? activeTextColor
+                                  : inactiveTextColor,
                               fontSize: 12,
-                              fontWeight: isActive ? FontWeight.w500 : FontWeight.w400,
+                              fontWeight: isActive
+                                  ? FontWeight.w500
+                                  : FontWeight.w400,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -2057,7 +2227,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
                               Icons.close,
                               size: 11,
                               color: isActive
-                                  ? (isDark ? Colors.grey.shade400 : Colors.grey.shade600)
+                                  ? (isDark
+                                        ? Colors.grey.shade400
+                                        : Colors.grey.shade600)
                                   : Colors.transparent,
                             ),
                           ),
@@ -2076,7 +2248,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
           PopupMenuButton<String>(
             padding: EdgeInsets.zero,
             icon: Icon(
-              _isFullscreen ? Icons.fullscreen_exit_rounded : Icons.more_vert_rounded,
+              _isFullscreen
+                  ? Icons.fullscreen_exit_rounded
+                  : Icons.more_vert_rounded,
               size: 18,
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
@@ -2084,10 +2258,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
             color: terminalPreset.theme.background,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
-              side: BorderSide(
-                color: terminalBorder,
-                width: 0.5,
-              ),
+              side: BorderSide(color: terminalBorder, width: 0.5),
             ),
             onSelected: (value) async {
               switch (value) {
@@ -2101,7 +2272,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
                   await _enableSplitView(Axis.vertical);
                   break;
                 case 'close_split':
-                  setState(() { _isSplitView = false; _splitSessionId = null; });
+                  setState(() {
+                    _isSplitView = false;
+                    _splitSessionId = null;
+                  });
                   break;
                 case 'font_reset':
                   _onTerminalFontSizeChanged(14);
@@ -2118,7 +2292,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
               PopupMenuItem(
                 value: 'fullscreen',
                 child: _menuItem(
-                  _isFullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                  _isFullscreen
+                      ? Icons.fullscreen_exit_rounded
+                      : Icons.fullscreen_rounded,
                   _isFullscreen ? 'Quitter le plein écran' : 'Plein écran',
                   isDark,
                 ),
@@ -2126,29 +2302,53 @@ class _SetupTerminalState extends State<SetupTerminal> {
               if (!_isSplitView) ...[
                 PopupMenuItem(
                   value: 'split_h',
-                  child: _menuItem(Icons.vertical_split_rounded, 'Split horizontal', isDark),
+                  child: _menuItem(
+                    Icons.vertical_split_rounded,
+                    'Split horizontal',
+                    isDark,
+                  ),
                 ),
                 PopupMenuItem(
                   value: 'split_v',
-                  child: _menuItem(Icons.horizontal_split_rounded, 'Split vertical', isDark),
+                  child: _menuItem(
+                    Icons.horizontal_split_rounded,
+                    'Split vertical',
+                    isDark,
+                  ),
                 ),
               ] else
                 PopupMenuItem(
                   value: 'close_split',
-                  child: _menuItem(Icons.close_fullscreen_rounded, 'Fermer le split', isDark),
+                  child: _menuItem(
+                    Icons.close_fullscreen_rounded,
+                    'Fermer le split',
+                    isDark,
+                  ),
                 ),
               PopupMenuItem(
                 value: 'font_reset',
-                child: _menuItem(Icons.format_size_rounded, 'Réinitialiser police', isDark),
+                child: _menuItem(
+                  Icons.format_size_rounded,
+                  'Réinitialiser police',
+                  isDark,
+                ),
               ),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'install_claude',
-                child: _menuItem(Icons.auto_awesome_rounded, 'Installer Claude Code', isDark),
+                child: _menuItem(
+                  Icons.auto_awesome_rounded,
+                  'Installer Claude Code',
+                  isDark,
+                ),
               ),
               PopupMenuItem(
                 value: 'install_lsp',
-                child: _menuItem(Icons.code_rounded, 'Installer LSP Servers', isDark),
+                child: _menuItem(
+                  Icons.code_rounded,
+                  'Installer LSP Servers',
+                  isDark,
+                ),
               ),
             ],
           ),
@@ -2163,31 +2363,66 @@ class _SetupTerminalState extends State<SetupTerminal> {
       style: MenuStyle(
         backgroundColor: WidgetStatePropertyAll(appTheme.selectScreenCardsBg),
         shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
       ),
       animated: true,
       onAnimationStatusChanged: (status) => _terminalSelectionStatus = status,
       menuChildren: [
         MenuItemButton(
-          onPressed: () => _createSession(makeActive: true, showFeedback: true, title: 'Linux Terminal'),
-          leadingIcon: Icon(Icons.terminal_rounded, color: appTheme.selectScreenCardTextColor, size: 18),
-          child: Text('Nouvelle session Alpine', style: TextStyle(color: appTheme.selectScreenCardTextColor)),
-        ),
-        ...sshServerList.map((server) => MenuItemButton(
-          onPressed: () => _createSession(makeActive: true, showFeedback: true, externalServer: server),
-          leadingIcon: Padding(
-            padding: const EdgeInsets.only(left: 3),
-            child: FaIcon(FontAwesomeIcons.server, color: appTheme.selectScreenCardTextColor, size: 17),
+          onPressed: () => _createSession(
+            makeActive: true,
+            showFeedback: true,
+            title: 'Linux Terminal',
           ),
-          child: Text(server.name, style: TextStyle(color: appTheme.selectScreenCardTextColor)),
-        )),
+          leadingIcon: Icon(
+            Icons.terminal_rounded,
+            color: appTheme.selectScreenCardTextColor,
+            size: 18,
+          ),
+          child: Text(
+            'Nouvelle session Alpine',
+            style: TextStyle(color: appTheme.selectScreenCardTextColor),
+          ),
+        ),
+        ...sshServerList.map(
+          (server) => MenuItemButton(
+            onPressed: () => _createSession(
+              makeActive: true,
+              showFeedback: true,
+              externalServer: server,
+            ),
+            leadingIcon: Padding(
+              padding: const EdgeInsets.only(left: 3),
+              child: FaIcon(
+                FontAwesomeIcons.server,
+                color: appTheme.selectScreenCardTextColor,
+                size: 17,
+              ),
+            ),
+            child: Text(
+              server.name,
+              style: TextStyle(color: appTheme.selectScreenCardTextColor),
+            ),
+          ),
+        ),
         if (termuxInfo != null && termuxInfo!.isConnected)
           MenuItemButton(
-            onPressed: () => _createSession(makeActive: true, showFeedback: true, externalServer: termuxInfo),
-            leadingIcon: SvgPicture.asset("assets/icons/Termux.svg", height: 18, width: 18),
-            child: Text(termuxInfo!.name, style: TextStyle(color: appTheme.selectScreenCardTextColor)),
+            onPressed: () => _createSession(
+              makeActive: true,
+              showFeedback: true,
+              externalServer: termuxInfo,
+            ),
+            leadingIcon: SvgPicture.asset(
+              "assets/icons/Termux.svg",
+              height: 18,
+              width: 18,
+            ),
+            child: Text(
+              termuxInfo!.name,
+              style: TextStyle(color: appTheme.selectScreenCardTextColor),
+            ),
           ),
-
       ],
       builder: (context, controller, child) => InkWell(
         onTap: () => _terminalSelectionStatus.isForwardOrCompleted
@@ -2199,7 +2434,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.add, size: 17, color: Colors.grey.shade500),
-              Icon(Icons.arrow_drop_down, size: 14, color: Colors.grey.shade600),
+              Icon(
+                Icons.arrow_drop_down,
+                size: 14,
+                color: Colors.grey.shade600,
+              ),
             ],
           ),
         ),
@@ -2222,8 +2461,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
           _hasSelection = false;
           // Sync page to active session
           if (!_syncingPage) {
-            final idx = state.sessions
-                .indexWhere((s) => s.id == state.activeSessionId);
+            final idx = state.sessions.indexWhere(
+              (s) => s.id == state.activeSessionId,
+            );
             if (idx >= 0 && _pageController.hasClients) {
               _syncingPage = true;
               _pageController
@@ -2249,7 +2489,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 ? _buildSplitTerminalView(state, activeTerminalTheme)
                 : _buildSingleTerminalPage(state, activeTerminalTheme);
 
-            final terminalContent = Stack(key: _terminalHostKey, children: [
+            final terminalContent = Stack(
+              key: _terminalHostKey,
+              children: [
                 Column(
                   children: [
                     Expanded(child: mainTermView),
@@ -2267,19 +2509,28 @@ class _SetupTerminalState extends State<SetupTerminal> {
                         onCopy: () {
                           final runtime = _activeRuntime();
                           if (runtime == null) return;
-                          final selectedText = runtime.controller.selection != null
-                              ? runtime.terminal.buffer.getText(runtime.controller.selection!)
+                          final selectedText =
+                              runtime.controller.selection != null
+                              ? runtime.terminal.buffer.getText(
+                                  runtime.controller.selection!,
+                                )
                               : '';
                           if (selectedText.isNotEmpty) {
-                            Clipboard.setData(ClipboardData(text: selectedText));
+                            Clipboard.setData(
+                              ClipboardData(text: selectedText),
+                            );
                           }
                         },
                         onPaste: () async {
                           final runtime = _activeRuntime();
                           if (runtime == null) return;
-                          final data = await Clipboard.getData(Clipboard.kTextPlain);
+                          final data = await Clipboard.getData(
+                            Clipboard.kTextPlain,
+                          );
                           if (data?.text != null) {
-                            runtime.pty?.write(const Utf8Encoder().convert(data!.text!));
+                            runtime.pty?.write(
+                              const Utf8Encoder().convert(data!.text!),
+                            );
                           }
                         },
                       ),
@@ -2298,9 +2549,14 @@ class _SetupTerminalState extends State<SetupTerminal> {
                       borderRadius: BorderRadius.circular(20),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(20),
-                        onTap: () => _onTerminalFontSizeChanged(kDefaultTerminalFontSize),
+                        onTap: () => _onTerminalFontSizeChanged(
+                          kDefaultTerminalFontSize,
+                        ),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           child: Text(
                             '${(state.fontSize / kDefaultTerminalFontSize * 100).round()}%',
                             style: const TextStyle(
@@ -2319,13 +2575,17 @@ class _SetupTerminalState extends State<SetupTerminal> {
             if (!widget.useScaffold) return terminalContent;
 
             // ── Feature 3: fullscreen wraps entire screen ──────────────────
-            final isDark   = appTheme.isDark;
-            final barColor = isDark ? const Color(0xff1e1e1e) : const Color(0xffececec);
+            final isDark = appTheme.isDark;
+            final barColor = isDark
+                ? const Color(0xff1e1e1e)
+                : const Color(0xffececec);
 
             Widget scaffold = Scaffold(
-              backgroundColor: isDark ? const Color(0xff1e1e1e) : const Color(0xffececec),
+              backgroundColor: isDark
+                  ? const Color(0xff1e1e1e)
+                  : const Color(0xffececec),
               appBar: _isFullscreen
-                  ? null   // hide app bar in fullscreen
+                  ? null // hide app bar in fullscreen
                   : AppBar(
                       toolbarHeight: 44,
                       backgroundColor: barColor,
@@ -2354,7 +2614,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
                       topLeft: Radius.circular(0),
                       topRight: Radius.circular(0),
                     ),
-                    child: _buildSessionTabBar(state, appTheme, activeTerminalTheme),
+                    child: _buildSessionTabBar(
+                      state,
+                      appTheme,
+                      activeTerminalTheme,
+                    ),
                   ),
                   Expanded(
                     child: ClipRRect(
@@ -2372,9 +2636,14 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 children: [
                   scaffold,
                   Positioned(
-                    top: 0, left: 0, right: 0, bottom: 0,
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
                     child: Scaffold(
-                      backgroundColor: isDark ? const Color(0xff121212) : Colors.white,
+                      backgroundColor: isDark
+                          ? const Color(0xff121212)
+                          : Colors.white,
                       body: Stack(
                         children: [
                           Column(
@@ -2383,16 +2652,23 @@ class _SetupTerminalState extends State<SetupTerminal> {
                               Container(
                                 height: 40,
                                 color: barColor,
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                ),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.terminal_rounded, size: 16, color: Colors.grey.shade500),
+                                    Icon(
+                                      Icons.terminal_rounded,
+                                      size: 16,
+                                      color: Colors.grey.shade500,
+                                    ),
                                     const SizedBox(width: 8),
                                     Expanded(
                                       child: Text(
                                         _activeRuntime()?.title ?? 'Terminal',
                                         style: TextStyle(
-                                          color: appTheme.selectScreenCardTextColor,
+                                          color: appTheme
+                                              .selectScreenCardTextColor,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -2400,13 +2676,21 @@ class _SetupTerminalState extends State<SetupTerminal> {
                                     ),
                                     IconButton(
                                       tooltip: 'Quitter le plein écran',
-                                      icon: const Icon(Icons.fullscreen_exit_rounded, size: 20),
-                                      onPressed: () => setState(() => _isFullscreen = false),
+                                      icon: const Icon(
+                                        Icons.fullscreen_exit_rounded,
+                                        size: 20,
+                                      ),
+                                      onPressed: () =>
+                                          setState(() => _isFullscreen = false),
                                     ),
                                   ],
                                 ),
                               ),
-                              _buildSessionTabBar(state, appTheme, activeTerminalTheme),
+                              _buildSessionTabBar(
+                                state,
+                                appTheme,
+                                activeTerminalTheme,
+                              ),
                               Expanded(child: terminalContent),
                             ],
                           ),

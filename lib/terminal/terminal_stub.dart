@@ -1,7 +1,7 @@
-// ── Web stub — terminal unavailable on web platform ──────────────────────────
-// This file is selected by terminal.dart conditional export when compiling for
-// dart:html (web). It provides empty / no-op implementations of every class
-// that the rest of the codebase imports from terminal.dart.
+// ── Web terminal preview ─────────────────────────────────────────────────────
+// The web build cannot spawn the native PTY. It still exposes a real text
+// input, visible cursor and local echo so the terminal panel remains useful
+// while developing or previewing Panda IDE in a browser.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -28,24 +28,19 @@ class SetupTerminal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.terminal, size: 48, color: Colors.grey),
-            SizedBox(height: 16),
-            Text('Terminal not available on web',
-                style: TextStyle(color: Colors.grey)),
-          ],
-        ),
+    return Scaffold(
+      body: EmbeddedTerminal(
+        projectDir: projectDir,
+        args: args,
+        showKeyboardMenu: showKeyboardMenu,
+        readOnly: readOnly,
       ),
     );
   }
 }
 
 // ── EmbeddedTerminal ──────────────────────────────────────────────────────────
-class EmbeddedTerminal extends StatelessWidget {
+class EmbeddedTerminal extends StatefulWidget {
   final String projectDir;
   final List<String> args;
   final bool showKeyboardMenu, readOnly;
@@ -59,10 +54,140 @@ class EmbeddedTerminal extends StatelessWidget {
   });
 
   @override
+  State<EmbeddedTerminal> createState() => _EmbeddedTerminalState();
+}
+
+class _EmbeddedTerminalState extends State<EmbeddedTerminal> {
+  late final TextEditingController _inputController;
+  late final FocusNode _inputFocus;
+  final ScrollController _scrollController = ScrollController();
+  final List<String> _lines = [
+    'Panda IDE web terminal',
+    'Preview mode: les commandes sont affichées localement.',
+    '',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _inputController = TextEditingController();
+    _inputFocus = FocusNode();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !widget.readOnly) _inputFocus.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _inputController.dispose();
+    _inputFocus.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (widget.readOnly) return;
+    final command = _inputController.text.trim();
+    if (command.isEmpty) return;
+    setState(() {
+      _lines
+        ..add('web@panda:~\$ $command')
+        ..add('preview: commande non exécutée dans le navigateur')
+        ..add('');
+      _inputController.clear();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+        );
+      }
+      if (mounted) _inputFocus.requestFocus();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Terminal not available on web',
-          style: TextStyle(color: Colors.grey)),
+    return Container(
+      color: const Color(0xff0d1117),
+      child: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              itemCount: _lines.length,
+              itemBuilder: (_, index) => Text(
+                _lines[index],
+                style: const TextStyle(
+                  color: Color(0xffd6deeb),
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            decoration: const BoxDecoration(
+              color: Color(0xff111820),
+              border: Border(top: BorderSide(color: Color(0xff263241))),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const Text(
+                  '›',
+                  style: TextStyle(
+                    color: Color(0xff7ee787),
+                    fontFamily: 'monospace',
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: _inputController,
+                    focusNode: _inputFocus,
+                    readOnly: widget.readOnly,
+                    autofocus: false,
+                    showCursor: !widget.readOnly,
+                    cursorColor: const Color(0xff7ee787),
+                    onSubmitted: (_) => _submit(),
+                    style: const TextStyle(
+                      color: Color(0xfff0f6fc),
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                    ),
+                    decoration: const InputDecoration(
+                      hintText: 'Tapez une commande (aperçu web)…',
+                      hintStyle: TextStyle(
+                        color: Color(0xff6e7681),
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Envoyer',
+                  onPressed: widget.readOnly ? null : _submit,
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                  color: const Color(0xff7ee787),
+                  splashRadius: 18,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -141,20 +266,26 @@ class TerminalSessionState {
     String? activeSessionId,
     double? fontSize,
     bool clearActive = false,
-  }) =>
-      TerminalSessionState(
-        sessions: sessions ?? this.sessions,
-        activeSessionId: clearActive ? null : activeSessionId ?? this.activeSessionId,
-        fontSize: fontSize ?? this.fontSize,
-      );
+  }) => TerminalSessionState(
+    sessions: sessions ?? this.sessions,
+    activeSessionId: clearActive
+        ? null
+        : activeSessionId ?? this.activeSessionId,
+    fontSize: fontSize ?? this.fontSize,
+  );
 }
 
 // ── Bloc ──────────────────────────────────────────────────────────────────────
 class TerminalSessionBloc
     extends Bloc<TerminalSessionEvent, TerminalSessionState> {
   TerminalSessionBloc({double initialFontSize = 13})
-      : super(TerminalSessionState(
-            sessions: [], activeSessionId: null, fontSize: initialFontSize)) {
+    : super(
+        TerminalSessionState(
+          sessions: [],
+          activeSessionId: null,
+          fontSize: initialFontSize,
+        ),
+      ) {
     on<CreateTerminalSession>((e, emit) {});
     on<SetActiveTerminalSession>((e, emit) {});
     on<DeleteTerminalSession>((e, emit) {});
