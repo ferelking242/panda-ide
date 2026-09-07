@@ -1,1 +1,5 @@
 modules = ["python-base-3.13"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 180000
