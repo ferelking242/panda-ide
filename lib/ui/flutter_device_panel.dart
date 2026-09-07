@@ -25,7 +25,12 @@ import '../services/wireless_pairing_service.dart';
 
 
 class FlutterDevicePanel extends StatefulWidget {
-  const FlutterDevicePanel({super.key});
+  final String workspacePath;
+
+  const FlutterDevicePanel({
+    super.key,
+    this.workspacePath = '',
+  });
 
   @override
   State<FlutterDevicePanel> createState() => _FlutterDevicePanelState();
@@ -249,12 +254,24 @@ class _FlutterDevicePanelState extends State<FlutterDevicePanel> {
       return;
     }
     setState(() { _busy = true; _status = 'flutter run sur $dev…'; });
-    await _service.startRun(deviceId: dev, onLine: (line) {
-      // Output → onglet terminal de l'IDE (pas de console intégrée)
+    final started = await _service.startRun(
+      deviceId: dev,
+      workspacePath: widget.workspacePath,
+      onLine: (line) {
+        // Output → onglet terminal de l'IDE (pas de console intégrée)
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _status = started
+          ? "Flutter en cours d'execution"
+          : "Échec du démarrage Flutter — voir le terminal";
     });
-    setState(() { _busy = false; _status = "Flutter en cours d'execution"; });
-    // Ouvrir l'onglet terminal pour voir la sortie
-    IdeTabOpener.instance.openTerminal();
+    if (started) {
+      // Ouvrir l'onglet terminal pour voir la sortie
+      IdeTabOpener.instance.openTerminal();
+    }
   }
 
   @override

@@ -870,7 +870,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
       // l'APK : PRoot y trouve libtalloc.so / libandroid-shmem.so, et
       // PROOT_LOADER designe le loader embarque (libproot-loader.so).
       final sessionEnv = <String, String>{
-        ...await DebianSetup.prootSessionEnvironment(),
+        ...await DebianSetup.prootSessionEnvironment(
+          flutterProjectPath: widget.projectDir,
+        ),
         // Suppress locale / groups warnings on Alpine where locales are not installed
         'LC_ALL': 'C',
         'LANG': 'C',

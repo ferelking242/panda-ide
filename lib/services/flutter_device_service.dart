@@ -18,6 +18,7 @@ import '../utils/debian_setup.dart';
 import '../utils/apk_service.dart';
 import '../utils/constants.dart';
 import 'shizuku_service.dart';
+import 'flutter_pub_environment.dart';
 
 
 
@@ -57,6 +58,7 @@ class FlutterDeviceService extends ChangeNotifier {
     Map<String, String> extraEnv = const {},
     List<String> extraBinds = const [],
     String workingDir = '/root',
+    String? flutterProjectPath,
   }) async {
     final prootBin = await DebianSetup.locateProotBinary(DebianSetup.debianDir);
     if (prootBin == null) {
@@ -78,9 +80,11 @@ class FlutterDeviceService extends ChangeNotifier {
       command.join(' '),
     ];
 
-    final env = await DebianSetup.prootSessionEnvironment();
+    final env = await DebianSetup.prootSessionEnvironment(
+      flutterProjectPath: flutterProjectPath,
+    );
     // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK
-        // pour trouver libtalloc.so (sinon CANNOT LINK EXECUTABLE).;
+    // pour trouver libtalloc.so (sinon CANNOT LINK EXECUTABLE).
     env.addAll(extraEnv);
 
     final process = await Process.start(
@@ -208,19 +212,29 @@ class FlutterDeviceService extends ChangeNotifier {
     return out.join('\n');
   }
 
-  Map<String, String> _flutterEnv() => {
-        'FLUTTER_ROOT': '/opt/flutter',
-        'PUB_CACHE': '/opt/flutter/.pub-cache',
-        'FLUTTER_SUPPRESS_ANALYTICS': 'true',
-        'PATH':
-            '/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-        'ANDROID_HOME': '/opt/android-sdk',
-      };
+  Map<String, String> _flutterEnv({String? projectPath}) {
+    final env = <String, String>{
+      'FLUTTER_ROOT': '/opt/flutter',
+      'PUB_CACHE': '/opt/flutter/.pub-cache',
+      'FLUTTER_SUPPRESS_ANALYTICS': 'true',
+      'PATH':
+          '/opt/flutter/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      'ANDROID_HOME': '/opt/android-sdk',
+    };
+    if (projectPath != null) {
+      env.addAll(FlutterPubEnvironment.forProject(projectPath));
+    }
+    return env;
+  }
 
-  List<String> _flutterBinds() => [
+  List<String> _flutterBinds([String? projectPath]) => [
         '$runtimesDir/flutter:/opt/flutter',
         if (Directory('$runtimesDir/android-sdk').existsSync())
           '$runtimesDir/android-sdk:/opt/android-sdk',
+        if (projectPath != null &&
+            projectPath.trim().isNotEmpty &&
+            DebianSetup.isDirAccessible(projectPath))
+          '$projectPath:${DebianSetup.workspaceMount}',
       ];
 
   // ── flutter run (preview native sur le même téléphone) ────────────────────
@@ -233,19 +247,24 @@ class FlutterDeviceService extends ChangeNotifier {
   Future<bool> startRun({
     required String deviceId,
     void Function(String line)? onLine,
+    String? workspacePath,
   }) async {
     if (_running) return false;
     final dartTarget = deviceId == 'web-server'
         ? '-d web-server --web-hostname 127.0.0.1 --web-port 8090'
         : '-d $deviceId';
     try {
+      final projectPath = workspacePath?.trim() ?? '';
       _runProcess = await _startInRootfs([
-        'cd /root/workspace 2>/dev/null || exit 1\n'
-            'flutter pub get && flutter run $dartTarget'
+        FlutterPubEnvironment.flutterRunCommand(
+          projectPath: projectPath,
+          dartTarget: dartTarget,
+        ),
       ],
           onLine: onLine,
-          extraEnv: _flutterEnv(),
-          extraBinds: _flutterBinds());
+          extraEnv: _flutterEnv(projectPath: projectPath),
+          extraBinds: _flutterBinds(projectPath),
+          flutterProjectPath: projectPath);
       _running = true;
       notifyListeners();
       unawaited(_runProcess!.exitCode.whenComplete(() {

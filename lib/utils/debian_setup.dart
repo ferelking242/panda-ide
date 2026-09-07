@@ -5,6 +5,7 @@ import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
 import 'package:archive/archive.dart';
 import 'package:panda/utils/panda_log.dart';
+import '../services/flutter_pub_environment.dart';
 
 /// Installs a minimal Debian ARM64 rootfs (glibc) for proot.
 ///
@@ -81,26 +82,32 @@ class DebianSetup {
 
   static Future<Map<String, String>> prootSessionEnvironment({
     Map<String, String> extra = const {},
+    String? flutterProjectPath,
   }) async {
-    if (_cachedSessionEnv != null) {
-      return <String, String>{..._cachedSessionEnv!, ...extra};
+    if (_cachedSessionEnv == null) {
+      final base = <String, String>{
+        'HOME': '/root',
+        'USER': 'root',
+        'LOGNAME': 'root',
+        'TERM': 'xterm-256color',
+        'SHELL': '/bin/bash',
+        'LANG': 'en_US.UTF-8',
+        'LC_ALL': 'en_US.UTF-8',
+        'DISPLAY': ':0',
+        'ENV': '/root/.profile',
+        'PATH':
+            '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        'TMPDIR': '/tmp',
+      };
+      base.addAll(await prootLinkEnvironment());
+      _cachedSessionEnv = base;
     }
-    final env = <String, String>{
-      'HOME': '/root',
-      'USER': 'root',
-      'LOGNAME': 'root',
-      'TERM': 'xterm-256color',
-      'SHELL': '/bin/bash',
-      'LANG': 'en_US.UTF-8',
-      'LC_ALL': 'en_US.UTF-8',
-      'DISPLAY': ':0',
-      'ENV': '/root/.profile',
-      'PATH':
-          '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-      'TMPDIR': '/tmp',
-    };
-    env.addAll(await prootLinkEnvironment());
-    _cachedSessionEnv = Map.of(env);
+
+    final env = <String, String>{..._cachedSessionEnv!};
+    if (flutterProjectPath != null &&
+        flutterProjectPath.trim().isNotEmpty) {
+      env.addAll(FlutterPubEnvironment.forProject(flutterProjectPath));
+    }
     env.addAll(extra);
     return env;
   }

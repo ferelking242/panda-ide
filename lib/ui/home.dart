@@ -4650,7 +4650,9 @@ class _SelectTypeState extends State<SelectType>
       return _buildUpdatePage(appTheme);
     }
     if (tab.id == 'flutter-device') {
-      return const FlutterDevicePanel();
+      return FlutterDevicePanel(
+        workspacePath: _currentWorkspaceDir ?? _activeProjectDir() ?? '',
+      );
     }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];
@@ -4746,7 +4748,9 @@ class _SelectTypeState extends State<SelectType>
       return _buildTerminalTabPage(appTheme);
     }
     if (tab.id == 'flutter-device') {
-      return const FlutterDevicePanel();
+      return FlutterDevicePanel(
+        workspacePath: _currentWorkspaceDir ?? _activeProjectDir() ?? '',
+      );
     }
     // ── Editor tab: file / folder / project ──────────────────────────────────
     final editorCfg = _editorTabs[tab.id];

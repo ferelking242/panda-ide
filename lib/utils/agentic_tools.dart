@@ -1170,8 +1170,10 @@ class AgenticTools {
         // installés par l'utilisateur via apk (terminal ou UI) restent ainsi
         // prioritaires sur les binaires hôtes embarqués.
         final hostExtras = Map<String, String>.from(envs)..remove('PATH');
-        final env =
-            await DebianSetup.prootSessionEnvironment(extra: hostExtras);
+        final env = await DebianSetup.prootSessionEnvironment(
+          extra: hostExtras,
+          flutterProjectPath: workspacePath,
+        );
 
         // Un git installé par l'utilisateur (apk add git) doit être utilisé
         // en entier : on retire l'override GIT_EXEC_PATH qui pointerait sur
