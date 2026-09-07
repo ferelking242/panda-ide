@@ -106,6 +106,7 @@ class _PandaAgentPendingChangesBarState
 
   void _showDiff() {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
