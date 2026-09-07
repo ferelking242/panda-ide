@@ -760,6 +760,35 @@ $toolLines
   }
 
   // ── SSE streaming (OpenAI-compat + Anthropic) + tool calling ─────────────
+  Future<void> _emitProgressiveText(
+    String text,
+    StreamController<AgentChunk> ctrl, {
+    required _BlockSequencer sequence,
+    AgentEventBus? eventBus,
+  }) async {
+    if (text.isEmpty || ctrl.isClosed) return;
+
+    // Tool-calling providers return the final assistant message as one JSON
+    // response. Keep the same visual contract as SSE providers by delivering
+    // that response in small, timed chunks instead of making it pop in whole.
+    const chunkSize = 12;
+    final blockId = sequence.next('text');
+    for (var offset = 0; offset < text.length; offset += chunkSize) {
+      if (ctrl.isClosed) return;
+      final end = (offset + chunkSize).clamp(0, text.length).toInt();
+      final chunk = text.substring(offset, end);
+      ctrl.add(
+        AgentChunk(
+          phase: AgentPhase.streaming,
+          text: chunk,
+          blockId: blockId,
+        ),
+      );
+      eventBus?.emit(AgentStreamingChunk(text: chunk));
+      await Future<void>.delayed(const Duration(milliseconds: 18));
+    }
+  }
+
   Future<void> _runSse(
     Models model,
     List<Map<String, dynamic>> messages,
@@ -899,12 +928,12 @@ $toolLines
       PandaLog.d('SSE', 'Parsed response — text=${assistantText.length} chars toolCalls=${toolCalls.length}');
 
       if (assistantText.isNotEmpty) {
-        ctrl.add(AgentChunk(
-          phase: AgentPhase.streaming,
-          text: assistantText,
-          blockId: seq.next('text'),
-        ));
-        eventBus?.emit(AgentStreamingChunk(text: assistantText));
+        await _emitProgressiveText(
+          assistantText,
+          ctrl,
+          sequence: seq,
+          eventBus: eventBus,
+        );
       } else {
         final fallbackChunks = parseSsePayload(decoded);
         if (fallbackChunks.isNotEmpty) {

@@ -2,13 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'flow_ui/models/flow_attachment.dart';
 import 'flow_ui/models/flow_message_data.dart';
 import 'flow_ui/models/flow_message_part.dart';
 import 'flow_ui/widgets/flow_markdown.dart';
-import 'flow_ui/widgets/flow_message_actions.dart';
 import 'flow_ui/widgets/flow_shimmer_text.dart';
 import 'flow_ui/widgets/flow_thinking_indicator.dart';
 import 'flow_ui/widgets/flow_thread.dart';
@@ -124,6 +122,16 @@ class PandaAgentFlowChat extends StatelessWidget {
         parts.add(FlowCustomPart(type: 'tool', data: call));
       }
     }
+    if (parts.isEmpty &&
+        sourcePhase == 'streaming' &&
+        isGeneratingMessage(source)) {
+      parts.add(
+        const FlowCustomPart(
+          type: 'thinking',
+          data: {'thinking': 'Réflexion en cours…'},
+        ),
+      );
+    }
 
     final effectiveStatus = parts.isEmpty && status == FlowMessageStatus.streaming
         ? FlowMessageStatus.pending
@@ -135,6 +143,9 @@ class PandaAgentFlowChat extends StatelessWidget {
       status: effectiveStatus,
     );
   }
+
+  static bool isGeneratingMessage(Map<String, dynamic> source) =>
+      source['phase']?.toString() == 'streaming';
 
   static String _withoutThinking(String value) {
     if (value.trim().isEmpty) return '';
@@ -329,28 +340,6 @@ class PandaAgentFlowChat extends StatelessWidget {
     };
   }
 
-  Widget? _messageFooter(FlowMessageData message) {
-    if (message.role != FlowMessageRole.assistant) return null;
-    final index = int.tryParse(message.id.replaceFirst('agent-message-', ''));
-    if (index == null) return null;
-    final text = message.parts
-        .whereType<FlowTextPart>()
-        .map((part) => part.text)
-        .join('\n')
-        .trim();
-    final actions = <FlowMessageAction>[
-      if (text.isNotEmpty)
-        FlowMessageAction.copy(
-          tooltip: 'Copier la réponse',
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: text));
-          },
-        ),
-    ];
-    if (actions.isEmpty) return null;
-    return FlowMessageActions(actions: actions);
-  }
-
   @override
   Widget build(BuildContext context) {
     final flowMessages = _flowMessages();
@@ -377,7 +366,7 @@ class PandaAgentFlowChat extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
             itemSpacing: 24,
             customPartBuilder: _buildCustomPart,
-            messageFooter: _messageFooter,
+            messageFooter: null,
             onRetry: onRetry == null
                 ? null
                 : (message) {
@@ -394,7 +383,6 @@ class PandaAgentFlowChat extends StatelessWidget {
         if (isGenerating)
           _PandaAgentLiveActivity(
             label: activity,
-            isThinking: phase == 'thinking',
           ),
       ],
     );
@@ -404,22 +392,15 @@ class PandaAgentFlowChat extends StatelessWidget {
 class _PandaAgentLiveActivity extends StatelessWidget {
   const _PandaAgentLiveActivity({
     required this.label,
-    required this.isThinking,
   });
 
   final String label;
-  final bool isThinking;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.55)),
-        ),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 9),
       child: Row(
         children: [
           FlowThinkingIndicator(
@@ -428,15 +409,6 @@ class _PandaAgentLiveActivity extends StatelessWidget {
             size: 13,
             color: colors.primary,
           ),
-          const Spacer(),
-          if (!isThinking)
-            FlowShimmerText(
-              text: 'stream above',
-              style: TextStyle(
-                color: colors.onSurfaceVariant,
-                fontSize: 10,
-              ),
-            ),
         ],
       ),
     );
@@ -460,7 +432,15 @@ class PandaAgentFlowThinkingBlock extends StatefulWidget {
 
 class _PandaAgentFlowThinkingBlockState
     extends State<PandaAgentFlowThinkingBlock> {
-  bool _expanded = true;
+  bool _expanded = false;
+
+  @override
+  void didUpdateWidget(PandaAgentFlowThinkingBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active && !widget.active) {
+      _expanded = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -653,15 +633,24 @@ class PandaAgentFlowToolCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
-                approval
-                    ? Icons.warning_amber_rounded
-                    : shell
-                        ? Icons.terminal
-                        : pandaAgentToolIcon(toolName),
-                size: 16,
-                color: approval ? Colors.amber[700] : foreground,
-              ),
+              if (shell && !approval)
+                Text(
+                  '>_',
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'monospace',
+                  ),
+                )
+              else
+                Icon(
+                  approval
+                      ? Icons.warning_amber_rounded
+                      : pandaAgentToolIcon(toolName),
+                  size: 16,
+                  color: approval ? Colors.amber[700] : foreground,
+                ),
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
@@ -669,8 +658,10 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                       ? 'Approbation requise · $toolName'
                       : shell
                           ? (running
-                              ? 'Commande en cours'
-                              : 'Commande exécutée')
+                              ? 'Command running'
+                              : _failed
+                                  ? 'Command failed'
+                                  : 'Command executed')
                           : toolName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -689,18 +680,22 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                 )
               else if (shell)
                 Container(
-                  width: 21,
-                  height: 21,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: (_failed ? Colors.redAccent : Colors.green)
-                        .withValues(alpha: 0.15),
-                    shape: BoxShape.circle,
+                        .withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(5),
                   ),
-                  child: Icon(
-                    _failed ? Icons.close : Icons.check,
-                    size: 14,
+                  child: Text(
+                    _failed ? 'FAIL' : 'OK',
                     color: _failed ? Colors.redAccent : Colors.green,
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 )
               else if (onOpen != null)
@@ -716,19 +711,44 @@ class PandaAgentFlowToolCard extends StatelessWidget {
           ),
           if (_command.isNotEmpty && !approval && !collapsed) ...[
             const SizedBox(height: 7),
-            Text(
-              showFullCommand
-                  ? _command
-                  : pandaWrapLongTokensForDisplay(_command),
-              maxLines: showFullCommand ? null : 1,
-              overflow: showFullCommand
-                  ? TextOverflow.visible
-                  : TextOverflow.ellipsis,
-              style: TextStyle(
-                color: foreground.withValues(alpha: 0.75),
-                fontSize: 11,
-                height: 1.4,
-                fontFamily: 'monospace',
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: BoxDecoration(
+                color: dark ? Colors.black.withValues(alpha: 0.28) : Colors.white,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: foreground.withValues(alpha: 0.08)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    r'$',
+                    style: TextStyle(
+                      color: foreground.withValues(alpha: 0.46),
+                      fontSize: 11,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      showFullCommand
+                          ? _command
+                          : pandaWrapLongTokensForDisplay(_command),
+                      maxLines: showFullCommand ? null : 1,
+                      overflow: showFullCommand
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: foreground.withValues(alpha: 0.82),
+                        fontSize: 11,
+                        height: 1.4,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
