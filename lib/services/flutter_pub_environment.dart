@@ -9,21 +9,34 @@ library;
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'flutter_pub_manifest.dart';
 
 class FlutterPubEnvironment {
   FlutterPubEnvironment._();
 
   static const String cacheRoot = '/root/.panda-pub-cache';
-  static const String cacheVersion = 'v1';
+  // Bump this when the cache layout or invalidation rules change. This
+  // invalidates caches created by older Panda builds without touching the
+  // user's project or lockfile.
+  static const String cacheVersion = 'v2';
 
   /// Returns a deterministic, path-safe cache key on both native and web.
+  ///
+  /// The dependency manifests are part of the key. A changed Git ref or
+  /// resolved commit therefore gets a fresh Pub Git cache instead of reusing
+  /// a possibly incomplete checkout from the previous lockfile.
   static String cacheKeyForProject(String projectPath) {
     final normalized = projectPath.trim().replaceAll('\\', '/');
     if (normalized.isEmpty) return 'default-$cacheVersion';
 
-    // Use the existing crypto dependency instead of 64-bit integer literals:
-    // dart2js cannot represent those literals exactly in JavaScript.
-    final digest = sha1.convert(utf8.encode(normalized)).toString();
+    final manifestBytes = <int>[];
+    manifestBytes.addAll(readPubManifestBytes(normalized));
+
+    final digest = sha1.convert(<int>[
+      ...utf8.encode(normalized),
+      0,
+      ...manifestBytes,
+    ]).toString();
     return '$cacheVersion-${digest.substring(0, 16)}';
   }
 
