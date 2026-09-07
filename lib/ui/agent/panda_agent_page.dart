@@ -79,6 +79,7 @@ class PandaAgentPage extends StatelessWidget {
             children: [
               if (controller.isGenerating)
                 PandaAgentActivity(
+                  key: const ValueKey('panda-agent-live-status'),
                   phase: controller.phase,
                   label: controller.activityLabel,
                 ),

@@ -32,7 +32,7 @@ class PandaAgentController extends ChangeNotifier {
   int _requestSerial = 0;
   bool _turnFinalized = false;
   String _streamBuffer = '';
-  String _thinkingBuffer = '';
+  String _visibleStreamBuffer = '';
   String _currentTool = '';
 
   AgentPhase phase = AgentPhase.idle;
@@ -46,12 +46,11 @@ class PandaAgentController extends ChangeNotifier {
   String get currentTool => _currentTool;
 
   String get activityLabel {
-    if (_currentTool.isNotEmpty) {
-      return 'Exécution de $_currentTool';
-    }
     return switch (phase) {
       AgentPhase.thinking => 'Analyse en cours…',
-      AgentPhase.toolRunning => 'Exécution en cours…',
+      AgentPhase.toolRunning => _currentTool.isEmpty
+          ? 'Exécution en cours…'
+          : 'Exécution de $_currentTool',
       AgentPhase.streaming => 'Réponse en cours…',
       AgentPhase.error => 'La génération a échoué',
       _ => 'Traitement en cours…',
@@ -148,7 +147,7 @@ class PandaAgentController extends ChangeNotifier {
         });
       inputController.clear();
       _streamBuffer = '';
-      _thinkingBuffer = '';
+      _visibleStreamBuffer = '';
       _currentTool = '';
       _turnFinalized = false;
       phase = AgentPhase.streaming;
@@ -194,9 +193,11 @@ class PandaAgentController extends ChangeNotifier {
     _subscription = null;
     isGenerating = false;
     phase = AgentPhase.idle;
+    _currentTool = '';
     if (messages.isNotEmpty && messages.last['role'] == 'agent') {
+      final visibleText = _stripThinking(_streamBuffer).text;
       messages.last['text'] =
-          _streamBuffer.isEmpty ? 'Génération arrêtée.' : _streamBuffer;
+          visibleText.isEmpty ? 'Génération arrêtée.' : visibleText;
       messages.last['phase'] = 'error';
     }
     notifyListeners();
@@ -255,13 +256,17 @@ class PandaAgentController extends ChangeNotifier {
               .map((block) => Map<String, dynamic>.from(block)) ??
           const <Map<String, dynamic>>[];
       for (final block in blocks) {
-        if (block['type'] == 'toolCall') {
-          parts.add('[tool ${block['name'] ?? 'unknown'}]\n'
-              '${block['result'] ?? 'running'}');
+        switch (block['type']) {
+          case 'toolCall':
+            parts.add('[tool ${block['name'] ?? 'unknown'}]\n'
+                '${block['result'] ?? 'running'}');
+          case 'text':
+            final blockText = block['text']?.toString() ?? '';
+            if (blockText.isNotEmpty) parts.add(blockText);
         }
       }
       final text = message['text']?.toString() ?? '';
-      if (text.isNotEmpty) parts.add(text);
+      if (parts.isEmpty && text.isNotEmpty) parts.add(text);
       if (parts.isNotEmpty) {
         result.add({'role': 'assistant', 'content': parts.join('\n\n')});
       }
@@ -391,7 +396,6 @@ class PandaAgentController extends ChangeNotifier {
     switch (chunk.phase) {
       case AgentPhase.thinking:
         phase = AgentPhase.thinking;
-        _thinkingBuffer += chunk.text;
         // Reasoning tokens are internal model data. Keep them out of the
         // conversation so they cannot be shown or replayed on the next turn.
         message['thinking'] = '';
@@ -416,12 +420,20 @@ class PandaAgentController extends ChangeNotifier {
           blocks[index]['result'] = chunk.toolResult ?? '';
           blocks[index]['status'] = 'done';
         }
+        _currentTool = '';
       case AgentPhase.streaming:
         phase = AgentPhase.streaming;
         _streamBuffer += chunk.text;
         final clean = _stripThinking(_streamBuffer);
         message['text'] = clean.text;
         message['thinking'] = '';
+        final visibleDelta = clean.text.startsWith(_visibleStreamBuffer)
+            ? clean.text.substring(_visibleStreamBuffer.length)
+            : clean.text;
+        _visibleStreamBuffer = clean.text;
+        if (visibleDelta.isNotEmpty) {
+          _appendBlock(blocks, 'text', {'text': visibleDelta});
+        }
       case AgentPhase.done:
         _finish(requestId);
       case AgentPhase.error:
@@ -463,9 +475,10 @@ class PandaAgentController extends ChangeNotifier {
     phase = failed ? AgentPhase.error : AgentPhase.done;
     if (messages.isNotEmpty && messages.last['role'] == 'agent') {
       if (failed) {
-        messages.last['text'] = _streamBuffer.isEmpty
+        final visibleText = _stripThinking(_streamBuffer).text;
+        messages.last['text'] = visibleText.isEmpty
             ? 'Erreur : ${error ?? 'la génération a échoué'}'
-            : _streamBuffer;
+            : visibleText;
         messages.last['phase'] = 'error';
         lastError = error;
       } else {
@@ -474,6 +487,7 @@ class PandaAgentController extends ChangeNotifier {
       messages.last['thinking'] = '';
       messages.last['blocks'] = _blocks();
     }
+    _currentTool = '';
     notifyListeners();
   }
 

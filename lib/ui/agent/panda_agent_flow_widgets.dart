@@ -5,7 +5,6 @@ import 'flow_ui/models/flow_attachment.dart';
 import 'flow_ui/models/flow_message_data.dart';
 import 'flow_ui/models/flow_message_part.dart';
 import 'flow_ui/widgets/flow_message_actions.dart';
-import 'flow_ui/widgets/flow_thinking_indicator.dart';
 import 'flow_ui/widgets/flow_thread.dart';
 
 /// The Panda host adapter for Flow UI.
@@ -86,17 +85,10 @@ class PandaAgentFlowChat extends StatelessWidget {
             .map((block) => Map<String, dynamic>.from(block))
             .toList() ??
         <Map<String, dynamic>>[];
-    final thinking = source['thinking']?.toString() ?? '';
-
     if (blocks.isNotEmpty) {
       for (final block in blocks) {
         final type = block['type']?.toString() ?? '';
-        if (type == 'thinking') {
-          final value = block['thinking']?.toString() ?? '';
-          if (value.trim().isNotEmpty) {
-            parts.add(FlowCustomPart(type: 'thinking', data: block));
-          }
-        } else if (type == 'toolCall') {
+        if (type == 'toolCall') {
           parts.add(FlowCustomPart(type: 'tool', data: block));
         } else if (type == 'text') {
           final value = _withoutThinking(block['text']?.toString() ?? '');
@@ -104,14 +96,6 @@ class PandaAgentFlowChat extends StatelessWidget {
         }
       }
     } else {
-      if (thinking.trim().isNotEmpty) {
-        parts.add(
-          FlowCustomPart(
-            type: 'thinking',
-            data: <String, dynamic>{'thinking': thinking},
-          ),
-        );
-      }
       if (text.trim().isNotEmpty) {
         final value = _withoutThinking(text);
         if (value.trim().isNotEmpty) parts.add(FlowTextPart(value));
@@ -170,13 +154,6 @@ class PandaAgentFlowChat extends StatelessWidget {
     final muted = foreground.withValues(alpha: 0.58);
 
     return switch (part.type) {
-      'thinking' => PandaAgentFlowThinking(
-          content: (data['thinking'] ?? '').toString(),
-          active: isGenerating && phase == 'thinking',
-          dark: dark,
-          foreground: foreground,
-          muted: muted,
-        ),
       'tool' => PandaAgentFlowToolCard(
           toolName: (data['name'] ?? data['toolName'] ?? 'outil').toString(),
           args: (data['args'] as Map?)?.cast<String, dynamic>() ??
@@ -253,65 +230,6 @@ class PandaAgentFlowChat extends StatelessWidget {
       retryLabel: 'Réessayer',
       thinkingLabel: 'Analyse en cours…',
       markdown: true,
-    );
-  }
-}
-
-class PandaAgentFlowThinking extends StatelessWidget {
-  const PandaAgentFlowThinking({
-    super.key,
-    required this.content,
-    required this.active,
-    required this.dark,
-    required this.foreground,
-    required this.muted,
-  });
-
-  final String content;
-  final bool active;
-  final bool dark;
-  final Color foreground;
-  final Color muted;
-
-  @override
-  Widget build(BuildContext context) {
-    final background = dark
-        ? const Color(0xff202033)
-        : const Color(0xfff0f2ff);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: (dark ? const Color(0xff7886d8) : const Color(0xff9ba8e8))
-              .withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (active)
-            const Padding(
-              padding: EdgeInsets.only(top: 2),
-              child: FlowThinkingIndicator(size: 15, active: true),
-            )
-          else
-            Icon(Icons.psychology_outlined, size: 16, color: muted),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              content.trim(),
-              style: TextStyle(
-                color: foreground.withValues(alpha: 0.82),
-                fontSize: 12,
-                height: 1.5,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
