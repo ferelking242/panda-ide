@@ -65,7 +65,6 @@ import '../local_models/ui/local_models_page.dart'
 import 'widgets.dart';
 import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
-import 'editor/status_bar.dart';
 import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
@@ -1485,25 +1484,13 @@ class _SelectTypeState extends State<SelectType>
                                                       ),
                                                     ),
                                                   ),
-                                                  // ── Bottom panel — its tab strip stays docked
-                                                  // above the status bar, even when collapsed.
+                                                  // ── Bottom panel — terminal only, opened
+                                                  // from the IDE header.
                                                   _buildBottomPanel(),
                                                 ],
                                               ),
                                             ),
 
-                                            // ── Status bar — right of activity bar ──
-                                            Positioned(
-                                              bottom: 0,
-                                              left: 0,
-                                              right: 0,
-                                              child: _buildStatusBar(
-                                                context,
-                                                appTheme,
-                                                sidebarActive:
-                                                    _sidebarState >= 1,
-                                              ),
-                                            ),
                                           ],
                                         ),
                                       ),
@@ -1524,63 +1511,6 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
         );
-      },
-    );
-  }
-
-  // ── VSCode-style status bar ────────────────────────────────────────────────
-  Widget _buildStatusBar(
-    BuildContext context,
-    AppTheme appTheme, {
-    bool sidebarActive = false,
-  }) {
-    final isDark = appTheme.isDark;
-
-    return BlocBuilder<RepoStatusBloc, RepoStatusState>(
-      builder: (ctx, repoState) {
-        final loaded = repoState is RepoStatusLoaded ? repoState : null;
-        final branch = (loaded?.currentBranch?.isNotEmpty ?? false)
-            ? loaded!.currentBranch
-            : null;
-
-        // ── Editor portion of the bar (right of activity bar) ─────────
-        // Faithful VS Code port (microsoft/vscode statusbarPart + markers
-        // contribution + notificationsStatus) — see editor/status_bar.dart.
-        final editorBar = ListenableBuilder(
-          listenable: EditorStatusHub.instance,
-          builder: (_, __) => WorkspaceDiagnosticsListener(
-            builder: (dCtx, errors, warnings, infos) => PandaStatusBar(
-              // The downbar sits directly on the editor surface. Do not
-              // paint an extra capsule behind the status icons.
-              background: Colors.transparent,
-              branchName: branch,
-              hasUpstream: loaded?.hasUpstream ?? false,
-              unpushedCount: loaded?.unpushedCount ?? 0,
-              unpulledCount: loaded?.unpulledCount ?? 0,
-              onBranchTap: branch != null
-                  ? () => _showBranchPicker(ctx, isDark, appTheme, loaded!)
-                  : null,
-              workspaceName: branch == null ? _currentWorkspaceName : null,
-              onWorkspaceTap: branch == null
-                  ? () => _showWorkspaceMenu(ctx, isDark, appTheme)
-                  : null,
-              errorCount: errors,
-              warningCount: warnings,
-              infoCount: infos,
-              onProblemsTap: () => setState(() {
-                _bottomPanelOpen = true;
-                _bottomPanelTab = 1;
-              }),
-              cursorLine: EditorStatusHub.instance.cursorLine,
-              cursorColumn: EditorStatusHub.instance.cursorColumn,
-              language: EditorStatusHub.instance.language,
-              unreadNotifications: PandaNotifications.unreadCount,
-              onNotificationsTap: () => _showNotificationInbox(dCtx),
-            ),
-          ),
-        );
-
-        return SizedBox(width: double.infinity, height: 22, child: editorBar);
       },
     );
   }
@@ -4754,38 +4684,25 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
-  // ── Bottom panel (terminal / problems / output / debug) ────────────────────────────────────
+  // ── Bottom panel (terminal only) ───────────────────────────────────────────────────────────
   Widget _buildBottomPanel() {
     return BlocBuilder<AppThemeBloc, AppThemeState>(
       builder: (context, ts) {
         final isDark = ts.appTheme.isDark;
         final bg = isDark ? const Color(0xff1a1b1f) : const Color(0xfff5f5f7);
-        final tabBg = isDark
-            ? const Color(0xff252526)
-            : const Color(0xffececf0);
-        final fg = isDark ? Colors.grey[400]! : Colors.grey[600]!;
-        final selFg = isDark ? Colors.grey[200]! : Colors.grey[900]!;
         final border = isDark
             ? const Color(0xff3a3a3a)
             : const Color(0xffdddddd);
-        const tabNames = ['TERMINAL', 'PROBLÈMES', 'SORTIE', 'CONSOLE DEBUG'];
-        const tabIcons = [
-          Icons.terminal_rounded,
-          Icons.error_outline_rounded,
-          Icons.output_rounded,
-          Icons.bug_report_outlined,
-        ];
+        if (!_bottomPanelOpen) return const SizedBox.shrink();
         return Padding(
-          // The status bar is an overlay at the bottom of the IDE. Keep a
-          // reserved strip here so it never covers panel content.
-          padding: const EdgeInsets.fromLTRB(6, 0, 6, 26),
+          padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
-            height: _bottomPanelOpen ? _bottomPanelHeight : 42,
+            height: _bottomPanelHeight,
             decoration: BoxDecoration(
               color: bg,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: border, width: 1),
               boxShadow: [
                 BoxShadow(
@@ -4799,286 +4716,16 @@ class _SelectTypeState extends State<SelectType>
               borderRadius: BorderRadius.circular(13),
               child: Column(
                 children: [
-                  // ── Line 1: Main panel tabs ──
-                  Container(
-                    height: 41,
-                    color: tabBg,
-                    child: Row(
-                      children: [
-                        ...List.generate(tabNames.length, (i) {
-                          final active = _bottomPanelTab == i;
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 3,
-                              vertical: 4,
-                            ),
-                            child: GestureDetector(
-                              onTap: () => setState(() {
-                                _bottomPanelTab = i;
-                                _bottomPanelOpen = true;
-                              }),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 120),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 11,
-                                  vertical: 5,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: active && _bottomPanelOpen
-                                      ? bg
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: active && _bottomPanelOpen
-                                        ? const Color(0xff007acc)
-                                        : Colors.transparent,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      tabIcons[i],
-                                      size: 17,
-                                      color: active && _bottomPanelOpen
-                                          ? _kAccent
-                                          : fg,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      tabNames[i],
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: active && _bottomPanelOpen
-                                            ? FontWeight.w700
-                                            : FontWeight.w500,
-                                        letterSpacing: 0.25,
-                                        color: active && _bottomPanelOpen
-                                            ? selFg
-                                            : fg,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                        const Spacer(),
-                        InkWell(
-                          onTap: () => setState(() => _bottomPanelOpen = false),
-                          borderRadius: BorderRadius.circular(8),
-                          child: Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: Icon(
-                              Icons.keyboard_arrow_down_rounded,
-                              size: 21,
-                              color: fg,
-                            ),
-                          ),
-                        ),
-                        // Ouvre le terminal comme onglet plein écran de l'éditeur
-                        // (mode étendu). Placé à droite du bouton de fermeture.
-                        Tooltip(
-                          message:
-                              'Ouvrir le terminal dans l\'éditeur (mode étendu)',
-                          child: InkWell(
-                            onTap: _openTerminalTab,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.all(8),
-                              child: Icon(
-                                Icons.open_in_new_rounded,
-                                size: 19,
-                                color: fg,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 2),
-                      ],
+                  // The terminal is the only bottom-panel surface. Its
+                  // controls stay in the top IDE bar, so no second tab/status
+                  // strip is rendered here.
+                  Expanded(
+                    child: _buildBottomPanelContent(
+                      context,
+                      ts.appTheme,
+                      isDark,
                     ),
                   ),
-                  if (_bottomPanelOpen) ...[
-                    // ── Line 2: Terminal sub-tabs ──
-                    if (_bottomPanelTab == 0)
-                      Container(
-                        height: 29,
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? const Color(0xff2d2d2d)
-                              : const Color(0xffe8e8e8),
-                          border: Border(
-                            bottom: BorderSide(color: border, width: 0.5),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 10),
-                            Icon(Icons.terminal_rounded, size: 14, color: fg),
-                            const SizedBox(width: 5),
-                            Text(
-                              'Terminal',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: fg,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            InkWell(
-                              onTap: _openTerminalTab,
-                              borderRadius: BorderRadius.circular(5),
-                              child: Padding(
-                                padding: const EdgeInsets.all(4),
-                                child: Icon(
-                                  Icons.add_rounded,
-                                  size: 16,
-                                  color: fg,
-                                ),
-                              ),
-                            ),
-                            const Spacer(),
-                            InkWell(
-                              onTap: () =>
-                                  setState(() => _bottomPanelOpen = false),
-                              borderRadius: BorderRadius.circular(5),
-                              child: Padding(
-                                padding: const EdgeInsets.all(6),
-                                child: Icon(
-                                  Icons.close_rounded,
-                                  size: 16,
-                                  color: fg,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                          ],
-                        ),
-                      ),
-                    // ── Problems toolbar (search + filter + actions) ───────────
-                    if (_bottomPanelTab == 1)
-                      Container(
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color: tabBg,
-                          border: Border(bottom: BorderSide(color: border)),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: Row(
-                          children: [
-                            // Search input
-                            Expanded(
-                              child: SizedBox(
-                                height: 20,
-                                child: TextField(
-                                  controller: _problemsSearchCtrl,
-                                  style: TextStyle(fontSize: 11, color: selFg),
-                                  decoration: InputDecoration(
-                                    isDense: true,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    hintText:
-                                        'Filter (e.g. text, **/*.ts, !**/node_modules/**)',
-                                    hintStyle: TextStyle(
-                                      fontSize: 11,
-                                      color: fg,
-                                    ),
-                                    prefixIcon: Icon(
-                                      Icons.search,
-                                      size: 12,
-                                      color: fg,
-                                    ),
-                                    prefixIconConstraints: const BoxConstraints(
-                                      minWidth: 24,
-                                      minHeight: 20,
-                                    ),
-                                    filled: true,
-                                    fillColor: isDark
-                                        ? const Color(0xff3c3c3c)
-                                        : const Color(0xff1e293b),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(2),
-                                      borderSide: BorderSide.none,
-                                    ),
-                                  ),
-                                  onChanged: (v) =>
-                                      setState(() => _problemsSearch = v),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            // Filter: errors only
-                            _PanelToolbarBtn(
-                              icon: Icons.cancel_outlined,
-                              tooltip: 'Show Errors',
-                              active: _problemsFilter == 1,
-                              fg: fg,
-                              activeFg: Colors.red[300]!,
-                              onTap: () => setState(
-                                () => _problemsFilter = _problemsFilter == 1
-                                    ? 0
-                                    : 1,
-                              ),
-                            ),
-                            // Filter: warnings only
-                            _PanelToolbarBtn(
-                              icon: Icons.warning_amber_outlined,
-                              tooltip: 'Show Warnings',
-                              active: _problemsFilter == 2,
-                              fg: fg,
-                              activeFg: Colors.orange[300]!,
-                              onTap: () => setState(
-                                () => _problemsFilter = _problemsFilter == 2
-                                    ? 0
-                                    : 2,
-                              ),
-                            ),
-                            // Collapse all
-                            _PanelToolbarBtn(
-                              icon: Icons.unfold_less,
-                              tooltip: 'Collapse All',
-                              active: false,
-                              fg: fg,
-                              activeFg: fg,
-                              onTap: () {},
-                            ),
-                            // Clear all
-                            _PanelToolbarBtn(
-                              icon: Icons.clear_all,
-                              tooltip: 'Clear All',
-                              active: false,
-                              fg: fg,
-                              activeFg: fg,
-                              onTap: () => setState(() {
-                                _problemsSearch = '';
-                                _problemsSearchCtrl.clear();
-                                _problemsFilter = 0;
-                              }),
-                            ),
-                            // More actions
-                            _PanelToolbarBtn(
-                              icon: Icons.more_horiz,
-                              tooltip: 'More Actions',
-                              active: false,
-                              fg: fg,
-                              activeFg: fg,
-                              onTap: () {},
-                            ),
-                          ],
-                        ),
-                      ),
-                    Expanded(
-                      child: _buildBottomPanelContent(
-                        context,
-                        ts.appTheme,
-                        isDark,
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -5093,39 +4740,10 @@ class _SelectTypeState extends State<SelectType>
     AppTheme appTheme,
     bool isDark,
   ) {
-    final fg = isDark ? const Color(0xffcfcfcf) : const Color(0xff333333);
-    switch (_bottomPanelTab) {
-      case 0: // Terminal
-        return EmbeddedTerminal(
-          projectDir: _currentWorkspaceDir ?? '/',
-          showKeyboardMenu: true,
-        );
-      case 1: // Problems
-        return _ProblemsPanel(
-          fg: fg,
-          search: _problemsSearch,
-          filter: _problemsFilter,
-        );
-      case 2: // Output
-        return ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Text('Pas de sortie.', style: TextStyle(fontSize: 12, color: fg)),
-          ],
-        );
-      case 3: // Debug Console
-        return ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            Text(
-              'Console de débogage vide.',
-              style: TextStyle(fontSize: 12, color: fg),
-            ),
-          ],
-        );
-      default:
-        return const SizedBox.shrink();
-    }
+    return EmbeddedTerminal(
+      projectDir: _currentWorkspaceDir ?? '/',
+      showKeyboardMenu: true,
+    );
   }
 
   // ── Tab bar ───────────────────────────────────────────────────────────────

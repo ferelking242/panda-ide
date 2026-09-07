@@ -5,6 +5,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../core/broken_icons.dart';
 
 // ── SetupTerminal ─────────────────────────────────────────────────────────────
 class SetupTerminal extends StatelessWidget {
@@ -62,8 +63,8 @@ class _EmbeddedTerminalState extends State<EmbeddedTerminal> {
   late final FocusNode _inputFocus;
   final ScrollController _scrollController = ScrollController();
   final List<String> _lines = [
-    'Panda IDE web terminal',
-    'Preview mode: les commandes sont affichées localement.',
+    'root@localhost:~#',
+    'Panda IDE web preview — les commandes restent locales.',
     '',
   ];
 
@@ -91,7 +92,7 @@ class _EmbeddedTerminalState extends State<EmbeddedTerminal> {
     if (command.isEmpty) return;
     setState(() {
       _lines
-        ..add('web@panda:~\$ $command')
+        ..add('root@localhost:~# $command')
         ..add('preview: commande non exécutée dans le navigateur')
         ..add('');
       _inputController.clear();
@@ -111,41 +112,40 @@ class _EmbeddedTerminalState extends State<EmbeddedTerminal> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xff0d1117),
+      color: const Color(0xff101114),
       child: Column(
         children: [
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
               itemCount: _lines.length,
               itemBuilder: (_, index) => Text(
                 _lines[index],
                 style: const TextStyle(
-                  color: Color(0xffd6deeb),
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                  height: 1.45,
+                  color: Color(0xffd7dae0),
+                  fontFamily: 'jetBrainsMonoNF',
+                  fontSize: 12.5,
+                  height: 1.55,
                 ),
               ),
             ),
           ),
           Container(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+            padding: const EdgeInsets.fromLTRB(16, 5, 10, 8),
             decoration: const BoxDecoration(
-              color: Color(0xff111820),
-              border: Border(top: BorderSide(color: Color(0xff263241))),
+              color: Color(0xff101114),
+              border: Border(top: BorderSide(color: Color(0xff24262d))),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Text(
-                  '›',
+                  'root@localhost:~#',
                   style: TextStyle(
-                    color: Color(0xff7ee787),
-                    fontFamily: 'monospace',
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    color: Color(0xff8b93a7),
+                    fontFamily: 'jetBrainsMonoNF',
+                    fontSize: 12.5,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -156,19 +156,19 @@ class _EmbeddedTerminalState extends State<EmbeddedTerminal> {
                     readOnly: widget.readOnly,
                     autofocus: false,
                     showCursor: !widget.readOnly,
-                    cursorColor: const Color(0xff7ee787),
+                    cursorColor: const Color(0xff9b8cff),
                     onSubmitted: (_) => _submit(),
                     style: const TextStyle(
-                      color: Color(0xfff0f6fc),
-                      fontFamily: 'monospace',
-                      fontSize: 13,
+                      color: Color(0xfff0f1f4),
+                      fontFamily: 'jetBrainsMonoNF',
+                      fontSize: 12.5,
                     ),
                     decoration: const InputDecoration(
-                      hintText: 'Tapez une commande (aperçu web)…',
+                      hintText: 'Tapez une commande…',
                       hintStyle: TextStyle(
-                        color: Color(0xff6e7681),
-                        fontFamily: 'monospace',
-                        fontSize: 13,
+                        color: Color(0xff666b78),
+                        fontFamily: 'jetBrainsMonoNF',
+                        fontSize: 12.5,
                       ),
                       border: InputBorder.none,
                       isDense: true,
@@ -179,9 +179,9 @@ class _EmbeddedTerminalState extends State<EmbeddedTerminal> {
                 IconButton(
                   tooltip: 'Envoyer',
                   onPressed: widget.readOnly ? null : _submit,
-                  icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                  color: const Color(0xff7ee787),
-                  splashRadius: 18,
+                  icon: const Icon(Broken.send_2, size: 17),
+                  color: const Color(0xff9b8cff),
+                  splashRadius: 16,
                 ),
               ],
             ),
