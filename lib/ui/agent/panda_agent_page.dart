@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../bloc/ui_bloc/ui_bloc.dart';
-import '../../bloc/ui_bloc/ui_event.dart';
 import '../../utils/ai.dart';
 import '../agent/flow_ui/widgets/flow_chat_view.dart';
 import '../agent/flow_ui/widgets/flow_composer.dart';
