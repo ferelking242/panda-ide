@@ -1724,19 +1724,6 @@ class _SelectTypeState extends State<SelectType>
 
   /// Contenu de l'onglet Terminal en mode étendu.
   Widget _buildTerminalTabPage(AppTheme appTheme) {
-    if (kIsWeb) {
-      return Center(
-        child: Text(
-          'Le terminal n\'est pas disponible dans la version web.',
-          style: TextStyle(
-            fontSize: 12,
-            color: appTheme.isDark
-                ? const Color(0xffcfcfcf)
-                : const Color(0xff333333),
-          ),
-        ),
-      );
-    }
     return Container(
       color: appTheme.isDark
           ? const Color(0xff1e1e1e)

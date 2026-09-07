@@ -303,6 +303,7 @@ class _TerminalRuntime {
   final Terminal terminal;
   final TerminalController controller;
   final bool isProot;
+  final FocusNode focusNode;
 
   Pty? pty;
   SSHSession? sshSession;
@@ -315,7 +316,7 @@ class _TerminalRuntime {
     required this.terminal,
     required this.controller,
     this.isProot = true,
-  });
+  }) : focusNode = FocusNode(debugLabel: 'terminal-$sessionId');
 
   bool get isRunning {
     if (sshSession != null) return true;
@@ -346,6 +347,7 @@ class _TerminalRuntime {
       controller.removeListener(selectionListener!);
     }
     controller.dispose();
+    focusNode.dispose();
   }
 }
 
@@ -388,6 +390,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Timer? _selectionUiSyncTimer;
   final GlobalKey _terminalHostKey = GlobalKey();
   Offset? _selectionToolbarOffset;
+  Offset? _selectionToolbarLastLongPressOffset;
+  String? _focusRequestedSessionId;
 
   final ValueNotifier<List<String>?> _suggestionsNotifier = ValueNotifier(null);
   final ScrollController _suggestionScrollController = ScrollController();
@@ -993,7 +997,15 @@ class _SetupTerminalState extends State<SetupTerminal> {
       process.output
           .cast<List<int>>()
           .transform(const Utf8Decoder(allowMalformed: true))
-          .listen(runtime.terminal.write);
+          .listen((chunk) {
+            final cleanChunk = chunk.replaceAll(
+              RegExp(r'groups: cannot find name for group ID \d+\r?\n?'),
+              '',
+            );
+            if (cleanChunk.isNotEmpty) {
+              runtime.terminal.write(cleanChunk);
+            }
+          });
 
       process.exitCode.then((code) {
         PandaLog.i(
@@ -1299,6 +1311,23 @@ class _SetupTerminalState extends State<SetupTerminal> {
                       offset: _selectionToolbarOffset ?? Offset.zero,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
+                        onLongPressStart: (_) {
+                          _selectionToolbarLastLongPressOffset = Offset.zero;
+                        },
+                        onLongPressMoveUpdate: (details) {
+                          final previous =
+                              _selectionToolbarLastLongPressOffset ??
+                              Offset.zero;
+                          _dragSelectionToolbar(
+                            overlayCtx,
+                            details.offsetFromOrigin - previous,
+                          );
+                          _selectionToolbarLastLongPressOffset =
+                              details.offsetFromOrigin;
+                        },
+                        onLongPressEnd: (_) {
+                          _selectionToolbarLastLongPressOffset = null;
+                        },
                         onPanUpdate: (details) =>
                             _dragSelectionToolbar(overlayCtx, details.delta),
                         child: Material(
@@ -1316,6 +1345,16 @@ class _SetupTerminalState extends State<SetupTerminal> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                 Padding(
+                                   padding: const EdgeInsets.symmetric(
+                                     horizontal: 3,
+                                   ),
+                                   child: Icon(
+                                     Icons.drag_indicator_rounded,
+                                     size: 18,
+                                     color: Colors.white.withValues(alpha: 0.55),
+                                   ),
+                                 ),
                                 _toolbarIconButton(
                                   icon: Icons.select_all_rounded,
                                   tooltip: 'Tout sélectionner',
@@ -1497,15 +1536,14 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   void _selectAll(_TerminalRuntime runtime) {
     final buffer = runtime.terminal.buffer;
-    final rows = buffer.lines.length;
+    final rows = buffer.height;
     if (rows <= 0) return;
-    final cols = runtime.terminal.viewWidth > 0
-        ? runtime.terminal.viewWidth
-        : 80;
     try {
       runtime.controller.setSelection(
         buffer.createAnchorFromOffset(CellOffset(0, 0)),
-        buffer.createAnchorFromOffset(CellOffset(cols - 1, rows - 1)),
+        buffer.createAnchorFromOffset(
+          CellOffset(buffer.lines[rows - 1].length, rows - 1),
+        ),
         mode: SelectionMode.line,
       );
       _selectionUiTick.value++;
@@ -1522,10 +1560,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }
   }
 
-  void _copySelection(_TerminalRuntime runtime) {
+  Future<void> _copySelection(_TerminalRuntime runtime) async {
     final selectedText = _selectedText(runtime);
     if (selectedText.isEmpty) return;
-    Clipboard.setData(ClipboardData(text: selectedText));
+    await Clipboard.setData(ClipboardData(text: selectedText));
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: const Text('Copié'),
@@ -1646,6 +1684,17 @@ class _SetupTerminalState extends State<SetupTerminal> {
         final session = state.sessions[index];
         final runtime = _sessionRuntimes[session.id];
         if (runtime == null) return const SizedBox();
+        if (session.id == state.activeSessionId &&
+            _focusRequestedSessionId != session.id) {
+          _focusRequestedSessionId = session.id;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted &&
+                _sessionBloc.state.activeSessionId == session.id &&
+                !runtime.focusNode.hasFocus) {
+              runtime.focusNode.requestFocus();
+            }
+          });
+        }
         return RawGestureDetector(
           gestures: {
             _TwoFingerPinchRecognizer:
@@ -1663,6 +1712,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
             readOnly: widget.readOnly,
             padding: EdgeInsets.zero,
             controller: runtime.controller,
+            focusNode: runtime.focusNode,
             autofocus: session.id == state.activeSessionId,
             theme: activeTheme.theme,
             cursorType: TerminalCursorType.verticalBar,
@@ -1702,10 +1752,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
             border: isActive
                 ? Border.all(color: activeTheme.theme.cursor, width: 1.5)
                 : Border.all(color: activeTheme.theme.selection, width: 0.5),
-            borderRadius: BorderRadius.circular(6),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(5),
+          child: ClipRect(
             child: RawGestureDetector(
               gestures: {
                 _TwoFingerPinchRecognizer:
@@ -1722,6 +1770,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 readOnly: widget.readOnly,
                 padding: EdgeInsets.zero,
                 controller: r.controller,
+                focusNode: r.focusNode,
                 autofocus: isActive,
                 theme: activeTheme.theme,
                 cursorType: TerminalCursorType.verticalBar,
@@ -2459,6 +2508,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
           _hideSelectionUI();
           _suggestionsNotifier.value = null;
           _hasSelection = false;
+          _focusRequestedSessionId = null;
           // Sync page to active session
           if (!_syncingPage) {
             final idx = state.sessions.indexWhere(
@@ -2609,22 +2659,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
               body: Column(
                 children: [
                   // Feature 5: tab bar with rounded top corners
-                  ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(0),
-                      topRight: Radius.circular(0),
-                    ),
-                    child: _buildSessionTabBar(
-                      state,
-                      appTheme,
-                      activeTerminalTheme,
-                    ),
+                  _buildSessionTabBar(
+                    state,
+                    appTheme,
+                    activeTerminalTheme,
                   ),
                   Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.zero,
-                      child: terminalContent,
-                    ),
+                    child: terminalContent,
                   ),
                 ],
               ),
