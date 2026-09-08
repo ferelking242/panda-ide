@@ -193,7 +193,6 @@ class VsixInstaller {
     const allowedHosts = {
       'marketplace.visualstudio.com',
       'open-vsx.org',
-      'open-vsx.org',
     };
     if (uri.scheme != 'https' || !allowedHosts.contains(uri.host)) {
       throw ArgumentError('Source d’extension non autorisée');
