@@ -3,26 +3,25 @@
 /// The Flutter SDK lives at $runtimesDir/flutter/ and contains:
 ///   bin/flutter  — CLI
 ///   bin/dart     — Dart SDK (replaces the standalone dart runtime)
-///   .pub-cache/  — global pub cache
+///   .pub-cache/  — SDK bootstrap cache (project caches live separately)
 ///
 /// This service checks installation state and provides the env-var map
 /// that the terminal PTY must inject.
 library;
+
 import 'dart:io';
 import '../utils/constants.dart';
-
-
 
 /// All env vars the PTY should inject when Flutter SDK is present.
 Map<String, String> flutterEnvVars({required String sharedPath}) {
   final flutterRoot = '$runtimesDir/flutter';
-  final androidSdk  = '$runtimesDir/android-sdk';
+  final androidSdk = '$runtimesDir/android-sdk';
   return {
     'FLUTTER_ROOT': flutterRoot,
-    'PUB_CACHE'   : '$flutterRoot/.pub-cache',
-    'PUB_HOSTED_URL'        : 'https://pub.dartlang.org',
+    'PUB_CACHE': '$homeDir/.panda-pub-cache',
+    'PUB_HOSTED_URL': 'https://pub.dartlang.org',
     'FLUTTER_STORAGE_BASE_URL': 'https://storage.googleapis.com',
-    'ANDROID_HOME'    : androidSdk,
+    'ANDROID_HOME': androidSdk,
     'ANDROID_SDK_ROOT': androidSdk,
     // Tell Flutter/Dart not to prompt for analytics
     'FLUTTER_SUPPRESS_ANALYTICS': 'true',
@@ -35,14 +34,16 @@ String buildFullPath({
   required String sharedPath,
   required String existingPath,
 }) {
-  final flutterBin    = '$runtimesDir/flutter/bin';
+  final flutterBin = '$runtimesDir/flutter/bin';
   final platformTools = '$runtimesDir/android-sdk/platform-tools';
-  final buildTools    = '$runtimesDir/android-sdk/build-tools/current';
+  final buildTools = '$runtimesDir/android-sdk/build-tools/current';
 
   // Prepend Flutter paths so they shadow any system Dart/flutter
-  final extra = [flutterBin, platformTools, buildTools]
-      .where((p) => !existingPath.contains(p))
-      .join(':');
+  final extra = [
+    flutterBin,
+    platformTools,
+    buildTools,
+  ].where((p) => !existingPath.contains(p)).join(':');
 
   return extra.isEmpty ? existingPath : '$extra:$existingPath';
 }
@@ -52,7 +53,8 @@ class FlutterSdkService {
   static final FlutterSdkService instance = FlutterSdkService._();
 
   static final _flutterBin = '$runtimesDir/flutter/bin/flutter';
-  static final _dartBin    = '$runtimesDir/flutter/bin/dart';
+  static final _dartBin = '$runtimesDir/flutter/bin/dart';
+  static final _hostPubCache = '$homeDir/.panda-pub-cache';
 
   // ── Installation state ────────────────────────────────────────────────────
 
@@ -72,8 +74,9 @@ class FlutterSdkService {
       );
       if (r.exitCode != 0) return null;
       // Output contains "flutterVersion": "3.x.x"
-      final match = RegExp(r'"flutterVersion"\s*:\s*"([^"]+)"')
-          .firstMatch(r.stdout.toString());
+      final match = RegExp(
+        r'"flutterVersion"\s*:\s*"([^"]+)"',
+      ).firstMatch(r.stdout.toString());
       return match?.group(1);
     } catch (_) {
       return null;
@@ -91,11 +94,11 @@ class FlutterSdkService {
         _flutterBin,
         ['doctor', '--no-version-check'],
         environment: {
-          'HOME'       : homeDir,
+          'HOME': homeDir,
           'FLUTTER_ROOT': '$runtimesDir/flutter',
-          'PUB_CACHE'  : '$runtimesDir/flutter/.pub-cache',
+          'PUB_CACHE': _hostPubCache,
           'FLUTTER_SUPPRESS_ANALYTICS': 'true',
-          'PATH'       : '$runtimesDir/flutter/bin:/bin:/usr/bin',
+          'PATH': '$runtimesDir/flutter/bin:/bin:/usr/bin',
         },
         runInShell: false,
       );
@@ -114,14 +117,22 @@ class FlutterSdkService {
     try {
       final r = await Process.run(
         _flutterBin,
-        ['precache', '--android', '--no-ios', '--no-web',
-         '--no-macos', '--no-windows', '--no-linux', '--no-fuchsia'],
+        [
+          'precache',
+          '--android',
+          '--no-ios',
+          '--no-web',
+          '--no-macos',
+          '--no-windows',
+          '--no-linux',
+          '--no-fuchsia',
+        ],
         environment: {
-          'HOME'       : homeDir,
+          'HOME': homeDir,
           'FLUTTER_ROOT': '$runtimesDir/flutter',
-          'PUB_CACHE'  : '$runtimesDir/flutter/.pub-cache',
+          'PUB_CACHE': _hostPubCache,
           'FLUTTER_SUPPRESS_ANALYTICS': 'true',
-          'PATH'       : '$runtimesDir/flutter/bin:/bin:/usr/bin',
+          'PATH': '$runtimesDir/flutter/bin:/bin:/usr/bin',
         },
         runInShell: false,
       );
