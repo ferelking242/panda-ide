@@ -55,19 +55,10 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
             _iconChip(Icons.backspace_rounded, () => _send('\x7f')),
             _chip('DEL', () => _send('\x1b[3~')),
             _dividerWidget(),
-            _shortcutChip('^C', '\x03'),
-            _shortcutChip('^Z', '\x1a'),
-            _shortcutChip('^D', '\x04'),
-            _shortcutChip('^L', '\x0c'),
             _actionChip(
               'CTRL+A',
               onTap: widget.onSelectAll ?? () => _send('\x01'),
             ),
-            _shortcutChip('^E', '\x05'),
-            _shortcutChip('^K', '\x0b'),
-            _shortcutChip('^U', '\x15'),
-            _shortcutChip('^W', '\x17'),
-            _shortcutChip('^S', '\x13'),
           ]),
           _buildRow([
             _iconChip(Icons.arrow_upward_rounded, () => _send('\x1b[A')),
@@ -119,20 +110,6 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       color: _foreground,
       background: _chipBackground,
       border: _chipBorder,
-    );
-  }
-
-  Widget _shortcutChip(String label, String sequence) {
-    return _TerminalKeyButton(
-      label: label,
-      onTap: () {
-        _resetModifiers();
-        widget.onSendSequence(sequence);
-      },
-      color: _foreground,
-      background: _chipBackground,
-      border: _chipBorder,
-      minWidth: 31,
     );
   }
 
