@@ -7,8 +7,9 @@ import 'package:flutter/material.dart';
 class TerminalKeyboardMenu extends StatefulWidget {
   final Function(String) onSendSequence;
   final Function(bool ctrl, bool alt, bool shift, VoidCallback resetCallback)
-      onModifierChanged;
+  onModifierChanged;
   final VoidCallback? onCopy;
+  final VoidCallback? onCopyAll;
   final VoidCallback? onPaste;
 
   const TerminalKeyboardMenu({
@@ -16,6 +17,7 @@ class TerminalKeyboardMenu extends StatefulWidget {
     required this.onSendSequence,
     required this.onModifierChanged,
     this.onCopy,
+    this.onCopyAll,
     this.onPaste,
   });
 
@@ -27,7 +29,7 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
   bool isCtrlActive = false;
   bool isAltActive = false;
   bool isShiftActive = false;
-  bool _isExpanded = true;  // collapse/expand toggle
+  bool _isExpanded = true; // collapse/expand toggle
 
   void _resetModifiers() {
     setState(() {
@@ -334,8 +336,18 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
                         chip('<', () => _sendWithModifiers('<')),
                         div(),
                         // ── Copy / Paste ──
-                        iconChip(Icons.copy_rounded, () => widget.onCopy?.call()),
-                        iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
+                        iconChip(
+                          Icons.copy_rounded,
+                          () => widget.onCopy?.call(),
+                        ),
+                        iconChip(
+                          Icons.content_copy_rounded,
+                          () => widget.onCopyAll?.call(),
+                        ),
+                        iconChip(
+                          Icons.paste_rounded,
+                          () => widget.onPaste?.call(),
+                        ),
                       ],
                     ),
                   ),
