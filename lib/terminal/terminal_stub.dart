@@ -14,6 +14,7 @@ class SetupTerminal extends StatelessWidget {
   final bool useScaffold, showKeyboardMenu, readOnly;
   final int? sshId, termuxId;
   final String? commandToExecuteInSSH;
+  final VoidCallback? onOpenInTab;
 
   const SetupTerminal({
     super.key,
@@ -25,6 +26,7 @@ class SetupTerminal extends StatelessWidget {
     this.sshId,
     this.termuxId,
     this.commandToExecuteInSSH,
+    this.onOpenInTab,
   });
 
   @override
@@ -35,6 +37,7 @@ class SetupTerminal extends StatelessWidget {
         args: args,
         showKeyboardMenu: showKeyboardMenu,
         readOnly: readOnly,
+        onOpenInTab: onOpenInTab,
       ),
     );
   }
@@ -45,6 +48,7 @@ class EmbeddedTerminal extends StatefulWidget {
   final String projectDir;
   final List<String> args;
   final bool showKeyboardMenu, readOnly;
+  final VoidCallback? onOpenInTab;
 
   const EmbeddedTerminal({
     super.key,
@@ -52,6 +56,7 @@ class EmbeddedTerminal extends StatefulWidget {
     this.args = const [],
     this.showKeyboardMenu = true,
     this.readOnly = false,
+    this.onOpenInTab,
   });
 
   @override
