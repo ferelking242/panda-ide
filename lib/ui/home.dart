@@ -212,7 +212,7 @@ class _SelectTypeState extends State<SelectType>
   int _sidebarStateBeforeFullScreen = 1;
 
   // ── Resizable panels ──────────────────────────────────────
-  final double _bottomPanelHeight = 220;
+  double _bottomPanelHeight = 220;
 
   // ── Resizable sidebar ─────────────────────────────────────
   final double _sidebarWidth = _kSidebarWidth;
@@ -3817,13 +3817,6 @@ class _SelectTypeState extends State<SelectType>
             _bottomPanelOpen ? _kAccent : fg,
             () => setState(() => _bottomPanelOpen = !_bottomPanelOpen),
           ),
-          // Ouvre le terminal comme onglet de l’éditeur, sans panneau docké.
-          _hdrBtn(
-            Icons.open_in_new_rounded,
-            'Ouvrir le terminal dans un onglet',
-            fg,
-            _openTerminalTab,
-          ),
           // panneau droit (style « sidebar right » ; plein écran
           // reste accessible dans le menu workspace)
           _hdrBtn(
@@ -4711,12 +4704,9 @@ class _SelectTypeState extends State<SelectType>
       builder: (context, ts) {
         final isDark = ts.appTheme.isDark;
         final bg = isDark ? const Color(0xff1a1b1f) : const Color(0xfff5f5f7);
-        final border = isDark
-            ? const Color(0xff3a3a3a)
-            : const Color(0xffdddddd);
         if (!_bottomPanelOpen) return const SizedBox.shrink();
         return Padding(
-          padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+          padding: EdgeInsets.zero,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
@@ -4724,22 +4714,39 @@ class _SelectTypeState extends State<SelectType>
             decoration: BoxDecoration(
               color: bg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: border, width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.24 : 0.08),
-                  blurRadius: 14,
-                  offset: const Offset(0, -3),
-                ),
-              ],
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(15),
               child: Column(
                 children: [
-                  // The terminal is the only bottom-panel surface. Its
-                  // controls stay in the top IDE bar, so no second tab/status
-                  // strip is rendered here.
+                  // One subtle grip keeps the panel resizable without adding
+                  // another framed toolbar around the terminal.
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onVerticalDragUpdate: (details) {
+                      setState(() {
+                        _bottomPanelHeight = (_bottomPanelHeight -
+                                (details.primaryDelta ?? 0))
+                            .clamp(150.0, 520.0)
+                            .toDouble();
+                      });
+                    },
+                    child: SizedBox(
+                      height: 10,
+                      child: Center(
+                        child: Container(
+                          width: 34,
+                          height: 2,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xff62656a)
+                                : const Color(0xffa6a8ac),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   Expanded(
                     child: _buildBottomPanelContent(
                       context,
@@ -4764,6 +4771,7 @@ class _SelectTypeState extends State<SelectType>
     return EmbeddedTerminal(
       projectDir: _currentWorkspaceDir ?? '/',
       showKeyboardMenu: true,
+      onOpenInTab: _openTerminalTab,
     );
   }
 

@@ -97,12 +97,66 @@ class _TwoFingerPinchRecognizer extends OneSequenceGestureRecognizer {
   String get debugDescription => 'two finger pinch zoom';
 }
 
+/// Android-style selection handle.  xterm exposes the selection range but
+/// intentionally leaves handle rendering to the host app.  A teardrop keeps
+/// the anchor obvious without the detached blue dots that were previously
+/// painted over the terminal.
+class _AndroidSelectionHandlePainter extends CustomPainter {
+  final Color color;
+  final bool upsideDown;
+
+  const _AndroidSelectionHandlePainter({
+    required this.color,
+    required this.upsideDown,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.save();
+    if (upsideDown) {
+      canvas.translate(0, size.height);
+      canvas.scale(1, -1);
+    }
+
+    final paint = Paint()
+      ..color = color
+      ..isAntiAlias = true;
+    final path = Path()
+      ..moveTo(size.width / 2, size.height - 2)
+      ..cubicTo(
+        2,
+        size.height * 0.62,
+        3,
+        3,
+        size.width / 2,
+        3,
+      )
+      ..cubicTo(
+        size.width - 3,
+        3,
+        size.width - 2,
+        size.height * 0.62,
+        size.width / 2,
+        size.height - 2,
+      )
+      ..close();
+    canvas.drawPath(path, paint);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_AndroidSelectionHandlePainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.upsideDown != upsideDown;
+  }
+}
+
 class SetupTerminal extends StatefulWidget {
   final String projectDir;
   final List<String> args;
   final bool useScaffold, showKeyboardMenu, readOnly;
   final int? sshId, termuxId;
   final String? commandToExecuteInSSH;
+  final VoidCallback? onOpenInTab;
 
   const SetupTerminal({
     super.key,
@@ -114,6 +168,7 @@ class SetupTerminal extends StatefulWidget {
     this.sshId,
     this.termuxId,
     this.commandToExecuteInSSH,
+    this.onOpenInTab,
   });
 
   @override
@@ -125,6 +180,7 @@ class EmbeddedTerminal extends StatelessWidget {
   final List<String> args;
   final bool showKeyboardMenu;
   final bool readOnly;
+  final VoidCallback? onOpenInTab;
 
   const EmbeddedTerminal({
     super.key,
@@ -132,6 +188,7 @@ class EmbeddedTerminal extends StatelessWidget {
     this.args = const [],
     this.showKeyboardMenu = true,
     this.readOnly = false,
+    this.onOpenInTab,
   });
 
   @override
@@ -142,6 +199,7 @@ class EmbeddedTerminal extends StatelessWidget {
       useScaffold: false,
       showKeyboardMenu: showKeyboardMenu,
       readOnly: readOnly,
+      onOpenInTab: onOpenInTab,
     );
   }
 }
@@ -1472,35 +1530,42 @@ class _SetupTerminalState extends State<SetupTerminal> {
   ) {
     final (startPx, endPx) = _handlePositions(runtime);
     if (startPx == null || endPx == null) return const [];
-    final overlaySize = MediaQuery.sizeOf(overlayCtx);
-    final maxLeft = (overlaySize.width - 40).clamp(0.0, overlaySize.width);
-    final maxTop = (overlaySize.height - 30).clamp(0.0, overlaySize.height);
+    final terminal = _renderTerminal;
+    if (terminal == null || !terminal.hasSize) return const [];
+
+    final terminalOrigin = terminal.localToGlobal(Offset.zero);
+    final terminalRect = terminalOrigin & terminal.size;
+    const handleWidth = 24.0;
+    const handleHeight = 28.0;
+    final handleColor = const Color(0xffaeb6c2);
 
     Widget handle(Offset pos, bool isStart) {
-      final desiredTop = isStart ? pos.dy - 28 : pos.dy + 2;
+      final desiredTop = isStart
+          ? pos.dy - handleHeight * 0.35
+          : pos.dy - handleHeight * 0.72;
+      final left = (pos.dx - handleWidth / 2).clamp(
+        terminalRect.left + 1,
+        terminalRect.right - handleWidth - 1,
+      );
+      final top = desiredTop.clamp(
+        terminalRect.top + 1,
+        terminalRect.bottom - handleHeight - 1,
+      );
       return Positioned(
-        left: (pos.dx - 20).clamp(0.0, maxLeft).toDouble(),
-        top: desiredTop.clamp(0.0, maxTop).toDouble(),
+        left: left.toDouble(),
+        top: top.toDouble(),
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onPanUpdate: (details) =>
               _dragSelectionHandle(runtime, isStart, details.globalPosition),
           onPanEnd: (_) => _selectionUiTick.value++,
           child: SizedBox(
-            width: 40,
-            height: 30,
-            child: Center(
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: const Color(0xff4c8dff).withValues(alpha: 0.92),
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 1.5),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black38, blurRadius: 3),
-                  ],
-                ),
+            width: handleWidth,
+            height: handleHeight,
+            child: CustomPaint(
+              painter: _AndroidSelectionHandlePainter(
+                color: handleColor,
+                upsideDown: !isStart,
               ),
             ),
           ),
@@ -1543,10 +1608,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (rows <= 0) return;
     try {
       runtime.controller.setSelection(
-        buffer.createAnchorFromOffset(CellOffset(0, 0)),
-        buffer.createAnchorFromOffset(
-          CellOffset(buffer.lines[rows - 1].length, rows - 1),
+        buffer.createAnchor(
+          0,
+          (rows - runtime.terminal.viewHeight).clamp(0, rows - 1),
         ),
+        buffer.createAnchor(runtime.terminal.viewWidth, rows - 1),
         mode: SelectionMode.line,
       );
       _selectionUiTick.value++;
@@ -1622,6 +1688,28 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _selectionUiSyncTimer = null;
     _selectionToolbarOverlay?.remove();
     _selectionToolbarOverlay = null;
+  }
+
+  /// Keeps the Android hardware shortcut path inside xterm's terminal
+  /// encoder.  In particular Ctrl+Shift+S must not be interpreted as a
+  /// Flutter text-field shortcut or be left stuck in the first cell.
+  KeyEventResult _handleTerminalKeyEvent(
+    _TerminalRuntime runtime,
+    FocusNode focusNode,
+    KeyEvent event,
+  ) {
+    if (event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.keyS &&
+        HardwareKeyboard.instance.isControlPressed &&
+        HardwareKeyboard.instance.isShiftPressed) {
+      runtime.terminal.keyInput(
+        TerminalKey.keyS,
+        ctrl: true,
+        shift: true,
+      );
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void sendToPty(String sequence) {
@@ -1718,8 +1806,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
             focusNode: runtime.focusNode,
             autofocus: session.id == state.activeSessionId,
             theme: activeTheme.theme,
-            cursorType: TerminalCursorType.verticalBar,
-            alwaysShowCursor: true,
+            cursorType: TerminalCursorType.block,
+            alwaysShowCursor: false,
+            onKeyEvent: (focusNode, event) =>
+                _handleTerminalKeyEvent(runtime, focusNode, event),
             deleteDetection: true,
             keyboardType: TextInputType.text,
             textStyle: TerminalStyle(
@@ -1776,8 +1866,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
                 focusNode: r.focusNode,
                 autofocus: isActive,
                 theme: activeTheme.theme,
-                cursorType: TerminalCursorType.verticalBar,
-                alwaysShowCursor: true,
+                cursorType: TerminalCursorType.block,
+                alwaysShowCursor: false,
+                onKeyEvent: (focusNode, event) =>
+                    _handleTerminalKeyEvent(r, focusNode, event),
                 deleteDetection: true,
                 keyboardType: TextInputType.text,
                 textStyle: TerminalStyle(
@@ -2296,13 +2388,28 @@ class _SetupTerminalState extends State<SetupTerminal> {
           // + new session button
           _buildNewSessionButton(state, appTheme),
           const SizedBox(width: 2),
+          if (widget.onOpenInTab != null)
+            IconButton(
+              tooltip: 'Ouvrir dans un onglet',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(
+                width: 32,
+                height: 32,
+              ),
+              visualDensity: VisualDensity.compact,
+              onPressed: widget.onOpenInTab,
+              icon: Icon(
+                Icons.open_in_new_rounded,
+                size: 16,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+            ),
+          const SizedBox(width: 2),
           // 3-dot options menu icon
           PopupMenuButton<String>(
             padding: EdgeInsets.zero,
             icon: Icon(
-              _isFullscreen
-                  ? Icons.fullscreen_exit_rounded
-                  : Icons.more_vert_rounded,
+               Icons.more_vert_rounded,
               size: 18,
               color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
             ),
