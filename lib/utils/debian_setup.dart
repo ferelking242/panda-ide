@@ -502,6 +502,53 @@ __panda_git() {
 PS1='\$(__panda_ps)'
 ''';
 
+  /// Single, repeatable setup command exposed inside every Panda terminal.
+  /// It installs the common toolchain in the selected guest distribution,
+  /// rather than pretending that the Android host has Node.js or Git.
+  static String pandaUpdateScript() => r'''#!/bin/sh
+set -u
+
+usage() {
+  echo "Usage: panda update | panda doctor"
+  echo "  update  Install or refresh Git, Node.js, npm, Python and build tools"
+  echo "  doctor  Show the tools currently available in this terminal"
+}
+
+case "${1:-}" in
+  update|setup)
+    if command -v apt-get >/dev/null 2>&1; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update
+      apt-get install -y --no-install-recommends \
+        ca-certificates curl wget git nodejs npm python3 python3-pip \
+        build-essential pkg-config
+    elif command -v apk >/dev/null 2>&1; then
+      apk update
+      apk add --no-cache ca-certificates curl wget git nodejs npm \
+        python3 py3-pip build-base pkgconf
+    else
+      echo "No supported package manager found. Select an Ubuntu, Debian or Alpine terminal."
+      exit 1
+    fi
+    echo "Panda toolchain updated."
+    "$0" doctor
+    ;;
+  doctor)
+    for tool in git node npm python3 pip3; do
+      if command -v "$tool" >/dev/null 2>&1; then
+        printf '%-8s %s\n' "$tool" "$("$tool" --version 2>/dev/null | head -n 1)"
+      else
+        printf '%-8s %s\n' "$tool" "not installed"
+      fi
+    done
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac
+''';
+
   static Future<void> ensureDebianRuntimeFiles() async =>
       _ensureRuntimeFilesIn(debianDir);
 
@@ -579,6 +626,7 @@ PS1='\$(__panda_ps)'
         'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n');
     _write('$dir/root/.profile', profile);
     _write('$dir/root/.bashrc', profile);
+    _write('$dir/usr/local/bin/panda', pandaUpdateScript());
 
     try {
       readyMarker.writeAsStringSync(rootfsVersion, flush: true);

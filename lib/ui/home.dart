@@ -53,6 +53,7 @@ import '../utils/themes.dart';
 import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
+import '../extensions/ui/extension_contributions_panel.dart';
 import '../extensions/extension_host.dart';
 import '../extensions/ui/command_palette.dart';
 import '../services/ide_tab_opener.dart';
@@ -1841,6 +1842,7 @@ class _SelectTypeState extends State<SelectType>
       ),
       _RailItem(icon: Broken.task_square, label: 'Outline', idx: 12),
       _RailItem(icon: Broken.clock, label: 'Timeline', idx: 13),
+       _RailItem(icon: Broken.element_3, label: 'Extensions', idx: 14),
     ];
 
     return Container(
@@ -2259,6 +2261,7 @@ class _SelectTypeState extends State<SelectType>
       11: 'MODÈLES LOCAUX',
       12: 'OUTLINE',
       13: 'TIMELINE',
+       14: 'EXTENSIONS',
     };
 
     Widget panelBody;
@@ -2287,6 +2290,9 @@ class _SelectTypeState extends State<SelectType>
       case 13: // Timeline
         panelBody = _sidebarTimeline(context, appTheme, isDark);
         break;
+       case 14: // Extension contribution points
+         panelBody = const ExtensionContributionsPanel();
+         break;
       case 9: // GitHub Copilot
         panelBody = _sidebarCopilot(context, appTheme, isDark);
         break;

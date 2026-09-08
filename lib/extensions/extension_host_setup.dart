@@ -61,15 +61,25 @@ class ExtensionHostSetup {
     final nodeReady = await NodeRuntimeManager.instance.init();
     if (!nodeReady) {
       print('[ExtensionHostSetup] ⚠️ Node.js runtime not found. Extensions requiring Node.js will not work.');
-      print('[ExtensionHostSetup] Download Node.js from Settings → Runtimes to enable extension support.');
+      print('[ExtensionHostSetup] Run "panda update" in a Debian/Ubuntu terminal '
+          'to install the terminal toolchain.');
     }
 
     // 3. Configurer le manager avec les chemins corrects.
-    final effectiveNodePath = NodeRuntimeManager.instance.nodePath ?? nodeBinPath;
-    ExtensionHostManager.instance.configure(
-      nodeBinPath: effectiveNodePath,
-      hostJsPath: hostJsPath,
-    );
+    final effectiveNodePath = NodeRuntimeManager.instance.nodePath;
+    if (nodeReady &&
+        effectiveNodePath != null &&
+        File(effectiveNodePath).existsSync() &&
+        File(hostJsPath).existsSync()) {
+      ExtensionHostManager.instance.configure(
+        nodeBinPath: effectiveNodePath,
+        hostJsPath: hostJsPath,
+      );
+    } else {
+      print('[ExtensionHostSetup] Node.js is unavailable; '
+          'run "panda update" in an Ubuntu/Debian terminal before using '
+          'Node-based extensions.');
+    }
 
     // 3. Brancher TasksBridge sur le shell Android (libbash.so).
     _wireTerminal(sharedPath: sharedPath);

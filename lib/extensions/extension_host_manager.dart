@@ -183,6 +183,17 @@ class ExtensionHostManager {
     await Future.wait(exts.map((e) => _safeActivate(e)));
   }
 
+  /// Activate installed extensions which contribute [viewId].
+  Future<void> activateForView(String viewId) async {
+    await ExtensionRegistry.instance.load();
+    final exts = ExtensionRegistry.instance.all.where((ext) {
+      return ext.manifest.contributes.views.any(
+        (view) => view['id']?.toString() == viewId,
+      );
+    });
+    await Future.wait(exts.map((e) => _safeActivate(e)));
+  }
+
   // ── Envoi d'events à toutes les extensions actives ───────────────────────
 
   /// Notifie toutes les extensions d'un événement éditeur.
@@ -231,7 +242,7 @@ class ExtensionHostManager {
   /// Résout le chemin absolu de l'entry point de l'extension.
   String? _resolveEntryPoint(InstalledExtension ext) {
     final base = ext.installPath;
-    final main = ext.manifest.main;
+    final main = ext.manifest.main ?? ext.manifest.browser;
     if (main == null) return null;
 
     // Normalise le chemin (peut commencer par "./")

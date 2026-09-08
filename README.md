@@ -19,7 +19,8 @@
 - **Integrated terminal** — built-in PTY, Termux support, SSH remote connections
 - **Git & GitHub** — clone, commit, push, pull, branch management
 - **AI assistance** — local LLaMA model + GitHub Copilot integration + Panda Agent
-- **Marketplace** — VSCode extensions (Open VSX), runtimes (Node.js, Python, Java, Go, Flutter SDK, …)
+- **Marketplace** — official Visual Studio Marketplace extensions first, with
+  Open VSX fallback for extensions not published by Microsoft
 - **File manager** — full filesystem access with project workspace
 - **WebView** — in-app browser for preview and documentation
 - **VSCode-inspired UI** — activity bar, tabbed workspace, status bar, command palette
@@ -72,7 +73,21 @@ Panda IDE includes a full VSCode extension host that allows running real `.vsix`
 | SCM / Tasks / Debug | ✅ |
 | CI/CD (Jest tests) | ✅ |
 
-Extensions are installed from [Open VSX Registry](https://open-vsx.org) (Microsoft Marketplace is legally restricted to VS Code).
+Extensions are queried from the official [Visual Studio Marketplace](https://marketplace.visualstudio.com/) first. Open VSX is used as a
+fallback for extensions that are not available there. The app validates the
+download as a VSIX before installing it.
+
+### Terminal toolchain
+
+The integrated Linux terminal exposes a repeatable setup command:
+
+```sh
+panda update
+```
+
+It installs or updates Git, Node.js, npm, Python, pip and common build tools
+inside the selected Ubuntu, Debian or Alpine guest. Use `panda doctor` to
+inspect the tools already available.
 
 ## Runtimes
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../extension_host_health.dart';
 import '../extension_host_manager.dart';
 import '../node_runtime.dart';
+import '../../services/ide_tab_opener.dart';
 
 /// Extension host status and diagnostics page.
 class ExtensionHostStatusPage extends StatefulWidget {
@@ -292,21 +293,24 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Install Node.js'),
+        title: const Text('Install the Panda toolchain'),
         content: const Text(
-          'Node.js is required for running VS Code extensions like Live Server, ESLint, and Prettier.\n\n'
-          'The binary (~80MB) will be downloaded to your device.',
+          'Open a Debian, Ubuntu or Alpine terminal and run:\n\n'
+          'panda update\n\n'
+          'This installs Node.js, npm, Git, Python and the common build tools '
+          'inside the terminal guest.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () {
               Navigator.pop(ctx);
+              IdeTabOpener.instance.openTerminal();
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Download Node.js from Settings → Runtimes')),
+                const SnackBar(content: Text('Run `panda update` in the terminal')),
               );
             },
-            child: const Text('Install'),
+            child: const Text('Open terminal'),
           ),
         ],
       ),

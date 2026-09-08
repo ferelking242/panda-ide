@@ -122,12 +122,6 @@ class VsixInstaller {
           'Cherchez une alternative sur open-vsx.org.');
     }
 
-    if (!manifest.hasRunnableEntryPoint) {
-      await _cleanup(tempDir);
-      return InstallFailure(
-          'Cette extension n\'a pas d\'entry point (champ "main" ou "browser" manquant).');
-    }
-
     // 5. Vérifier si déjà installée
     await ExtensionRegistry.instance.load();
     if (!force && ExtensionRegistry.instance.isInstalled(manifest.id)) {
@@ -195,9 +189,23 @@ class VsixInstaller {
   // ── Helpers privés ───────────────────────────────────────────────────────
 
   Future<File> _download(String url) async {
-    final response = await http.get(Uri.parse(url));
+    final uri = Uri.parse(url);
+    const allowedHosts = {
+      'marketplace.visualstudio.com',
+      'open-vsx.org',
+      'open-vsx.org',
+    };
+    if (uri.scheme != 'https' || !allowedHosts.contains(uri.host)) {
+      throw ArgumentError('Source d’extension non autorisée');
+    }
+    final response = await http.get(uri);
     if (response.statusCode != 200) {
       throw Exception('HTTP ${response.statusCode}');
+    }
+    if (response.bodyBytes.length < 4 ||
+        response.bodyBytes[0] != 0x50 ||
+        response.bodyBytes[1] != 0x4b) {
+      throw Exception('Le téléchargement ne ressemble pas à une archive VSIX');
     }
 
     final tempFile = File(

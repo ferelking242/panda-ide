@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import '../command_registry.dart';
 import '../extension_host.dart';
+import '../extension_contributions.dart';
 
 
 
@@ -53,12 +54,14 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
   final TextEditingController _ctrl = TextEditingController();
   final FocusNode _focus = FocusNode();
   List<RegisteredCommand> _results = [];
+  List<RegisteredCommand> _extensionCommands = [];
   int _selectedIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _results = CommandRegistry.instance.all;
+    CommandRegistry.instance.addListener(_refreshResults);
     _loadNativeCommands();
     _ctrl.addListener(_onQuery);
     // Focus automatique sur le champ de recherche
@@ -68,6 +71,7 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
   @override
   void dispose() {
     _ctrl.removeListener(_onQuery);
+    CommandRegistry.instance.removeListener(_refreshResults);
     _ctrl.dispose();
     _focus.dispose();
     super.dispose();
@@ -78,34 +82,36 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
   /// contributes.commands SANS charger le code des extensions.
   Future<void> _loadNativeCommands() async {
     try {
-      await ExtensionHost.instance.scanInstalled();
-      final native = <RegisteredCommand>[];
-      for (final m in ExtensionHost.instance.knownManifests) {
-        for (final c in m.contributes.commands) {
-          native.add(RegisteredCommand(
-            command: c.id,
-            extensionId: m.id,
-            title: c.title.isNotEmpty ? c.title : c.id,
-            category: c.category ?? m.name,
-            description: m.description,
-          ));
-        }
-      }
-      if (!mounted || native.isEmpty) return;
-      setState(() {
-        final ids = _results.map((c) => c.command).toSet();
-        _results = [
-          ..._results,
-          ...native.where((c) => !ids.contains(c.command)),
-        ];
-      });
+      final snapshot = await ExtensionContributionIndex.load();
+      if (!mounted) return;
+      _extensionCommands = snapshot.commands;
+      _refreshResults();
     } catch (_) {
       // Registre indisponible : la palette garde les commandes builtin.
     }
   }
 
   void _onQuery() {
-    final filtered = CommandRegistry.instance.search(_ctrl.text);
+    _refreshResults();
+  }
+
+  void _refreshResults() {
+    final all = <String, RegisteredCommand>{
+      for (final command in CommandRegistry.instance.all) command.command: command,
+      for (final command in _extensionCommands) command.command: command,
+    };
+    final query = _ctrl.text.toLowerCase().trim();
+    final filtered = all.values.where((command) {
+      if (query.isEmpty) return true;
+      return command.displayLabel.toLowerCase().contains(query) ||
+          command.command.toLowerCase().contains(query) ||
+          (command.description?.toLowerCase().contains(query) ?? false);
+    }).toList();
+    if (!mounted) {
+      _results = filtered;
+      _selectedIndex = 0;
+      return;
+    }
     setState(() {
       _results = filtered;
       _selectedIndex = 0;
@@ -123,7 +129,7 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
           ExtensionHost.instance.executeCommand(cmd.command).catchError((_) {}));
       return;
     }
-    CommandRegistry.instance.execute(cmd.command, []);
+    unawaited(ExtensionContributionIndex.launchCommand(cmd).catchError((_) {}));
   }
 
   void _moveSelection(int delta) {

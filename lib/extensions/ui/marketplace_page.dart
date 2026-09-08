@@ -8,8 +8,10 @@
 library;
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import '../models/marketplace_extension.dart';
-import '../open_vsx_client.dart';
+import '../marketplace_client.dart';
 import '../extension_registry.dart';
 import 'panda_registry_page.dart';
 import '../vsix_installer.dart';
@@ -56,7 +58,7 @@ class MarketplacePage extends StatefulWidget {
 }
 
 class _MarketplacePageState extends State<MarketplacePage> {
-  final _client = OpenVsxClient();
+  final _client = ExtensionMarketplaceClient();
   final _searchCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
 
@@ -170,9 +172,16 @@ class _MarketplacePageState extends State<MarketplacePage> {
   Future<void> _install(MarketplaceExtension ext) async {
     setState(() => _installStates[ext.id] = _InstallState.installing);
     try {
-      final url = await _client.getDownloadUrl(ext.namespace, ext.name, ext.version);
+      final url = ext.downloadUrl ??
+          await _client.getDownloadUrl(ext.namespace, ext.name, ext.version);
       final installer = VsixInstaller();
-      await installer.installFromUrl(url);
+      final result = await installer.installFromUrl(url);
+      if (result is InstallFailure) {
+        throw StateError(result.reason);
+      }
+      if (result is! InstallSuccess) {
+        throw StateError('Installation interrompue');
+      }
       await ExtensionRegistry.instance.load();
       if (!mounted) return;
       setState(() => _installStates[ext.id] = _InstallState.installed);
@@ -985,7 +994,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
 // ═══════════════════════════════════════════════════════════════
 
 class _DetailReadme extends StatefulWidget {
-  final OpenVsxClient client;
+  final ExtensionMarketplaceClient client;
   final MarketplaceExtension ext;
   const _DetailReadme({required this.client, required this.ext});
 
@@ -994,7 +1003,7 @@ class _DetailReadme extends StatefulWidget {
 }
 
 class _DetailReadmeState extends State<_DetailReadme> {
-  String? _readme;
+  MarketplaceContent? _readme;
   bool _loading = true;
 
   @override
@@ -1023,7 +1032,7 @@ class _DetailReadmeState extends State<_DetailReadme> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_readme == null || _readme!.isEmpty) {
+    if (_readme == null || _readme!.content.isEmpty) {
       return Center(
         child: Text(
           widget.ext.description,
@@ -1033,13 +1042,50 @@ class _DetailReadmeState extends State<_DetailReadme> {
       );
     }
 
+    if (_readme!.isHtml) {
+      return InAppWebView(
+        initialSettings: InAppWebViewSettings(
+          javaScriptEnabled: false,
+          transparentBackground: true,
+        ),
+        initialData: InAppWebViewInitialData(
+          data: _detailHtml(_readme!.content, cs),
+          mimeType: 'text/html',
+          encoding: 'utf-8',
+        ),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: Text(
-        _readme!,
-        style: TextStyle(fontSize: 13, color: cs.onSurface, height: 1.5),
+      child: MarkdownWidget(
+        data: _readme!.content,
+        config: MarkdownConfig(
+          configs: [
+            PConfig(
+              textStyle: TextStyle(fontSize: 13, color: cs.onSurface, height: 1.5),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  String _detailHtml(String content, ColorScheme cs) {
+    final background = '#${cs.surface.value.toRadixString(16).substring(2)}';
+    final foreground = '#${cs.onSurface.value.toRadixString(16).substring(2)}';
+    final safe = content
+        .replaceAll(RegExp(r'<script\b[^>]*>[\s\S]*?</script>',
+            caseSensitive: false), '')
+        .replaceAll(RegExp(r'\son\w+\s*=\s*"[^"]*"',
+            caseSensitive: false), '')
+        .replaceAll(RegExp(r"\son\w+\s*=\s*'[^']*'",
+            caseSensitive: false), '');
+    return '''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+body { background: $background; color: $foreground; font-family: sans-serif; font-size: 14px; line-height: 1.55; padding: 12px; margin: 0; }
+img { max-width: 100%; height: auto; } pre { overflow-x: auto; padding: 10px; border-radius: 6px; background: rgba(127,127,127,.15); }
+code { font-family: monospace; } a { color: #5090c8; }
+</style></head><body>$safe</body></html>''';
   }
 }
 
