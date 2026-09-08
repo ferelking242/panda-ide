@@ -95,33 +95,40 @@ class DebianSetup {
         'LC_ALL': 'en_US.UTF-8',
         'DISPLAY': ':0',
         'ENV': '/root/.profile',
-        'PATH':
-            '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
         'TMPDIR': '/tmp',
       };
       base.addAll(await prootLinkEnvironment());
       _cachedSessionEnv = base;
     }
 
-    final env = <String, String>{..._cachedSessionEnv!};
-    if (flutterProjectPath != null &&
-        flutterProjectPath.trim().isNotEmpty) {
-      env.addAll(FlutterPubEnvironment.forProject(flutterProjectPath));
+    final env = <String, String>{
+      ..._cachedSessionEnv!,
+      // Never fall back to Flutter's shared installation cache. Pub Git
+      // checkouts must stay inside the private rootfs, even for a shell that
+      // was opened without a project selected.
+      ...FlutterPubEnvironment.forProject(flutterProjectPath ?? ''),
+    };
+    if (flutterProjectPath != null && flutterProjectPath.trim().isNotEmpty) {
+      env['PANDA_WORKSPACE_HOST'] = flutterProjectPath;
     }
     env.addAll(extra);
     return env;
   }
 
-  static Future<String?> locateProotBinary(String rootfsDir,
-      {bool useCache = true}) async {
+  static Future<String?> locateProotBinary(
+    String rootfsDir, {
+    bool useCache = true,
+  }) async {
     final cached = _cachedProotBin;
     if (useCache && cached != null && File(cached).existsSync()) return cached;
     final dir = await nativeLibDir();
     final candidate = '$dir/libproot.so';
     if (dir.isEmpty || !File(candidate).existsSync()) return null;
     try {
-      final result = await Process.run(candidate, ['--version'],
-          environment: await prootLinkEnvironment());
+      final result = await Process.run(candidate, [
+        '--version',
+      ], environment: await prootLinkEnvironment());
       final output = '${result.stdout}${result.stderr}';
       if (result.exitCode == 0 || output.contains('PRoot')) {
         _cachedProotBin = candidate;
@@ -143,17 +150,24 @@ class DebianSetup {
   static bool isRootfsCompleteIn(String dir) {
     if (!File('$dir/.panda-rootfs-version').existsSync()) return false;
     // Ubuntu uses symlinks (bin -> usr/bin), check both paths
-    final hasSh = File('$dir/bin/sh').existsSync() ||
+    final hasSh =
+        File('$dir/bin/sh').existsSync() ||
         File('$dir/usr/bin/sh').existsSync() ||
         File('$dir/usr/bin/bash').existsSync();
-    final hasApt = File('$dir/usr/bin/apt').existsSync() ||
+    final hasApt =
+        File('$dir/usr/bin/apt').existsSync() ||
         File('$dir/bin/apt').existsSync();
-    final hasPython = File('$dir/usr/bin/python3').existsSync() ||
+    final hasPython =
+        File('$dir/usr/bin/python3').existsSync() ||
         File('$dir/bin/python3').existsSync();
-    final hasLibc = File('$dir/lib/aarch64-linux-gnu/libc.so.6').existsSync() ||
+    final hasLibc =
+        File('$dir/lib/aarch64-linux-gnu/libc.so.6').existsSync() ||
         File('$dir/usr/lib/aarch64-linux-gnu/libc.so.6').existsSync() ||
         File('$dir/lib/libc.so.6').existsSync();
-    return hasSh && hasApt && hasPython && hasLibc &&
+    return hasSh &&
+        hasApt &&
+        hasPython &&
+        hasLibc &&
         Directory('$dir/etc/apt').existsSync() &&
         Directory('$dir/root').existsSync();
   }
@@ -164,7 +178,8 @@ class DebianSetup {
   static bool isDirAccessible(String path) {
     try {
       final dir = Directory(path);
-      return dir.existsSync() && dir.statSync().type == FileSystemEntityType.directory;
+      return dir.existsSync() &&
+          dir.statSync().type == FileSystemEntityType.directory;
     } catch (_) {
       return false;
     }
@@ -173,16 +188,17 @@ class DebianSetup {
   static Future<bool> ensureDebianRootfs({bool force = false}) async {
     final destination = Directory(debianDir);
     final marker = File('${destination.path}/.panda-rootfs-version');
-    final current =
-        marker.existsSync() ? marker.readAsStringSync().trim() : '';
+    final current = marker.existsSync() ? marker.readAsStringSync().trim() : '';
     if (!force && current == rootfsVersion && isRootfsComplete()) {
       PandaLog.d('DebianSetup', 'Rootfs already complete v$rootfsVersion');
       await ensureDebianRuntimeFiles();
       return true;
     }
 
-    PandaLog.i('DebianSetup',
-        'Starting rootfs extraction (current=$current, force=$force)');
+    PandaLog.i(
+      'DebianSetup',
+      'Starting rootfs extraction (current=$current, force=$force)',
+    );
     lastError = '';
     final sw = Stopwatch()..start();
 
@@ -200,15 +216,20 @@ class DebianSetup {
 
       // [2/6] Write archive from assets
       PandaLog.d(
-          'DebianSetup', '[2/6] Loading debian-arm64-rootfs.tar.gz from assets');
+        'DebianSetup',
+        '[2/6] Loading debian-arm64-rootfs.tar.gz from assets',
+      );
       await Directory(tempDir).create(recursive: true);
       final archive = File('$tempDir/debian-arm64-rootfs.tar.gz');
       try {
-        final bytes =
-            await rootBundle.load('assets/runtimes/debian-arm64-rootfs.tar.gz');
+        final bytes = await rootBundle.load(
+          'assets/runtimes/debian-arm64-rootfs.tar.gz',
+        );
         await archive.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
         PandaLog.d(
-            'DebianSetup', '[2/6] Archive written (${bytes.lengthInBytes} bytes)');
+          'DebianSetup',
+          '[2/6] Archive written (${bytes.lengthInBytes} bytes)',
+        );
       } catch (e) {
         lastError =
             'debian-arm64-rootfs.tar.gz not found in assets. '
@@ -271,8 +292,10 @@ class DebianSetup {
           PandaLog.w('DebianSetup', 'Symlink failed: $name -> $target: $e');
         }
       }
-      PandaLog.d('DebianSetup',
-          '[4/6] Extracted: $filesWritten files, $dirsCreated dirs, $symlinksCreated symlinks');
+      PandaLog.d(
+        'DebianSetup',
+        '[4/6] Extracted: $filesWritten files, $dirsCreated dirs, $symlinksCreated symlinks',
+      );
 
       // Make binaries executable
       await _makeBinariesExecutable(stagingDir.path);
@@ -285,30 +308,38 @@ class DebianSetup {
       final checks = {
         'bin/sh': File('${stagingDir.path}/bin/sh').existsSync(),
         'usr/bin/apt': File('${stagingDir.path}/usr/bin/apt').existsSync(),
-        'usr/bin/python3':
-            File('${stagingDir.path}/usr/bin/python3').existsSync(),
-        'lib/libc.so.6 (glibc)':
-            File('${stagingDir.path}/lib/aarch64-linux-gnu/libc.so.6')
-                .existsSync(),
+        'usr/bin/python3': File(
+          '${stagingDir.path}/usr/bin/python3',
+        ).existsSync(),
+        'lib/libc.so.6 (glibc)': File(
+          '${stagingDir.path}/lib/aarch64-linux-gnu/libc.so.6',
+        ).existsSync(),
         'etc/apt': Directory('${stagingDir.path}/etc/apt').existsSync(),
         'root dir': Directory('${stagingDir.path}/root').existsSync(),
       };
       for (final entry in checks.entries) {
         PandaLog.d(
-            'DebianSetup', '[5/6] ${entry.key}: ${entry.value ? "OK" : "MISSING"}');
+          'DebianSetup',
+          '[5/6] ${entry.key}: ${entry.value ? "OK" : "MISSING"}',
+        );
       }
       if (checks.values.any((ok) => !ok)) {
-        final missing =
-            checks.entries.where((e) => !e.value).map((e) => e.key).toList();
+        final missing = checks.entries
+            .where((e) => !e.value)
+            .map((e) => e.key)
+            .toList();
         lastError = 'Rootfs invalid: ${missing.join(', ')}';
         throw StateError(lastError);
       }
-      await File('${stagingDir.path}/.panda-rootfs-version')
-          .writeAsString(rootfsVersion, flush: true);
+      await File(
+        '${stagingDir.path}/.panda-rootfs-version',
+      ).writeAsString(rootfsVersion, flush: true);
 
       // [6/6] Atomic rename
       PandaLog.i(
-          'DebianSetup', '[6/6] Renaming staging -> ${destination.path}');
+        'DebianSetup',
+        '[6/6] Renaming staging -> ${destination.path}',
+      );
       try {
         if (destination.existsSync()) {
           await destination.delete(recursive: true);
@@ -338,7 +369,9 @@ class DebianSetup {
       final ok = isRootfsComplete();
       if (ok) {
         PandaLog.i(
-            'DebianSetup', 'Debian rootfs ready (${sw.elapsedMilliseconds}ms)');
+          'DebianSetup',
+          'Debian rootfs ready (${sw.elapsedMilliseconds}ms)',
+        );
       } else {
         lastError = 'Rootfs validation failed after rename';
         PandaLog.e('DebianSetup', lastError);
@@ -372,8 +405,13 @@ class DebianSetup {
 
   static Future<void> _makeBinariesExecutable(String rootPath) async {
     const execDirs = [
-      'bin', 'sbin', 'usr/bin', 'usr/sbin', 'usr/local/bin',
-      'lib', 'usr/lib',
+      'bin',
+      'sbin',
+      'usr/bin',
+      'usr/sbin',
+      'usr/local/bin',
+      'lib',
+      'usr/lib',
     ];
     const tmpDirs = ['tmp', 'var/tmp'];
     final targets = <String>[];
@@ -383,8 +421,10 @@ class DebianSetup {
     if (targets.isEmpty) return;
     final list = targets.join(' ');
     try {
-      final r = await Process.run(
-          '/system/bin/sh', ['-c', 'chmod -R 755 $list']);
+      final r = await Process.run('/system/bin/sh', [
+        '-c',
+        'chmod -R 755 $list',
+      ]);
       if (r.exitCode != 0) {
         PandaLog.w('DebianSetup', 'chmod failed: ${r.stderr}');
       }
@@ -394,8 +434,10 @@ class DebianSetup {
     for (final d in tmpDirs) {
       if (!Directory('$rootPath/$d').existsSync()) continue;
       try {
-        await Process.run(
-            '/system/bin/sh', ['-c', 'chmod 1777 "$rootPath/$d"']);
+        await Process.run('/system/bin/sh', [
+          '-c',
+          'chmod 1777 "$rootPath/$d"',
+        ]);
       } catch (_) {}
     }
   }
@@ -411,7 +453,8 @@ class DebianSetup {
     }
   }
 
-  static String pandaProfileScript() => '''
+  static String pandaProfileScript() =>
+      '''
 # $profileVersion - generated by Panda IDE (Debian)
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 export HOME="\${HOME:-/root}"
@@ -469,13 +512,16 @@ PS1='\$(__panda_ps)'
 
     // Always update profile files if profileVersion changed, even when
     // rootfs is already ready — ensures bash PS1 prompt works.
-    final profileNeedsUpdate = !profileMarker.existsSync() ||
+    final profileNeedsUpdate =
+        !profileMarker.existsSync() ||
         profileMarker.readAsStringSync().trim() != profileVersion;
     if (profileNeedsUpdate) {
       final profile = pandaProfileScript();
       _write('$dir/etc/profile.d/panda.sh', profile);
-      _write('$dir/etc/profile',
-          'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n');
+      _write(
+        '$dir/etc/profile',
+        'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n',
+      );
       _write('$dir/root/.profile', profile);
       _write('$dir/root/.bashrc', profile);
       try {
@@ -506,20 +552,25 @@ PS1='\$(__panda_ps)'
 
     await _makeBinariesExecutable(dir);
 
-    _write('$dir/etc/resolv.conf',
-        'nameserver 1.1.1.1\nnameserver 8.8.8.8\n');
-    _write('$dir/etc/hosts',
-        '127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n',
-        overwrite: false);
+    _write('$dir/etc/resolv.conf', 'nameserver 1.1.1.1\nnameserver 8.8.8.8\n');
+    _write(
+      '$dir/etc/hosts',
+      '127.0.0.1 localhost\n::1 localhost ip6-localhost ip6-loopback\n',
+      overwrite: false,
+    );
 
     // Debian apt config
-    _write('$dir/etc/apt/apt.conf.d/99norecommends',
-        'APT::Install-Recommends "false";\n');
+    _write(
+      '$dir/etc/apt/apt.conf.d/99norecommends',
+      'APT::Install-Recommends "false";\n',
+    );
 
     final profile = pandaProfileScript();
     _write('$dir/etc/profile.d/panda.sh', profile);
-    _write('$dir/etc/profile',
-        'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n');
+    _write(
+      '$dir/etc/profile',
+      'for f in /etc/profile.d/*.sh; do [ -r "\$f" ] && . "\$f"; done\n',
+    );
     _write('$dir/root/.profile', profile);
     _write('$dir/root/.bashrc', profile);
 
