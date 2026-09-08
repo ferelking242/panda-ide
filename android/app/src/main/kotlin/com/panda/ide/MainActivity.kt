@@ -108,6 +108,15 @@ class MainActivity : FlutterActivity() {
                     KeepAliveService.stop(applicationContext)
                     result.success(true)
                 }
+                "showCommandNotification" -> {
+                    val title = call.argument<String>("title")?.trim()
+                        ?.ifBlank { "Panda IDE" } ?: "Panda IDE"
+                    val message = call.argument<String>("message")?.trim()
+                        ?.ifBlank { "Commande terminée" } ?: "Commande terminée"
+                    val isError = call.argument<Boolean>("isError") ?: false
+                    showCommandNotification(title, message, isError)
+                    result.success(true)
+                }
                 "requestPermission" -> {
                     // Permissions téléphone pour extensions (camera, micro…)
                     val perm = call.argument<String>("permission")!!
@@ -434,6 +443,64 @@ class MainActivity : FlutterActivity() {
 
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    private fun showCommandNotification(
+        title: String,
+        message: String,
+        isError: Boolean,
+    ) {
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+            val channelId = if (isError) "panda_terminal_errors" else "panda_terminal"
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                manager.createNotificationChannel(
+                    android.app.NotificationChannel(
+                        channelId,
+                        if (isError) "Terminal — erreurs" else "Terminal — commandes",
+                        if (isError) {
+                            android.app.NotificationManager.IMPORTANCE_HIGH
+                        } else {
+                            android.app.NotificationManager.IMPORTANCE_DEFAULT
+                        },
+                    ).apply {
+                        description = "Fin des commandes Panda IDE"
+                    },
+                )
+            }
+            val icon = if (isError) {
+                android.R.drawable.stat_notify_error
+            } else {
+                android.R.drawable.stat_notify_more
+            }
+            val notification =
+                androidx.core.app.NotificationCompat.Builder(this, channelId)
+                    .setSmallIcon(icon)
+                    .setContentTitle(title)
+                    .setContentText(message)
+                    .setStyle(
+                        androidx.core.app.NotificationCompat.BigTextStyle()
+                            .bigText(message),
+                    )
+                    .setAutoCancel(true)
+                    .setCategory(
+                        if (isError) {
+                            androidx.core.app.NotificationCompat.CATEGORY_ERROR
+                        } else {
+                            androidx.core.app.NotificationCompat.CATEGORY_STATUS
+                        },
+                    )
+                    .build()
+            manager.notify(
+                (System.currentTimeMillis() and 0x7fffffff).toInt(),
+                notification,
+            )
+        } catch (security: SecurityException) {
+            Log.w(TAG, "Command notification permission denied", security)
+        } catch (error: Exception) {
+            Log.w(TAG, "Could not show command notification", error)
         }
     }
 

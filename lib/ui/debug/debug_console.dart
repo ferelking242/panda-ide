@@ -161,7 +161,7 @@ class _DebugConsoleState extends State<DebugConsole> {
               const Icon(Icons.terminal, size: 12, color: Color(0xFF89B4FA)),
               const SizedBox(width: 4),
               const Text(
-                'DEBUG CONSOLE',
+                'DEBUG',
                 style: TextStyle(
                   color: Color(0xFF89B4FA),
                   fontSize: 10,

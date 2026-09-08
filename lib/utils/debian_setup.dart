@@ -18,7 +18,7 @@ class DebianSetup {
   static const String _debianDirName = 'debian-arm64';
   static const String rootfsVersion = 'debian-bookworm-arm64 v1';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-debian-profile v6';
+  static const String profileVersion = 'panda-debian-profile v7';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -499,6 +499,11 @@ __panda_git() {
     [ -n "\$g" ] && printf ' %s' "\$g"
     printf '\\n\\033[38;5;110m╰─❯ \\033[0m'
   }
+__panda_prompt() {
+    local code=\$?
+    printf '\\033]777;PANDA_STATUS;%s\\007' "\$code"
+}
+PROMPT_COMMAND=__panda_prompt
 PS1='\$(__panda_ps)'
 ''';
 

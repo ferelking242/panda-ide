@@ -2,8 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class PandaNotifications {
+  static const MethodChannel _nativeChannel = MethodChannel('com.panda.ide');
   static final List<Map<String, dynamic>> inbox = [];
   static int unreadCount = 0;
+
+  /// Sends a real Android notification. Unlike the in-app overlay this also
+  /// works while Panda is backgrounded and the terminal is protected by the
+  /// foreground service.
+  static Future<void> showSystem({
+    required String title,
+    required String message,
+    bool isError = false,
+  }) async {
+    try {
+      await _nativeChannel.invokeMethod('showCommandNotification', {
+        'title': title,
+        'message': message,
+        'isError': isError,
+      });
+    } catch (_) {
+      // Web, desktop and old APKs do not expose the native channel.
+    }
+  }
   
   static void show({
     required BuildContext context,

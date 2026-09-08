@@ -11,7 +11,7 @@ class AlpineSetup {
   static const String _alpineDirName = 'alpine-linux';
   static const String rootfsVersion = 'alpine-3.22.5';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-profile v3';
+  static const String profileVersion = 'panda-profile v4';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -297,6 +297,7 @@ __panda_git() {
 }
 __panda_prompt() {
   local code=\$?
+  printf '\\033]777;PANDA_STATUS;%s\\007' "\$code"
   local c='033[38;5;75m'
   [ "\$code" -ne 0 ] && c='033[38;5;203m'
   PS1="033[38;5;110m╭─ 033[38;5;183mw033[0m\$(__panda_git) 033[38;5;110m[\${code}]033[0m\\n\${c}╰─❯ 033[0m"

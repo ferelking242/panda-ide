@@ -222,15 +222,18 @@ class _BottomPanelState extends State<BottomPanel> {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 8),
-
-          // Tab items
-          _tabChip(BottomPanelTab.problems, 'PROBLEMS', state),
-          _tabChip(BottomPanelTab.output, 'OUTPUT', state),
-          _tabChip(BottomPanelTab.debugConsole, 'DEBUG CONSOLE', state),
-          _tabChip(BottomPanelTab.terminal, 'TERMINAL', state),
-
-          const Spacer(),
+          Expanded(
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(left: 8),
+              children: [
+                _tabChip(BottomPanelTab.problems, 'PROBLEMS', state),
+                _tabChip(BottomPanelTab.output, 'OUTPUT', state),
+                _tabChip(BottomPanelTab.debugConsole, 'DEBUG', state),
+                _tabChip(BottomPanelTab.terminal, 'TERMINAL', state),
+              ],
+            ),
+          ),
 
           // Toggle / minimize
           IconButton(
@@ -577,33 +580,39 @@ class _BottomPanelState extends State<BottomPanel> {
               bottom: BorderSide(color: Color(0xFF3C3C3C), width: 0.5),
             ),
           ),
-          child: Row(
-            children: [
-              const SizedBox(width: 4),
-              // Terminal tabs
-              for (final tab in tabs)
-                _terminalTabChip(tab, activeId == tab.id),
-              // New terminal button
-              GestureDetector(
-                onTap: () {
-                  final newId = 'terminal-${DateTime.now().millisecondsSinceEpoch}';
-                  final newTabs = [
-                    ...tabs,
-                    TerminalTab(id: newId, name: 'Terminal ${tabs.length + 1}'),
-                  ];
-                  widget.onUpdate(widget.state.copyWith(
-                    terminalTabs: newTabs,
-                    activeTerminalId: newId,
-                  ));
-                  widget.onCreateTerminal?.call(newId);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  child: const Icon(Icons.add, size: 14, color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
+           child: Row(
+             children: [
+               Expanded(
+                 child: ListView(
+                   scrollDirection: Axis.horizontal,
+                   padding: const EdgeInsets.only(left: 4),
+                   children: [
+                     for (final tab in tabs)
+                       _terminalTabChip(tab, activeId == tab.id),
+                   ],
+                 ),
+               ),
+               // New terminal button stays pinned and is always reachable.
+               GestureDetector(
+                 onTap: () {
+                   final newId = 'terminal-${DateTime.now().millisecondsSinceEpoch}';
+                   final newTabs = [
+                     ...tabs,
+                     TerminalTab(id: newId, name: 'Terminal ${tabs.length + 1}'),
+                   ];
+                   widget.onUpdate(widget.state.copyWith(
+                     terminalTabs: newTabs,
+                     activeTerminalId: newId,
+                   ));
+                   widget.onCreateTerminal?.call(newId);
+                 },
+                 child: Container(
+                   padding: const EdgeInsets.symmetric(horizontal: 6),
+                   child: const Icon(Icons.add, size: 14, color: Colors.white70),
+                 ),
+               ),
+             ],
+           ),
         ),
         // Terminal content
         Expanded(
