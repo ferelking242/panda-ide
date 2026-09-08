@@ -55,15 +55,15 @@ class PandaActivityBar extends StatelessWidget {
     final selColor = isDark ? _kActivitySelDark : _kActivitySelLight;
 
     final topItems = <RailItem>[
-      RailItem(icon: Icons.folder, label: 'Explorateur', idx: 1),
-      RailItem(icon: Icons.search, label: 'Rechercher', idx: 2),
+      RailItem(icon: Broken.element_3, label: 'Explorateur', idx: 1),
+      RailItem(icon: Broken.search_normal, label: 'Rechercher', idx: 2),
       RailItem(
-          icon: Icons.account_tree, label: 'Contrôle Git', idx: 3),
+          icon: Broken.programming_arrows, label: 'Contrôle Git', idx: 3),
       RailItem(
-          icon: Icons.bug_report, label: 'Exécuter / Debug', idx: 4),
-      RailItem(icon: Icons.device_hub, label: 'Tunnel', idx: 5),
-      RailItem(icon: Icons.extension, label: 'Marketplace', idx: 6),
-      RailItem(icon: Icons.psychology, label: 'Panda Agent', idx: 10),
+          icon: Broken.play_circle, label: 'Exécuter / Debug', idx: 4),
+      RailItem(icon: Broken.routing_2, label: 'Tunnel', idx: 5),
+      RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
+      RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
       RailItem(icon: Broken.cpu, label: 'Gateway AI', idx: 7),
       RailItem(icon: Broken.global, label: 'Navigateur', idx: 8),
       RailItem(
@@ -169,7 +169,7 @@ class PandaActivityBar extends StatelessWidget {
           // ── Bottom: Settings ─────────────────────────────────────
           _ActivityBtnEx(
             item: RailItem(
-                icon: Icons.settings, label: 'Parametres', idx: 99),
+                icon: Broken.setting_3, label: 'Parametres', idx: 99),
             selected: false,
             iconColor: iconColor,
             selColor: selColor,

@@ -69,6 +69,7 @@ import 'flutter_device_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
 import 'agent/panda_activity_dock.dart';
+import 'agent/agent_workflow_checklist.dart';
 import 'agent/flow_ui/widgets/flow_composer.dart';
 import 'agent/flow_ui/widgets/flow_thread.dart';
 import 'agent/flow_ui/widgets/flow_message.dart';
@@ -1827,9 +1828,9 @@ class _SelectTypeState extends State<SelectType>
       _RailItem(icon: Broken.search_normal, label: 'Rechercher', idx: 2),
       _RailItem(icon: Broken.programming_arrows, label: 'Contrôle Git', idx: 3),
       _RailItem(icon: Broken.play_circle, label: 'Exécuter / Debug', idx: 4),
-      _RailItem(icon: Icons.device_hub, label: 'Tunnel', idx: 5),
+      _RailItem(icon: Broken.routing_2, label: 'Tunnel', idx: 5),
       _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
-      _RailItem(icon: Icons.psychology, label: 'Panda Agent', idx: 10),
+      _RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
 
       _RailItem(icon: Broken.cpu, label: 'Gateway AI', idx: 7),
       _RailItem(icon: Broken.global, label: 'Navigateur', idx: 8),
@@ -1838,8 +1839,8 @@ class _SelectTypeState extends State<SelectType>
         label: 'GitHub Copilot',
         idx: 9,
       ),
-      _RailItem(icon: Icons.account_tree, label: 'Outline', idx: 12),
-      _RailItem(icon: Icons.schedule, label: 'Timeline', idx: 13),
+      _RailItem(icon: Broken.task_square, label: 'Outline', idx: 12),
+      _RailItem(icon: Broken.clock, label: 'Timeline', idx: 13),
     ];
 
     return Container(
@@ -6740,236 +6741,19 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Tasks tab content ─────────────────────────────────────────────────────
   Widget _buildTasksTabContent(BuildContext context, AppTheme appTheme) {
-    final isDark = appTheme.isDark;
-    final bg = isDark ? const Color(0xff181818) : const Color(0xfffafafa);
-    final fg = isDark ? Colors.grey[200]! : Colors.grey[900]!;
-    final muted = isDark ? Colors.grey[500]! : Colors.grey[600]!;
-    final border = isDark ? const Color(0xff3a3a3a) : const Color(0xffe5e5e5);
-    final cardBg = isDark ? const Color(0xff252526) : const Color(0xfff0f0f0);
-    final emptyBg = isDark ? const Color(0xff252526) : const Color(0xffe8e8e8);
-
-    final readyTasks = _agentTasks
-        .where((t) => t['status'] == 'ready')
-        .toList();
-    final activeTasks = _agentTasks
-        .where((t) => t['status'] == 'active')
-        .toList();
-    final draftTasks = _agentTasks
-        .where((t) => t['status'] == 'draft')
-        .toList();
-
-    Widget sectionLabel(String label) => Padding(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: muted,
-          letterSpacing: 0.2,
-        ),
+    return AgentWorkflowChecklist(
+      onClose: () => setState(() {
+        _agentPanelPrevTab = _agentPanelTab;
+        _agentPanelTab = 0;
+      }),
+      onSubmit: (text) => _pandaAgentController.send(
+        context: context,
+        aiState: context.read<AIBloc>().state,
+        workspacePath: _currentWorkspaceDir ?? _activeProjectDir() ?? '',
+        text: text,
       ),
-    );
-
-    Widget emptyBox(String text) => Container(
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      padding: const EdgeInsets.symmetric(vertical: 18),
-      decoration: BoxDecoration(
-        color: emptyBg,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Center(
-        child: Text(text, style: TextStyle(fontSize: 12, color: muted)),
-      ),
-    );
-
-    Widget taskTile(Map<String, dynamic> task) {
-      final icons = {
-        'ready': (Broken.play_circle, Colors.green[400]!),
-        'active': (Broken.timer_1, Colors.blue[400]!),
-        'draft': (Broken.edit, muted),
-      };
-      final pair = icons[task['status']] ?? (Broken.task_square, muted);
-      return ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-        leading: Icon(pair.$1, size: 16, color: pair.$2),
-        title: Text(
-          task['title'] as String? ?? 'Task',
-          style: TextStyle(fontSize: 13, color: fg),
-        ),
-        subtitle: task['desc'] != null
-            ? Text(
-                task['desc'] as String,
-                style: TextStyle(fontSize: 11, color: muted),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              )
-            : null,
-        trailing: GestureDetector(
-          onTap: () => setState(() => _agentTasks.remove(task)),
-          child: Icon(Broken.close_circle, size: 15, color: muted),
-        ),
-      );
-    }
-
-    return Container(
-      color: bg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // ── "New" onboarding card (dismissible) ─────────────────────
-          if (_agentTasksShowNew)
-            Container(
-              margin: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: border),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _kAccent,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'New',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      GestureDetector(
-                        onTap: () => setState(() => _agentTasksShowNew = false),
-                        child: Icon(
-                          Broken.close_square,
-                          size: 16,
-                          color: muted,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Colorful task type icons row
-                  Row(
-                    children: [
-                      for (final c in [
-                        Colors.blue[400]!,
-                        Colors.green[400]!,
-                        Colors.orange[400]!,
-                        Colors.purple[400]!,
-                        Colors.pink[400]!,
-                      ])
-                        Container(
-                          width: 30,
-                          height: 30,
-                          margin: const EdgeInsets.only(right: 6),
-                          decoration: BoxDecoration(
-                            color: c.withValues(alpha: 0.18),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Center(
-                            child: Icon(Broken.task_square, size: 14, color: c),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Background tasks allow you to get more work done at once.',
-                    style: TextStyle(fontSize: 12, color: fg),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Try creating your first one!',
-                    style: TextStyle(fontSize: 12, color: fg),
-                  ),
-                  const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: () {},
-                    child: Text(
-                      'View documentation',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _kAccent,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // ── Task sections ────────────────────────────────────────────
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 8),
-              children: [
-                sectionLabel('Ready'),
-                readyTasks.isEmpty
-                    ? emptyBox('No ready tasks')
-                    : Column(children: readyTasks.map(taskTile).toList()),
-                sectionLabel('Active'),
-                activeTasks.isEmpty
-                    ? emptyBox('No active tasks')
-                    : Column(children: activeTasks.map(taskTile).toList()),
-                sectionLabel('Draft'),
-                draftTasks.isEmpty
-                    ? emptyBox('No draft tasks')
-                    : Column(children: draftTasks.map(taskTile).toList()),
-              ],
-            ),
-          ),
-
-          // ── + New task button (full width, no Core badge) ─────────
-          Container(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: border, width: 0.5)),
-            ),
-            child: GestureDetector(
-              onTap: () => _createAgentTask(context, appTheme),
-              child: Container(
-                height: 40,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xff2a2a2a)
-                      : const Color(0xff1e293b),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Broken.add_square, size: 15, color: muted),
-                    const SizedBox(width: 6),
-                    Text(
-                      'New task',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: fg,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      onModeTap: () => _showApprovalModeSheet(context, appTheme),
+      onStop: _pandaAgentController.stop,
     );
   }
 
