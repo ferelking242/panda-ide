@@ -8,3 +8,12 @@ When validating Flutter changes, first check whether `flutter` or `dart` is avai
 **Why:** The Panda IDE workspace had no Flutter/Dart executable available, so code verification was limited to targeted source inspection and `git diff --check`.
 
 **How to apply:** Use the project’s configured Flutter workflow or an explicitly available SDK for analyzer/build checks when one is present.
+
+Web validation can miss errors in Android-only files because the web target uses
+platform stubs; native Flutter changes must be confirmed by an Android build too.
+
+**Why:** The web build passed while the Android build caught an incorrect PTY
+byte-buffer type in a hardware shortcut path.
+
+**How to apply:** Treat web success as partial validation when editing
+`*_native.dart` or other platform-specific Flutter code.
