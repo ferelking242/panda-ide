@@ -66,14 +66,10 @@ class FlutterDeviceService extends ChangeNotifier {
     }
 
     final prootArgs = <String>[
-      '-0',
-      '--link2symlink',
-      '--kill-on-exit',
-      '--rootfs=${DebianSetup.debianDir}',
-      '-b', '/dev',
-      '-b', '/proc',
-      '-b', '/sys',
-      ...extraBinds.expand((b) => ['-b', b]),
+      ...await DebianSetup.prootArguments(
+        rootfsPath: DebianSetup.debianDir,
+        extraBinds: extraBinds,
+      ),
       '-w', workingDir,
       '/bin/sh',
       '-c',
@@ -81,6 +77,7 @@ class FlutterDeviceService extends ChangeNotifier {
     ];
 
     final env = await DebianSetup.prootSessionEnvironment(
+      rootfsPath: DebianSetup.debianDir,
       flutterProjectPath: flutterProjectPath,
     );
     // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK
@@ -132,6 +129,35 @@ class FlutterDeviceService extends ChangeNotifier {
     await sub2.cancel();
     lastOutput = out.join('\n');
     return out;
+  }
+
+  /// Runs Pub through the same PRoot environment as the Flutter device flow.
+  ///
+  /// Verification must not invoke the Android-host Flutter binary directly:
+  /// that bypasses the guest Git/filesystem setup and can recreate the cache
+  /// corruption this service is responsible for avoiding.
+  Future<ProcessResult> runPubGet(
+    String projectPath, {
+    Duration timeout = const Duration(seconds: 30),
+  }) async {
+    final normalizedPath = projectPath.trim();
+    final process = await _startInRootfs(
+      ['flutter', 'pub', 'get'],
+      workingDir: DebianSetup.workspaceMount,
+      extraEnv: _flutterEnv(projectPath: normalizedPath),
+      extraBinds: _flutterBinds(normalizedPath),
+      flutterProjectPath: normalizedPath,
+    );
+    final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+    final stderrFuture = process.stderr.transform(utf8.decoder).join();
+    final exitCode = await process.exitCode.timeout(timeout, onTimeout: () {
+      process.kill(ProcessSignal.sigterm);
+      return -1;
+    });
+    final stdout = await stdoutFuture;
+    final stderr = await stderrFuture;
+    lastOutput = '$stdout$stderr';
+    return ProcessResult(process.pid, exitCode, stdout, stderr);
   }
 
   // ── ADB ────────────────────────────────────────────────────────────────────

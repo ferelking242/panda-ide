@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import '../../services/flutter_device_service.dart';
+
 /// Verification pipeline that runs checks after code modifications.
 ///
 /// The level of verification is adaptive based on:
@@ -109,14 +111,12 @@ class VerificationPipeline {
   }
 
   static Future<List<String>> _checkBuild(String workspacePath) async {
-    // Don't run full build — just check pubspec
+    // Don't run full build — just check pubspec through Panda's guest runtime.
     try {
-      final result = await Process.run(
-        'flutter',
-        ['pub', 'get'],
-        workingDirectory: workspacePath,
-        environment: {'PATH': _androidPath()},
-      ).timeout(const Duration(seconds: 30));
+      final result = await FlutterDeviceService.instance.runPubGet(
+        workspacePath,
+        timeout: const Duration(seconds: 30),
+      );
 
       if (result.exitCode != 0) {
         return ['pub get failed: ${result.stderr}'];

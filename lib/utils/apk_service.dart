@@ -67,19 +67,15 @@ class ApkService {
 
     final rootfsDir = DebianSetup.debianDir;
     final prootArgs = <String>[
-      '-0',
-      '--link2symlink',
-      '--kill-on-exit',
-      '--rootfs=$rootfsDir',
-      '-b', '/dev',
-      '-b', '/proc',
-      '-b', '/sys',
+      ...await DebianSetup.prootArguments(rootfsPath: rootfsDir),
       '-w', '/root',
       '/sbin/apk',
       ...args,
     ];
 
-    final env = await DebianSetup.prootSessionEnvironment();
+    final env = await DebianSetup.prootSessionEnvironment(
+      rootfsPath: rootfsDir,
+    );
     // No LD_PRELOAD-style leakage into guest: profile unsets it, but apk runs
     // non-login here so drop it explicitly for cleanliness.
     // ⚠️ NE PAS retirer : libproot.so a besoin de cette var AU LINK

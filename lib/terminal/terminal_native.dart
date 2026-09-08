@@ -761,7 +761,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Future<void> _ensureSharedAdbServer(String prootBin, String rootfsDir) async {
     if (_sharedAdbHost != null) return;
     try {
-      final sessionEnv = await DebianSetup.prootSessionEnvironment();
+      final sessionEnv = await DebianSetup.prootSessionEnvironment(
+        rootfsPath: rootfsDir,
+      );
       // Endpoint mémorisé par l'extension Panda Device (IP:port de debug)
       String endpoint = '';
       try {
@@ -775,19 +777,15 @@ class _SetupTerminalState extends State<SetupTerminal> {
         'LANG': 'C',
         if (endpoint.isNotEmpty) 'ADB_ENDPOINT': endpoint,
       };
+      final hostBinds = <String>[
+        if (Directory(tempDir).existsSync()) '$tempDir:/tmp',
+        if (Directory(appDir).existsSync()) appDir,
+      ];
       final hostArgs = <String>[
-        '-0',
-        '--link2symlink',
-        '--sysvipc',
-        '--rootfs=$rootfsDir',
-        '-b',
-        '/dev',
-        '-b',
-        '/proc',
-        '-b',
-        '/sys',
-        if (Directory(tempDir).existsSync()) ...['-b', '$tempDir:/tmp'],
-        if (Directory(appDir).existsSync()) ...['-b', appDir],
+        ...await DebianSetup.prootArguments(
+          rootfsPath: rootfsDir,
+          extraBinds: hostBinds,
+        ),
         '-w',
         '/root',
         '/bin/sh',
@@ -906,17 +904,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
         DebianSetup.isDirAccessible(widget.projectDir);
 
     try {
-      final prootArgs = <String>[
-        '-0',
-        '--link2symlink',
-        '--sysvipc',
-        '--kill-on-exit',
-        '--rootfs=$rootfsDir',
-        // Inconditional binds
-        '-b', '/dev',
-        '-b', '/proc',
-        '-b', '/sys',
-      ];
+      final prootArgs = await DebianSetup.prootArguments(
+        rootfsPath: rootfsDir,
+      );
 
       void addConditionalBind(String hostPath, [String? guestPath]) {
         try {
@@ -931,10 +921,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
       }
 
       // Conditional binds
-      addConditionalBind('/dev/pts');
       addConditionalBind('/dev/urandom');
       addConditionalBind('/dev/shm');
-      addConditionalBind('/proc/self/fd', '/dev/fd');
       addConditionalBind('/system');
       addConditionalBind('/apex');
       addConditionalBind('/linkerconfig');
@@ -961,6 +949,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       // PROOT_LOADER designe le loader embarque (libproot-loader.so).
       final sessionEnv = <String, String>{
         ...await DebianSetup.prootSessionEnvironment(
+          rootfsPath: rootfsDir,
           flutterProjectPath: widget.projectDir,
         ),
         // Suppress locale / groups warnings on Alpine where locales are not installed

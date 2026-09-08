@@ -64,46 +64,91 @@ class DebianSetup {
     return file.existsSync() ? file.path : null;
   }
 
-  static Future<Map<String, String>> prootLinkEnvironment() async {
+  static String prootL2sDir(String rootfsPath) => '$rootfsPath/.panda-proot-l2s';
+
+  /// PRoot's link2symlink store must be inside the rootfs and bind-mounted
+  /// onto the same guest path. Otherwise a hard link created by Git/Pub is
+  /// represented by a symlink to the Android host path, which is not resolvable
+  /// after the process enters the guest.
+  static Future<void> ensureProotL2sDir(String rootfsPath) async {
+    await Directory(prootL2sDir(rootfsPath)).create(recursive: true);
+  }
+
+  /// Common PRoot arguments used by every guest process.
+  ///
+  /// Keep this in one place. Pub, apk, the terminal and the agent must see the
+  /// same link translation and device filesystem; a single divergent launcher
+  /// is enough to produce broken Git objects in a Pub cache.
+  static Future<List<String>> prootArguments({
+    required String rootfsPath,
+    List<String> extraBinds = const [],
+  }) async {
+    await ensureProotL2sDir(rootfsPath);
+    bool hostExists(String path) =>
+        FileSystemEntity.typeSync(path, followLinks: false) !=
+        FileSystemEntityType.notFound;
+
+    final standardBinds = <String>[
+      '/dev',
+      '/proc',
+      '/sys',
+      '${prootL2sDir(rootfsPath)}:${prootL2sDir(rootfsPath)}',
+      if (hostExists('/dev/pts')) '/dev/pts',
+      if (hostExists('/proc/self/fd')) '/proc/self/fd:/dev/fd',
+      if (hostExists('/proc/self/fd/0')) '/proc/self/fd/0:/dev/stdin',
+      if (hostExists('/proc/self/fd/1')) '/proc/self/fd/1:/dev/stdout',
+      if (hostExists('/proc/self/fd/2')) '/proc/self/fd/2:/dev/stderr',
+    ];
+    return <String>[
+      '-0',
+      '--link2symlink',
+      '--sysvipc',
+      '--kill-on-exit',
+      '--rootfs=$rootfsPath',
+      ...standardBinds.expand((bind) => ['-b', bind]),
+      ...extraBinds.expand((bind) => ['-b', bind]),
+    ];
+  }
+
+  static Future<Map<String, String>> prootLinkEnvironment({
+    String? rootfsPath,
+  }) async {
     final dir = await nativeLibDir();
     final loader = '$dir/libproot-loader.so';
+    final resolvedRootfs = rootfsPath ?? debianDir;
     try {
       Directory(tempDir).createSync(recursive: true);
+      await ensureProotL2sDir(resolvedRootfs);
     } catch (_) {}
     return {
       if (dir.isNotEmpty) 'LD_LIBRARY_PATH': dir,
       if (File(loader).existsSync()) 'PROOT_LOADER': loader,
       'PROOT_TMP_DIR': tempDir,
+      'PROOT_L2S_DIR': prootL2sDir(resolvedRootfs),
       'PROOT_NO_SECCOMP': '1',
     };
   }
 
-  static Map<String, String>? _cachedSessionEnv;
-
   static Future<Map<String, String>> prootSessionEnvironment({
     Map<String, String> extra = const {},
     String? flutterProjectPath,
+    String? rootfsPath,
   }) async {
-    if (_cachedSessionEnv == null) {
-      final base = <String, String>{
-        'HOME': '/root',
-        'USER': 'root',
-        'LOGNAME': 'root',
-        'TERM': 'xterm-256color',
-        'SHELL': '/bin/bash',
-        'LANG': 'en_US.UTF-8',
-        'LC_ALL': 'en_US.UTF-8',
-        'DISPLAY': ':0',
-        'ENV': '/root/.profile',
-        'PATH':
-            '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-        'TMPDIR': '/tmp',
-      };
-      base.addAll(await prootLinkEnvironment());
-      _cachedSessionEnv = base;
-    }
-
-    final env = <String, String>{..._cachedSessionEnv!};
+    final env = <String, String>{
+      'HOME': '/root',
+      'USER': 'root',
+      'LOGNAME': 'root',
+      'TERM': 'xterm-256color',
+      'SHELL': '/bin/bash',
+      'LANG': 'en_US.UTF-8',
+      'LC_ALL': 'en_US.UTF-8',
+      'DISPLAY': ':0',
+      'ENV': '/root/.profile',
+      'PATH':
+          '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      'TMPDIR': '/tmp',
+      ...await prootLinkEnvironment(rootfsPath: rootfsPath),
+    };
     if (flutterProjectPath != null &&
         flutterProjectPath.trim().isNotEmpty) {
       env.addAll(FlutterPubEnvironment.forProject(flutterProjectPath));
@@ -121,7 +166,7 @@ class DebianSetup {
     if (dir.isEmpty || !File(candidate).existsSync()) return null;
     try {
       final result = await Process.run(candidate, ['--version'],
-          environment: await prootLinkEnvironment());
+          environment: await prootLinkEnvironment(rootfsPath: rootfsDir));
       final output = '${result.stdout}${result.stderr}';
       if (result.exitCode == 0 || output.contains('PRoot')) {
         _cachedProotBin = candidate;
@@ -489,6 +534,7 @@ PS1='\$(__panda_ps)'
     }
 
     for (final name in const [
+      '.panda-proot-l2s',
       'root',
       'root/workspace',
       'tmp',

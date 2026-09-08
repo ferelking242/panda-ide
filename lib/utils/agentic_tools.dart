@@ -1127,16 +1127,9 @@ class AgenticTools {
       } catch (_) {}
       final prootBin = await DebianSetup.locateProotBinary(rootfsDir);
       if (prootBin != null) {
-        final prootArgs = <String>[
-          '-0',
-          '--link2symlink',
-          '--sysvipc',
-          '--kill-on-exit',
-          '--rootfs=$rootfsDir',
-          '-b', '/dev',
-          '-b', '/proc',
-          '-b', '/sys',
-        ];
+        final prootArgs = await DebianSetup.prootArguments(
+          rootfsPath: rootfsDir,
+        );
         void addBind(String hostPath, [String? guestPath]) {
           try {
             final host = hostPath.split(':').first;
@@ -1173,6 +1166,7 @@ class AgenticTools {
         final env = await DebianSetup.prootSessionEnvironment(
           extra: hostExtras,
           flutterProjectPath: workspacePath,
+          rootfsPath: rootfsDir,
         );
 
         // Un git installé par l'utilisateur (apk add git) doit être utilisé
