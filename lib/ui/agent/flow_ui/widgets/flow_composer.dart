@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 
+import '../../../../core/broken_icons.dart';
 import '../models/flow_attachment.dart';
 import '../models/flow_attachment_options.dart';
 import '../styles/flow_composer_style.dart';
@@ -339,7 +340,7 @@ class _FlowComposerState extends State<FlowComposer> {
   /// outline's 1px included), its content — attachment strip and field —
   /// inset 18 further from the sides while the action row tucks in at 10,
   /// under a soft ambient shadow.
-  static const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(24));
+  static const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(18));
   static const EdgeInsetsGeometry _cardPadding = EdgeInsetsDirectional.fromSTEB(
     1,
     19,
@@ -657,7 +658,7 @@ class _FlowComposerState extends State<FlowComposer> {
         child: Padding(
           padding: const EdgeInsets.all(_attachPadding),
           child: Icon(
-            Icons.add,
+            Broken.add,
             size: _attachIconSize,
             color: foreground,
           ),
@@ -684,7 +685,7 @@ class _FlowComposerState extends State<FlowComposer> {
         context,
         active: true,
         disc: FlowCircleButton(
-          icon: Icons.stop_rounded,
+          icon: Broken.stop_circle,
           background: discColor,
           foreground: glyphColor,
           padding: _stopPadding,
@@ -791,7 +792,7 @@ class _FlowComposerState extends State<FlowComposer> {
                     Expanded(child: content),
                     const SizedBox(width: _errorGap),
                     FlowCircleButton(
-                      icon: Icons.close,
+                      icon: Broken.close_circle,
                       background: const Color(0x00000000),
                       foreground: foreground,
                       hoverColor: background,

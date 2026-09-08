@@ -77,7 +77,7 @@ class PandaAgentPage extends StatelessWidget {
           thread: thread,
           threadController: controller.scrollController,
           greeting: const FlowGreeting(
-            icon: Icons.auto_awesome,
+             icon: Broken.magicpen,
             text: 'Comment puis-je vous aider ?',
           ),
           suggestions: null,
@@ -150,7 +150,7 @@ class PandaAgentPage extends StatelessWidget {
                 ),
               if (modelOptions.isEmpty)
                 FlowPill(
-                  icon: Icons.memory_outlined,
+                   icon: Broken.cpu,
                   label: model.isEmpty ? 'Model' : model,
                   showLabel: true,
                   tooltip: 'Modèle actuel',
@@ -162,8 +162,10 @@ class PandaAgentPage extends StatelessWidget {
                     ? 'Arrêter la dictée'
                     : 'Dicter un message',
                 onPressed: controller.toggleListening,
-                icon: Icon(
-                  controller.isListening ? Icons.mic : Icons.mic_none,
+                   icon: Icon(
+                     controller.isListening
+                         ? Broken.microphone
+                         : Broken.microphone_slash,
                   size: 19,
                   color: controller.isListening
                       ? Theme.of(context).colorScheme.primary
@@ -242,8 +244,8 @@ class PandaAgentPage extends StatelessWidget {
               ListTile(
                 leading: Icon(
                   mode.$1 == controller.chatMode
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
+                       ? Broken.record_circle
+                       : Broken.radio,
                 ),
                 title: Text(mode.$2),
                 subtitle: Text(mode.$3),
@@ -273,8 +275,8 @@ class PandaAgentPage extends StatelessWidget {
               ListTile(
                 leading: Icon(
                   mode.$1 == controller.approvalMode
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_unchecked,
+                       ? Broken.record_circle
+                       : Broken.radio,
                 ),
                 title: Text(mode.$2),
                 subtitle: Text(mode.$3),
@@ -321,23 +323,26 @@ class _PandaAgentSuggestions extends StatelessWidget {
               ),
             ),
           ),
-          FlowSuggestionGroup(
-            layout: FlowSuggestionLayout.wrap,
-            spacing: 6,
-            suggestions: [
-              FlowSuggestion(
-                label: 'Explique la structure de ce projet',
-                icon: Broken.tree,
-                outlined: true,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                onTap: () => onSend('Explique la structure de ce projet'),
+          Row(
+            children: [
+              Expanded(
+                child: FlowSuggestion(
+                  label: 'Explique la structure de ce projet',
+                  icon: Broken.tree,
+                  outlined: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  onTap: () => onSend('Explique la structure de ce projet'),
+                ),
               ),
-              FlowSuggestion(
-                label: 'Analyse le fichier ouvert',
-                icon: Broken.search_normal,
-                outlined: true,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                onTap: () => onSend('Analyse le fichier ouvert'),
+              const SizedBox(width: 6),
+              Expanded(
+                child: FlowSuggestion(
+                  label: 'Analyse le fichier ouvert',
+                  icon: Broken.search_normal,
+                  outlined: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  onTap: () => onSend('Analyse le fichier ouvert'),
+                ),
               ),
             ],
           ),

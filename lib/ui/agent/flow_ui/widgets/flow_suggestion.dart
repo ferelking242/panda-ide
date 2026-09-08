@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
+import '../../../../core/broken_icons.dart';
 import '../styles/flow_suggestion_style.dart';
 import '../theme/flow_theme.dart';
 
@@ -185,7 +186,7 @@ class _FlowSuggestionState extends State<FlowSuggestion> {
                     if (showArrow) ...[
                       const SizedBox(width: _iconGap),
                       Icon(
-                        Icons.arrow_forward,
+                        Broken.arrow_right,
                         size: _arrowSize,
                         color: colors.onSurfaceMuted,
                       ),

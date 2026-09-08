@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../../core/broken_icons.dart';
 import 'flow_ui/models/flow_attachment.dart';
 import 'flow_ui/models/flow_message_data.dart';
 import 'flow_ui/models/flow_message_part.dart';
@@ -465,7 +466,7 @@ class _PandaAgentFlowThinkingBlockState
               child: Row(
                 children: [
                   Icon(
-                    Icons.psychology_outlined,
+                    Broken.cpu,
                     size: 17,
                     color: colors.primary,
                   ),
@@ -491,8 +492,8 @@ class _PandaAgentFlowThinkingBlockState
                   ),
                   Icon(
                     _expanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
+                        ? Broken.arrow_up_2
+                        : Broken.arrow_down_2,
                     size: 18,
                     color: colors.onSurfaceVariant,
                   ),
@@ -646,7 +647,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
               else
                 Icon(
                   approval
-                      ? Icons.warning_amber_rounded
+                      ? Broken.warning_2
                       : pandaAgentToolIcon(toolName),
                   size: 16,
                   color: approval ? Colors.amber[700] : foreground,
@@ -702,7 +703,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Ouvrir dans un onglet',
                   onPressed: onOpen,
-                  icon: Icon(Icons.open_in_new, size: 14, color: muted),
+                  icon: Icon(Broken.export, size: 14, color: muted),
                   padding: EdgeInsets.zero,
                   constraints:
                       const BoxConstraints.tightFor(width: 24, height: 24),
@@ -795,19 +796,19 @@ class PandaAgentFlowToolCard extends StatelessWidget {
               children: [
                 _approvalButton(
                   label: 'Autoriser',
-                  icon: Icons.check,
+                  icon: Broken.check,
                   color: Colors.green,
                   onPressed: onAllow,
                 ),
                 _approvalButton(
                   label: 'Toujours',
-                  icon: Icons.done_all,
+                  icon: Broken.tick_circle,
                   color: Colors.blue,
                   onPressed: onAlways,
                 ),
                 _approvalButton(
                   label: 'Refuser',
-                  icon: Icons.close,
+                  icon: Broken.close_circle,
                   color: Colors.redAccent,
                   onPressed: onDeny,
                 ),
@@ -956,31 +957,31 @@ class _PandaAgentFlowSpinnerState extends State<PandaAgentFlowSpinner>
 IconData pandaAgentToolIcon(String name) {
   final value = name.toLowerCase();
   if (value.contains('read') || value.contains('list') || value.contains('file')) {
-    return Icons.description_outlined;
+    return Broken.document;
   }
   if (value.contains('write') ||
       value.contains('edit') ||
       value.contains('create')) {
-    return Icons.edit_note;
+    return Broken.edit;
   }
   if (value.contains('search') ||
       value.contains('grep') ||
       value.contains('find') ||
       value.contains('web')) {
-    return Icons.search;
+    return Broken.search_normal;
   }
   if (value.contains('terminal') ||
       value.contains('bash') ||
       value.contains('exec') ||
       value.contains('run') ||
       value.contains('shell')) {
-    return Icons.terminal;
+    return Broken.command;
   }
-  if (value.contains('git')) return Icons.account_tree;
+  if (value.contains('git')) return Broken.programming_arrows;
   if (value.contains('delete') || value.contains('remove')) {
-    return Icons.delete_outline;
+    return Broken.trash;
   }
-  return Icons.build_outlined;
+  return Broken.setting_3;
 }
 
 String pandaWrapLongTokensForDisplay(String text) {

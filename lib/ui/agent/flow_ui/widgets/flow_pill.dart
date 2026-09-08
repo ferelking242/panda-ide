@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/broken_icons.dart';
 import '../styles/flow_pill_style.dart';
 import '../theme/flow_theme.dart';
 
@@ -184,7 +185,11 @@ class _FlowPillState extends State<FlowPill> {
           ],
           if (hasRemove) ...[
             SizedBox(width: gap),
-            Icon(Icons.close, size: _removeSize, color: removeForeground),
+            Icon(
+              Broken.close_circle,
+              size: _removeSize,
+              color: removeForeground,
+            ),
           ],
         ],
       ),

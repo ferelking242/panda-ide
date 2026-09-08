@@ -119,39 +119,43 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: card,
-              border: Border.all(color: line),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(
-              children: [
-                _buildHeader(
-                  foreground: foreground,
-                  muted: muted,
-                  line: line,
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+          child: Column(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: card,
+                  border: Border.all(color: line),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                if (_expanded) ...[
-                  Expanded(
-                    child: _buildBody(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeader(
                       foreground: foreground,
                       muted: muted,
                       line: line,
-                      input: input,
                     ),
-                  ),
-                  _buildComposer(
-                    foreground: foreground,
-                    muted: muted,
-                    line: line,
-                    input: input,
-                  ),
-                  _buildFooter(foreground: foreground, muted: muted),
-                ],
-              ],
-            ),
+                    if (_expanded) ...[
+                      _buildBody(
+                        foreground: foreground,
+                        muted: muted,
+                        line: line,
+                      ),
+                      _buildComposer(
+                        foreground: foreground,
+                        muted: muted,
+                        line: line,
+                        input: input,
+                      ),
+                      _buildFooter(foreground: foreground, muted: muted),
+                    ],
+                  ],
+                ),
+              ),
+              if (_expanded)
+                _buildEnvironmentFooter(foreground: foreground, muted: muted),
+            ],
           ),
         ),
       ),
@@ -167,8 +171,8 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
       onTap: () => setState(() => _expanded = !_expanded),
       borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
       child: Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        height: 48,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: line)),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
@@ -177,7 +181,7 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
           children: [
             Icon(
               _expanded ? Broken.arrow_down_2 : Broken.arrow_right_2,
-              size: 22,
+              size: 20,
               color: muted,
             ),
             const SizedBox(width: 10),
@@ -185,7 +189,7 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
               'Todos ($_progress/${_tasks.length})',
               style: TextStyle(
                 color: foreground,
-                fontSize: 17,
+                fontSize: 15,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -193,13 +197,13 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
             IconButton(
               tooltip: 'Fermer',
               onPressed: widget.onClose,
-              icon: Icon(Broken.close_circle, size: 23, color: muted),
+              icon: Icon(Broken.close_square, size: 20, color: muted),
               visualDensity: VisualDensity.compact,
             ),
             IconButton(
               tooltip: 'Options de la liste',
               onPressed: () {},
-              icon: Icon(Broken.menu, size: 23, color: muted),
+              icon: Icon(Broken.menu, size: 20, color: muted),
               visualDensity: VisualDensity.compact,
             ),
           ],
@@ -212,22 +216,29 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
     required Color foreground,
     required Color muted,
     required Color line,
-    required Color input,
   }) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        for (var index = 0; index < _tasks.length; index++)
-          _buildTaskRow(
-            task: _tasks[index],
-            index: index,
-            foreground: foreground,
-            muted: muted,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+          child: Column(
+            children: [
+              for (var index = 0; index < _tasks.length; index++)
+                _buildTaskRow(
+                  task: _tasks[index],
+                  index: index,
+                  foreground: foreground,
+                  muted: muted,
+                ),
+            ],
           ),
-        const SizedBox(height: 12),
+        ),
         Container(height: 1, color: line),
-        const SizedBox(height: 12),
-        _buildAttachmentRow(foreground: foreground, muted: muted, input: input),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 2),
+          child: _buildAttachmentRow(muted: muted),
+        ),
       ],
     );
   }
@@ -254,18 +265,18 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
         onTap: () => _toggleTask(index),
         borderRadius: BorderRadius.circular(8),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 5),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(icon, size: 27, color: color),
-              const SizedBox(width: 12),
+              Icon(icon, size: 23, color: color),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   task.title,
                   style: TextStyle(
                     color: textColor,
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w400,
                     height: 1.25,
                   ),
@@ -274,7 +285,7 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
               if (task.status == _WorkflowTaskStatus.active)
                 Padding(
                   padding: const EdgeInsets.only(left: 8),
-                  child: Icon(Broken.more_circle, size: 18, color: muted),
+                  child: Icon(Broken.more_circle, size: 16, color: muted),
                 ),
             ],
           ),
@@ -283,34 +294,29 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
     );
   }
 
-  Widget _buildAttachmentRow({
-    required Color foreground,
-    required Color muted,
-    required Color input,
-  }) {
+  Widget _buildAttachmentRow({required Color muted}) {
     final file = widget.initialAttachment;
-    return Row(
-      children: [
-        _roundIconButton(
-          icon: Broken.add,
-          color: muted,
-          tooltip: 'Ajouter une pièce jointe',
-          onTap: widget.onAddAttachment,
+    return InkWell(
+      onTap: widget.onAddAttachment,
+      borderRadius: BorderRadius.circular(7),
+      child: CustomPaint(
+        painter: _DashedRoundedRectPainter(
+          color: muted.withValues(alpha: 0.28),
+          radius: 7,
         ),
-        const SizedBox(width: 8),
-        if (file != null && file.isNotEmpty)
-          Container(
-            constraints: const BoxConstraints(maxWidth: 320),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: input,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: muted.withValues(alpha: 0.24)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(Broken.arrow_down, size: 18, color: const Color(0xff57b7e8)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Broken.add, size: 22, color: muted),
+              if (file != null && file.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Icon(
+                  Broken.arrow_down,
+                  size: 17,
+                  color: const Color(0xff57b7e8),
+                ),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
@@ -318,17 +324,16 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: muted,
-                      fontSize: 14,
+                      fontSize: 13,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
                 ),
               ],
-            ),
+            ],
           ),
-        const Spacer(),
-        Icon(Broken.document_text, size: 17, color: muted),
-      ],
+        ),
+      ),
     );
   }
 
@@ -339,12 +344,12 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
     required Color input,
   }) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
       child: Container(
         decoration: BoxDecoration(
           color: input,
           border: Border.all(color: line.withValues(alpha: 0.85)),
-          borderRadius: BorderRadius.circular(11),
+          borderRadius: BorderRadius.circular(9),
         ),
         child: TextField(
           controller: _inputController,
@@ -358,7 +363,7 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
             hintText: 'Describe what to build',
             hintStyle: TextStyle(color: muted, fontSize: 15),
             border: InputBorder.none,
-            contentPadding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+            contentPadding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
           ),
         ),
       ),
@@ -368,7 +373,7 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
   Widget _buildFooter({required Color foreground, required Color muted}) {
     final accent = const Color(0xffaeb6c8);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Row(
         children: [
           _roundIconButton(
@@ -420,7 +425,7 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        height: 34,
+        height: 30,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
@@ -457,11 +462,108 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
         onTap: onTap,
         borderRadius: BorderRadius.circular(18),
         child: SizedBox(
-          width: 32,
-          height: 32,
-          child: Center(child: Icon(icon, size: 21, color: color)),
+          width: 30,
+          height: 30,
+          child: Center(child: Icon(icon, size: 19, color: color)),
         ),
       ),
     );
   }
+
+  Widget _buildEnvironmentFooter({
+    required Color foreground,
+    required Color muted,
+  }) {
+    return SizedBox(
+      height: 42,
+      child: Row(
+        children: [
+          Icon(Broken.monitor, size: 17, color: muted),
+          const SizedBox(width: 8),
+          Text(
+            'Local',
+            style: TextStyle(
+              color: muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 22),
+          Icon(Broken.magicpen, size: 17, color: const Color(0xffe1bd36)),
+          const SizedBox(width: 7),
+          Text(
+            'Autopilot (Preview)',
+            style: TextStyle(
+              color: const Color(0xffe1bd36),
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const Spacer(),
+          Icon(Broken.record_circle, size: 25, color: muted),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashedRoundedRectPainter extends CustomPainter {
+  const _DashedRoundedRectPainter({
+    required this.color,
+    required this.radius,
+  });
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final rect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    const dash = 5.0;
+    const gap = 4.0;
+    for (var x = rect.left; x < rect.right; x += dash + gap) {
+      canvas.drawLine(
+        Offset(x, rect.top),
+        Offset((x + dash).clamp(rect.left, rect.right).toDouble(), rect.top),
+        paint,
+      );
+      canvas.drawLine(
+        Offset(x, rect.bottom),
+        Offset(
+          (x + dash).clamp(rect.left, rect.right).toDouble(),
+          rect.bottom,
+        ),
+        paint,
+      );
+    }
+    for (var y = rect.top; y < rect.bottom; y += dash + gap) {
+      canvas.drawLine(
+        Offset(rect.left, y),
+        Offset(
+          rect.left,
+          (y + dash).clamp(rect.top, rect.bottom).toDouble(),
+        ),
+        paint,
+      );
+      canvas.drawLine(
+        Offset(rect.right, y),
+        Offset(
+          rect.right,
+          (y + dash).clamp(rect.top, rect.bottom).toDouble(),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRoundedRectPainter oldDelegate) =>
+      oldDelegate.color != color || oldDelegate.radius != radius;
 }

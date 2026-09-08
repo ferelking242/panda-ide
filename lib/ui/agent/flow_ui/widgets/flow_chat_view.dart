@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import '../../../../core/broken_icons.dart';
 import '../models/flow_attachment.dart';
 import '../models/flow_attachment_options.dart';
 import '../styles/flow_chat_view_style.dart';
@@ -274,7 +275,7 @@ class _FlowChatViewState extends State<FlowChatView> {
   static const double _dropBlurSigma = 12;
   static const double _dropGlyphSize = 48;
   static const double _dropGlyphGap = 16;
-  static const IconData _dropIcon = Icons.file_upload_outlined;
+  static const IconData _dropIcon = Broken.document_upload;
   static const Duration _dropReveal = Duration(milliseconds: 150);
   static const double _composerGap = 8;
 
@@ -609,7 +610,7 @@ class _FlowChatViewState extends State<FlowChatView> {
                     border: Border.all(color: colors.outline),
                   ),
                   child: FlowCircleButton(
-                    icon: Icons.arrow_downward,
+                    icon: Broken.arrow_down,
                     // The opaque ground, not a translucent container wash —
                     // the button floats over the thread, and messages
                     // scrolling beneath must not read through it.

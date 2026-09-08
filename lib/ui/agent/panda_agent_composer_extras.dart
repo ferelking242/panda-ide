@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/broken_icons.dart';
 import '../../utils/agentic_tools.dart';
 import '../../utils/editors/edit_hunks.dart';
 import 'panda_agent_controller.dart';
@@ -122,7 +123,7 @@ class _PandaAgentPendingChangesBarState
                   padding: const EdgeInsets.only(bottom: 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.description_outlined, size: 18),
+                      const Icon(Broken.document_text, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -194,8 +195,8 @@ class _PandaAgentPendingChangesBarState
                 children: [
                   Icon(
                     _expanded
-                        ? Icons.keyboard_arrow_down
-                        : Icons.keyboard_arrow_right,
+                        ? Broken.arrow_down_2
+                        : Broken.arrow_right_2,
                     size: 20,
                     color: colors.onSurfaceVariant,
                   ),
@@ -244,7 +245,7 @@ class _PandaAgentPendingChangesBarState
                   IconButton(
                     tooltip: 'Voir le diff',
                     onPressed: _working ? null : _showDiff,
-                    icon: Icon(Icons.copy_all_outlined,
+                    icon: Icon(Broken.copy,
                         size: 19, color: colors.onSurfaceVariant),
                     visualDensity: VisualDensity.compact,
                   ),
@@ -363,7 +364,7 @@ class PandaAgentComposerFooter extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
-          Icon(Icons.desktop_windows_outlined,
+          Icon(Broken.monitor,
               size: 17, color: colors.onSurfaceVariant),
           const SizedBox(width: 7),
           Text(
@@ -376,7 +377,7 @@ class PandaAgentComposerFooter extends StatelessWidget {
           ),
           const SizedBox(width: 18),
           Icon(
-            auto ? Icons.rocket_launch_outlined : Icons.verified_user_outlined,
+            auto ? Broken.magicpen : Broken.shield_tick,
             size: 17,
             color: auto ? const Color(0xffe2bd36) : colors.onSurfaceVariant,
           ),
@@ -499,7 +500,7 @@ class PandaAgentQueueBar extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.queue_play_next_outlined, size: 16, color: colors.primary),
+              Icon(Broken.task, size: 16, color: colors.primary),
               const SizedBox(width: 6),
               Text(
                 'File d’attente · ${items.length}/5',
@@ -525,13 +526,13 @@ class PandaAgentQueueBar extends StatelessWidget {
                 IconButton(
                   tooltip: 'Modifier',
                   onPressed: () => _edit(context, index, items[index]),
-                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  icon: const Icon(Broken.edit, size: 15),
                   visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   tooltip: 'Retirer',
                   onPressed: () => onRemove(index),
-                  icon: const Icon(Icons.close, size: 15),
+                  icon: const Icon(Broken.close_circle, size: 15),
                   visualDensity: VisualDensity.compact,
                 ),
               ],
