@@ -108,6 +108,30 @@ class MainActivity : FlutterActivity() {
                     KeepAliveService.stop(applicationContext)
                     result.success(true)
                 }
+                "killProcessGroup" -> {
+                    val pid = call.argument<Int>("pid")
+                    val signal = call.argument<Int>("signal") ?: 15
+                    if (pid == null || pid <= 0 || signal !in 1..64) {
+                        result.error("BAD_ARGS", "A valid pid and signal are required", null)
+                        return@setMethodCallHandler
+                    }
+
+                    var killed = false
+                    try {
+                        // flutter_pty makes the child a session/process-group
+                        // leader. Negative pid targets the complete group,
+                        // including Git/Flutter descendants.
+                        val kill = ProcessBuilder(
+                            "/system/bin/kill",
+                            "-$signal",
+                            "-$pid",
+                        ).redirectErrorStream(true).start()
+                        killed = kill.waitFor() == 0
+                    } catch (_: Exception) {
+                        // Some Android vendor images do not expose /system/bin/kill.
+                    }
+                    result.success(killed)
+                }
                 "requestPermission" -> {
                     // Permissions téléphone pour extensions (camera, micro…)
                     val perm = call.argument<String>("permission")!!
