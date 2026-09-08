@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:thinking_orbs_flutter/thinking_orbs.dart';
 
@@ -76,21 +78,50 @@ class FlowThinkingIndicator extends StatefulWidget {
   State<FlowThinkingIndicator> createState() => _FlowThinkingIndicatorState();
 }
 
-class _FlowThinkingIndicatorState extends State<FlowThinkingIndicator> {
+class _FlowThinkingIndicatorState extends State<FlowThinkingIndicator>
+    with SingleTickerProviderStateMixin {
   /// The design's gap between the glyph and its label.
   static const double _labelGap = 4;
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    );
+    if (widget.active) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(FlowThinkingIndicator oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.duration != widget.duration) {
+      _controller.duration = widget.duration;
+    }
+    if (widget.active && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.active && _controller.isAnimating) {
+      _controller.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final label = widget.label;
 
-    Widget glyph = ThinkingOrb(
-      state: widget.orbState,
-      size: widget.orbSize,
-      theme: widget.orbTheme,
-      speed: widget.orbSpeed,
-      paused: !widget.active,
-      semanticsLabel: widget.semanticLabel,
+    final glyph = _PulseDots(
+      animation: _controller,
+      color: widget.color ?? context.flowColors.primary,
+      size: widget.size,
+      semanticLabel: widget.semanticLabel,
     );
 
     if (label == null) {
@@ -117,4 +148,64 @@ class _FlowThinkingIndicatorState extends State<FlowThinkingIndicator> {
   }
 }
 
+class _PulseDots extends StatelessWidget {
+  const _PulseDots({
+    required this.animation,
+    required this.color,
+    required this.size,
+    this.semanticLabel,
+  });
+
+  final Animation<double> animation;
+  final Color color;
+  final double size;
+  final String? semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final dots = [
+      0.0,
+      0.18,
+      0.36,
+    ];
+    return Semantics(
+      label: semanticLabel,
+      child: AnimatedBuilder(
+        animation: animation,
+        builder: (context, _) {
+          return SizedBox(
+            width: size,
+            height: size,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                for (final offset in dots)
+                  Opacity(
+                    opacity: 0.45 +
+                        0.55 *
+                            (0.5 +
+                                0.5 *
+                                    math.sin(
+                                      (animation.value + offset) *
+                                          math.pi *
+                                          2,
+                                    )),
+                    child: Container(
+                      width: size * 0.22,
+                      height: size * 0.22,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 

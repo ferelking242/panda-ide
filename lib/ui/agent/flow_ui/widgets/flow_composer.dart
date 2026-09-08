@@ -340,29 +340,29 @@ class _FlowComposerState extends State<FlowComposer> {
   /// outline's 1px included), its content — attachment strip and field —
   /// inset 18 further from the sides while the action row tucks in at 10,
   /// under a soft ambient shadow.
-  static const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(18));
+  static const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(12));
   static const EdgeInsetsGeometry _cardPadding = EdgeInsetsDirectional.fromSTEB(
     1,
-    19,
+    12,
     1,
-    11,
+    8,
   );
-  static const double _contentInset = 18;
+  static const double _contentInset = 12;
   static const double _actionInset = 10;
-  static const double _attachmentGap = 12;
+  static const double _attachmentGap = 8;
   // Keep the action row close to the field on narrow mobile composers.
-  static const double _fieldGap = 8;
+  static const double _fieldGap = 4;
   static const double _leadingGap = 4;
   static const double _trailingGap = 8;
 
   /// Between two neighbouring pills in the action row — the design's 8,
   /// closing to 6 on phones.
-  static const double _pillGap = 8;
+  static const double _pillGap = 5;
   static const double _mobilePillGap = 6;
 
   /// The field's floor for the compressed composer: a 34px input followed by
   /// the compact action row and the reduced inter-row gap.
-  static const double _fieldMinHeight = 34;
+  static const double _fieldMinHeight = 30;
 
   /// The design's outline: a 1px hairline over the ink, sweeping from the
   /// top-left toward the bottom-right where it thins — 14% → 8% at rest,
@@ -374,19 +374,19 @@ class _FlowComposerState extends State<FlowComposer> {
 
   /// Send and stop are the design's ringed button: a 26px disc inside a
   /// surface-colored gap and a 1px ring, on a 32px frame.
-  static const double _buttonFrame = 32;
-  static const double _buttonDisc = 26;
+  static const double _buttonFrame = 30;
+  static const double _buttonDisc = 24;
 
   /// Centers the stop glyph on the disc (26 = 18 + 2 × 4).
   static const double _stopPadding = 4;
 
   /// The attach affordance: the menus' trigger metrics — an 18px glyph
   /// padded 7 onto a 32px disc.
-  static const double _attachIconSize = 18;
-  static const double _attachPadding = 7;
+  static const double _attachIconSize = 17;
+  static const double _attachPadding = 6;
 
   /// The card's lift: the theme's shadow ink at the composer's tighter blur.
-  static const double _shadowBlur = 12;
+  static const double _shadowBlur = 8;
 
   /// The drop wash over the card's ground — light enough that the field's
   /// text keeps its contrast, heavy enough to read as a state change

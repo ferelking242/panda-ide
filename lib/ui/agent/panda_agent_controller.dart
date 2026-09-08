@@ -31,6 +31,7 @@ class QueuedAgentPrompt {
 class PandaAgentController extends ChangeNotifier {
   PandaAgentController() {
     inputController.addListener(notifyListeners);
+    unawaited(_loadPreferences());
   }
 
   final TextEditingController inputController = TextEditingController();
@@ -58,11 +59,38 @@ class PandaAgentController extends ChangeNotifier {
   String? lastError;
   int usedTokens = 0;
   int maxTokens = 120000;
+  int _promptTokens = 0;
   BuildContext? _lastContext;
   String _lastWorkspacePath = '';
+  bool _disposed = false;
 
   bool get hasPendingApproval => _approval != null;
   String get currentTool => _currentTool;
+
+  Future<void> _loadPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_disposed) return;
+      final savedMode = prefs.getString('panda_agent_chat_mode');
+      final savedApproval = prefs.getString('panda_agent_approval_mode');
+      if (savedMode != null && {'ask', 'agent', 'plan'}.contains(savedMode)) {
+        chatMode = savedMode;
+      }
+      if (savedApproval != null &&
+          {'default', 'every', 'autopilot'}.contains(savedApproval)) {
+        approvalMode = savedApproval;
+      }
+      notifyListeners();
+    } catch (_) {
+      // Preferences are optional; the safe defaults remain active.
+    }
+  }
+
+  Future<void> _persistModes() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('panda_agent_chat_mode', chatMode);
+    await prefs.setString('panda_agent_approval_mode', approvalMode);
+  }
 
   String providerLabel(String provider) {
     if (provider.trim().isEmpty) return 'Custom';
@@ -248,6 +276,7 @@ class PandaAgentController extends ChangeNotifier {
         history.map((entry) => entry['content']?.toString() ?? '').join('\n'),
       );
       maxTokens = _contextLimit(config);
+      _promptTokens = usedTokens;
       notifyListeners();
       messages
         ..add(<String, dynamic>{
@@ -356,12 +385,14 @@ class PandaAgentController extends ChangeNotifier {
   void setMode(String mode) {
     if (!{'ask', 'agent', 'plan'}.contains(mode) || chatMode == mode) return;
     chatMode = mode;
+    unawaited(_persistModes());
     notifyListeners();
   }
 
   void setApprovalMode(String mode) {
     if (!{'default', 'every', 'autopilot'}.contains(mode)) return;
     approvalMode = mode;
+    unawaited(_persistModes());
     notifyListeners();
   }
 
@@ -390,7 +421,6 @@ class PandaAgentController extends ChangeNotifier {
   void clearError() {
     if (lastError == null) return;
     lastError = null;
-    notifyListeners();
     notifyListeners();
   }
 
@@ -590,9 +620,9 @@ class PandaAgentController extends ChangeNotifier {
       case AgentPhase.streaming:
         phase = AgentPhase.streaming;
         _streamBuffer += chunk.text;
-        usedTokens = math.max(
-          usedTokens,
-          _estimateTokens(_streamBuffer),
+        usedTokens = math.min(
+          maxTokens,
+          _promptTokens + _estimateTokens(_streamBuffer),
         ).toInt();
         final clean = _stripThinking(_streamBuffer);
         message['text'] = clean.text;
@@ -781,6 +811,7 @@ class PandaAgentController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     runner.cancel();
     unawaited(_subscription?.cancel());
     unawaited(speech.stop());

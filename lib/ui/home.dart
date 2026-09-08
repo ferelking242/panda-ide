@@ -5554,6 +5554,7 @@ class _SelectTypeState extends State<SelectType>
           _agentPanelTab = 4;
         });
       },
+      onOpenSecrets: _openAgentSettingsTab,
     );
   }
 

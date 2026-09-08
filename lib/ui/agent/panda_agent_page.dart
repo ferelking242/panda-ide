@@ -21,11 +21,13 @@ class PandaAgentPage extends StatelessWidget {
     required this.controller,
     required this.workspacePath,
     this.onOpenProviders,
+    this.onOpenSecrets,
   });
 
   final PandaAgentController controller;
   final String Function() workspacePath;
   final VoidCallback? onOpenProviders;
+  final VoidCallback? onOpenSecrets;
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +156,7 @@ class PandaAgentPage extends StatelessWidget {
                   label: model.isEmpty ? 'Model' : model,
                   showLabel: true,
                   tooltip: 'Modèle actuel',
+                   onTap: onOpenProviders,
                 ),
             ],
             trailingActions: [
@@ -212,7 +215,7 @@ class PandaAgentPage extends StatelessWidget {
               leading: const Icon(Broken.key),
               title: const Text('Secrets et variables'),
               subtitle: const Text('Gérer les accès de l’agent'),
-              onTap: () => Navigator.pop(sheetContext, 'provider'),
+               onTap: () => Navigator.pop(sheetContext, 'secrets'),
             ),
           ],
         ),
@@ -226,7 +229,11 @@ class PandaAgentPage extends StatelessWidget {
       if (picked.isNotEmpty) controller.addAttachments(picked);
       return;
     }
-    onOpenProviders?.call();
+    if (action == 'secrets') {
+      onOpenSecrets?.call();
+    } else {
+      onOpenProviders?.call();
+    }
   }
 
   void _showModes(BuildContext context) {
