@@ -869,7 +869,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }
   }
 
-  // ── PRoot + Alpine session ─────────────────────────────────────────────────
+  // ── PRoot + selected Linux session ─────────────────────────────────────────
 
   Future<void> _startProotSession(
     _TerminalRuntime runtime, {
@@ -880,7 +880,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final sw = Stopwatch()..start();
 
     if (!await RootfsManager.isInstalled(activeType)) {
-      // Alpine should have been extracted during SettingUpScreen.
+      // The selected Linux rootfs should have been extracted during setup.
       // If we're here, the extraction failed or was skipped.
       PandaLog.e(
         'Terminal',
@@ -903,7 +903,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
       return;
     }
     PandaLog.d('Terminal', 'Linux rootfs verified complete');
-    await DebianSetup.ensureDebianRuntimeFiles();
+    // Use the selected distro's directory explicitly. The legacy helper
+    // derives a path from whichever rootfs marker it finds first, which can
+    // make an Ubuntu session inherit stale Debian/Alpine runtime files.
+    await DebianSetup.ensureRuntimeFilesForRootfs(rootfsDir);
 
     PandaLog.i('Terminal', 'Locating PRoot binary in rootfs=$rootfsDir');
     final prootBin = await DebianSetup.locateProotBinary(rootfsDir);
@@ -931,7 +934,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         '\x1b[33m    /panda-ide/Logs/panda-*.log\x1b[0m\r\n',
       );
       runtime.terminal.write(
-        '\x1b[36m  Essayez de réinstaller ou de vider le cache Alpine\x1b[0m\r\n',
+        '\x1b[36m  Essayez de réinstaller le rootfs sélectionné ou de vider son cache\x1b[0m\r\n',
       );
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
@@ -1010,7 +1013,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
           rootfsPath: rootfsDir,
           flutterProjectPath: widget.projectDir,
         ),
-        // Suppress locale / groups warnings on Alpine where locales are not installed
+        // Suppress locale / groups warnings when the rootfs has no locales.
         'LC_ALL': 'C',
         'LANG': 'C',
       };
@@ -1063,7 +1066,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
         runtime.pty = null;
         runtime.terminal.write(
-          '\r\n\r\n[Alpine session ended with exit code $code]',
+          '\r\n\r\n[${activeType.displayName} session ended with exit code $code]',
         );
         _sessionBloc.add(
           UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
@@ -1120,7 +1123,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
       };
     } catch (e) {
       PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString());
-      runtime.terminal.write('\r\n\x1b[31m[Erreur PRoot / Alpine]\x1b[0m\r\n');
+      runtime.terminal.write(
+        '\r\n\x1b[31m[Erreur PRoot / ${activeType.displayName}]\x1b[0m\r\n',
+      );
       runtime.terminal.write('\x1b[31m  $e\x1b[0m\r\n');
       runtime.terminal.write('\x1b[33m  Logs:\x1b[0m\r\n');
       runtime.terminal.write(
@@ -1610,11 +1615,13 @@ class _SetupTerminalState extends State<SetupTerminal> {
       runtime.controller.setSelection(
         buffer.createAnchor(
           0,
-          (rows - runtime.terminal.viewHeight).clamp(0, rows - 1),
+          0,
         ),
         buffer.createAnchor(runtime.terminal.viewWidth, rows - 1),
         mode: SelectionMode.line,
       );
+      _hasSelection = true;
+      _showSelectionUI();
       _selectionUiTick.value++;
     } catch (_) {}
   }
@@ -1690,31 +1697,66 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _selectionToolbarOverlay = null;
   }
 
-  /// Keeps the Android hardware shortcut path inside xterm's terminal
-  /// encoder.  In particular Ctrl+Shift+S must not be interpreted as a
-  /// Flutter text-field shortcut or be left stuck in the first cell.
+  /// Keep hardware shortcuts in the same path as the accessory keyboard.
+  ///
+  /// Flutter's text-input layer does not forward every Ctrl combination to
+  /// xterm on Android. Handling the control bytes here makes a physical
+  /// keyboard behave like the on-screen keys. Ctrl+A is intentionally a
+  /// terminal-buffer action because the accessory key is Select All.
   KeyEventResult _handleTerminalKeyEvent(
     _TerminalRuntime runtime,
     FocusNode focusNode,
     KeyEvent event,
   ) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.keyS &&
-        HardwareKeyboard.instance.isControlPressed &&
-        HardwareKeyboard.instance.isShiftPressed) {
-      runtime.terminal.keyInput(
-        TerminalKey.keyS,
-        ctrl: true,
-        shift: true,
-      );
+    if (event is! KeyDownEvent ||
+        !HardwareKeyboard.instance.isControlPressed) {
+      return KeyEventResult.ignored;
+    }
+
+    if (event.logicalKey == LogicalKeyboardKey.keyA) {
+      _selectAll(runtime);
       return KeyEventResult.handled;
     }
-    return KeyEventResult.ignored;
+
+    final controlCode = <LogicalKeyboardKey, int>{
+      LogicalKeyboardKey.keyB: 2,
+      LogicalKeyboardKey.keyC: 3,
+      LogicalKeyboardKey.keyD: 4,
+      LogicalKeyboardKey.keyE: 5,
+      LogicalKeyboardKey.keyF: 6,
+      LogicalKeyboardKey.keyG: 7,
+      LogicalKeyboardKey.keyH: 8,
+      LogicalKeyboardKey.keyI: 9,
+      LogicalKeyboardKey.keyJ: 10,
+      LogicalKeyboardKey.keyK: 11,
+      LogicalKeyboardKey.keyL: 12,
+      LogicalKeyboardKey.keyM: 13,
+      LogicalKeyboardKey.keyN: 14,
+      LogicalKeyboardKey.keyO: 15,
+      LogicalKeyboardKey.keyP: 16,
+      LogicalKeyboardKey.keyQ: 17,
+      LogicalKeyboardKey.keyR: 18,
+      LogicalKeyboardKey.keyS: 19,
+      LogicalKeyboardKey.keyT: 20,
+      LogicalKeyboardKey.keyU: 21,
+      LogicalKeyboardKey.keyV: 22,
+      LogicalKeyboardKey.keyW: 23,
+      LogicalKeyboardKey.keyX: 24,
+      LogicalKeyboardKey.keyY: 25,
+      LogicalKeyboardKey.keyZ: 26,
+    }[event.logicalKey];
+    if (controlCode == null) return KeyEventResult.ignored;
+
+    runtime.pty?.write(<int>[controlCode]);
+    return KeyEventResult.handled;
   }
 
   void sendToPty(String sequence) {
+    if (widget.readOnly) return;
     final runtime = _activeRuntime();
-    runtime?.pty?.write(const Utf8Encoder().convert(sequence));
+    if (runtime == null) return;
+    if (!runtime.focusNode.hasFocus) runtime.focusNode.requestFocus();
+    runtime.pty?.write(const Utf8Encoder().convert(sequence));
   }
 
   void _setTerminalOutputWithAutocomplete({
@@ -2540,7 +2582,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
             size: 18,
           ),
           child: Text(
-            'Nouvelle session Alpine',
+            'Nouvelle session Linux',
             style: TextStyle(color: appTheme.selectScreenCardTextColor),
           ),
         ),

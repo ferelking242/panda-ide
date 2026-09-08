@@ -506,6 +506,14 @@ PS1='\$(__panda_ps)'
   static Future<void> ensureDebianRuntimeFiles() async =>
       _ensureRuntimeFilesIn(debianDir);
 
+  /// Prepare the exact rootfs selected by the terminal.
+  ///
+  /// The old convenience method derives a legacy path for callers that do not
+  /// know the active distro.  A terminal session does know it, so it must use
+  /// this method or an Ubuntu session can inherit Debian/Alpine runtime files.
+  static Future<void> ensureRuntimeFilesForRootfs(String rootfsPath) async =>
+      _ensureRuntimeFilesIn(rootfsPath);
+
   static Future<void> _ensureRuntimeFilesIn(String dir) async {
     if (!Directory(dir).existsSync()) return;
 
@@ -528,11 +536,6 @@ PS1='\$(__panda_ps)'
       } catch (_) {}
     }
 
-    if (readyMarker.existsSync() &&
-        readyMarker.readAsStringSync().trim() == rootfsVersion) {
-      return;
-    }
-
     for (final name in const [
       '.panda-proot-l2s',
       'root',
@@ -552,6 +555,15 @@ PS1='\$(__panda_ps)'
 
     await _makeBinariesExecutable(dir);
 
+    // resolv.conf can be a stale file (or a symlink into a systemd path that
+    // does not exist inside PRoot). Always replace it when a session starts.
+    final resolv = File('$dir/etc/resolv.conf');
+    try {
+      if (FileSystemEntity.typeSync(resolv.path, followLinks: false) ==
+          FileSystemEntityType.link) {
+        await resolv.delete();
+      }
+    } catch (_) {}
     _write('$dir/etc/resolv.conf',
         'nameserver 1.1.1.1\nnameserver 8.8.8.8\n');
     _write('$dir/etc/hosts',
@@ -570,7 +582,7 @@ PS1='\$(__panda_ps)'
     _write('$dir/root/.bashrc', profile);
 
     try {
-      readyMarker.writeAsStringSync(rootfsVersion);
+      readyMarker.writeAsStringSync(rootfsVersion, flush: true);
       PandaLog.i('DebianSetup', 'Runtime files ready (marker written)');
     } catch (_) {}
   }

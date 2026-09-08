@@ -11,6 +11,7 @@ class TerminalKeyboardMenu extends StatefulWidget {
       onModifierChanged;
   final VoidCallback? onCopy;
   final VoidCallback? onPaste;
+  final VoidCallback? onSelectAll;
 
   const TerminalKeyboardMenu({
     super.key,
@@ -18,6 +19,7 @@ class TerminalKeyboardMenu extends StatefulWidget {
     required this.onModifierChanged,
     this.onCopy,
     this.onPaste,
+    this.onSelectAll,
   });
 
   @override
@@ -49,18 +51,23 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
             _modifierChip('ALT', Modifier.alt, _alt),
             _modifierChip('SHIFT', Modifier.shift, _shift),
             _chip('TAB', () => _sendWithModifiers('\t')),
-            _chip('SPC', () => _sendWithModifiers(' ')),
+            _iconChip(Icons.keyboard_return_rounded, () => _send('\r')),
+            _iconChip(Icons.backspace_rounded, () => _send('\x7f')),
+            _chip('DEL', () => _send('\x1b[3~')),
             _dividerWidget(),
             _shortcutChip('^C', '\x03'),
             _shortcutChip('^Z', '\x1a'),
             _shortcutChip('^D', '\x04'),
             _shortcutChip('^L', '\x0c'),
-            _shortcutChip('^A', '\x01'),
+            _actionChip(
+              'CTRL+A',
+              onTap: widget.onSelectAll ?? () => _send('\x01'),
+            ),
             _shortcutChip('^E', '\x05'),
             _shortcutChip('^K', '\x0b'),
             _shortcutChip('^U', '\x15'),
             _shortcutChip('^W', '\x17'),
-            _shortcutChip('^⇧S', '\x13'),
+            _shortcutChip('^S', '\x13'),
           ]),
           _buildRow([
             _iconChip(Icons.arrow_upward_rounded, () => _send('\x1b[A')),
@@ -72,36 +79,19 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
             _chip('END', () => _send('\x1b[F')),
             _chip('PgUp', () => _send('\x1b[5~')),
             _chip('PgDn', () => _send('\x1b[6~')),
-            _dividerWidget(),
-            ...[
-              '|',
-              '&',
-              ';',
-              '~',
-              '.',
-              '/',
-              '\\',
-              '`',
-              '"',
-              "'",
-              '(',
-              ')',
-              '{',
-              '}',
-              '[',
-              ']',
-              '!',
-              '#',
-              '%',
-              '^',
-              '@',
-              '*',
-              '>',
-              '<',
-            ].map((value) => _chip(
-                  value,
-                  () => _sendWithModifiers(value),
-                )),
+            _chip('INS', () => _send('\x1b[2~')),
+            _chip('F1', () => _send('\x1bOP')),
+            _chip('F2', () => _send('\x1bOQ')),
+            _chip('F3', () => _send('\x1bOR')),
+            _chip('F4', () => _send('\x1bOS')),
+            _chip('F5', () => _send('\x1b[15~')),
+            _chip('F6', () => _send('\x1b[17~')),
+            _chip('F7', () => _send('\x1b[18~')),
+            _chip('F8', () => _send('\x1b[19~')),
+            _chip('F9', () => _send('\x1b[20~')),
+            _chip('F10', () => _send('\x1b[21~')),
+            _chip('F11', () => _send('\x1b[23~')),
+            _chip('F12', () => _send('\x1b[24~')),
             _dividerWidget(),
             _iconChip(Icons.copy_rounded, () => widget.onCopy?.call()),
             _iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
@@ -143,6 +133,20 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       background: _chipBackground,
       border: _chipBorder,
       minWidth: 31,
+    );
+  }
+
+  Widget _actionChip(String label, {required VoidCallback onTap}) {
+    return _TerminalKeyButton(
+      label: label,
+      onTap: () {
+        _resetModifiers();
+        onTap();
+      },
+      color: _foreground,
+      background: _chipBackground,
+      border: _chipBorder,
+      minWidth: 48,
     );
   }
 

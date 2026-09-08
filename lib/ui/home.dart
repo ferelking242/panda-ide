@@ -4703,7 +4703,7 @@ class _SelectTypeState extends State<SelectType>
     return BlocBuilder<AppThemeBloc, AppThemeState>(
       builder: (context, ts) {
         final isDark = ts.appTheme.isDark;
-        final bg = isDark ? const Color(0xff1a1b1f) : const Color(0xfff5f5f7);
+        const panelRadius = 10.0;
         if (!_bottomPanelOpen) return const SizedBox.shrink();
         return Padding(
           padding: EdgeInsets.zero,
@@ -4711,12 +4711,11 @@ class _SelectTypeState extends State<SelectType>
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             height: _bottomPanelHeight,
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(16),
-            ),
+            clipBehavior: Clip.antiAlias,
+            decoration: const BoxDecoration(color: Colors.transparent),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(panelRadius),
+              clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
                   // One subtle grip keeps the panel resizable without adding
