@@ -11,6 +11,7 @@ class TerminalKeyboardMenu extends StatefulWidget {
       onModifierChanged;
   final VoidCallback? onCopy;
   final VoidCallback? onPaste;
+  final VoidCallback? onSelectAll;
 
   const TerminalKeyboardMenu({
     super.key,
@@ -18,6 +19,7 @@ class TerminalKeyboardMenu extends StatefulWidget {
     required this.onModifierChanged,
     this.onCopy,
     this.onPaste,
+    this.onSelectAll,
   });
 
   @override
@@ -28,6 +30,7 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
   bool _ctrl = false;
   bool _alt = false;
   bool _shift = false;
+  bool _showFunctionKeys = false;
 
   static const _foreground = Color(0xffc4c7cc);
   static const _mutedForeground = Color(0xff92969d);
@@ -49,37 +52,33 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
             _modifierChip('ALT', Modifier.alt, _alt),
             _modifierChip('SHIFT', Modifier.shift, _shift),
             _chip('TAB', () => _sendWithModifiers('\t')),
-            _iconChip(Icons.keyboard_return_rounded, () => _send('\r')),
-            _iconChip(Icons.backspace_rounded, () => _send('\x7f')),
-            _chip('DEL', () => _send('\x1b[3~')),
-          ]),
-          _buildRow([
             _iconChip(Icons.arrow_upward_rounded, () => _send('\x1b[A')),
             _iconChip(Icons.arrow_downward_rounded, () => _send('\x1b[B')),
             _iconChip(Icons.arrow_back_rounded, () => _send('\x1b[D')),
             _iconChip(Icons.arrow_forward_rounded, () => _send('\x1b[C')),
-            _dividerWidget(),
+          ]),
+          _buildRow([
+            _chip('FN', () {
+              setState(() => _showFunctionKeys = !_showFunctionKeys);
+            }, active: _showFunctionKeys),
             _chip('HOME', () => _send('\x1b[H')),
             _chip('END', () => _send('\x1b[F')),
             _chip('PgUp', () => _send('\x1b[5~')),
             _chip('PgDn', () => _send('\x1b[6~')),
             _chip('INS', () => _send('\x1b[2~')),
-            _chip('F1', () => _send('\x1bOP')),
-            _chip('F2', () => _send('\x1bOQ')),
-            _chip('F3', () => _send('\x1bOR')),
-            _chip('F4', () => _send('\x1bOS')),
-            _chip('F5', () => _send('\x1b[15~')),
-            _chip('F6', () => _send('\x1b[17~')),
-            _chip('F7', () => _send('\x1b[18~')),
-            _chip('F8', () => _send('\x1b[19~')),
-            _chip('F9', () => _send('\x1b[20~')),
-            _chip('F10', () => _send('\x1b[21~')),
-            _chip('F11', () => _send('\x1b[23~')),
-            _chip('F12', () => _send('\x1b[24~')),
+            _iconChip(Icons.keyboard_return_rounded, () => _send('\r')),
+            _iconChip(Icons.backspace_rounded, () => _send('\x7f')),
+            _chip('DEL', () => _send('\x1b[3~')),
             _dividerWidget(),
+            _iconChip(Icons.select_all_rounded, () => widget.onSelectAll?.call()),
             _iconChip(Icons.copy_rounded, () => widget.onCopy?.call()),
             _iconChip(Icons.paste_rounded, () => widget.onPaste?.call()),
           ]),
+          if (_showFunctionKeys)
+            _buildRow([
+              for (var i = 1; i <= 12; i++)
+                _chip('F$i', () => _send(_functionKeySequence(i))),
+            ]),
         ],
       ),
     );
@@ -96,13 +95,13 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
     );
   }
 
-  Widget _chip(String label, VoidCallback onTap) {
+  Widget _chip(String label, VoidCallback onTap, {bool active = false}) {
     return _TerminalKeyButton(
       label: label,
       onTap: onTap,
-      color: _foreground,
-      background: _chipBackground,
-      border: _chipBorder,
+      color: active ? Colors.white : _foreground,
+      background: active ? _activeBackground : _chipBackground,
+      border: active ? _foreground : _chipBorder,
     );
   }
 
@@ -197,6 +196,23 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       _shift,
       _resetModifiers,
     );
+  }
+
+  String _functionKeySequence(int key) {
+    return switch (key) {
+      1 => '\x1bOP',
+      2 => '\x1bOQ',
+      3 => '\x1bOR',
+      4 => '\x1bOS',
+      5 => '\x1b[15~',
+      6 => '\x1b[17~',
+      7 => '\x1b[18~',
+      8 => '\x1b[19~',
+      9 => '\x1b[20~',
+      10 => '\x1b[21~',
+      11 => '\x1b[23~',
+      _ => '\x1b[24~',
+    };
   }
 }
 

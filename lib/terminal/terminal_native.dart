@@ -363,10 +363,16 @@ class _TerminalRuntime {
   final TerminalController controller;
   final bool isProot;
   final FocusNode focusNode;
+  final GlobalKey<TerminalViewState> viewKey;
 
   Pty? pty;
   SSHSession? sshSession;
   String currentInput = '';
+  String commandInput = '';
+  String lastCommand = '';
+  bool promptSeen = false;
+  int? ptyColumns;
+  int? ptyRows;
   VoidCallback? selectionListener;
 
   _TerminalRuntime({
@@ -375,7 +381,8 @@ class _TerminalRuntime {
     required this.terminal,
     required this.controller,
     this.isProot = true,
-  }) : focusNode = FocusNode(debugLabel: 'terminal-$sessionId');
+  })  : focusNode = FocusNode(debugLabel: 'terminal-$sessionId'),
+        viewKey = GlobalKey<TerminalViewState>();
 
   bool get isRunning {
     if (sshSession != null) return true;
@@ -428,7 +435,8 @@ class TerminalSessionStore {
   TerminalSessionBloc? bloc;
 }
 
-class _SetupTerminalState extends State<SetupTerminal> {
+class _SetupTerminalState extends State<SetupTerminal>
+    with WidgetsBindingObserver {
   late TerminalSessionBloc _sessionBloc;
   late final List<SSHInfo> sshServerList;
   late final SSHPrivateKey? termuxInfo;
@@ -492,6 +500,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Réutilise le bloc global si une vue précédente existe (expand/collapse)
     _sessionBloc = TerminalSessionStore.instance.bloc ??= TerminalSessionBloc(
       initialFontSize: _terminalFontSizeFromConfig(),
@@ -506,6 +515,18 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _pageController = PageController(initialPage: 0);
     _bootstrapTerminalPage();
     _loadPathBinaries();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncTerminalDimensions();
+    });
+  }
+
+  @override
+  void didChangeMetrics() {
+    // Gboard changes the available height without recreating the terminal.
+    // Give xterm one layout pass, then forward its new cell size to the PTY.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncTerminalDimensions();
+    });
   }
 
   Future<void> _bootstrapTerminalPage() async {
@@ -532,46 +553,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
         if (r.pty != null && r.terminal.onOutput == null) {
           final proc = r.pty!;
           r.terminal.onOutput = (data) {
-            if (widget.readOnly) return;
-
-            String sequence = '';
-            if (_modCtrl) {
-              if (data.length == 1) {
-                int code = data.toUpperCase().codeUnitAt(0);
-                if (code >= 65 && code <= 90) {
-                  sequence = String.fromCharCode(code - 64);
-                }
-              }
-              if (_modResetCallback != null) _modResetCallback!();
-              _modCtrl = false;
-              _modAlt = false;
-              _modShift = false;
-              _modResetCallback = null;
-            } else if (_modAlt) {
-              sequence = '\x1b$data';
-              if (_modResetCallback != null) _modResetCallback!();
-              _modCtrl = false;
-              _modAlt = false;
-              _modShift = false;
-              _modResetCallback = null;
-            } else if (_modShift) {
-              sequence = data.toUpperCase();
-              if (_modResetCallback != null) _modResetCallback!();
-              _modCtrl = false;
-              _modAlt = false;
-              _modShift = false;
-              _modResetCallback = null;
-            } else {
-              sequence = data;
-            }
-
-            if (sequence.isNotEmpty) {
-              proc.write(const Utf8Encoder().convert(sequence));
-            }
-            final activeId = _sessionBloc.state.activeSessionId;
-            if (activeId == r.sessionId) {
-              _handleInputForAutocomplete(r, sequence);
-            }
+            _forwardTerminalInput(r, data, proc.write);
           };
         }
       }
@@ -632,12 +614,20 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final runtime = _TerminalRuntime(
       sessionId: id,
       title: sessionTitle,
-      terminal: Terminal(platform: TerminalTargetPlatform.android),
+      terminal: Terminal(
+        platform: TerminalTargetPlatform.android,
+        // Keep xterm's logical line reflow enabled. The PTY receives the same
+        // width through _onTerminalResized below.
+        reflowEnabled: true,
+      ),
       controller: TerminalController(selectionMode: SelectionMode.line),
       isProot: true,
     );
     runtime.selectionListener = () => _onSelectionChanged(id);
     runtime.controller.addListener(runtime.selectionListener!);
+    runtime.terminal.onPrivateOSC = (code, args) {
+      _handleTerminalOsc(runtime, code, args);
+    };
     _sessionRuntimes[id] = runtime;
 
     _sessionBloc.add(
@@ -665,6 +655,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     if (runtime == null) return;
     runtime.stopProcess();
     runtime.currentInput = '';
+    runtime.commandInput = '';
     if (_sessionBloc.state.activeSessionId == sessionId) {
       _suggestionsNotifier.value = null;
     }
@@ -742,7 +733,6 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   // ── Feature 1: show exit code banner ────────────────────────────────────
   void _showExitBanner(String sessionId, int code) {
-    if (!mounted) return;
     final meta = _sessionBloc.state.sessions.firstWhere(
       (s) => s.id == sessionId,
       orElse: () => TerminalSessionMeta(
@@ -753,12 +743,76 @@ class _SetupTerminalState extends State<SetupTerminal> {
       ),
     );
 
-    if (code != 0) {
+    final isError = code != 0;
+    final title = isError
+        ? 'Commande échouée: ${meta.title}'
+        : 'Commande terminée: ${meta.title}';
+    final message = isError
+        ? 'Le processus s’est terminé avec le code d’erreur $code.'
+        : 'Le processus s’est terminé correctement (code 0).';
+    unawaited(PandaNotifications.showSystem(
+      title: title,
+      message: message,
+      isError: isError,
+    ));
+    if (mounted && isError) {
       PandaNotifications.show(
         context: context,
         title: 'Session Terminée: ${meta.title}',
-        message: 'Le processus s\'est terminé avec le code d\'erreur $code.',
+        message: message,
         isError: true,
+      );
+    }
+  }
+
+  void _handleTerminalOsc(
+    _TerminalRuntime runtime,
+    String code,
+    List<String> args,
+  ) {
+    if (code != '777' || args.length < 2 || args.first != 'PANDA_STATUS') {
+      return;
+    }
+    final exitCode = int.tryParse(args[1]);
+    if (exitCode == null) return;
+    // Bash emits one marker for the initial prompt. Do not report that as a
+    // completed command; every subsequent prompt represents the prior command.
+    if (!runtime.promptSeen) {
+      runtime.promptSeen = true;
+      return;
+    }
+    if (runtime.lastCommand.trim().isEmpty) return;
+    _showCommandNotification(runtime, exitCode);
+    runtime.lastCommand = '';
+    runtime.commandInput = '';
+    runtime.currentInput = '';
+  }
+
+  void _showCommandNotification(_TerminalRuntime runtime, int code) {
+    final isError = code != 0;
+    final command = runtime.lastCommand.trim();
+    final shortCommand = command.length > 80
+        ? '${command.substring(0, 77)}...'
+        : command;
+    unawaited(PandaNotifications.showSystem(
+      title: isError
+          ? 'Commande échouée: ${runtime.title}'
+          : 'Commande terminée: ${runtime.title}',
+      message: isError
+          ? '$shortCommand\nCode de sortie: $code'
+          : '$shortCommand\nTerminé correctement',
+      isError: isError,
+    ));
+    if (mounted) {
+      PandaNotifications.show(
+        context: context,
+        title: isError
+            ? 'Commande échouée: ${runtime.title}'
+            : 'Commande terminée: ${runtime.title}',
+        message: isError
+            ? '$shortCommand\nCode de sortie: $code'
+            : '$shortCommand\nTerminé correctement',
+        isError: isError,
       );
     }
   }
@@ -1076,52 +1130,15 @@ class _SetupTerminalState extends State<SetupTerminal> {
       });
 
       runtime.terminal.onOutput = (data) {
-        if (widget.readOnly) return;
-
-        String sequence = '';
-        if (_modCtrl) {
-          if (data.length == 1) {
-            int code = data.toUpperCase().codeUnitAt(0);
-            if (code >= 65 && code <= 90) {
-              sequence = String.fromCharCode(code - 64);
-            }
-          }
-          // Reset modifier after one key
-          if (_modResetCallback != null) _modResetCallback!();
-          _modCtrl = false;
-          _modAlt = false;
-          _modShift = false;
-          _modResetCallback = null;
-        } else if (_modAlt) {
-          sequence = '\x1b$data';
-          if (_modResetCallback != null) _modResetCallback!();
-          _modCtrl = false;
-          _modAlt = false;
-          _modShift = false;
-          _modResetCallback = null;
-        } else if (_modShift) {
-          sequence = data.toUpperCase();
-          if (_modResetCallback != null) _modResetCallback!();
-          _modCtrl = false;
-          _modAlt = false;
-          _modShift = false;
-          _modResetCallback = null;
-        } else {
-          sequence = data;
-        }
-
-        if (sequence.isNotEmpty) {
-          process.write(const Utf8Encoder().convert(sequence));
-        }
-        final activeSessionId = _sessionBloc.state.activeSessionId;
-        if (activeSessionId == runtime.sessionId) {
-          _handleInputForAutocomplete(runtime, sequence);
-        }
+        _forwardTerminalInput(runtime, data, process.write);
       };
 
       runtime.terminal.onResize = (w, h, pw, ph) {
-        process.resize(h, w);
+        _onTerminalResized(runtime, w, h, pw, ph);
       };
+      // A TerminalView can lay itself out before the PTY callback is attached.
+      // Reconcile the dimensions once more after both sides are ready.
+      _syncTerminalDimensions();
     } catch (e) {
       PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString());
       runtime.terminal.write(
@@ -1136,6 +1153,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
       );
+      _showExitBanner(runtime.sessionId, 1);
     }
   }
 
@@ -1164,7 +1182,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
       terminal.buffer.clear();
       terminal.buffer.setCursor(0, 0);
       terminal.onResize = (w, h, pw, ph) {
-        session.resizeTerminal(w, h, pw, ph);
+        if (w > 0 && h > 0) {
+          session.resizeTerminal(w, h, pw, ph);
+        }
       };
 
       if (widget.termuxId != null) {
@@ -1176,7 +1196,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
       }
 
       terminal.onOutput = (data) {
-        session.write(utf8.encode(data));
+        _forwardTerminalInput(
+          runtime,
+          data,
+          (bytes) => session.write(bytes),
+        );
       };
 
       session.stdout
@@ -1204,6 +1228,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   }
 
   void _handleInputForAutocomplete(_TerminalRuntime runtime, String data) {
+    _trackCommandInput(runtime, data);
     if (data == '\r' || data == '\n') {
       _suggestionsNotifier.value = null;
       runtime.currentInput = '';
@@ -1234,6 +1259,26 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }
 
     _updateSuggestions(runtime);
+  }
+
+  void _trackCommandInput(_TerminalRuntime runtime, String data) {
+    if (data.isEmpty || data.contains('\x1b')) return;
+    for (var i = 0; i < data.length; i++) {
+      final char = data[i];
+      if (char == '\r' || char == '\n') {
+        runtime.lastCommand = runtime.commandInput.trim();
+        runtime.commandInput = '';
+      } else if (char == '\x7f' || char == '\b') {
+        if (runtime.commandInput.isNotEmpty) {
+          runtime.commandInput = runtime.commandInput.substring(
+            0,
+            runtime.commandInput.length - 1,
+          );
+        }
+      } else if (data.codeUnitAt(i) >= 32) {
+        runtime.commandInput += char;
+      }
+    }
   }
 
   Future<void> _updateSuggestions(_TerminalRuntime runtime) async {
@@ -1656,7 +1701,9 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text != null && text.isNotEmpty) {
-      runtime.pty?.write(const Utf8Encoder().convert(text));
+      _forwardTerminalInput(runtime, text, (bytes) {
+        runtime.pty?.write(bytes);
+      });
     }
   }
 
@@ -1689,6 +1736,120 @@ class _SetupTerminalState extends State<SetupTerminal> {
         ),
       ),
     );
+  }
+
+  /// Applies the accessory Ctrl/Alt/Shift state to Gboard text input and to
+  /// hardware input using the same encoding.
+  void _forwardTerminalInput(
+    _TerminalRuntime runtime,
+    String data,
+    void Function(Uint8List bytes) write,
+  ) {
+    if (widget.readOnly) return;
+
+    // Ctrl+A is a selection action in Panda, matching the terminal toolbar
+    // and the native xterm shortcut. It must not be sent to bash first.
+    if (_modCtrl && data.length == 1 && data.toLowerCase() == 'a') {
+      _selectAll(runtime);
+      _modResetCallback?.call();
+      _modCtrl = false;
+      _modAlt = false;
+      _modShift = false;
+      _modResetCallback = null;
+      return;
+    }
+    if (_modCtrl && data.length == 1 && data.toLowerCase() == 'v') {
+      _modResetCallback?.call();
+      _modCtrl = false;
+      _modAlt = false;
+      _modShift = false;
+      _modResetCallback = null;
+      unawaited(_pasteIntoTerminal(runtime));
+      return;
+    }
+    if (_modCtrl &&
+        data.length == 1 &&
+        data.toLowerCase() == 'c' &&
+        runtime.controller.selection != null) {
+      unawaited(_copySelection(runtime));
+      _modResetCallback?.call();
+      _modCtrl = false;
+      _modAlt = false;
+      _modShift = false;
+      _modResetCallback = null;
+      return;
+    }
+
+    var sequence = data;
+    if (_modCtrl && data.length == 1) {
+      final code = data.toLowerCase().codeUnitAt(0);
+      sequence = switch (code) {
+        >= 97 && <= 122 => String.fromCharCode(code - 96),
+        91 => '\x1b',
+        92 => '\x1c',
+        93 => '\x1d',
+        94 => '\x1e',
+        95 => '\x1f',
+        63 => '\x7f',
+        32 => '\x00',
+        _ => data,
+      };
+    }
+    if (_modAlt) sequence = '\x1b$sequence';
+    if (_modShift) sequence = sequence.toUpperCase();
+
+    if (_modCtrl || _modAlt || _modShift) {
+      _modResetCallback?.call();
+      _modCtrl = false;
+      _modAlt = false;
+      _modShift = false;
+      _modResetCallback = null;
+    }
+
+    if (sequence.isEmpty) return;
+    write(Uint8List.fromList(utf8.encode(sequence)));
+    if (_sessionBloc.state.activeSessionId == runtime.sessionId) {
+      _handleInputForAutocomplete(runtime, sequence);
+    }
+  }
+
+  void _onTerminalResized(
+    _TerminalRuntime runtime,
+    int columns,
+    int rows,
+    int pixelWidth,
+    int pixelHeight,
+  ) {
+    if (columns <= 0 || rows <= 0) return;
+    if (runtime.pty != null &&
+        (runtime.ptyColumns != columns || runtime.ptyRows != rows)) {
+      runtime.pty!.resize(rows, columns);
+    }
+    runtime.ptyColumns = columns;
+    runtime.ptyRows = rows;
+  }
+
+  void _syncTerminalDimensions() {
+    for (final runtime in _sessionRuntimes.values) {
+      try {
+        final render = runtime.viewKey.currentState?.renderTerminal;
+        if (render != null && render.hasSize) {
+          render.markNeedsLayout();
+        }
+      } catch (_) {}
+
+      final process = runtime.pty;
+      if (process == null) continue;
+      final columns = runtime.terminal.viewWidth;
+      final rows = runtime.terminal.viewHeight;
+      if (columns > 0 &&
+          rows > 0 &&
+          (runtime.ptyColumns != columns || runtime.ptyRows != rows)) {
+        process.resize(rows, columns);
+        runtime.ptyColumns = columns;
+        runtime.ptyRows = rows;
+      }
+    }
   }
 
   void _hideSelectionUI() {
@@ -1743,6 +1904,18 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }[event.logicalKey];
     if (controlCode == null) return KeyEventResult.ignored;
 
+    if (event.logicalKey == LogicalKeyboardKey.keyA) {
+      _selectAll(runtime);
+      return KeyEventResult.handled;
+    }
+    // xterm's Actions implement copy/paste and selection. Do not consume
+    // those combinations in the terminal-to-shell control-byte path.
+    if (event.logicalKey == LogicalKeyboardKey.keyV ||
+        (event.logicalKey == LogicalKeyboardKey.keyC &&
+            HardwareKeyboard.instance.isShiftPressed)) {
+      return KeyEventResult.ignored;
+    }
+
     runtime.pty?.write(Uint8List.fromList([controlCode]));
     return KeyEventResult.handled;
   }
@@ -1769,6 +1942,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _hideSelectionUI();
     _selectionUiTick.dispose();
     _suggestionsNotifier.dispose();
@@ -1838,6 +2012,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
           },
           child: TerminalView(
             runtime.terminal,
+            key: runtime.viewKey,
             readOnly: widget.readOnly,
             padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
             controller: runtime.controller,
@@ -1898,6 +2073,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
               },
               child: TerminalView(
                 r.terminal,
+                key: r.viewKey,
                 readOnly: widget.readOnly,
                 padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
                 controller: r.controller,
@@ -2718,6 +2894,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
                               ClipboardData(text: selectedText),
                             );
                           }
+                        },
+                        onSelectAll: () {
+                          final runtime = _activeRuntime();
+                          if (runtime != null) _selectAll(runtime);
                         },
                         onPaste: () async {
                           final runtime = _activeRuntime();
