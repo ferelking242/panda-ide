@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../bloc/ui_bloc/ui_bloc.dart';
+import '../../core/broken_icons.dart';
 import '../agent/flow_ui/widgets/flow_chat_view.dart';
 import '../agent/flow_ui/widgets/flow_composer.dart';
 import '../agent/flow_ui/widgets/flow_greeting.dart';
-import '../agent/flow_ui/widgets/flow_model_selector.dart';
 import '../agent/flow_ui/widgets/flow_pill.dart';
 import '../agent/flow_ui/models/flow_attachment_options.dart';
 import '../agent/flow_ui/widgets/flow_suggestion.dart';
+import '../agent/flow_ui/utils/flow_file_picker.dart';
 import 'panda_agent_controller.dart';
 import 'panda_agent_composer_extras.dart';
 import 'panda_agent_flow_widgets.dart';
+import 'panda_agent_model_selector.dart';
 
 class PandaAgentPage extends StatelessWidget {
   const PandaAgentPage({
@@ -43,13 +45,15 @@ class PandaAgentPage extends StatelessWidget {
                 final value = Map<String, dynamic>.from(entry.value as Map);
                 final name = controller.modelName(value);
                 final providerName = controller.providerName(value);
-                return FlowModelOption(
+                return PandaAgentModelOption(
                   id: entry.key,
                   label: name.isEmpty ? entry.key : name,
-                  description: providerName.isEmpty ? null : providerName,
+                  providerId: providerName.isEmpty ? 'custom' : providerName,
+                  providerLabel: controller.providerLabel(providerName),
                 );
               },
             )
+            .where((option) => option.providerId.isNotEmpty)
             .toList();
         final pendingRevision = controller.messages.isEmpty
             ? 0
@@ -76,28 +80,32 @@ class PandaAgentPage extends StatelessWidget {
             icon: Icons.auto_awesome,
             text: 'Comment puis-je vous aider ?',
           ),
-          suggestions: FlowSuggestionGroup(
-            suggestions: [
-              FlowSuggestion(
-                label: 'Explique la structure de ce projet',
-                icon: Icons.account_tree_outlined,
-                onTap: () => controller.inputController.text =
-                    'Explique la structure de ce projet',
+          suggestions: null,
+          aboveComposer: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (controller.messages.isEmpty)
+                _PandaAgentSuggestions(
+                  onSend: (text) => controller.send(
+                    context: context,
+                    aiState: aiState,
+                    workspacePath: workspacePath(),
+                    text: text,
+                  ),
+                ),
+              PandaAgentPendingChangesBar(
+                key: ValueKey(
+                  'pending-$pendingRevision-${controller.phase.name}-${controller.messages.length}',
+                ),
+                workspacePath: workspacePath(),
+                revision: pendingRevision,
               ),
-              FlowSuggestion(
-                label: 'Analyse le fichier ouvert',
-                icon: Icons.search_outlined,
-                onTap: () => controller.inputController.text =
-                    'Analyse le fichier ouvert',
+              PandaAgentQueueBar(
+                items: controller.queuedPrompts,
+                onRemove: controller.removeQueued,
+                onEdit: controller.editQueued,
               ),
             ],
-          ),
-          aboveComposer: PandaAgentPendingChangesBar(
-            key: ValueKey(
-              'pending-$pendingRevision-${controller.phase.name}-${controller.messages.length}',
-            ),
-            workspacePath: workspacePath(),
-            revision: pendingRevision,
           ),
           composer: FlowComposer(
             controller: controller.inputController,
@@ -113,14 +121,17 @@ class PandaAgentPage extends StatelessWidget {
             maxLines: 2,
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
             attachments: controller.pendingAttachments,
-            onAttachmentsPicked: controller.addAttachments,
+            onAttach: () => _showAddMenu(context, controller),
             onAttachmentsPasted: controller.addAttachments,
+            onAttachmentsDropped: controller.addAttachments,
             onRemoveAttachment: controller.removeAttachment,
             attachmentOptions: FlowAttachmentOptions.any,
             attachTooltip: 'Ajouter un fichier ou une image',
+            errorMessage: controller.lastError,
+            onErrorDismiss: controller.clearError,
             leadingActions: [
               FlowPill(
-                icon: Icons.auto_awesome,
+                icon: Broken.magicpen,
                 label: controller.chatMode == 'agent'
                     ? 'Agent'
                     : controller.chatMode == 'plan'
@@ -131,18 +142,11 @@ class PandaAgentPage extends StatelessWidget {
                 onTap: () => _showModes(context),
               ),
               if (modelOptions.isNotEmpty)
-                FlowModelSelector(
+                PandaAgentModelSelector(
                   models: modelOptions,
                   selectedId: aiState.modelSelected['chat']?.toString(),
-                  compact: true,
-                  onSelected: (id) {
-                    final selected = Map<String, dynamic>.from(
-                      aiState.modelSelected,
-                    )..['chat'] = id;
-                    context.read<AIBloc>().add(ModelSelectEvent(selected));
-                  },
-                  tooltip: model.isEmpty ? 'Choisir un modèle' : model,
-                  sheetTitle: 'Choisir un modèle',
+                  onSelected: (id) => controller.selectModel(context, id),
+                  onAddProvider: onOpenProviders,
                 ),
               if (modelOptions.isEmpty)
                 FlowPill(
@@ -171,11 +175,56 @@ class PandaAgentPage extends StatelessWidget {
           ),
           belowComposer: PandaAgentComposerFooter(
             approvalMode: controller.approvalMode,
+            usedTokens: controller.usedTokens,
+            maxTokens: controller.maxTokens,
             onApprovalTap: () => _showApprovalModes(context),
           ),
         );
       },
     );
+  }
+
+  Future<void> _showAddMenu(
+    BuildContext context,
+    PandaAgentController controller,
+  ) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Broken.document_upload),
+              title: const Text('Ajouter un fichier'),
+              subtitle: const Text('Joindre un fichier au prochain message'),
+              onTap: () => Navigator.pop(sheetContext, 'file'),
+            ),
+            ListTile(
+              leading: const Icon(Broken.briefcase),
+              title: const Text('Provider / intégration'),
+              subtitle: const Text('Ouvrir la page Providers'),
+              onTap: () => Navigator.pop(sheetContext, 'provider'),
+            ),
+            ListTile(
+              leading: const Icon(Broken.key),
+              title: const Text('Secrets et variables'),
+              subtitle: const Text('Gérer les accès de l’agent'),
+              onTap: () => Navigator.pop(sheetContext, 'provider'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || action == null) return;
+    if (action == 'file') {
+      final picked = await showFlowAttachmentPicker(
+        options: FlowAttachmentOptions.any,
+      );
+      if (picked.isNotEmpty) controller.addAttachments(picked);
+      return;
+    }
+    onOpenProviders?.call();
   }
 
   void _showModes(BuildContext context) {
@@ -217,8 +266,9 @@ class PandaAgentPage extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             for (final mode in const [
-              ('default', 'Demander une approbation', 'Valider les outils sensibles'),
-              ('autopilot', 'Toujours autoriser', 'Exécuter sans interrompre le flux'),
+              ('default', 'Approbation des actions sensibles', 'Demander uniquement pour les commandes destructives'),
+              ('every', 'Demander chaque outil', 'Confirmer chaque lecture, édition ou commande'),
+              ('autopilot', 'Autopilot', 'Exécuter sans demander, y compris les commandes destructives'),
             ])
               ListTile(
                 leading: Icon(
@@ -235,6 +285,63 @@ class PandaAgentPage extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PandaAgentSuggestions extends StatelessWidget {
+  const _PandaAgentSuggestions({required this.onSend});
+
+  final ValueChanged<String> onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.22),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.7)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 3, bottom: 4),
+            child: Text(
+              'Suggestions',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: colors.onSurfaceVariant,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+          FlowSuggestionGroup(
+            layout: FlowSuggestionLayout.wrap,
+            spacing: 6,
+            suggestions: [
+              FlowSuggestion(
+                label: 'Explique la structure de ce projet',
+                icon: Broken.tree,
+                outlined: true,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                onTap: () => onSend('Explique la structure de ce projet'),
+              ),
+              FlowSuggestion(
+                label: 'Analyse le fichier ouvert',
+                icon: Broken.search_normal,
+                outlined: true,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                onTap: () => onSend('Analyse le fichier ouvert'),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

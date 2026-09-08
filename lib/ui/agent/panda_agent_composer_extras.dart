@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../utils/agentic_tools.dart';
 import '../../utils/editors/edit_hunks.dart';
+import 'panda_agent_controller.dart';
 
 /// The pending-edit strip shown between the activity stream and the composer.
 ///
@@ -343,16 +344,21 @@ class PandaAgentComposerFooter extends StatelessWidget {
   const PandaAgentComposerFooter({
     super.key,
     required this.approvalMode,
+    required this.usedTokens,
+    required this.maxTokens,
     required this.onApprovalTap,
   });
 
   final String approvalMode;
+  final int usedTokens;
+  final int maxTokens;
   final VoidCallback onApprovalTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final auto = approvalMode == 'autopilot';
+    final usage = maxTokens <= 0 ? 0.0 : (usedTokens / maxTokens).clamp(0.0, 1.0);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
@@ -381,7 +387,11 @@ class PandaAgentComposerFooter extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 3),
               child: Text(
-                auto ? 'Autopilot (Preview)' : 'Approval mode',
+                auto
+                    ? 'Autopilot'
+                    : approvalMode == 'every'
+                        ? 'Every tool'
+                        : 'Approval mode',
                 style: TextStyle(
                   color: auto ? const Color(0xffe2bd36) : colors.onSurfaceVariant,
                   fontSize: 13,
@@ -391,7 +401,10 @@ class PandaAgentComposerFooter extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          const _UsageRing(value: 0.75),
+          Tooltip(
+            message: '~$usedTokens / $maxTokens tokens de contexte',
+            child: _UsageRing(value: usage, label: '${(usage * 100).round()}'),
+          ),
         ],
       ),
     );
@@ -399,9 +412,10 @@ class PandaAgentComposerFooter extends StatelessWidget {
 }
 
 class _UsageRing extends StatelessWidget {
-  const _UsageRing({required this.value});
+  const _UsageRing({required this.value, required this.label});
 
   final double value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -413,7 +427,7 @@ class _UsageRing extends StatelessWidget {
         painter: _UsageRingPainter(value: value, color: color),
         child: Center(
           child: Text(
-            '${(value * 100).round()}',
+            label,
             style: TextStyle(
               color: color,
               fontSize: 7,
@@ -421,6 +435,108 @@ class _UsageRing extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Prompts submitted while the current turn is running.
+class PandaAgentQueueBar extends StatelessWidget {
+  const PandaAgentQueueBar({
+    super.key,
+    required this.items,
+    required this.onRemove,
+    required this.onEdit,
+  });
+
+  final List<QueuedAgentPrompt> items;
+  final ValueChanged<int> onRemove;
+  final void Function(int index, String text) onEdit;
+
+  Future<void> _edit(BuildContext context, int index, QueuedAgentPrompt item) async {
+    final editor = TextEditingController(text: item.text);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Modifier le message en attente'),
+        content: TextField(
+          controller: editor,
+          autofocus: true,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Message à envoyer après le tour actuel',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, editor.text.trim()),
+            child: const Text('Enregistrer'),
+          ),
+        ],
+      ),
+    );
+    editor.dispose();
+    if (result != null && result.isNotEmpty) onEdit(index, result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 2),
+      padding: const EdgeInsets.fromLTRB(9, 6, 5, 6),
+      decoration: BoxDecoration(
+        color: colors.primaryContainer.withValues(alpha: 0.28),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.primary.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.queue_play_next_outlined, size: 16, color: colors.primary),
+              const SizedBox(width: 6),
+              Text(
+                'File d’attente · ${items.length}/5',
+                style: TextStyle(
+                  color: colors.onSurface,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          for (var index = 0; index < items.length; index++)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    items[index].text,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Modifier',
+                  onPressed: () => _edit(context, index, items[index]),
+                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  tooltip: 'Retirer',
+                  onPressed: () => onRemove(index),
+                  icon: const Icon(Icons.close, size: 15),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }

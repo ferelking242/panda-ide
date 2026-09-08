@@ -580,7 +580,7 @@ class _FlowComposerState extends State<FlowComposer> {
   }
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
-    if (!widget.submitOnEnter || widget.isStreaming) {
+    if (!widget.submitOnEnter) {
       return KeyEventResult.ignored;
     }
     final isEnter =

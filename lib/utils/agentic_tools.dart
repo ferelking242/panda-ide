@@ -18,6 +18,7 @@ import 'package:panda/utils/agentic_tool_catalog.dart';
 import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
+import 'package:panda/utils/agent_settings_service.dart';
 
 typedef AgentConfirmCallback = Future<bool> Function({
   required String toolName,
@@ -29,7 +30,8 @@ class AgenticTools {
   final BuildContext context;
   final String workspacePath;
   final AgentConfirmCallback? onConfirmRequired;
-  final String approvalMode; // 'default' | 'autonome' | 'autopilot'
+  final String approvalMode; // 'default' | 'every' | 'autonome' | 'autopilot'
+  Process? _activeProcess;
 
   static bool allowAllCommandsThisSession = false;
   static Set<String> approvedCommandsWhitelist = {};
@@ -466,6 +468,9 @@ class AgenticTools {
     if (approvalMode == 'autopilot' || approvalMode == 'autonome' || allowAllCommandsThisSession) {
       return true;
     }
+    // AgentRunner asks once before every tool in this mode. Avoid asking a
+    // second time here when the tool itself is also destructive.
+    if (approvalMode == 'every') return true;
     if (command.isNotEmpty && approvedCommandsWhitelist.contains(command.trim())) {
       return true;
     }
@@ -1080,6 +1085,7 @@ class AgenticTools {
       environment: environment,
       mode: ProcessStartMode.inheritStdio,
     );
+    _activeProcess = proc;
 
     // Read both streams concurrently — this is the key fix.
     final stdoutF = proc.stdout
@@ -1100,12 +1106,24 @@ class AgenticTools {
     final stdoutBytes = results[1] as List<int>;
     final stderrBytes = results[2] as List<int>;
 
-    return ProcessResult(
+    final result = ProcessResult(
       exitCode,
       exitCode,
       utf8.decode(stdoutBytes, allowMalformed: true),
       utf8.decode(stderrBytes, allowMalformed: true),
     );
+    if (identical(_activeProcess, proc)) _activeProcess = null;
+    return result;
+  }
+
+  /// Stops the currently running shell command, if one exists.
+  void interrupt() {
+    final process = _activeProcess;
+    if (process == null) return;
+    try {
+      process.kill(ProcessSignal.sigkill);
+    } catch (_) {}
+    _activeProcess = null;
   }
 
   /// Exécute [script] dans l'environnement Alpine de l'agent en utilisant
@@ -1732,7 +1750,7 @@ class AgenticTools {
       final argsStr = args.isEmpty ? '' : ' ${args.join(' ')}';
       final fullCmdStr = '$command$argsStr'.trim();
 
-      if (_kDangerousCommands.contains(baseCmd) || approvalMode == 'default') {
+      if (_kDangerousCommands.contains(baseCmd)) {
         final confirmed = await _confirmDestructive(
           title: 'Exécuter une commande système ?',
           body: fullCmdStr,
@@ -2238,11 +2256,9 @@ class AgenticTools {
   Future<ToolResult<String>> getSecret(String name) async {
     try {
       if (name.isEmpty) return ToolResult.error('Secret name cannot be empty.');
-      final prefs = await SharedPreferences.getInstance();
-      final secretJson = prefs.getString('agent_secrets') ?? '{}';
-      final Map<String, dynamic> secretsMap = jsonDecode(secretJson);
-      if (secretsMap.containsKey(name) && secretsMap[name].toString().isNotEmpty) {
-        return ToolResult.success(secretsMap[name].toString());
+      final secretsMap = await AgentSettingsService.getSecrets();
+      if (secretsMap.containsKey(name) && secretsMap[name]!.isNotEmpty) {
+        return ToolResult.success(secretsMap[name]!);
       }
       if (Platform.environment.containsKey(name)) {
         return ToolResult.success(Platform.environment[name]!);
@@ -2269,9 +2285,7 @@ class AgenticTools {
   Future<ToolResult<List<String>>> listSecrets() async {
     try {
       final names = <String>{};
-      final prefs = await SharedPreferences.getInstance();
-      final secretJson = prefs.getString('agent_secrets') ?? '{}';
-      final Map<String, dynamic> secretsMap = jsonDecode(secretJson);
+      final secretsMap = await AgentSettingsService.getSecrets();
       names.addAll(secretsMap.keys);
 
       for (final key in Platform.environment.keys) {

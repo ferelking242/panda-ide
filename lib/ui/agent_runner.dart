@@ -106,6 +106,7 @@ class _BlockSequencer {
 
 class AgentRunner {
   http.Client? _client;
+  AgenticTools? _activeTools;
 
   /// V3 agent components
   final ToolRegistry toolRegistry = ToolRegistry();
@@ -133,6 +134,8 @@ class AgentRunner {
     try {
       _client?.close();
       _client = null;
+      _activeTools?.interrupt();
+      _activeTools = null;
     } catch (_) {}
   }
 
@@ -443,9 +446,14 @@ $toolLines
               approvalMode: approvalMode,
             )
           : null;
+      _activeTools = agenticTools;
 
       // Register native tools in V3 ToolRegistry
-      if (context != null && toolRegistry.count == 0) {
+      // Tool definitions capture the current context, approval callback and
+      // workspace. Re-register them on every run so a changed model or
+      // approval mode never keeps stale closures from the previous turn.
+      if (context != null) {
+        toolRegistry.clear();
         NativeToolBridge.registerAll(
           registry: toolRegistry,
           context: context,
@@ -533,6 +541,8 @@ $toolLines
           agentMode: agentMode,
           workspacePath: workspacePath,
           blocks: _BlockSequencer(),
+           approvalMode: approvalMode,
+           onConfirmRequired: onConfirmRequired,
           eventBus: eventBus,
         );
       } else {
@@ -547,6 +557,8 @@ $toolLines
           agentMode: agentMode,
           workspacePath: workspacePath,
           blocks: _BlockSequencer(),
+           approvalMode: approvalMode,
+           onConfirmRequired: onConfirmRequired,
           eventBus: eventBus,
         );
       }
@@ -564,6 +576,7 @@ $toolLines
     } finally {
       _client?.close();
       _client = null;
+      _activeTools = null;
       PandaLog.i('AgentRunner', 'Run complete');
       eventBus?.emit(AgentFinished(taskId: '', result: ''));
       if (!terminalError && !ctrl.isClosed) {
@@ -581,7 +594,15 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent', String workspacePath = '', _BlockSequencer? blocks, AgentEventBus? eventBus}
+    {
+      required bool allowWrites,
+      String agentMode = 'agent',
+      String workspacePath = '',
+      String approvalMode = 'default',
+      AgentConfirmCallback? onConfirmRequired,
+      _BlockSequencer? blocks,
+      AgentEventBus? eventBus,
+    }
   ) async {
     final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
@@ -696,9 +717,18 @@ $toolLines
         _eventBus.emit(AgentToolStarted(toolId: name, toolName: name, args: args));
         PandaLog.toolCall('Gemini', name, args);
 
+        final approved = await _confirmEveryTool(
+          approvalMode: approvalMode,
+          onConfirmRequired: onConfirmRequired,
+          toolName: name,
+          args: args,
+        );
+
         // Use V3 ToolExecutor when available, fallback to old dispatch
         String result;
-        if (toolRegistry.has(name)) {
+        if (!approved) {
+          result = 'Outil "$name" annulé par l’utilisateur.';
+        } else if (toolRegistry.has(name)) {
           result = await toolExecutor.execute(name, args);
         } else {
           result = await _dispatchTool(
@@ -796,7 +826,15 @@ $toolLines
     StreamController<AgentChunk> ctrl,
     AgenticTools? tools,
     List<Map<String, dynamic>> toolSchemas,
-    {required bool allowWrites, String agentMode = 'agent', String workspacePath = '', _BlockSequencer? blocks, AgentEventBus? eventBus}
+    {
+      required bool allowWrites,
+      String agentMode = 'agent',
+      String workspacePath = '',
+      String approvalMode = 'default',
+      AgentConfirmCallback? onConfirmRequired,
+      _BlockSequencer? blocks,
+      AgentEventBus? eventBus,
+    }
   ) async {
     final seq = blocks ?? _BlockSequencer();
     final conversationMessages = <Map<String, dynamic>>[
@@ -984,17 +1022,27 @@ $toolLines
         ));
         eventBus?.emit(AgentToolStarted(toolId: functionName, toolName: functionName, args: args));
         PandaLog.toolCall('SSE', functionName, args);
-        final result = await _dispatchTool(
-          tools,
-          functionName,
-          args,
-          allowWrites: allowWrites,
-          agentMode: agentMode,
-        )
-            .timeout(const Duration(seconds: 150), onTimeout: () {
-          PandaLog.w('SSE', 'Tool $functionName timed out after 150 s');
-          return 'Error: tool $functionName exceeded 150 s timeout';
-        });
+        final approved = await _confirmEveryTool(
+          approvalMode: approvalMode,
+          onConfirmRequired: onConfirmRequired,
+          toolName: functionName,
+          args: args,
+        );
+        final String result;
+        if (!approved) {
+          result = 'Outil "$functionName" annulé par l’utilisateur.';
+        } else {
+          result = await _dispatchTool(
+            tools,
+            functionName,
+            args,
+            allowWrites: allowWrites,
+            agentMode: agentMode,
+          ).timeout(const Duration(seconds: 150), onTimeout: () {
+            PandaLog.w('SSE', 'Tool $functionName timed out after 150 s');
+            return 'Error: tool $functionName exceeded 150 s timeout';
+          });
+        }
         PandaLog.toolResult('SSE', functionName, result);
         ctrl.add(AgentChunk(phase: AgentPhase.toolDone, toolName: functionName, toolResult: result));
         eventBus?.emit(AgentToolFinished(toolId: functionName, toolName: functionName, result: result));
@@ -1032,6 +1080,23 @@ $toolLines
   }
 
   // ── Tool dispatch ─────────────────────────────────────────────────────────
+  Future<bool> _confirmEveryTool({
+    required String approvalMode,
+    required AgentConfirmCallback? onConfirmRequired,
+    required String toolName,
+    required Map<String, dynamic> args,
+  }) async {
+    if (approvalMode != 'every') return true;
+    if (onConfirmRequired == null) return false;
+    return onConfirmRequired(
+      toolName: toolName,
+      command: toolName,
+      details: args.isEmpty
+          ? 'L’agent demande l’exécution de cet outil.'
+          : 'Arguments : ${jsonEncode(args)}',
+    );
+  }
+
   Future<String> _dispatchTool(
     AgenticTools tools,
     String functionName,

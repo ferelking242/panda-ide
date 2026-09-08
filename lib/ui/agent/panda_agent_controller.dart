@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -12,6 +14,13 @@ import '../../utils/copilot_chat.dart';
 import '../../utils/panda_log.dart';
 import '../agent_runner.dart';
 import 'flow_ui/models/flow_attachment.dart';
+
+class QueuedAgentPrompt {
+  QueuedAgentPrompt(this.text, this.attachments);
+
+  String text;
+  final List<FlowAttachment> attachments;
+}
 
 /// Owns Panda Agent state and transport.
 ///
@@ -30,6 +39,7 @@ class PandaAgentController extends ChangeNotifier {
   final List<Map<String, dynamic>> messages = <Map<String, dynamic>>[];
   final SpeechToText speech = SpeechToText();
   final List<FlowAttachment> pendingAttachments = <FlowAttachment>[];
+  final List<QueuedAgentPrompt> queuedPrompts = <QueuedAgentPrompt>[];
 
   StreamSubscription<AgentChunk>? _subscription;
   Completer<bool>? _approval;
@@ -46,9 +56,24 @@ class PandaAgentController extends ChangeNotifier {
   String approvalMode = 'default';
   String conversationTitle = 'Nouvelle conversation';
   String? lastError;
+  int usedTokens = 0;
+  int maxTokens = 120000;
+  BuildContext? _lastContext;
+  String _lastWorkspacePath = '';
 
   bool get hasPendingApproval => _approval != null;
   String get currentTool => _currentTool;
+
+  String providerLabel(String provider) {
+    if (provider.trim().isEmpty) return 'Custom';
+    return provider
+        .trim()
+        .split(RegExp(r'[_-]+'))
+        .map((part) => part.isEmpty
+            ? part
+            : '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
+  }
 
   String get activityLabel {
     return switch (phase) {
@@ -153,12 +178,29 @@ class PandaAgentController extends ChangeNotifier {
     required AIState aiState,
     required String workspacePath,
     String? text,
+    List<FlowAttachment>? attachmentsOverride,
   }) async {
     final prompt = (text ?? inputController.text).trim();
-    final attachments = List<FlowAttachment>.of(pendingAttachments);
-    if ((prompt.isEmpty && attachments.isEmpty) || isGenerating) return;
+    final attachments = List<FlowAttachment>.of(
+      attachmentsOverride ?? pendingAttachments,
+    );
+    if (prompt.isEmpty && attachments.isEmpty) return;
+    if (isGenerating) {
+      if (queuedPrompts.length >= 5) {
+        lastError = 'La file d’attente est pleine (5 messages maximum).';
+      } else {
+        queuedPrompts.add(QueuedAgentPrompt(prompt, attachments));
+        inputController.clear();
+        pendingAttachments.clear();
+        lastError = null;
+      }
+      notifyListeners();
+      return;
+    }
 
     final requestId = ++_requestSerial;
+    _lastContext = context;
+    _lastWorkspacePath = workspacePath;
     isGenerating = true;
     phase = AgentPhase.thinking;
     lastError = null;
@@ -202,6 +244,11 @@ class PandaAgentController extends ChangeNotifier {
           '[Pièces jointes: $attachmentSummary]',
       ].join('\n');
       history.add(<String, dynamic>{'role': 'user', 'content': modelPrompt});
+      usedTokens = _estimateTokens(
+        history.map((entry) => entry['content']?.toString() ?? '').join('\n'),
+      );
+      maxTokens = _contextLimit(config);
+      notifyListeners();
       messages
         ..add(<String, dynamic>{
           'role': 'user',
@@ -274,6 +321,9 @@ class PandaAgentController extends ChangeNotifier {
     runner.cancel();
     unawaited(_subscription?.cancel());
     _subscription = null;
+    final approval = _approval;
+    _approval = null;
+    approval?.complete(false);
     isGenerating = false;
     phase = AgentPhase.idle;
     _currentTool = '';
@@ -310,7 +360,37 @@ class PandaAgentController extends ChangeNotifier {
   }
 
   void setApprovalMode(String mode) {
+    if (!{'default', 'every', 'autopilot'}.contains(mode)) return;
     approvalMode = mode;
+    notifyListeners();
+  }
+
+  Future<void> selectModel(BuildContext context, String modelId) async {
+    final bloc = context.read<AIBloc>();
+    final selected = Map<String, dynamic>.from(bloc.state.modelSelected)
+      ..['chat'] = modelId;
+    bloc.add(ModelSelectEvent(selected));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('modelSelected', jsonEncode(selected));
+    notifyListeners();
+  }
+
+  void removeQueued(int index) {
+    if (index < 0 || index >= queuedPrompts.length) return;
+    queuedPrompts.removeAt(index);
+    notifyListeners();
+  }
+
+  void editQueued(int index, String text) {
+    if (index < 0 || index >= queuedPrompts.length || text.trim().isEmpty) return;
+    queuedPrompts[index].text = text.trim();
+    notifyListeners();
+  }
+
+  void clearError() {
+    if (lastError == null) return;
+    lastError = null;
+    notifyListeners();
     notifyListeners();
   }
 
@@ -510,6 +590,10 @@ class PandaAgentController extends ChangeNotifier {
       case AgentPhase.streaming:
         phase = AgentPhase.streaming;
         _streamBuffer += chunk.text;
+        usedTokens = math.max(
+          usedTokens,
+          _estimateTokens(_streamBuffer),
+        ).toInt();
         final clean = _stripThinking(_streamBuffer);
         message['text'] = clean.text;
         message['thinking'] = '';
@@ -575,6 +659,23 @@ class PandaAgentController extends ChangeNotifier {
     }
     _currentTool = '';
     notifyListeners();
+    if (queuedPrompts.isNotEmpty) {
+      final next = queuedPrompts.removeAt(0);
+      final nextContext = _lastContext;
+      final nextWorkspace = _lastWorkspacePath;
+      if (nextContext != null && nextContext.mounted) {
+        unawaited(Future<void>.delayed(
+          Duration.zero,
+          () => send(
+            context: nextContext,
+            aiState: nextContext.read<AIBloc>().state,
+            workspacePath: nextWorkspace,
+            text: next.text,
+            attachmentsOverride: next.attachments,
+          ),
+        ));
+      }
+    }
   }
 
   List<Map<String, dynamic>> _blocks() {
@@ -643,6 +744,15 @@ class PandaAgentController extends ChangeNotifier {
       return 'Aucune clé configurée pour $provider. Ouvrez Tools → Providers.';
     }
     return 'Impossible de charger le modèle ${modelName(config)}.';
+  }
+
+  int _estimateTokens(String value) =>
+      math.max(0, (value.length / 4).ceil()).toInt();
+
+  int _contextLimit(Map<String, dynamic>? config) {
+    final configured = config?['contextSize'] ?? config?['maxContextTokens'];
+    final value = configured is num ? configured.toInt() : 120000;
+    return value.clamp(1024, 1000000).toInt();
   }
 
   bool _hasProvider(dynamic config) =>
