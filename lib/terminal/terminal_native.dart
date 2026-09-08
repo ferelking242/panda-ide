@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_pty/flutter_pty.dart';
@@ -1747,7 +1748,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
     }[event.logicalKey];
     if (controlCode == null) return KeyEventResult.ignored;
 
-    runtime.pty?.write(<int>[controlCode]);
+    runtime.pty?.write(Uint8List.fromList([controlCode]));
     return KeyEventResult.handled;
   }
 
