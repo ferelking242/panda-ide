@@ -1,3 +1,4 @@
+- [Terminal runtime profiles](terminal-runtime.md) — install command markers in each generated login profile; environment-only hooks can be overwritten by Bash startup.
 - [GitHub AI providers](github-ai-providers.md) — GitHub Models and GitHub Copilot are separate services; verify their current availability before adding a provider.
 - [Panda Agent stream lifecycle](panda-agent-stream-lifecycle.md) — setup failures before streaming must close the stream and reset the UI instead of leaving generation infinite.
 - [iOS Llama pod build](ios-llama-pod-build.md) — generated CocoaPods specs need persistent ARC and explicit Llama/ggml source patches for iOS.
