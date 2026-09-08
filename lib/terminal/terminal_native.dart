@@ -1698,12 +1698,11 @@ class _SetupTerminalState extends State<SetupTerminal> {
     _selectionToolbarOverlay = null;
   }
 
-  /// Keep hardware shortcuts in the same path as the accessory keyboard.
+  /// Keep hardware Ctrl shortcuts in the same path as the accessory keyboard.
   ///
   /// Flutter's text-input layer does not forward every Ctrl combination to
   /// xterm on Android. Handling the control bytes here makes a physical
-  /// keyboard behave like the on-screen keys. Ctrl+A is intentionally a
-  /// terminal-buffer action because the accessory key is Select All.
+  /// keyboard behave like the on-screen Ctrl modifier followed by a letter.
   KeyEventResult _handleTerminalKeyEvent(
     _TerminalRuntime runtime,
     FocusNode focusNode,
@@ -1714,12 +1713,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
       return KeyEventResult.ignored;
     }
 
-    if (event.logicalKey == LogicalKeyboardKey.keyA) {
-      _selectAll(runtime);
-      return KeyEventResult.handled;
-    }
-
     final controlCode = <LogicalKeyboardKey, int>{
+      LogicalKeyboardKey.keyA: 1,
       LogicalKeyboardKey.keyB: 2,
       LogicalKeyboardKey.keyC: 3,
       LogicalKeyboardKey.keyD: 4,

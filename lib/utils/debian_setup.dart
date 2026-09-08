@@ -484,7 +484,7 @@ __panda_git() {
     local b
     b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return 0
     [ -n "\$(git status --porcelain 2>/dev/null)" ] && b="\$b *"
-    echo -ne "033[38;5;141m\$b033[0m"
+    printf '\\033[38;5;141m%s\\033[0m' "\$b"
 }
 
   __panda_ps() {
@@ -494,11 +494,10 @@ __panda_git() {
         "\$HOME"/*) p="~\${PWD#\$HOME}" ;;
         *) p="\$PWD" ;;
     esac
-    echo -ne "001033[38;5;110m002╭─ 001033[38;5;183m002\$p001033[0m002"
+    printf '\\033[38;5;110m╭─ \\033[38;5;183m%s\\033[0m' "\$p"
     local g="\$(\$__panda_git)"
-    [ -n "\$g" ] && echo -ne " \$g"
-    echo -ne "\n"
-    echo -ne "001033[38;5;110m002╰─❯ 001033[0m002"
+    [ -n "\$g" ] && printf ' %s' "\$g"
+    printf '\\n\\033[38;5;110m╰─❯ \\033[0m'
   }
 PS1='\$(__panda_ps)'
 ''';

@@ -11,7 +11,6 @@ class TerminalKeyboardMenu extends StatefulWidget {
       onModifierChanged;
   final VoidCallback? onCopy;
   final VoidCallback? onPaste;
-  final VoidCallback? onSelectAll;
 
   const TerminalKeyboardMenu({
     super.key,
@@ -19,7 +18,6 @@ class TerminalKeyboardMenu extends StatefulWidget {
     required this.onModifierChanged,
     this.onCopy,
     this.onPaste,
-    this.onSelectAll,
   });
 
   @override
@@ -54,11 +52,6 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
             _iconChip(Icons.keyboard_return_rounded, () => _send('\r')),
             _iconChip(Icons.backspace_rounded, () => _send('\x7f')),
             _chip('DEL', () => _send('\x1b[3~')),
-            _dividerWidget(),
-            _actionChip(
-              'CTRL+A',
-              onTap: widget.onSelectAll ?? () => _send('\x01'),
-            ),
           ]),
           _buildRow([
             _iconChip(Icons.arrow_upward_rounded, () => _send('\x1b[A')),
@@ -110,20 +103,6 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
       color: _foreground,
       background: _chipBackground,
       border: _chipBorder,
-    );
-  }
-
-  Widget _actionChip(String label, {required VoidCallback onTap}) {
-    return _TerminalKeyButton(
-      label: label,
-      onTap: () {
-        _resetModifiers();
-        onTap();
-      },
-      color: _foreground,
-      background: _chipBackground,
-      border: _chipBorder,
-      minWidth: 48,
     );
   }
 
