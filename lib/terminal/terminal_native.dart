@@ -22,6 +22,7 @@ import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import './terminal_bridge.dart';
 import './terminal_keyboard_menu.dart';
+import './process_group.dart';
 
 /// Taille de police par défaut du terminal — source de vérité du zoom
 /// (100%). Le pinch et les boutons A+/A− gravitent autour de cette valeur.
@@ -323,26 +324,27 @@ class _TerminalRuntime {
     return pty != null;
   }
 
-  void stopProcess() {
+  Future<void> stopProcess() async {
     if (sshSession != null) {
       sshSession!.kill(SSHSignal.KILL);
+      sshSession = null;
     }
-    if (pty != null) {
-      try {
-        pty!.kill(ProcessSignal.sigint);
-      } catch (_) {}
-      try {
-        pty!.kill(ProcessSignal.sigterm);
-      } catch (_) {}
-      try {
-        pty!.kill(ProcessSignal.sigkill);
-      } catch (_) {}
-    }
+    final process = pty;
+    if (process == null) return;
+
+    // Clear the reference immediately so a concurrent close/restart cannot
+    // write to the session while it is being torn down.
     pty = null;
+    await TerminalProcessGroup.killPtyGroup(process, ProcessSignal.sigterm);
+    try {
+      await process.exitCode.timeout(const Duration(milliseconds: 250));
+    } catch (_) {
+      await TerminalProcessGroup.killPtyGroup(process, ProcessSignal.sigkill);
+    }
   }
 
   Future<void> dispose() async {
-    stopProcess();
+    await stopProcess();
     if (selectionListener != null) {
       controller.removeListener(selectionListener!);
     }
@@ -604,7 +606,7 @@ class _SetupTerminalState extends State<SetupTerminal> {
   Future<void> _restartSession(String sessionId) async {
     final runtime = _sessionRuntimes[sessionId];
     if (runtime == null) return;
-    runtime.stopProcess();
+    await runtime.stopProcess();
     runtime.currentInput = '';
     if (_sessionBloc.state.activeSessionId == sessionId) {
       _suggestionsNotifier.value = null;
@@ -612,10 +614,10 @@ class _SetupTerminalState extends State<SetupTerminal> {
     await _startPty(runtime);
   }
 
-  void _terminateSession(String sessionId) {
+  Future<void> _terminateSession(String sessionId) async {
     final runtime = _sessionRuntimes[sessionId];
     if (runtime == null || !runtime.isRunning) return;
-    runtime.stopProcess();
+    await runtime.stopProcess();
     _sessionBloc.add(
       UpdateTerminalSessionStatus(id: sessionId, isRunning: false),
     );
@@ -1346,57 +1348,66 @@ class _SetupTerminalState extends State<SetupTerminal> {
                                   border: Border.all(
                                     color: const Color(0x2effffff),
                                   ),
-                              ),
+                                ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                 Padding(
-                                   padding: const EdgeInsets.symmetric(
-                                     horizontal: 3,
-                                   ),
-                                   child: Icon(
-                                     Icons.drag_indicator_rounded,
-                                     size: 18,
-                                     color: Colors.white.withValues(alpha: 0.55),
-                                   ),
-                                 ),
-                                _toolbarIconButton(
-                                  icon: Icons.select_all_rounded,
-                                  tooltip: 'Tout sélectionner',
-                                  onTap: () => _selectAll(runtime),
-                                ),
-                                _toolbarIconButton(
-                                  icon: Icons.copy_rounded,
-                                  tooltip: 'Copier la sélection',
-                                  onTap: () => _copySelection(runtime),
-                                ),
-                                _toolbarIconButton(
-                                  icon: Icons.paste_rounded,
-                                  tooltip: 'Coller',
-                                  onTap: () => _pasteIntoTerminal(runtime),
-                                ),
-                                _toolbarIconButton(
-                                  icon: Icons.manage_search_rounded,
-                                  tooltip: 'Rechercher dans le projet',
-                                  onTap: () => _grepSelection(runtime),
-                                ),
-                                _toolbarIconButton(
-                                  icon: Icons.auto_awesome,
-                                  tooltip: "Envoyer à l'agent",
-                                  onTap: () {
-                                    final text = _selectedText(runtime);
-                                    if (text.isNotEmpty) {
-                                      TerminalBridge.instance.sendToAgent(text);
-                                    }
-                                    runtime.controller.clearSelection();
-                                  },
-                                ),
-                                _toolbarIconButton(
-                                  icon: Icons.close_rounded,
-                                  tooltip: 'Fermer',
-                                  onTap: () =>
-                                      runtime.controller.clearSelection(),
-                                ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 3,
+                                      ),
+                                      child: Icon(
+                                        Icons.drag_indicator_rounded,
+                                        size: 18,
+                                        color: Colors.white.withValues(
+                                          alpha: 0.55,
+                                        ),
+                                      ),
+                                    ),
+                                    _toolbarIconButton(
+                                      icon: Icons.select_all_rounded,
+                                      tooltip: 'Tout sélectionner',
+                                      onTap: () => _selectAll(runtime),
+                                    ),
+                                    _toolbarIconButton(
+                                      icon: Icons.copy_rounded,
+                                      tooltip: 'Copier la sélection',
+                                      onTap: () => _copySelection(runtime),
+                                    ),
+                                    _toolbarIconButton(
+                                      icon: Icons.content_copy_rounded,
+                                      tooltip: 'Copier tout le terminal',
+                                      onTap: () => _copyAllTerminal(runtime),
+                                    ),
+                                    _toolbarIconButton(
+                                      icon: Icons.paste_rounded,
+                                      tooltip: 'Coller',
+                                      onTap: () => _pasteIntoTerminal(runtime),
+                                    ),
+                                    _toolbarIconButton(
+                                      icon: Icons.manage_search_rounded,
+                                      tooltip: 'Rechercher dans le projet',
+                                      onTap: () => _grepSelection(runtime),
+                                    ),
+                                    _toolbarIconButton(
+                                      icon: Icons.auto_awesome,
+                                      tooltip: "Envoyer à l'agent",
+                                      onTap: () {
+                                        final text = _selectedText(runtime);
+                                        if (text.isNotEmpty) {
+                                          TerminalBridge.instance.sendToAgent(
+                                            text,
+                                          );
+                                        }
+                                        runtime.controller.clearSelection();
+                                      },
+                                    ),
+                                    _toolbarIconButton(
+                                      icon: Icons.close_rounded,
+                                      tooltip: 'Fermer',
+                                      onTap: () =>
+                                          runtime.controller.clearSelection(),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -1533,18 +1544,23 @@ class _SetupTerminalState extends State<SetupTerminal> {
     final sel = runtime.controller.selection;
     if (rt == null || sel == null) return;
     try {
+      final range = sel.normalized;
       var cell = rt.getCellOffset(rt.globalToLocal(globalPos));
-      if (!isStart && cell.y == sel.end.y && cell.x < sel.end.x) {
+      if (!isStart && cell.y == range.end.y && cell.x < range.end.x) {
         cell = CellOffset(cell.x + 1, cell.y);
       }
-      final base = isStart ? cell : sel.begin;
-      final extent = isStart ? sel.end : cell;
+      final base = isStart ? cell : range.begin;
+      final extent = isStart ? range.end : cell;
       final buffer = runtime.terminal.buffer;
       runtime.controller.setSelection(
         buffer.createAnchorFromOffset(base),
         buffer.createAnchorFromOffset(extent),
         mode: SelectionMode.line,
       );
+      // The selection toolbar and handles live in an Overlay, so the
+      // controller update alone does not guarantee that their positions are
+      // rebuilt during a drag.
+      _selectionUiTick.value++;
     } catch (_) {}
   }
 
@@ -1588,8 +1604,32 @@ class _SetupTerminalState extends State<SetupTerminal> {
     );
   }
 
+  /// Copies the complete terminal transcript, including scrollback.
+  ///
+  /// The pinned xterm API uses line-based selections. A dedicated copy-all
+  /// action avoids forcing the user to drag handles through a long build log.
+  Future<void> _copyAllTerminal(_TerminalRuntime runtime) async {
+    final text = runtime.terminal.buffer.lines
+        .map((line) => line.getText())
+        .join('\n')
+        .trimRight();
+    if (text.isEmpty) return;
+
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Terminal copié'),
+        duration: const Duration(milliseconds: 900),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+
   Future<void> _pasteIntoTerminal(_TerminalRuntime runtime) async {
     if (widget.readOnly) return;
+    runtime.focusNode.requestFocus();
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     final text = data?.text;
     if (text != null && text.isNotEmpty) {
@@ -2585,9 +2625,16 @@ class _SetupTerminalState extends State<SetupTerminal> {
                             );
                           }
                         },
+                        onCopyAll: () {
+                          final runtime = _activeRuntime();
+                          if (runtime != null) {
+                            unawaited(_copyAllTerminal(runtime));
+                          }
+                        },
                         onPaste: () async {
                           final runtime = _activeRuntime();
                           if (runtime == null) return;
+                          runtime.focusNode.requestFocus();
                           final data = await Clipboard.getData(
                             Clipboard.kTextPlain,
                           );
@@ -2673,14 +2720,8 @@ class _SetupTerminalState extends State<SetupTerminal> {
               body: Column(
                 children: [
                   // Feature 5: tab bar with rounded top corners
-                  _buildSessionTabBar(
-                    state,
-                    appTheme,
-                    activeTerminalTheme,
-                  ),
-                  Expanded(
-                    child: terminalContent,
-                  ),
+                  _buildSessionTabBar(state, appTheme, activeTerminalTheme),
+                  Expanded(child: terminalContent),
                 ],
               ),
             );
