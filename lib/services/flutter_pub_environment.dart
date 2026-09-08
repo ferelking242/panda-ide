@@ -68,7 +68,20 @@ flutter pub get
 pub_status=\$?
 if [ "\$pub_status" -ne 0 ]; then
   echo "[Panda] flutter pub get a échoué dans ce workspace."
-  echo "[Panda] Le cache isolé peut être réparé avec: rm -rf $cachePath && flutter pub get"
+  echo "[Panda] Cache: \$PUB_CACHE"
+  echo "[Panda] Filesystem du cache:"
+  df -P "\$PUB_CACHE" 2>/dev/null | tail -n 1 || true
+  if [ -d "\$PUB_CACHE/git/cache" ]; then
+    echo "[Panda] Vérification des caches Git Pub:"
+    for repo in "\$PUB_CACHE"/git/cache/*; do
+      [ -d "\$repo" ] || continue
+      echo "[Panda] repo=\$repo"
+      git -C "\$repo" fsck --full 2>&1 | sed -n '1,40p' || true
+      find "\$repo/objects" -type f 2>/dev/null | wc -l | \
+        sed 's/^/[Panda] objets=/' || true
+    done
+  fi
+  echo "[Panda] Réparation ciblée: rm -rf $cachePath && flutter pub get"
   exit "\$pub_status"
 fi
 exec flutter run $dartTarget
