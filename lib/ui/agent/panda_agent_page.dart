@@ -67,8 +67,6 @@ class PandaAgentPage extends StatelessWidget {
                 messages: controller.messages,
                 scrollController: controller.scrollController,
                 isGenerating: controller.isGenerating,
-                phase: controller.phase.name,
-                currentTool: controller.currentTool,
                 onRetry: controller.retry,
                 onToolApproval: controller.resolveApproval,
                 onAlwaysAllowTools: () => controller.setApprovalMode('autopilot'),
@@ -133,8 +131,6 @@ class PandaAgentPage extends StatelessWidget {
             onRemoveAttachment: controller.removeAttachment,
             attachmentOptions: FlowAttachmentOptions.any,
             attachTooltip: 'Ajouter un fichier ou une image',
-            errorMessage: controller.lastError,
-            onErrorDismiss: controller.clearError,
             leadingActions: [
               FlowPill(
                 icon: Broken.magicpen,

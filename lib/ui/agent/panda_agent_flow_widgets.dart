@@ -7,7 +7,6 @@ import 'flow_ui/models/flow_attachment.dart';
 import 'flow_ui/models/flow_message_data.dart';
 import 'flow_ui/models/flow_message_part.dart';
 import 'flow_ui/widgets/flow_markdown.dart';
-import 'flow_ui/widgets/flow_shimmer_text.dart';
 import 'flow_ui/widgets/flow_thinking_indicator.dart';
 import 'flow_ui/widgets/flow_thread.dart';
 
@@ -22,8 +21,6 @@ class PandaAgentFlowChat extends StatelessWidget {
     required this.messages,
     required this.scrollController,
     required this.isGenerating,
-    required this.phase,
-    this.currentTool = '',
     this.onRetry,
     this.onToolApproval,
     this.onAlwaysAllowTools,
@@ -33,8 +30,6 @@ class PandaAgentFlowChat extends StatelessWidget {
   final List<Map<String, dynamic>> messages;
   final ScrollController scrollController;
   final bool isGenerating;
-  final String phase;
-  final String currentTool;
   final void Function(int index)? onRetry;
   final ValueChanged<bool>? onToolApproval;
   final VoidCallback? onAlwaysAllowTools;
@@ -91,16 +86,31 @@ class PandaAgentFlowChat extends StatelessWidget {
             .map((block) => Map<String, dynamic>.from(block))
             .toList() ??
         <Map<String, dynamic>>[];
+    // Keep one lightweight activity line in the message stream. It replaces
+    // both FlowThread's pending indicator and the old sticky footer activity:
+    // the line is inserted after the user message and content grows below it.
+    final showThinkingLine =
+        source['showThinkingLine'] == true ||
+        sourcePhase == 'streaming' ||
+        blocks.any((block) => block['type'] == 'thinkingLine');
+    if (showThinkingLine) {
+      parts.add(
+        FlowCustomPart(
+          type: 'thinkingLine',
+          data: {
+            'active': isGeneratingMessage(source),
+          },
+        ),
+      );
+    }
     if (blocks.isNotEmpty) {
       for (final block in blocks) {
         final type = block['type']?.toString() ?? '';
         if (type == 'toolCall') {
           parts.add(FlowCustomPart(type: 'tool', data: block));
         } else if (type == 'thinking') {
-          final thinking = block['thinking']?.toString() ?? '';
-          if (thinking.trim().isNotEmpty) {
-            parts.add(FlowCustomPart(type: 'thinking', data: block));
-          }
+          // Thinking is represented by the persistent inline activity line.
+          // Do not add a second expandable card for the same turn.
         } else if (type == 'text') {
           final value = _withoutThinking(block['text']?.toString() ?? '');
           final todo = _parseTodo(value);
@@ -156,17 +166,6 @@ class PandaAgentFlowChat extends StatelessWidget {
         parts.add(FlowCustomPart(type: 'tool', data: call));
       }
     }
-    if (parts.isEmpty &&
-        sourcePhase == 'streaming' &&
-        isGeneratingMessage(source)) {
-      parts.add(
-        const FlowCustomPart(
-          type: 'thinking',
-          data: {'thinking': 'Réflexion en cours…'},
-        ),
-      );
-    }
-
     final effectiveStatus = parts.isEmpty && status == FlowMessageStatus.streaming
         ? FlowMessageStatus.pending
         : status;
@@ -412,9 +411,10 @@ class PandaAgentFlowChat extends StatelessWidget {
                     normalizedResult,
                   ),
         ),
-      'thinking' => PandaAgentFlowThinkingBlock(
-          text: data['thinking']?.toString() ?? '',
-          active: isGenerating && message.status == FlowMessageStatus.streaming,
+      'thinkingLine' => PandaAgentFlowThinkingLine(
+          active: data['active'] == true &&
+              isGenerating &&
+              message.status == FlowMessageStatus.streaming,
         ),
       'todo' => PandaAgentTodoCard(
           title: data['title']?.toString() ?? 'Todos',
@@ -431,74 +431,24 @@ class PandaAgentFlowChat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final flowMessages = _flowMessages();
-    final latest = flowMessages.isEmpty ? null : flowMessages.last;
-    final hasThinking = latest?.parts.any(
-          (part) => part is FlowCustomPart && part.type == 'thinking',
-        ) ??
-        false;
-    final activity = switch (phase) {
-      'thinking' => hasThinking ? 'Thinking' : 'Starting',
-      'toolRunning' => currentTool.isEmpty
-          ? 'Working'
-          : 'Running ${currentTool.replaceAll('runShellCommand', 'command')}',
-      'streaming' => 'Writing',
-      _ => 'Starting',
-    };
-
-    return Column(
-      children: [
-        Expanded(
-          child: FlowThread(
-            messages: flowMessages,
-            controller: scrollController,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
-            itemSpacing: 24,
-            customPartBuilder: _buildCustomPart,
-            messageFooter: null,
-            onRetry: onRetry == null
-                ? null
-                : (message) {
-                    final index = int.tryParse(
-                      message.id.replaceFirst('agent-message-', ''),
-                    );
-                    if (index != null) onRetry!(index);
-                  },
-            retryLabel: 'Réessayer',
-            thinkingLabel: 'Thinking',
-            markdown: true,
-          ),
-        ),
-        if (isGenerating)
-          _PandaAgentLiveActivity(
-            label: activity,
-          ),
-      ],
-    );
-  }
-}
-
-class _PandaAgentLiveActivity extends StatelessWidget {
-  const _PandaAgentLiveActivity({
-    required this.label,
-  });
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 9),
-      child: Row(
-        children: [
-          FlowThinkingIndicator(
-            label: label,
-            active: true,
-            size: 13,
-            color: colors.primary,
-          ),
-        ],
-      ),
+    return FlowThread(
+      messages: flowMessages,
+      controller: scrollController,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 20),
+      itemSpacing: 24,
+      customPartBuilder: _buildCustomPart,
+      messageFooter: null,
+      onRetry: onRetry == null
+          ? null
+          : (message) {
+              final index = int.tryParse(
+                message.id.replaceFirst('agent-message-', ''),
+              );
+              if (index != null) onRetry!(index);
+            },
+      retryLabel: 'Réessayer',
+      thinkingLabel: null,
+      markdown: true,
     );
   }
 }
@@ -637,110 +587,26 @@ class _PandaTodoRow extends StatelessWidget {
   }
 }
 
-class PandaAgentFlowThinkingBlock extends StatefulWidget {
-  const PandaAgentFlowThinkingBlock({
+class PandaAgentFlowThinkingLine extends StatelessWidget {
+  const PandaAgentFlowThinkingLine({
     super.key,
-    required this.text,
     this.active = false,
   });
 
-  final String text;
   final bool active;
-
-  @override
-  State<PandaAgentFlowThinkingBlock> createState() =>
-      _PandaAgentFlowThinkingBlockState();
-}
-
-class _PandaAgentFlowThinkingBlockState
-    extends State<PandaAgentFlowThinkingBlock> {
-  bool _expanded = false;
-
-  @override
-  void didUpdateWidget(PandaAgentFlowThinkingBlock oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.active && !widget.active) {
-      _expanded = false;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final text = widget.text.trim();
-    if (text.isEmpty) return const SizedBox.shrink();
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.32),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.55)),
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.only(top: 2, bottom: 4),
+      child: Row(
         children: [
-          InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => setState(() => _expanded = !_expanded),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
-              child: Row(
-                children: [
-                  Icon(
-                    Broken.cpu,
-                    size: 17,
-                    color: colors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: widget.active
-                        ? FlowShimmerText(
-                            text: 'Thinking',
-                            style: TextStyle(
-                              color: colors.onSurface,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          )
-                        : Text(
-                            'Thinking',
-                            style: TextStyle(
-                              color: colors.onSurface,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                  Icon(
-                    _expanded
-                        ? Broken.arrow_up_2
-                        : Broken.arrow_down_2,
-                    size: 18,
-                    color: colors.onSurfaceVariant,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            child: _expanded
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(36, 0, 14, 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SelectableText(
-                        text,
-                        style: TextStyle(
-                          color: colors.onSurfaceVariant,
-                          fontSize: 12,
-                          height: 1.45,
-                        ),
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
+          FlowThinkingIndicator(
+            label: 'Thinking',
+            active: active,
+            size: 12,
+            color: colors.primary,
           ),
         ],
       ),
@@ -857,13 +723,13 @@ class PandaAgentFlowToolCard extends StatelessWidget {
               color: accent,
             );
       return Container(
-        width: 30,
-        height: 30,
+        width: 24,
+        height: 24,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: foreground.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: foreground.withValues(alpha: 0.09)),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: foreground.withValues(alpha: 0.07)),
         ),
         child: child,
       );
@@ -872,24 +738,17 @@ class PandaAgentFlowToolCard extends StatelessWidget {
     Widget statusWidget() {
       if (running) {
         return const SizedBox.square(
-          dimension: 14,
+          dimension: 12,
           child: CircularProgressIndicator(strokeWidth: 1.5),
-        );
-      }
-      if (shell) {
-        return Icon(
-          _failed ? Broken.close_circle : Broken.tick_circle,
-          size: 18,
-          color: _failed ? Colors.redAccent : Colors.green,
         );
       }
       if (onOpen != null) {
         return IconButton(
           tooltip: 'Ouvrir dans un onglet',
           onPressed: onOpen,
-          icon: Icon(Broken.export, size: 15, color: muted),
+          icon: Icon(Broken.export, size: 14, color: muted),
           padding: EdgeInsets.zero,
-          constraints: const BoxConstraints.tightFor(width: 26, height: 26),
+          constraints: const BoxConstraints.tightFor(width: 24, height: 24),
         );
       }
       return const SizedBox.shrink();
@@ -904,11 +763,11 @@ class PandaAgentFlowToolCard extends StatelessWidget {
             onTap: hasDetails ? onToggle : null,
             borderRadius: BorderRadius.circular(10),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(
                 children: [
                   iconTile(),
-                  const SizedBox(width: 9),
+                  const SizedBox(width: 7),
                   Expanded(
                     child: Text(
                       approval
@@ -918,7 +777,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: foreground,
-                        fontSize: 12,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
                         fontFamily: 'monospace',
                       ),
@@ -945,11 +804,9 @@ class PandaAgentFlowToolCard extends StatelessWidget {
             child: collapsed
                 ? const SizedBox.shrink()
                 : Padding(
-                    padding: const EdgeInsets.only(left: 39, top: 3, bottom: 2),
+                    padding: const EdgeInsets.only(top: 2, bottom: 2),
                     child: _buildDetails(
-                      context,
                       approval: approval,
-                      showFullCommand: true,
                     ),
                   ),
           ),
@@ -957,18 +814,15 @@ class PandaAgentFlowToolCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDetails(
-    BuildContext context, {
+  Widget _buildDetails({
     required bool approval,
-    required bool showFullCommand,
   }) {
-    final panelColor = foreground.withValues(alpha: dark ? 0.07 : 0.045);
-    final panelBorder = foreground.withValues(alpha: 0.09);
+    final panelBorder = foreground.withValues(alpha: dark ? 0.14 : 0.12);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: panelColor,
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: panelBorder),
       ),
@@ -1017,38 +871,56 @@ class PandaAgentFlowToolCard extends StatelessWidget {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_command.isNotEmpty)
+                if (_command.isNotEmpty || shell)
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        r'$',
-                        style: TextStyle(
-                          color: foreground.withValues(alpha: 0.46),
-                          fontSize: 11,
-                          fontFamily: 'monospace',
+                      if (shell)
+                        Text(
+                          '>_',
+                          style: TextStyle(
+                            color: foreground.withValues(alpha: 0.72),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            fontFamily: 'monospace',
+                          ),
+                        )
+                      else
+                        Icon(
+                          pandaAgentToolIcon(toolName),
+                          size: 13,
+                          color: muted,
                         ),
-                      ),
-                      const SizedBox(width: 7),
+                      const SizedBox(width: 6),
                       Expanded(
                         child: Text(
-                          showFullCommand
-                              ? _command
-                              : pandaWrapLongTokensForDisplay(_command),
+                          _command.isEmpty ? toolName : _command,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: foreground.withValues(alpha: 0.82),
-                            fontSize: 11,
-                            height: 1.4,
+                            fontSize: 10.5,
+                            height: 1.25,
                             fontFamily: 'monospace',
                           ),
                         ),
                       ),
+                      if (running)
+                        const SizedBox.square(
+                          dimension: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.3),
+                        )
+                      else if (shell && result?.trim().isNotEmpty == true)
+                        Icon(
+                          _failed ? Broken.close_circle : Broken.tick_circle,
+                          size: 14,
+                          color: _failed ? Colors.redAccent : Colors.green,
+                        ),
                     ],
                   ),
-                if (_command.isNotEmpty &&
+                if ((_command.isNotEmpty || shell) &&
                     result != null &&
                     result!.trim().isNotEmpty)
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                 if (result != null && result!.trim().isNotEmpty)
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 220),
@@ -1060,7 +932,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                           isStreaming: false,
                           style: TextStyle(
                             color: foreground.withValues(alpha: 0.82),
-                            fontSize: 11,
+                            fontSize: 10.5,
                             height: 1.4,
                           ),
                         ),
@@ -1203,14 +1075,4 @@ IconData pandaAgentToolIcon(String name) {
     return Broken.trash;
   }
   return Broken.setting_3;
-}
-
-String pandaWrapLongTokensForDisplay(String text) {
-  return text
-      .replaceAll('/', '/\u200B')
-      .replaceAll('\\', '\\\u200B')
-      .replaceAll('.', '.\u200B')
-      .replaceAll('-', '-\u200B')
-      .replaceAll('_', '_\u200B')
-      .replaceAll(':', ':\u200B');
 }

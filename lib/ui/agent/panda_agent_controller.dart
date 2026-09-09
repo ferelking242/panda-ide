@@ -297,6 +297,7 @@ class PandaAgentController extends ChangeNotifier {
           'role': 'agent',
           'text': '',
           'thinking': '',
+           'showThinkingLine': true,
           'phase': 'streaming',
           'toolCalls': <Map<String, dynamic>>[],
           'blocks': <Map<String, dynamic>>[],

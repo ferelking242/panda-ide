@@ -72,22 +72,21 @@ class FlowErrorState extends StatelessWidget {
   /// and on a raised card alike.
   static const BorderRadius _radius = BorderRadius.all(Radius.circular(12));
   static const EdgeInsetsGeometry _cardPadding = EdgeInsets.fromLTRB(
-    16,
-    14,
-    16,
-    14,
+    12,
+    10,
+    12,
+    10,
   );
-  static const double _borderOpacity = 0.4;
 
   /// The glyph, sized to the title's line so the pair reads as one row;
   /// the message and the pill align to the card's edge below, not to the
   /// text's indent.
-  static const double _iconSize = 16;
+  static const double _iconSize = 14;
   static const double _iconGap = 6;
 
   /// Gaps: glyph row to message, content to the retry pill.
-  static const double _messageGap = 8;
-  static const double _retryGap = 12;
+  static const double _messageGap = 6;
+  static const double _retryGap = 8;
 
   @override
   Widget build(BuildContext context) {
@@ -132,12 +131,14 @@ class FlowErrorState extends StatelessWidget {
     return Container(
       padding: padding ?? _cardPadding,
       decoration: BoxDecoration(
-        color: effective?.backgroundColor ?? colors.surfaceContainerLowest,
+        color:
+            effective?.backgroundColor ??
+            colors.surfaceContainerLow.withValues(alpha: 0.34),
         borderRadius: borderRadius ?? _radius,
         border: Border.all(
           color:
               effective?.borderColor ??
-              colors.error.withValues(alpha: _borderOpacity),
+              colors.outlineVariant.withValues(alpha: 0.72),
         ),
       ),
       child: Column(
@@ -154,7 +155,7 @@ class FlowErrorState extends StatelessWidget {
                   child: Icon(
                     Icons.error_outline,
                     size: _iconSize,
-                    color: effective?.glyphColor ?? colors.error,
+                    color: effective?.glyphColor ?? colors.onSurfaceVariant,
                   ),
                 ),
               ),
