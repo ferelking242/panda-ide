@@ -89,6 +89,13 @@ android {
         }
     }
 
+    // The GitHub APK is also distributed by sideloading, where Play Feature
+    // Delivery never installs node_feature.  libnodelauncher.so is already in
+    // the base app, so keep its libnode.so dependency in the base APK too.
+    // The feature still owns the source for Play builds; this source-set entry
+    // makes the extension host work in both delivery modes.
+    sourceSets["main"].jniLibs.srcDir("src/node_feature/src/main/jniLibs")
+
     dynamicFeatures.addAll(
         setOf(
             ":app:rust_feature",

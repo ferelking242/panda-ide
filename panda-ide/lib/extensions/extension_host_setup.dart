@@ -80,7 +80,8 @@ class ExtensionHostSetup {
     await _extractAssets();
 
     // 2. Initialize Node.js runtime.
-    final nodeReady = await NodeRuntimeManager.instance.init();
+    final nodeReady =
+        await NodeRuntimeManager.instance.init(sharedPath: sharedPath);
     if (!nodeReady) {
       throw StateError(
         'Node.js runtime indisponible ou inexécutable. '

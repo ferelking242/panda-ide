@@ -8,7 +8,9 @@ import 'extension_webview.dart';
 /// This keeps contributed commands and views discoverable even when an
 /// extension is lazy and has not started its Node host yet.
 class ExtensionContributionsPanel extends StatefulWidget {
-  const ExtensionContributionsPanel({super.key});
+  final String? extensionId;
+
+  const ExtensionContributionsPanel({super.key, this.extensionId});
 
   @override
   State<ExtensionContributionsPanel> createState() =>
@@ -89,7 +91,20 @@ class _ExtensionContributionsPanelState
     final cs = Theme.of(context).colorScheme;
     if (_loading) return const Center(child: CircularProgressIndicator());
 
-    final snapshot = _snapshot ?? const ExtensionContributionSnapshot();
+    final loadedSnapshot = _snapshot ?? const ExtensionContributionSnapshot();
+    final snapshot = widget.extensionId == null
+        ? loadedSnapshot
+        : ExtensionContributionSnapshot(
+            commands: loadedSnapshot.commands
+                .where((item) => item.extensionId == widget.extensionId)
+                .toList(),
+            views: loadedSnapshot.views
+                .where((item) => item.extensionId == widget.extensionId)
+                .toList(),
+            menus: loadedSnapshot.menus
+                .where((item) => item.extensionId == widget.extensionId)
+                .toList(),
+          );
     if (snapshot.commands.isEmpty &&
         snapshot.views.isEmpty &&
         snapshot.menus.isEmpty) {
@@ -102,7 +117,9 @@ class _ExtensionContributionsPanelState
             const SizedBox(height: 12),
             Center(
               child: Text(
-                'Aucune contribution d’extension installée.',
+                widget.extensionId == null
+                    ? 'Aucune contribution d’extension installée.'
+                    : 'Cline n’est pas installé ou ne déclare aucune vue.',
                 style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
               ),
             ),

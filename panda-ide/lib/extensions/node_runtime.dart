@@ -28,7 +28,15 @@ class NodeRuntimeManager {
 
   /// Initialize the Node.js runtime.
   /// Checks if node is already installed, if not, tries to extract from assets.
-  Future<bool> init() async {
+  ///
+  /// [sharedPath] is Android's nativeLibraryDir.  Sideloaded APKs do not
+  /// receive Play Feature Delivery splits, so the base APK may expose the
+  /// embedded Node launcher there instead of a writable bin/node file.
+  Future<bool> init({String? sharedPath}) async {
+    _installed = false;
+    _nodePath = null;
+    _version = null;
+
     // 1. Check if node binary already exists at the expected path
     final expectedPath = '$binDir/node';
     final existingPaths = <String>[
@@ -39,6 +47,7 @@ class NodeRuntimeManager {
       '$appDir/terminals/ubuntu/usr/bin/node',
       '$appDir/terminals/debian/usr/bin/node',
       '$appDir/terminals/alpine/usr/bin/node',
+      if (sharedPath != null) '$sharedPath/libnodelauncher.so',
     ];
     for (final candidate in existingPaths) {
       if (!File(candidate).existsSync()) continue;
@@ -76,7 +85,8 @@ class NodeRuntimeManager {
       }
     }
 
-    // 3. Try to extract from bundled assets
+    // 3. Try to extract from bundled assets.  This is kept as a fallback for
+    // development builds that provide assets/bin/node.
     final extracted = await _extractFromAssets();
     if (extracted) {
       _nodePath = expectedPath;
@@ -219,7 +229,7 @@ class NodeRuntimeManager {
         ...Platform.environment,
         'PATH': '$nodeDirectory:${Platform.environment['PATH'] ?? ''}',
         'LD_LIBRARY_PATH':
-            '$runtimeLibraryDirectory:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
+            '$nodeDirectory:$runtimeLibraryDirectory:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
         'HOME': Platform.environment['HOME'] ?? appDir,
         'TMPDIR': Platform.environment['TMPDIR'] ?? tempDir,
       };

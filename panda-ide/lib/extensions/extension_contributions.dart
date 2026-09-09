@@ -76,10 +76,13 @@ class ExtensionContributionIndex {
         if (id == null || id.isEmpty || !viewIds.add('${ext.manifest.id}:$id')) {
           continue;
         }
+        final rawTitle = item['name']?.toString();
         views.add(ExtensionViewEntry(
           extensionId: ext.manifest.id,
           viewId: id,
-          title: item['name']?.toString() ?? id,
+          title: rawTitle?.trim().isNotEmpty == true
+              ? rawTitle!
+              : ext.manifest.displayName,
         ));
       }
       for (final item in contributes.viewsContainers) {

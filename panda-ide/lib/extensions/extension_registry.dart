@@ -67,21 +67,67 @@ class ExtensionRegistry {
     if (_loaded) return;
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsKey);
+    var needsSave = false;
     if (raw != null) {
       final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
       for (final item in list) {
         try {
           final ext = InstalledExtension.fromJson(item);
-          // Vérifier que le dossier d'installation existe encore
+          // Keep the entry when its directory exists.  If an app update moved
+          // the registry path, _discoverOnDisk below repairs it from the
+          // package.json instead of silently hiding the extension.
           if (Directory(ext.installPath).existsSync()) {
             _extensions[ext.manifest.id] = ext;
+          } else {
+            needsSave = true;
           }
         } catch (e) {
-          // Extension corrompue → on ignore silencieusement
+          // A malformed registry entry must not hide healthy extensions.
+          needsSave = true;
         }
       }
     }
     _loaded = true;
+    needsSave = await _discoverOnDisk() || needsSave;
+    if (needsSave) await _save();
+  }
+
+  /// Rebuild missing registry entries from the extension directories.
+  ///
+  /// This is important after restoring an APK or changing the app storage
+  /// root: the VSIX files can still be present even when SharedPreferences
+  /// contains an old path.  package.json is the source of truth for discovery.
+  Future<bool> _discoverOnDisk() async {
+    final root = _root;
+    if (root == null) return false;
+    final extensionsDir = Directory(p.join(root, 'panda_extensions'));
+    if (!extensionsDir.existsSync()) return false;
+
+    var changed = false;
+    await for (final entity in extensionsDir.list(followLinks: false)) {
+      if (entity is! Directory) continue;
+      final manifestFile = File(p.join(entity.path, 'package.json'));
+      if (!manifestFile.existsSync()) continue;
+
+      try {
+        final raw = jsonDecode(await manifestFile.readAsString());
+        if (raw is! Map<String, dynamic>) continue;
+        final manifest = ExtensionManifest.fromJson(raw);
+        final current = _extensions[manifest.id];
+        if (current == null || current.installPath != entity.path) {
+          _extensions[manifest.id] = InstalledExtension(
+            manifest: manifest,
+            installPath: entity.path,
+            state: current?.state ?? ExtensionState.enabled,
+            errorMessage: current?.errorMessage,
+          );
+          changed = true;
+        }
+      } catch (_) {
+        // Ignore unrelated or partially extracted directories.
+      }
+    }
+    return changed;
   }
 
   Future<void> _save() async {
@@ -179,7 +225,16 @@ class ExtensionRegistry {
   }
 
   static String? _root;
-  static void setRoot(String path) => _root = path;
+  static void setRoot(String path) {
+    if (_root == path) return;
+    _root = path;
+    // A test harness or a storage migration may set the root after a first
+    // load.  Force one fresh disk discovery in that case.
+    if (instance._loaded) {
+      instance._loaded = false;
+      instance._extensions.clear();
+    }
+  }
 
   /// Chemin d'installation pour une extension donnée.
   /// Falls back to the system temp directory if setRoot() was never called

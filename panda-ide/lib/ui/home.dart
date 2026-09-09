@@ -55,6 +55,7 @@ import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_contributions_panel.dart';
 import '../extensions/extension_host.dart';
+import '../extensions/extension_registry.dart';
 import '../extensions/ui/command_palette.dart';
 import '../services/ide_tab_opener.dart';
 import '../extensions/language_feature_router.dart';
@@ -167,6 +168,7 @@ class _SelectTypeState extends State<SelectType>
 
   // Active activity-bar item (0 = none/welcome)
   int _activeRail = 0;
+  bool _clineInstalled = false;
   // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
   int _sidebarState = 1;
   bool _rightPanelOpen = false;
@@ -443,6 +445,7 @@ class _SelectTypeState extends State<SelectType>
       context.read<ChatSessionBloc>().add(LoadChatSessions());
       checkAndRequestMissingPermissions(context);
       _bootstrapExtensionHost();
+      _refreshClineSidebar();
       _registerTabOpener();
     });
   }
@@ -480,6 +483,22 @@ class _SelectTypeState extends State<SelectType>
       await ExtensionHost.instance.activateEagerExtensions();
     } catch (e) {
       PandaLog.w('PandaAgent', 'ExtensionHost bootstrap failed: $e');
+    }
+  }
+
+  Future<void> _refreshClineSidebar() async {
+    try {
+      await ExtensionRegistry.instance.load();
+      final installed = ExtensionRegistry.instance.all.any(
+        (extension) =>
+            extension.manifest.id == 'saoudrizwan.claude-dev' ||
+            extension.manifest.displayName.toLowerCase() == 'cline',
+      );
+      if (mounted && installed != _clineInstalled) {
+        setState(() => _clineInstalled = installed);
+      }
+    } catch (error) {
+      PandaLog.w('Extensions', 'Unable to discover Cline: $error');
     }
   }
 
@@ -1843,7 +1862,13 @@ class _SelectTypeState extends State<SelectType>
       ),
       _RailItem(icon: Broken.task_square, label: 'Outline', idx: 12),
       _RailItem(icon: Broken.clock, label: 'Timeline', idx: 13),
-       _RailItem(icon: Broken.element_3, label: 'Extensions', idx: 14),
+      _RailItem(icon: Broken.element_3, label: 'Extensions', idx: 14),
+      if (_clineInstalled)
+        _RailItem(
+          icon: Broken.message_programming,
+          label: 'Cline',
+          idx: 15,
+        ),
     ];
 
     return Container(
@@ -1945,6 +1970,20 @@ class _SelectTypeState extends State<SelectType>
                         // Panda Agent always opens directly in the editor.
                         if (item.idx == 10) {
                           _openAgentTab();
+                          return;
+                        }
+                        // Cline contributes a webview sidebar. Keep it as a
+                        // first-class activity-bar item once its VSIX is found.
+                        if (item.idx == 15) {
+                          setState(() {
+                            if (_activeRail == 15 && _sidebarState == 2) {
+                              _sidebarState = 1;
+                              _activeRail = 0;
+                            } else {
+                              _activeRail = 15;
+                              _sidebarState = 2;
+                            }
+                          });
                           return;
                         }
                         // Local Models opens as an editor tab.
@@ -2262,7 +2301,8 @@ class _SelectTypeState extends State<SelectType>
       11: 'MODÈLES LOCAUX',
       12: 'OUTLINE',
       13: 'TIMELINE',
-       14: 'EXTENSIONS',
+      14: 'EXTENSIONS',
+      15: 'CLINE',
     };
 
     Widget panelBody;
@@ -2293,6 +2333,11 @@ class _SelectTypeState extends State<SelectType>
         break;
        case 14: // Extension contribution points
          panelBody = const ExtensionContributionsPanel();
+         break;
+       case 15: // Cline contributed webview
+         panelBody = const ExtensionContributionsPanel(
+           extensionId: 'saoudrizwan.claude-dev',
+         );
          break;
       case 9: // GitHub Copilot
         panelBody = _sidebarCopilot(context, appTheme, isDark);

@@ -115,10 +115,19 @@ List<SettingsSection> parseContributesConfiguration(Map<String, dynamic> contrib
   void parseSection(Map<String, dynamic> section) {
     final title = section['title'] as String? ?? 'Settings';
     final description = section['description'] as String?;
-    final properties = section['properties'] as Map<String, dynamic>? ?? {};
+    final rawProperties = section['properties'];
+    final properties = rawProperties is Map
+        ? rawProperties.map(
+            (key, value) => MapEntry(key.toString(), value),
+          )
+        : <String, dynamic>{};
 
     final items = properties.entries
-        .map((e) => SettingItem.fromJson(e.key, e.value as Map<String, dynamic>))
+        .where((e) => e.value is Map)
+        .map((e) => SettingItem.fromJson(
+              e.key,
+              Map<String, dynamic>.from(e.value as Map),
+            ))
         .where((s) => !s.isDeprecated)
         .toList();
 
@@ -561,7 +570,8 @@ class _NoSettings extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Cette extension ne déclare pas de settings configurables.',
+              'Cette extension ne déclare pas de paramètres VS Code.\n'
+              'Ses réglages sont probablement accessibles depuis sa propre vue.',
               style: TextStyle(fontSize: 13, color: Colors.grey),
               textAlign: TextAlign.center,
             ),

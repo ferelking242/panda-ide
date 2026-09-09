@@ -100,7 +100,12 @@ class _ExtensionsPanelState extends State<ExtensionsPanel> {
     );
     if (confirm != true) return;
     try {
-      await ExtensionHostManager.instance.deactivate(ext.manifest.id);
+      // A broken Node host must not make the extension impossible to remove.
+      // Deactivation is best-effort; the installer still removes the files
+      // and the registry entry below.
+      try {
+        await ExtensionHostManager.instance.deactivate(ext.manifest.id);
+      } catch (_) {}
       final removed = await VsixInstaller().uninstall(ext.manifest.id);
       if (!removed) throw StateError('Extension introuvable sur le disque');
       if (!mounted) return;
