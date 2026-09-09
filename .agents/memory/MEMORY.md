@@ -10,3 +10,4 @@
 - [GitHub push authentication](github-push-authentication.md) — use the secure PAT with an x-access-token URL rewrite when the GitHub extraheader flow returns invalid credentials.
 - [Flutter Pub cache isolation](flutter-pub-cache-isolation.md) — every workspace needs a deterministic Pub cache inside PRoot to avoid misleading Git checkout failures.
 - [Panda Agent runtime constraints](panda-agent-runtime-constraints.md) — rebuild tool closures per turn and use AgentSettingsService as the canonical agent secret vault.
+- [VS Code extension module loading](vscode-extension-module-loading.md) — bare `require('vscode')` needs a Module._load shim, not only a require.cache entry.
