@@ -817,6 +817,8 @@ class PandaAgentFlowToolCard extends StatelessWidget {
   Widget _buildDetails({
     required bool approval,
   }) {
+    final shell = _isShellCommand;
+    final running = status == 'running';
     final panelBorder = foreground.withValues(alpha: dark ? 0.14 : 0.12);
     return Container(
       width: double.infinity,
