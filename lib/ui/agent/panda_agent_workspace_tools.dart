@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/broken_icons.dart';
 import '../../utils/agent_settings_service.dart';
 
 const _pandaBg = Color(0xff1e1e1e);
@@ -13,6 +14,10 @@ const _pandaBorder = Color(0xff363638);
 const _pandaMuted = Color(0xffa6a6aa);
 const _pandaBlue = Color(0xff1683f7);
 const _pandaGreen = Color(0xff65d98a);
+const _pandaMenuShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.all(Radius.circular(8)),
+  side: BorderSide(color: _pandaBorder),
+);
 
 enum PandaWorkspaceToolPage { files, skills, secrets }
 
@@ -211,8 +216,10 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
 
   PopupMenuButton<String> _entryMenu(FileSystemEntity entry) {
     return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 20, color: _pandaMuted),
+      icon: const Icon(Broken.more, size: 20, color: _pandaMuted),
       color: _pandaPanelRaised,
+      elevation: 8,
+      shape: _pandaMenuShape,
       onSelected: (value) async {
         switch (value) {
           case 'rename':
@@ -247,7 +254,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
           value: 'new-file',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.note_add_outlined, size: 18),
+            leading: Icon(Broken.note, size: 18),
             title: Text('Add file'),
           ),
         ),
@@ -255,7 +262,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
           value: 'new-folder',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.create_new_folder_outlined, size: 18),
+            leading: Icon(Broken.folder_add, size: 18),
             title: Text('Add folder'),
           ),
         ),
@@ -264,7 +271,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
           value: 'shell',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.terminal, size: 18),
+            leading: Icon(Broken.command, size: 18),
             title: Text('Open shell here'),
           ),
         ),
@@ -272,7 +279,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
           value: 'path',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.copy_outlined, size: 18),
+            leading: Icon(Broken.copy, size: 18),
             title: Text('Copy file path'),
           ),
         ),
@@ -280,7 +287,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
           value: 'link',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.link, size: 18),
+            leading: Icon(Broken.link, size: 18),
             title: Text('Copy link'),
           ),
         ),
@@ -288,7 +295,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
           value: 'download',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.download_outlined, size: 18),
+            leading: Icon(Broken.document_download, size: 18),
             title: Text('Download folder'),
           ),
         ),
@@ -296,7 +303,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
           value: 'delete',
           child: ListTile(
             contentPadding: EdgeInsets.zero,
-            leading: Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+            leading: Icon(Broken.trash, color: Colors.redAccent, size: 18),
             title: Text('Delete', style: TextStyle(color: Colors.redAccent)),
           ),
         ),
@@ -323,8 +330,10 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
                   ),
                 ),
                 PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert, color: _pandaMuted),
+                  icon: const Icon(Broken.more, color: _pandaMuted),
                   color: _pandaPanelRaised,
+                  elevation: 8,
+                  shape: _pandaMenuShape,
                   onSelected: (value) async {
                     switch (value) {
                       case 'file':
@@ -350,7 +359,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
                       value: 'file',
                       child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.note_add_outlined, size: 18),
+                        leading: Icon(Broken.note, size: 18),
                         title: Text('New file'),
                       ),
                     ),
@@ -358,7 +367,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
                       value: 'folder',
                       child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.create_new_folder_outlined, size: 18),
+                        leading: Icon(Broken.folder_add, size: 18),
                         title: Text('New folder'),
                       ),
                     ),
@@ -366,7 +375,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
                       value: 'upload',
                       child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.upload_file, size: 18),
+                        leading: Icon(Broken.document_upload, size: 18),
                         title: Text('Upload files'),
                       ),
                     ),
@@ -374,7 +383,7 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
                       value: 'zip',
                       child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.download_outlined, size: 18),
+                        leading: Icon(Broken.document_download, size: 18),
                         title: Text('Download as zip'),
                       ),
                     ),
@@ -384,8 +393,8 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
                         contentPadding: EdgeInsets.zero,
                         leading: Icon(
                           _showHidden
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
+                               ? Broken.eye_slash
+                               : Broken.eye,
                           size: 18,
                         ),
                         title: Text(_showHidden
@@ -425,8 +434,8 @@ class _PandaFilesPageState extends State<PandaFilesPage> {
                             children: [
                               Icon(
                                 isDirectory
-                                    ? Icons.folder_outlined
-                                    : Icons.insert_drive_file_outlined,
+                                    ? Broken.folder
+                                    : Broken.document,
                                 color: isDirectory
                                     ? _pandaMuted
                                     : Colors.blue[300],
@@ -601,10 +610,10 @@ class _PandaAgentSkillsPageState extends State<PandaAgentSkillsPage> {
                         children: [
                           Icon(
                             tab == 'Community'
-                                ? Icons.language_outlined
+                                 ? Broken.global
                                 : tab == 'Workspace'
-                                    ? Icons.account_tree_outlined
-                                    : Icons.folder_outlined,
+                                    ? Broken.diagram
+                                    : Broken.folder,
                             size: 16,
                             color: _tab == tab ? Colors.white : _pandaMuted,
                           ),
@@ -681,10 +690,10 @@ class _PandaAgentSkillsPageState extends State<PandaAgentSkillsPage> {
             for (final name in _installed)
               ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-                leading: const Icon(Icons.extension_outlined, color: _pandaBlue),
+                leading: const Icon(Broken.code_1, color: _pandaBlue),
                 title: Text(name, style: const TextStyle(color: Colors.white)),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: _pandaMuted),
+                  icon: const Icon(Broken.trash, color: _pandaMuted),
                   onPressed: () async {
                     final next = _installed.where((item) => item != name).toList();
                     await AgentSettingsService.setSkills(next);
@@ -738,7 +747,7 @@ class _CommunitySkillCard extends StatelessWidget {
               ),
               TextButton.icon(
                 onPressed: installed ? null : onInstall,
-                icon: const Icon(Icons.download_outlined, size: 14),
+                icon: const Icon(Broken.document_download, size: 14),
                 label: Text(installed ? 'Installed' : 'Install'),
                 style: TextButton.styleFrom(
                   foregroundColor: installed ? _pandaMuted : Colors.white,
@@ -770,7 +779,7 @@ class _CommunitySkillCard extends StatelessWidget {
             alignment: Alignment.centerRight,
             child: IconButton(
               visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.keyboard_arrow_down, color: _pandaMuted),
+              icon: const Icon(Broken.arrow_down, color: _pandaMuted),
               onPressed: () => showDialog<void>(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -924,12 +933,14 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.link, color: _pandaMuted, size: 20),
+                icon: const Icon(Broken.link, color: _pandaMuted, size: 20),
                 onPressed: () => _notice(context, 'Secret link copied.'),
               ),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: _pandaMuted),
+                icon: const Icon(Broken.more, color: _pandaMuted),
                 color: _pandaPanelRaised,
+                elevation: 8,
+                shape: _pandaMenuShape,
                 onSelected: (value) {
                   if (value == 'add') _newSecret();
                   if (value == 'refresh') _loadSecrets();
@@ -941,7 +952,7 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
               ),
               FilledButton.icon(
                 onPressed: () => _newSecret(),
-                icon: const Icon(Icons.add, size: 16),
+                icon: const Icon(Broken.add, size: 16),
                 label: const Text('New Secret'),
                 style: FilledButton.styleFrom(
                   backgroundColor: _pandaBlue,
@@ -964,11 +975,11 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, color: Colors.white, size: 17),
+                Icon(Broken.info_circle, color: Colors.white, size: 17),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Secrets are accessible to anyone who has access to this App. To restrict secret access, you must update App invite permissions.',
+                    'Secret values are stored locally for this workspace and stay hidden in the interface.',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 12,
@@ -984,7 +995,7 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
             controller: _searchController,
             hintText: 'Filter Secrets by name',
             onChanged: (value) => setState(() => _query = value),
-            suffixIcon: Icons.search,
+            suffixIcon: Broken.search_normal,
           ),
           const SizedBox(height: 8),
           if (names.isEmpty)
@@ -1025,7 +1036,7 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
         children: [
           const Padding(
             padding: EdgeInsets.all(9),
-            child: Icon(Icons.copy_outlined, color: _pandaMuted, size: 17),
+            child: Icon(Broken.copy, color: _pandaMuted, size: 17),
           ),
           Expanded(
             child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 13)),
@@ -1035,16 +1046,18 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
             style: TextStyle(color: _pandaMuted, letterSpacing: 1),
           ),
           IconButton(
-            icon: const Icon(Icons.visibility_outlined, color: _pandaMuted, size: 18),
+            icon: const Icon(Broken.eye, color: _pandaMuted, size: 18),
             onPressed: () => _notice(context, 'Secret values stay hidden.'),
           ),
           PopupMenuButton<String>(
             icon: Icon(
-              Icons.more_vert,
+              Broken.more,
               color: isOpen ? Colors.white : _pandaMuted,
               size: 20,
             ),
             color: _pandaPanelRaised,
+            elevation: 8,
+            shape: _pandaMenuShape,
             onOpened: () => setState(() => _openMenu = name),
             onCanceled: () => setState(() => _openMenu = null),
             onSelected: (value) async {
@@ -1066,7 +1079,7 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
                 value: 'edit',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.edit_outlined, size: 18),
+                  leading: Icon(Broken.edit, size: 18),
                   title: Text('Edit'),
                 ),
               ),
@@ -1074,7 +1087,7 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
                 value: 'usage',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.search, size: 18),
+                  leading: Icon(Broken.search_normal, size: 18),
                   title: Text('Find Usages'),
                 ),
               ),
@@ -1082,7 +1095,7 @@ class _PandaSecretsPageState extends State<PandaSecretsPage> {
                 value: 'delete',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.delete_outline, color: Colors.redAccent, size: 18),
+                   leading: Icon(Broken.trash, color: Colors.redAccent, size: 18),
                   title: Text('Delete', style: TextStyle(color: Colors.redAccent)),
                 ),
               ),
@@ -1125,7 +1138,7 @@ class _PandaSearchField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: const TextStyle(color: _pandaMuted, fontSize: 12),
-        suffixIcon: Icon(suffixIcon ?? Icons.search, color: _pandaMuted, size: 19),
+       suffixIcon: Icon(suffixIcon ?? Broken.search_normal, color: _pandaMuted, size: 19),
         filled: true,
         fillColor: _pandaPanel,
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),

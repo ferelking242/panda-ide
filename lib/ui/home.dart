@@ -5461,6 +5461,15 @@ class _SelectTypeState extends State<SelectType>
     final selBg = isDark ? const Color(0xff383838) : const Color(0xffd2d2d2);
 
     if (_agentPanelTab >= 3) {
+      final pageTitle = _agentPanelTab == 4
+          ? 'Providers'
+          : _agentPanelTab == 5
+              ? 'Files'
+              : _agentPanelTab == 6
+                  ? 'Agent Skills'
+                  : _agentPanelTab == 7
+                      ? 'Secrets'
+                      : 'User Settings';
       return Container(
         height: 50,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -5487,34 +5496,24 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
             const SizedBox(width: 6),
-            Icon(
-              _agentPanelTab == 4
-                  ? Broken.cpu_setting
-                  : _agentPanelTab == 5
-                      ? Broken.folder
-                      : _agentPanelTab == 6
-                          ? Broken.code_1
-                          : _agentPanelTab == 7
-                              ? Broken.lock
-                              : Broken.setting,
-              size: 15,
-              color: _kAccent,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              _agentPanelTab == 4
-                  ? 'Providers'
-                  : _agentPanelTab == 5
-                      ? 'Files'
-                      : _agentPanelTab == 6
-                          ? 'Agent Skills'
-                          : _agentPanelTab == 7
-                              ? 'Secrets'
-                              : 'User Settings',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: fg,
+            Flexible(
+              child: Container(
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                alignment: Alignment.centerLeft,
+                decoration: BoxDecoration(
+                  color: selBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  pageTitle,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: fg,
+                  ),
+                ),
               ),
             ),
           ],
@@ -6664,66 +6663,47 @@ class _SelectTypeState extends State<SelectType>
 
     final tools = [
       (
+        section: 'Recent',
         icon: Broken.folder,
         color: Colors.green[400]!,
         title: 'Files',
         desc: 'Browse and manage files in your workspace',
       ),
       (
+        section: 'Recent',
         icon: Broken.lock,
         color: Colors.orange[400]!,
         title: 'Secrets',
         desc:
-            'Store sensitive information (like API keys) securely in your App',
+            'Store sensitive values securely for this workspace',
       ),
       (
+        section: 'Panda Agent',
         icon: Broken.code_1,
         color: Colors.blue[400]!,
         title: 'Agent Skills',
         desc: 'Manage skills that extend Agent capabilities',
       ),
       (
-        icon: Broken.archive_book,
-        color: Colors.green[400]!,
-        title: 'App Storage',
-        desc: 'Host and save uploads like images, videos, and documents',
-      ),
-      (
-        icon: Broken.copy,
+        section: 'Panda Agent',
+        icon: Broken.cpu_setting,
         color: Colors.purple[400]!,
-        title: 'Artifacts',
-        desc: 'Browse generated artifacts and previews',
+        title: 'Providers',
+        desc: 'Configure the models and providers used by Panda Agent',
       ),
       (
-        icon: Broken.brush_1,
-        color: Colors.pink[400]!,
-        title: 'Canvas',
-        desc: 'Agent-controlled canvas for mockups and wireframes',
-      ),
-      (
+        section: 'Workspace',
         icon: Broken.command_square,
         color: Colors.teal[400]!,
         title: 'Console',
         desc: 'View the terminal output after running your code',
       ),
       (
-        icon: Broken.data,
-        color: Colors.cyan[400]!,
-        title: 'Database',
-        desc:
-            'Stores structured data such as user profiles, game scores, and product catalogs',
-      ),
-      (
-        icon: Broken.code,
+        section: 'Workspace',
+        icon: Broken.programming_arrows,
         color: Colors.indigo[400]!,
-        title: 'Developer',
-        desc: 'Internal developer tools, telemetry, and diagnostics',
-      ),
-      (
-        icon: Broken.global,
-        color: Colors.amber[400]!,
-        title: 'Domains',
-        desc: 'Manage custom domains for your published project',
+        title: 'Git',
+        desc: 'Review changes and manage the local repository',
       ),
     ];
 
@@ -6741,107 +6721,131 @@ class _SelectTypeState extends State<SelectType>
               )
               .toList();
 
+    final toolWidgets = <Widget>[];
+    String? lastSection;
+    for (final tool in filtered) {
+      if (tool.section != lastSection) {
+        lastSection = tool.section;
+        toolWidgets.add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            child: Text(
+              tool.section,
+              style: TextStyle(
+                color: muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.3,
+              ),
+            ),
+          ),
+        );
+      }
+      toolWidgets.add(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          child: Material(
+            color: inputBg,
+            borderRadius: BorderRadius.circular(7),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(7),
+              onTap: () {
+                if (tool.title == 'Files') {
+                  setState(() {
+                    _agentPanelPrevTab = _agentPanelTab;
+                    _agentPanelTab = 5;
+                  });
+                } else if (tool.title == 'Agent Skills') {
+                  setState(() {
+                    _agentPanelPrevTab = _agentPanelTab;
+                    _agentPanelTab = 6;
+                  });
+                } else if (tool.title == 'Secrets') {
+                  setState(() {
+                    _agentPanelPrevTab = _agentPanelTab;
+                    _agentPanelTab = 7;
+                  });
+                } else if (tool.title == 'Providers') {
+                  setState(() {
+                    _agentPanelPrevTab = _agentPanelTab;
+                    _agentPanelTab = 4;
+                  });
+                } else if (tool.title == 'Console') {
+                  setState(() {
+                    _bottomPanelOpen = true;
+                    _bottomPanelTab = 0;
+                  });
+                } else if (tool.title == 'Git') {
+                  setState(() {
+                    _rightPanelOpen = false;
+                    _sidebarState = 2;
+                    _activeRail = 3;
+                  });
+                }
+              },
+              hoverColor: hoverBg,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: tool.color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Icon(tool.icon, size: 16, color: tool.color),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tool.title,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: fg,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            tool.desc,
+                            style: TextStyle(fontSize: 11, color: muted),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Broken.arrow_right_3,
+                      size: 13,
+                      color: muted.withValues(alpha: 0.5),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Container(
       color: bg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Tool list — same bg as panel, no card elevation
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(top: 6, bottom: 4),
-              itemCount: filtered.length,
-              itemBuilder: (_, i) {
-                final t = filtered[i];
-                return Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () {
-                      if (t.title == 'Files') {
-                        setState(() {
-                          _agentPanelPrevTab = _agentPanelTab;
-                          _agentPanelTab = 5;
-                        });
-                      } else if (t.title == 'Agent Skills') {
-                        setState(() {
-                          _agentPanelPrevTab = _agentPanelTab;
-                          _agentPanelTab = 6;
-                        });
-                      } else if (t.title == 'Secrets') {
-                        setState(() {
-                          _agentPanelPrevTab = _agentPanelTab;
-                          _agentPanelTab = 7;
-                        });
-                      } else if (t.title == 'Providers') {
-                        setState(() {
-                          _agentPanelPrevTab = _agentPanelTab;
-                          _agentPanelTab = 4;
-                        });
-                      } else if (t.title == 'Console') {
-                        setState(() {
-                          _bottomPanelOpen = true;
-                          _bottomPanelTab = 0;
-                        });
-                      } else if (t.title == 'User Settings') {
-                        setState(() {
-                          _agentPanelPrevTab = _agentPanelTab;
-                          _agentPanelTab = 3;
-                        });
-                      }
-                    },
-                    hoverColor: hoverBg,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            decoration: BoxDecoration(
-                              color: t.color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Center(
-                              child: Icon(t.icon, size: 16, color: t.color),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  t.title,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: fg,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  t.desc,
-                                  style: TextStyle(fontSize: 11, color: muted),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Broken.arrow_right_3,
-                            size: 13,
-                            color: muted.withValues(alpha: 0.5),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
+            child: ListView(
+              padding: const EdgeInsets.only(top: 2, bottom: 4),
+              children: toolWidgets,
             ),
           ),
 
