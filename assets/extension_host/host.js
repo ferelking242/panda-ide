@@ -21,6 +21,7 @@
 // ── 0. Résolution des chemins ─────────────────────────────────────────────
 
 const path = require('path');
+const Module = require('module');
 
 // Le chemin de l'entry point de l'extension est le premier argument CLI
 const extensionEntryPoint = process.argv[2];
@@ -43,7 +44,16 @@ const HOST_DIR = __dirname;
 const ipc    = require(path.join(HOST_DIR, 'ipc.js'));
 const vscode = require(path.join(HOST_DIR, 'api', 'vscode.js'));
 
-// Injecter dans le cache require() sous 'vscode'
+// A bare `require('vscode')` is resolved before Node consults a cache entry
+// keyed only by the request string. Intercept Module._load so extensions can
+// import the shim from any nested file in the VSIX.
+const originalModuleLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  if (request === 'vscode') return vscode;
+  return originalModuleLoad.call(this, request, parent, isMain);
+};
+
+// Keep a cache entry too for tooling that inspects require.cache directly.
 require.cache['vscode'] = {
   id:       'vscode',
   filename: 'vscode',
@@ -107,8 +117,24 @@ ipc.onCall('deactivate', async () => {
 
 // Handler générique pour les commandes invoquées par Flutter
 ipc.onEvent('command.invoke', ({ command, args }) => {
-  // Les extensions enregistrent leurs commandes via vscode.commands.registerCommand()
-  // qui ajoute un handler dans le module vscode. Rien à faire ici directement.
+  // Compatibilité avec les anciens clients qui envoient un event sans attendre
+  // de résultat.
+  vscode.commands._invoke(command, ...(Array.isArray(args) ? args : []))
+    .catch((err) => {
+      process.stderr.write(
+        `[host] command event "${command}" failed: ${err?.stack || err}\n`,
+      );
+    });
+});
+
+// Le client Flutter utilise désormais une requête pour que les erreurs et la
+// valeur de retour d'une commande restent visibles dans la palette.
+ipc.onCall('command.invoke', async ({ command, args } = {}) => {
+  if (!command) throw new Error('Missing command id');
+  return vscode.commands._invoke(
+    command,
+    ...(Array.isArray(args) ? args : []),
+  );
 });
 
 // ── 4. Gestion des erreurs non capturées ──────────────────────────────────

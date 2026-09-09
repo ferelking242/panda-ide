@@ -134,7 +134,23 @@ const window = {
     webview.createWebviewPanel(viewType, title, showOptions, options),
   registerWebviewPanelSerializer: (viewType, serializer) =>
     webview.registerWebviewPanelSerializer(viewType, serializer),
-  createWebviewView: (vt,t,so,opts)=>{const vid=`wvv-${vt}-${Date.now()}`;ipc.callFlutter('vscode.window.webviewView.create',[vid,vt,t,so,opts]);return{webview:{html:'',options:opts||{},cspSource:'',asWebviewUri:(u)=>u,postMessage:(m)=>ipc.callFlutter('vscode.window.webviewView.postMessage',[vid,m]),onDidReceiveMessage:new types.EventEmitter().event},visible:true,onDidDispose:new types.EventEmitter().event,onDidChangeVisibility:new types.EventEmitter().event,show:(p)=>ipc.callFlutter('vscode.window.webviewView.show',[vid,!!p]),dispose:()=>ipc.callFlutter('vscode.window.webviewView.dispose',[vid])};},
+  createWebviewView: (viewType, title, showOptions, options) =>
+    webview.createWebviewView(viewType, title, options),
+  registerWebviewViewProvider: (viewId, provider, options = {}) => {
+    const view = webview.createWebviewView(viewId, viewId, options);
+    const token = {
+      isCancellationRequested: false,
+      onCancellationRequested: new types.EventEmitter().event,
+    };
+    Promise.resolve()
+      .then(() => provider.resolveWebviewView(view, {}, token))
+      .catch((error) => {
+        process.stderr.write(
+          `[vscode shim] resolveWebviewView(${viewId}) failed: ${error?.stack || error}\n`,
+        );
+      });
+    return new types.Disposable(() => view.dispose());
+  },
 
   // Tree views (Phase 8 — stub, TreeDataProvider is pull-model via commands)
   createTreeView: (tid, opts) => { const vid=`tree-${tid}-${Date.now()}`; ipc.callFlutter('vscode.window.treeView.create',[vid,tid,opts]); return {onDidChangeSelection:new types.EventEmitter().event,onDidChangeVisibility:new types.EventEmitter().event,onDidExpandElement:new types.EventEmitter().event,onDidCollapseElement:new types.EventEmitter().event,reveal:(el,o)=>ipc.callFlutter('vscode.window.treeView.reveal',[vid,el,o]),dispose:()=>ipc.callFlutter('vscode.window.treeView.dispose',[vid])}; },
@@ -407,6 +423,17 @@ const commands = {
 
   getCommands: (filterInternal = false) =>
     ipc.callFlutter('vscode.commands.getAll', [filterInternal]),
+
+  // Private bridge used by host.js when Flutter invokes a contributed command.
+  // Keeping the actual callback in this process preserves VS Code's command
+  // registration semantics and returns its Promise/result to Flutter.
+  _invoke: (command, ...rest) => {
+    const local = _commandHandlers.get(command);
+    if (!local) {
+      throw new Error(`No handler registered for command "${command}"`);
+    }
+    return Promise.resolve(local(...rest));
+  },
 };
 
 // Quand Flutter invoque une commande enregistrée par cette extension

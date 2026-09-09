@@ -119,11 +119,51 @@ class OpenVsxClient {
   /// Récupère le README.md d'une extension (texte markdown).
   Future<String?> getReadme(
       String namespace, String name, String version) async {
-    final uri =
-        Uri.parse('$_baseUrl/api/$namespace/$name/$version/file/README.md');
+    // Open VSX exposes the actual file name in the version metadata. Some
+    // extensions publish `readme.md` (lowercase), so assuming README.md
+    // makes the detail page silently empty on case-sensitive registries.
     try {
-      final r = await _http.get(uri, headers: _headers).timeout(_timeout);
-      if (r.statusCode == 200) return r.body;
+      final metadataUri =
+          Uri.parse('$_baseUrl/api/$namespace/$name/$version');
+      final metadataResponse =
+          await _http.get(metadataUri, headers: _headers).timeout(_timeout);
+      if (metadataResponse.statusCode >= 200 &&
+          metadataResponse.statusCode < 300) {
+        final metadata =
+            jsonDecode(metadataResponse.body) as Map<String, dynamic>;
+        final files = metadata['files'];
+        final readmeUrl =
+            files is Map ? files['readme']?.toString() : null;
+        if (readmeUrl != null && readmeUrl.isNotEmpty) {
+          final content = await _getText(readmeUrl);
+          if (content != null && content.trim().isNotEmpty) return content;
+        }
+      }
+    } catch (_) {
+      // Try the conventional paths below. A missing metadata response should
+      // never make the whole extension detail page fail.
+    }
+
+    for (final fileName in const ['README.md', 'readme.md']) {
+      final uri = Uri.parse(
+          '$_baseUrl/api/$namespace/$name/$version/file/$fileName');
+      final content = await _getText(uri.toString());
+      if (content != null && content.trim().isNotEmpty) return content;
+    }
+    return null;
+  }
+
+  Future<String?> _getText(String url) async {
+    try {
+      final response = await _http
+          .get(Uri.parse(url), headers: const {
+            'Accept': 'text/plain, text/markdown, text/html, */*',
+            'User-Agent': 'PandaIDE/2.3 (Android; arm64)',
+          })
+          .timeout(_timeout);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return response.body;
+      }
     } catch (_) {}
     return null;
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../command_registry.dart';
 import '../extension_contributions.dart';
+import 'extension_webview.dart';
 
 /// Sidebar entry point for VS Code contribution points.
 ///
@@ -56,7 +57,18 @@ class _ExtensionContributionsPanelState
 
   Future<void> _openView(ExtensionViewEntry view) async {
     try {
-      await ExtensionContributionIndex.showView(view);
+      // VS Code exposes a container as the activity-bar icon and renders its
+      // first contributed view when that icon is selected. Treating the
+      // container itself as an executable view made the tap look like a no-op.
+      final target = view.isContainer
+          ? (_snapshot?.views
+                  .where((item) =>
+                      !item.isContainer &&
+                      item.extensionId == view.extensionId)
+                  .firstOrNull ??
+              view)
+          : view;
+      await ExtensionContributionIndex.showView(target);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${view.title} activée')),
@@ -99,11 +111,39 @@ class _ExtensionContributionsPanelState
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _load,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        children: [
+    return ListenableBuilder(
+      listenable: WebviewPanelManager.instance,
+      builder: (context, _) {
+        final panels = WebviewPanelManager.instance.panels;
+        if (panels.isNotEmpty) {
+          return Column(
+            children: [
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.arrow_back, size: 18),
+                title: const Text('Contributions',
+                    style: TextStyle(fontSize: 12)),
+                subtitle: Text('${panels.length} vue active',
+                    style: TextStyle(
+                        fontSize: 10,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                onTap: () {
+                  for (final panel in List.of(panels)) {
+                    WebviewPanelManager.instance.disposePanel(panel.panelId);
+                  }
+                },
+              ),
+              const Divider(height: 1),
+              const Expanded(child: ExtensionWebviewContainer()),
+            ],
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: [
           if (snapshot.views.isNotEmpty) ...[
             _sectionTitle('VUES ET PANNEAUX', cs),
             ...snapshot.views.map(
@@ -160,8 +200,10 @@ class _ExtensionContributionsPanelState
               ),
             ),
           ],
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 

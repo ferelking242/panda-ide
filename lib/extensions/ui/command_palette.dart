@@ -56,6 +56,8 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
   List<RegisteredCommand> _results = [];
   List<RegisteredCommand> _extensionCommands = [];
   int _selectedIndex = 0;
+  bool _executing = false;
+  String? _executionError;
 
   @override
   void initState() {
@@ -118,18 +120,31 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
     });
   }
 
-  void _execute(RegisteredCommand cmd) {
-    Navigator.of(context).pop();
-    // Extension native (.panda) : activation paresseuse via l'ExtensionHost
-    // (charge le code seulement maintenant, comme onCommand: de VS Code).
-    final owner = ExtensionHost.instance.manifestOf(cmd.extensionId);
-    if (owner != null &&
-        owner.contributes.commands.any((c) => c.id == cmd.command)) {
-      unawaited(
-          ExtensionHost.instance.executeCommand(cmd.command).catchError((_) {}));
-      return;
+  Future<void> _execute(RegisteredCommand cmd) async {
+    if (_executing) return;
+    setState(() {
+      _executing = true;
+      _executionError = null;
+    });
+
+    try {
+      // Extension native (.panda) : activation paresseuse via l'ExtensionHost
+      // (charge le code seulement maintenant, comme onCommand: de VS Code).
+      final owner = ExtensionHost.instance.manifestOf(cmd.extensionId);
+      if (owner != null &&
+          owner.contributes.commands.any((c) => c.id == cmd.command)) {
+        await ExtensionHost.instance.executeCommand(cmd.command);
+      } else {
+        await ExtensionContributionIndex.launchCommand(cmd);
+      }
+      if (mounted) Navigator.of(context).pop();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _executing = false;
+        _executionError = error.toString();
+      });
     }
-    unawaited(ExtensionContributionIndex.launchCommand(cmd).catchError((_) {}));
   }
 
   void _moveSelection(int delta) {
@@ -194,7 +209,7 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
                       _moveSelection(-1);
                     } else if (event.logicalKey == LogicalKeyboardKey.enter) {
                       if (_results.isNotEmpty) {
-                        _execute(_results[_selectedIndex]);
+                            unawaited(_execute(_results[_selectedIndex]));
                       }
                     } else if (event.logicalKey == LogicalKeyboardKey.escape) {
                       Navigator.of(context).pop();
@@ -238,13 +253,35 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
 
             // ── Count label ────────────────────────────────────────────────
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-              child: Row(
+              padding: const EdgeInsets.fromLTRB(16, 2, 16, 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '${_results.length} commands',
-                    style: TextStyle(color: hintColor, fontSize: 11),
+                  Row(
+                    children: [
+                      Text(
+                        '${_results.length} commands',
+                        style: TextStyle(color: hintColor, fontSize: 11),
+                      ),
+                      if (_executing) ...[
+                        const SizedBox(width: 8),
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.5),
+                        ),
+                      ],
+                    ],
                   ),
+                  if (_executionError != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      _executionError!,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(color: Colors.red[300], fontSize: 11),
+                    ),
+                  ],
                 ],
               ),
             ),

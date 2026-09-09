@@ -99,6 +99,15 @@ function createWebviewPanelProxy(panelId, viewType, title, options) {
       onDidDisposeEmitter.fire();
     },
 
+    // Webview views use the same Flutter surface as panels. The sidebar
+    // provider calls show() when VS Code makes the view visible.
+    show(preserveFocus) {
+      return ipc.callFlutter(
+        'vscode.webview.reveal',
+        [panelId, 1, preserveFocus ?? false],
+      );
+    },
+
     // Events
     onDidDispose: onDidDisposeEmitter.event,
     onDidChangeViewState: onDidChangeViewStateEmitter.event,
@@ -157,6 +166,22 @@ module.exports = {
       },
     }]).catch(() => {});
 
+    return createWebviewPanelProxy(panelId, viewType, title, options);
+  },
+
+  /**
+   * vscode.window.createWebviewView() / registerWebviewViewProvider().
+   * A view is represented by the same real WebView surface as a panel so it
+   * can be rendered by the Flutter sidebar without a second IPC protocol.
+   */
+  createWebviewView(viewType, title, options) {
+    const panelId = `webview_view_${_panelCounter++}`;
+    ipc.callFlutter('vscode.webview.create', [{
+      panelId,
+      viewType,
+      title,
+      options: options ?? {},
+    }]).catch(() => {});
     return createWebviewPanelProxy(panelId, viewType, title, options);
   },
 

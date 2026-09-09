@@ -19,7 +19,6 @@ class MarketplaceContent {
 class ExtensionMarketplaceClient {
   static const _galleryUrl =
       'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery';
-  static const _publisher = 'Microsoft.VisualStudio.Code';
   static const _timeout = Duration(seconds: 20);
 
   final http.Client _http;
@@ -41,7 +40,6 @@ class ExtensionMarketplaceClient {
         'filters': [
           {
             'criteria': [
-              {'filterType': 8, 'value': _publisher},
               if (query.trim().isNotEmpty)
                 {'filterType': 10, 'value': query.trim()},
               if (category != null)
@@ -66,16 +64,20 @@ class ExtensionMarketplaceClient {
           )
           .timeout(_timeout);
       _assertOk(response);
-      return _parseSearch(jsonDecode(response.body) as Map<String, dynamic>);
+      final parsed =
+          _parseSearch(jsonDecode(response.body) as Map<String, dynamic>);
+      // The gallery can return an empty successful response for an extension
+      // that is available in Open VSX. Do not show a false empty marketplace.
+      if (parsed.extensions.isNotEmpty) return parsed;
     } catch (_) {
-      return _openVsx.search(
-        query: query,
-        offset: offset,
-        size: size,
-        category: category,
-        sortBy: sortBy == 'relevance' ? 'relevance' : 'downloadCount',
-      );
     }
+    return _openVsx.search(
+      query: query,
+      offset: offset,
+      size: size,
+      category: category,
+      sortBy: sortBy == 'relevance' ? 'relevance' : 'downloadCount',
+    );
   }
 
   Future<MarketplaceSearchResult> featured({int size = 20}) =>
@@ -138,7 +140,6 @@ class ExtensionMarketplaceClient {
               {
                 'criteria': [
                   {'filterType': 7, 'value': '$namespace.$name'},
-                  {'filterType': 8, 'value': _publisher},
                 ],
               },
             ],

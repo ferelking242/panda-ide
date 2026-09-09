@@ -100,23 +100,22 @@ class CommandRegistry {
   Future<dynamic> execute(String command, List<dynamic> args) async {
     final registered = _commands[command];
     if (registered == null) {
-      // Commande builtin ou inconnue — on ignore silencieusement
-      return null;
+      throw StateError('Commande non enregistrée : $command');
     }
 
     final bridge = ExtensionHostManager.instance.getBridge(registered.extensionId);
-    if (bridge == null) return null;
-
-    // L'extension a enregistré un handler via vscode.commands.registerCommand()
-    // qui crée un ipc.onCall handler. On peut aussi utiliser fireEvent.
-    // On préfère call() pour avoir un retour.
-    try {
-      return await bridge.call('command.$command', args);
-    } catch (_) {
-      // Si pas de handler call, fire l'event classique
-      bridge.fireEvent('command.invoke', {'command': command, 'args': args});
-      return null;
+    if (bridge == null) {
+      throw StateError(
+          'Le host de ${registered.extensionId} n’est pas actif pour $command');
     }
+
+    // host.js dispatches this call to the handler registered by
+    // vscode.commands.registerCommand(). Calling a made-up
+    // `command.<id>` RPC first caused every palette action to wait for an
+    // error before falling back to an event with no result.
+    return bridge.call('command.invoke', [
+      {'command': command, 'args': args},
+    ]);
   }
 
   // ── Query ─────────────────────────────────────────────────────────────────

@@ -174,11 +174,9 @@ class ExtensionContributionIndex {
     if (ext == null) {
       throw StateError('Extension ${view.extensionId} is not installed');
     }
-    if (!ExtensionHostManager.instance.isActive(ext.manifest.id)) {
-      await ExtensionHostManager.instance.activate(ext);
-    }
     // Activation is the VS Code contract for contributed views. The extension
-    // then registers its tree/webview provider through the normal API router.
+    // registers its webview/tree provider while activating; the panel manager
+    // then exposes the resulting view in the Extensions sidebar.
     await ExtensionHostManager.instance.activateForView(view.viewId);
   }
 }

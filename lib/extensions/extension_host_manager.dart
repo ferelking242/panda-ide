@@ -191,7 +191,9 @@ class ExtensionHostManager {
         (view) => view['id']?.toString() == viewId,
       );
     });
-    await Future.wait(exts.map((e) => _safeActivate(e)));
+    // A view click must report activation errors to the UI. Swallowing the
+    // error made a broken provider look like a successful sidebar action.
+    await Future.wait(exts.map(activate));
   }
 
   // ── Envoi d'events à toutes les extensions actives ───────────────────────
