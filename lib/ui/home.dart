@@ -4725,32 +4725,125 @@ class _SelectTypeState extends State<SelectType>
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  // One subtle grip keeps the panel resizable without adding
-                  // another framed toolbar around the terminal.
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onVerticalDragUpdate: (details) {
-                      setState(() {
-                        _bottomPanelHeight = (_bottomPanelHeight -
-                                (details.primaryDelta ?? 0))
-                            .clamp(150.0, 520.0)
-                            .toDouble();
-                      });
-                    },
-                    child: SizedBox(
-                      height: 10,
-                      child: Center(
-                        child: Container(
-                          width: 34,
-                          height: 2,
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xff62656a)
-                                : const Color(0xffa6a8ac),
-                            borderRadius: BorderRadius.circular(2),
+                  // The grip also acts as the terminal panel header. Keep the
+                  // handle centered while making the two panel actions easy
+                  // to reach without covering the terminal content.
+                  SizedBox(
+                    height: 34,
+                    child: Stack(
+                      children: [
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onVerticalDragUpdate: (details) {
+                            setState(() {
+                              _bottomPanelHeight = (_bottomPanelHeight -
+                                      (details.primaryDelta ?? 0))
+                                  .clamp(150.0, 520.0)
+                                  .toDouble();
+                            });
+                          },
+                          child: Center(
+                            child: Container(
+                              width: 34,
+                              height: 3,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xff62656a)
+                                    : const Color(0xffa6a8ac),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        Positioned(
+                          right: 4,
+                          top: 0,
+                          bottom: 0,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Tooltip(
+                                message: 'Ouvrir le même terminal dans l’éditeur',
+                                child: IconButton(
+                                  icon: const Icon(Icons.open_in_new_rounded),
+                                  iconSize: 17,
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(
+                                    minWidth: 32,
+                                    minHeight: 32,
+                                  ),
+                                  color: isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[700],
+                                  onPressed: _openTerminalTab,
+                                ),
+                              ),
+                              PopupMenuButton<String>(
+                                tooltip: 'Options du terminal',
+                                icon: const Icon(Icons.more_horiz_rounded),
+                                iconSize: 19,
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                                color: isDark
+                                    ? const Color(0xff2b2b2b)
+                                    : Colors.white,
+                                onSelected: (value) {
+                                  switch (value) {
+                                    case 'open_tab':
+                                      _openTerminalTab();
+                                    case 'maximize_panel':
+                                      setState(() {
+                                        _bottomPanelHeight = 520.0;
+                                      });
+                                    case 'close_panel':
+                                      setState(() {
+                                        _bottomPanelOpen = false;
+                                      });
+                                  }
+                                },
+                                itemBuilder: (context) => [
+                                  PopupMenuItem(
+                                    value: 'open_tab',
+                                    child: Text(
+                                      'Ouvrir dans l’éditeur',
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.grey[200]
+                                            : Colors.grey[800],
+                                      ),
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'maximize_panel',
+                                    child: Text(
+                                      'Agrandir le panneau',
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.grey[200]
+                                            : Colors.grey[800],
+                                      ),
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'close_panel',
+                                    child: Text(
+                                      'Fermer le panneau',
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.grey[200]
+                                            : Colors.grey[800],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Expanded(
