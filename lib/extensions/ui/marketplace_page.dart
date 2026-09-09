@@ -8,14 +8,14 @@
 library;
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:markdown_widget/markdown_widget.dart';
 import '../models/marketplace_extension.dart';
 import '../marketplace_client.dart';
 import '../extension_registry.dart';
+import '../extension_host_manager.dart';
 import 'panda_registry_page.dart';
 import '../vsix_installer.dart';
 import 'extension_settings_page.dart';
+import 'extension_readme_view.dart';
 
 
 
@@ -193,6 +193,50 @@ class _MarketplacePageState extends State<MarketplacePage> {
       setState(() => _installStates[ext.id] = _InstallState.error);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Install failed: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _uninstall(MarketplaceExtension ext) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Désinstaller l’extension ?'),
+        content: Text('${ext.displayName} sera retirée de Panda IDE.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Désinstaller'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ExtensionHostManager.instance.deactivate(ext.id);
+      final removed = await VsixInstaller().uninstall(ext.id);
+      if (!removed) {
+        throw StateError('${ext.id} n’est pas installé');
+      }
+      await ExtensionRegistry.instance.load();
+      if (!mounted) return;
+      setState(() => _installStates[ext.id] = _InstallState.notInstalled);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${ext.displayName} désinstallée')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Désinstallation impossible : $error'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -850,22 +894,49 @@ class _MarketplacePageState extends State<MarketplacePage> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        if (alreadyInstalled || installState == _InstallState.installed)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                            decoration: BoxDecoration(
-                              color: cs.primary.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.check_circle_rounded, size: 14, color: cs.primary),
-                                const SizedBox(width: 4),
-                                Text('Installed', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.primary)),
-                              ],
-                            ),
-                          )
+                         if (alreadyInstalled || installState == _InstallState.installed)
+                           Wrap(
+                             spacing: 6,
+                             runSpacing: 6,
+                             crossAxisAlignment: WrapCrossAlignment.center,
+                             children: [
+                               Container(
+                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                 decoration: BoxDecoration(
+                                   color: cs.primary.withValues(alpha: 0.15),
+                                   borderRadius: BorderRadius.circular(10),
+                                 ),
+                                 child: Row(
+                                   mainAxisSize: MainAxisSize.min,
+                                   children: [
+                                     Icon(Icons.check_circle_rounded, size: 14, color: cs.primary),
+                                     const SizedBox(width: 4),
+                                     Text('Installed', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: cs.primary)),
+                                   ],
+                                 ),
+                               ),
+                               IconButton(
+                                 tooltip: 'Réglages',
+                                 icon: Icon(Icons.settings_outlined, size: 18, color: cs.onSurfaceVariant),
+                                 onPressed: () {
+                                   final installed = ExtensionRegistry.instance.get(ext.id);
+                                   if (installed == null) return;
+                                   Navigator.push(context, MaterialPageRoute(
+                                     builder: (_) => ExtensionSettingsPage(extension: installed),
+                                   ));
+                                 },
+                               ),
+                               OutlinedButton.icon(
+                                 onPressed: () => _uninstall(ext),
+                                 icon: const Icon(Icons.delete_outline, size: 16),
+                                 label: const Text('Désinstaller'),
+                                 style: OutlinedButton.styleFrom(
+                                   foregroundColor: Colors.red[400],
+                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                 ),
+                               ),
+                             ],
+                           )
                         else if (installState == _InstallState.installing)
                           const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         else
@@ -1096,55 +1167,10 @@ class _DetailReadmeState extends State<_DetailReadme> {
       );
     }
 
-    if (_readme!.isHtml) {
-      return InAppWebView(
-        initialSettings: InAppWebViewSettings(
-          javaScriptEnabled: false,
-          transparentBackground: true,
-        ),
-        initialData: InAppWebViewInitialData(
-          data: _detailHtml(_readme!.content, cs),
-          mimeType: 'text/html',
-          encoding: 'utf-8',
-        ),
-      );
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: MarkdownWidget(
-        data: _readme!.content,
-        config: MarkdownConfig(
-          configs: [
-            PConfig(
-              textStyle: TextStyle(fontSize: 13, color: cs.onSurface, height: 1.5),
-            ),
-          ],
-        ),
-      ),
+    return ExtensionReadmeView(
+      content: _readme!.content,
+      isHtml: _readme!.isHtml,
     );
-  }
-
-  String _detailHtml(String content, ColorScheme cs) {
-    final background = '#${cs.surface.value.toRadixString(16).substring(2)}';
-    final foreground = '#${cs.onSurface.value.toRadixString(16).substring(2)}';
-    final source = RegExp(r'<body\b[^>]*>([\s\S]*?)</body>',
-            caseSensitive: false)
-        .firstMatch(content)
-        ?.group(1) ??
-        content;
-    final safe = source
-        .replaceAll(RegExp(r'<script\b[^>]*>[\s\S]*?</script>',
-            caseSensitive: false), '')
-        .replaceAll(RegExp(r'\son\w+\s*=\s*"[^"]*"',
-            caseSensitive: false), '')
-        .replaceAll(RegExp(r"\son\w+\s*=\s*'[^']*'",
-            caseSensitive: false), '');
-    return '''<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-body { background: $background; color: $foreground; font-family: sans-serif; font-size: 14px; line-height: 1.55; padding: 12px; margin: 0; }
-img { max-width: 100%; height: auto; } pre { overflow-x: auto; padding: 10px; border-radius: 6px; background: rgba(127,127,127,.15); }
-code { font-family: monospace; } a { color: #5090c8; }
-</style></head><body>$safe</body></html>''';
   }
 }
 

@@ -516,7 +516,7 @@ class _SetupTerminalState extends State<SetupTerminal>
     _bootstrapTerminalPage();
     _loadPathBinaries();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _syncTerminalDimensions();
+      if (mounted) _scheduleTerminalDimensionSync();
     });
   }
 
@@ -524,9 +524,7 @@ class _SetupTerminalState extends State<SetupTerminal>
   void didChangeMetrics() {
     // Gboard changes the available height without recreating the terminal.
     // Give xterm a layout pass, then forward its new cell size to the PTY.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _syncTerminalDimensions();
-    });
+    _scheduleTerminalDimensionSync();
   }
 
   Future<void> _bootstrapTerminalPage() async {
@@ -1206,7 +1204,7 @@ class _SetupTerminalState extends State<SetupTerminal>
       // A TerminalView can lay itself out again while the process is starting.
       // Reconcile the dimensions once more after both sides are ready. This
       // also covers a resize event emitted before the PTY was assigned.
-      _syncTerminalDimensions();
+      _scheduleTerminalDimensionSync();
     } catch (e) {
       PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString());
       runtime.terminal.write(
@@ -1921,6 +1919,21 @@ class _SetupTerminalState extends State<SetupTerminal>
     // to that stale value.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _applyMeasuredDimensionsToAllTerminals();
+    });
+  }
+
+  /// Keyboard transitions can produce several layout passes. A single
+  /// post-frame measurement may therefore capture the old 24-column width
+  /// even though the terminal is already visually wider. Re-measure briefly
+  /// after the transition so readline and xterm receive the same final width.
+  void _scheduleTerminalDimensionSync() {
+    if (!mounted) return;
+    _syncTerminalDimensions();
+    Future<void>.delayed(const Duration(milliseconds: 80), () {
+      if (mounted) _syncTerminalDimensions();
+    });
+    Future<void>.delayed(const Duration(milliseconds: 260), () {
+      if (mounted) _syncTerminalDimensions();
     });
   }
 

@@ -54,6 +54,11 @@ class ExtensionHostManager {
   /// Doit être défini par l'UI avant d'activer les extensions.
   Future<dynamic> Function(String extensionId, IpcMessage msg)? apiCallHandler;
 
+  /// Loader installé par ExtensionHostSetup. L'initialisation Android est
+  /// volontairement différée, mais une action utilisateur peut arriver avant
+  /// la fin de cette initialisation.
+  Future<void> Function()? _configurationLoader;
+
   // ── Initialisation ───────────────────────────────────────────────────────
 
   /// À appeler depuis main.dart après avoir localisé node et extrait host.js.
@@ -64,14 +69,29 @@ class ExtensionHostManager {
 
   bool get isConfigured => _nodeBinPath != null && _hostJsPath != null;
 
+  void setConfigurationLoader(Future<void> Function() loader) {
+    _configurationLoader = loader;
+  }
+
+  Future<void> _ensureConfigured() async {
+    if (isConfigured) return;
+    final loader = _configurationLoader;
+    if (loader != null) {
+      await loader();
+    }
+    if (!isConfigured) {
+      throw StateError(
+        'Extension host indisponible : Node.js ou host.js est manquant. '
+        'Exécutez « panda update » puis réessayez.',
+      );
+    }
+  }
+
   // ── Activation d'extension ───────────────────────────────────────────────
 
   /// Active une extension : spawn le process Node.js et envoie "activate".
   Future<void> activate(InstalledExtension ext) async {
-    if (!isConfigured) {
-      throw StateError(
-          'ExtensionHostManager not configured. Call configure() first.');
-    }
+    await _ensureConfigured();
 
     final id = ext.manifest.id;
     if (_hosts.containsKey(id)) return; // déjà active
@@ -187,9 +207,10 @@ class ExtensionHostManager {
   Future<void> activateForView(String viewId) async {
     await ExtensionRegistry.instance.load();
     final exts = ExtensionRegistry.instance.all.where((ext) {
-      return ext.manifest.contributes.views.any(
-        (view) => view['id']?.toString() == viewId,
-      );
+      final views = ext.manifest.contributes.views;
+      final containers = ext.manifest.contributes.viewsContainers;
+      return views.any((view) => view['id']?.toString() == viewId) ||
+          containers.any((container) => container['id']?.toString() == viewId);
     });
     // A view click must report activation errors to the UI. Swallowing the
     // error made a broken provider look like a successful sidebar action.

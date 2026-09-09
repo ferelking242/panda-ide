@@ -36,6 +36,7 @@ const _kExtensionHostAssets = [
 
 class ExtensionHostSetup {
   ExtensionHostSetup._();
+  static Future<void>? _initFuture;
 
   /// Chemin sur le filesystem vers le répertoire extension_host extrait.
   static String get hostDir => '$appDir/extension_host';
@@ -53,7 +54,28 @@ class ExtensionHostSetup {
   /// [sharedPath] : résultat de NativeChannel.getLibraryPath().
   /// Doit être appelé depuis main() après WidgetsFlutterBinding.ensureInitialized(),
   /// uniquement sur Android (!kIsWeb).
-  static Future<void> init({required String sharedPath}) async {
+  static Future<void> init({required String sharedPath}) {
+    final current = _initFuture;
+    if (current != null) return current;
+
+    final future = _doInit(sharedPath: sharedPath);
+    _initFuture = future;
+    future.catchError((_) {
+      // A missing runtime is recoverable after the user runs `panda update`.
+      // Do not permanently cache a failed initialization attempt.
+      if (identical(_initFuture, future)) _initFuture = null;
+    });
+    return future;
+  }
+
+  static Future<void> _doInit({required String sharedPath}) async {
+    // Une action de l'interface peut demander une activation avant que le
+    // démarrage différé de main() ne soit terminé. Réutiliser exactement le
+    // même Future évite le message trompeur « not configured ».
+    ExtensionHostManager.instance.setConfigurationLoader(
+      () => init(sharedPath: sharedPath),
+    );
+
     // 1. Extraire les fichiers JS sur le filesystem.
     await _extractAssets();
 

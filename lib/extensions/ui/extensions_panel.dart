@@ -11,12 +11,13 @@
 library;
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:markdown_widget/markdown_widget.dart';
 import '../extension_host_manager.dart';
 import '../extension_registry.dart';
 import '../open_vsx_client.dart';
 import '../vsix_installer.dart';
 import 'marketplace_page.dart';
+import 'extension_readme_view.dart';
+import 'extension_settings_page.dart';
 
 
 
@@ -49,19 +50,32 @@ class _ExtensionsPanelState extends State<ExtensionsPanel> {
   }
 
   Future<void> _setEnabled(InstalledExtension ext, bool enabled) async {
-    await ExtensionRegistry.instance.setEnabled(ext.manifest.id, enabled: enabled);
-    if (enabled) {
-      if (ExtensionHostManager.instance.isConfigured) {
-        try {
-          await ExtensionHostManager.instance.activate(
-            ExtensionRegistry.instance.get(ext.manifest.id)!,
-          );
-        } catch (_) {}
+    try {
+      await ExtensionRegistry.instance
+          .setEnabled(ext.manifest.id, enabled: enabled);
+      if (enabled) {
+        await ExtensionHostManager.instance.activate(
+          ExtensionRegistry.instance.get(ext.manifest.id)!,
+        );
+      } else {
+        await ExtensionHostManager.instance.deactivate(ext.manifest.id);
       }
-    } else {
-      await ExtensionHostManager.instance.deactivate(ext.manifest.id);
+    } catch (error) {
+      await ExtensionRegistry.instance.setError(ext.manifest.id, '$error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              enabled
+                  ? 'Activation impossible : $error'
+                  : 'Désactivation impossible : $error',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
-    _loadExtensions();
+    if (mounted) await _loadExtensions();
   }
 
   Future<void> _uninstall(InstalledExtension ext) async {
@@ -85,9 +99,24 @@ class _ExtensionsPanelState extends State<ExtensionsPanel> {
       ),
     );
     if (confirm != true) return;
-    await ExtensionHostManager.instance.deactivate(ext.manifest.id);
-    await VsixInstaller().uninstall(ext.manifest.id);
-    _loadExtensions();
+    try {
+      await ExtensionHostManager.instance.deactivate(ext.manifest.id);
+      final removed = await VsixInstaller().uninstall(ext.manifest.id);
+      if (!removed) throw StateError('Extension introuvable sur le disque');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${ext.manifest.displayName} désinstallée')),
+      );
+      await _loadExtensions();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Désinstallation impossible : $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _viewReadme(InstalledExtension ext) {
@@ -145,6 +174,14 @@ class _ExtensionsPanelState extends State<ExtensionsPanel> {
                     onToggle: (v) => _setEnabled(_extensions[i], v),
                     onUninstall: () => _uninstall(_extensions[i]),
                     onViewReadme: () => _viewReadme(_extensions[i]),
+                    onOpenSettings: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ExtensionSettingsPage(
+                          extension: _extensions[i],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
     );
@@ -159,6 +196,7 @@ class _ExtensionListItem extends StatelessWidget {
   final ValueChanged<bool> onToggle;
   final VoidCallback onUninstall;
   final VoidCallback onViewReadme;
+  final VoidCallback onOpenSettings;
 
   const _ExtensionListItem({
     required this.ext,
@@ -166,6 +204,7 @@ class _ExtensionListItem extends StatelessWidget {
     required this.onToggle,
     required this.onUninstall,
     required this.onViewReadme,
+    required this.onOpenSettings,
   });
 
   @override
@@ -325,6 +364,13 @@ class _ExtensionListItem extends StatelessWidget {
                     foregroundColor: Colors.red[400],
                   ),
                 ),
+                const SizedBox(width: 4),
+                IconButton(
+                  onPressed: onOpenSettings,
+                  tooltip: 'Réglages',
+                  icon: const Icon(Icons.settings_outlined, size: 16),
+                  visualDensity: VisualDensity.compact,
+                ),
               ],
             ),
           ],
@@ -434,8 +480,6 @@ class _ReadmePageState extends State<_ReadmePage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -447,13 +491,7 @@ class _ReadmePageState extends State<_ReadmePage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _readme != null
-              ? MarkdownWidget(
-                  data: _readme!,
-                  config: MarkdownConfig(configs: [
-                    if (isDark)
-                      const PreConfig(theme: {'root': TextStyle(color: Colors.white70)}),
-                  ]),
-                )
+              ? ExtensionReadmeView(content: _readme!)
               : Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
