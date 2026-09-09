@@ -96,7 +96,12 @@ class ExtensionHostManager {
     await _ensureConfigured();
 
     final id = ext.manifest.id;
-    if (_hosts.containsKey(id)) return; // déjà active
+    final existing = _hosts[id];
+    if (existing != null) {
+      if (!existing.bridge.isClosed) return; // déjà active
+      // A crashed Node process must not permanently block lazy reactivation.
+      _hosts.remove(id);
+    }
 
     if (!ext.isRunnable) {
       throw StateError(
@@ -245,11 +250,15 @@ class ExtensionHostManager {
   // ── Introspection ────────────────────────────────────────────────────────
 
   List<ActiveExtensionHost> get activeHosts => _hosts.values.toList();
-  bool isActive(String extensionId) => _hosts.containsKey(extensionId);
+  bool isActive(String extensionId) =>
+      _hosts[extensionId]?.bridge.isClosed == false;
   ActiveExtensionHost? getHost(String extensionId) => _hosts[extensionId];
 
   /// Retourne l'IpcBridge d'une extension active — utilisé par LanguageFeatureRouter.
-  IpcBridge? getBridge(String extensionId) => _hosts[extensionId]?.bridge;
+  IpcBridge? getBridge(String extensionId) {
+    final bridge = _hosts[extensionId]?.bridge;
+    return bridge != null && !bridge.isClosed ? bridge : null;
+  }
 
   // ── Dispose ──────────────────────────────────────────────────────────────
 
