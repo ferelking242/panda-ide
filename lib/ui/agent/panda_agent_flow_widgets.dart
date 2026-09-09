@@ -528,7 +528,7 @@ class _PandaAgentTodoCardState extends State<PandaAgentTodoCard> {
         .length;
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 2),
+      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest.withValues(alpha: 0.2),

@@ -277,7 +277,10 @@ class _FlowChatViewState extends State<FlowChatView> {
   static const double _dropGlyphGap = 16;
   static const IconData _dropIcon = Broken.document_upload;
   static const Duration _dropReveal = Duration(milliseconds: 150);
-  static const double _composerGap = 8;
+  // Host surfaces such as Panda Agent place an inline suggestion strip
+  // directly above the composer, like Copilot. Keeping this at zero also
+  // lets adjacent pending/todo surfaces read as one continuous stack.
+  static const double _composerGap = 0;
 
   /// The jump button's lift: the composer's shadow, so the disc and the
   /// card it floats above share one.
@@ -289,7 +292,7 @@ class _FlowChatViewState extends State<FlowChatView> {
   /// padding.
   static const double _greetingGap = 32;
   static const double _suggestionsGapWide = 48;
-  static const double _suggestionsGapCompact = 16;
+  static const double _suggestionsGapCompact = 0;
   static const double _suggestionsExtraInset = 8;
 
   bool _showJump = false;

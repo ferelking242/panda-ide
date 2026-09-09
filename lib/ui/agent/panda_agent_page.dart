@@ -319,7 +319,8 @@ class _PandaAgentSuggestions extends StatelessWidget {
       ('Propose les prochaines étapes', Broken.task),
     ];
     return Container(
-      margin: const EdgeInsets.only(bottom: 2),
+      width: double.infinity,
+      margin: EdgeInsets.zero,
       padding: const EdgeInsets.fromLTRB(9, 7, 0, 8),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest.withValues(alpha: 0.22),

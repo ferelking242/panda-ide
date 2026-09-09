@@ -489,7 +489,8 @@ class PandaAgentQueueBar extends StatelessWidget {
     if (items.isEmpty) return const SizedBox.shrink();
     final colors = Theme.of(context).colorScheme;
     return Container(
-      margin: const EdgeInsets.only(top: 4, bottom: 2),
+      width: double.infinity,
+      margin: EdgeInsets.zero,
       padding: const EdgeInsets.fromLTRB(9, 6, 5, 6),
       decoration: BoxDecoration(
         color: colors.primaryContainer.withValues(alpha: 0.28),
