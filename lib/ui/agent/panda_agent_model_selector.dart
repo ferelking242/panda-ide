@@ -53,13 +53,13 @@ class PandaAgentModelSelector extends StatelessWidget {
           ? 'Choisir un modèle'
           : '${selected.providerLabel} · ${selected.label}',
       child: Material(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.38),
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: models.isEmpty ? null : () => _showPicker(context),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [

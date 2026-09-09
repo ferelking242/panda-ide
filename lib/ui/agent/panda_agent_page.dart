@@ -8,12 +8,12 @@ import '../agent/flow_ui/widgets/flow_composer.dart';
 import '../agent/flow_ui/widgets/flow_greeting.dart';
 import '../agent/flow_ui/widgets/flow_pill.dart';
 import '../agent/flow_ui/models/flow_attachment_options.dart';
-import '../agent/flow_ui/widgets/flow_suggestion.dart';
 import '../agent/flow_ui/utils/flow_file_picker.dart';
 import 'panda_agent_controller.dart';
 import 'panda_agent_composer_extras.dart';
 import 'panda_agent_flow_widgets.dart';
 import 'panda_agent_model_selector.dart';
+import 'flow_ui/styles/flow_pill_style.dart';
 
 class PandaAgentPage extends StatelessWidget {
   const PandaAgentPage({
@@ -112,10 +112,14 @@ class PandaAgentPage extends StatelessWidget {
           composer: FlowComposer(
             controller: controller.inputController,
             isStreaming: controller.isGenerating,
-            onSend: (_) => controller.send(
+            // Use the value delivered by FlowComposer. The composer clears
+            // its controller after this callback; reading the controller
+            // again here could turn a valid tap into an empty request.
+            onSend: (text) => controller.send(
               context: context,
               aiState: aiState,
               workspacePath: workspacePath(),
+              text: text,
             ),
             onStop: controller.stop,
             placeholder: 'Écrire un message à Panda Agent…',
@@ -141,7 +145,24 @@ class PandaAgentPage extends StatelessWidget {
                         : 'Ask',
                 tooltip: 'Mode ${controller.chatMode}',
                 showLabel: true,
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                borderRadius: BorderRadius.circular(6),
+                style: const FlowPillStyle(
+                  backgroundColor: Colors.transparent,
+                  hoverColor: Color(0x14141414),
+                  borderColor: Colors.transparent,
+                ),
                 onTap: () => _showModes(context),
+              ),
+              _ComposerContextButton(
+                label: '@',
+                tooltip: 'Ajouter un fichier au contexte',
+                onTap: () => _insertContextToken(controller, '@'),
+              ),
+              _ComposerContextButton(
+                label: '#',
+                tooltip: 'Ajouter une référence au contexte',
+                onTap: () => _insertContextToken(controller, '#'),
               ),
               if (modelOptions.isNotEmpty)
                 PandaAgentModelSelector(
@@ -152,29 +173,24 @@ class PandaAgentPage extends StatelessWidget {
                 ),
               if (modelOptions.isEmpty)
                 FlowPill(
-                   icon: Broken.cpu,
+                  icon: Broken.cpu,
                   label: model.isEmpty ? 'Model' : model,
                   showLabel: true,
                   tooltip: 'Modèle actuel',
-                   onTap: onOpenProviders,
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  borderRadius: BorderRadius.circular(6),
+                  style: const FlowPillStyle(
+                    backgroundColor: Colors.transparent,
+                    hoverColor: Color(0x14141414),
+                    borderColor: Colors.transparent,
+                  ),
+                  onTap: onOpenProviders,
                 ),
             ],
             trailingActions: [
-              IconButton(
-                tooltip: controller.isListening
-                    ? 'Arrêter la dictée'
-                    : 'Dicter un message',
+              _PandaAgentMicButton(
+                isListening: controller.isListening,
                 onPressed: controller.toggleListening,
-                   icon: Icon(
-                     controller.isListening
-                         ? Broken.microphone
-                         : Broken.microphone_slash,
-                  size: 19,
-                  color: controller.isListening
-                      ? Theme.of(context).colorScheme.primary
-                      : null,
-                ),
-                visualDensity: VisualDensity.compact,
               ),
             ],
           ),
@@ -186,6 +202,27 @@ class PandaAgentPage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  void _insertContextToken(PandaAgentController controller, String token) {
+    final value = controller.inputController.value;
+    final selection = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    final prefix = selection.start > 0 &&
+            !RegExp(r'\s').hasMatch(value.text[selection.start - 1])
+        ? ' '
+        : '';
+    final insertion = '$prefix$token';
+    final start = selection.start.clamp(0, value.text.length).toInt();
+    final end = selection.end.clamp(start, value.text.length).toInt();
+    final nextText = value.text.replaceRange(start, end, insertion);
+    final caret = start + insertion.length;
+    controller.inputController.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: caret),
+      composing: TextRange.empty,
     );
   }
 
@@ -307,12 +344,17 @@ class _PandaAgentSuggestions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final suggestions = [
+      ('Explique la structure de ce projet', Broken.tree),
+      ('Analyse le fichier ouvert', Broken.search_normal),
+      ('Propose les prochaines étapes', Broken.task),
+    ];
     return Container(
       margin: const EdgeInsets.only(bottom: 2),
-      padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+      padding: const EdgeInsets.fromLTRB(9, 7, 0, 8),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(11),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.7)),
       ),
       child: Column(
@@ -330,30 +372,164 @@ class _PandaAgentSuggestions extends StatelessWidget {
               ),
             ),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: FlowSuggestion(
-                  label: 'Explique la structure de ce projet',
-                  icon: Broken.tree,
-                  outlined: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  onTap: () => onSend('Explique la structure de ce projet'),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: FlowSuggestion(
-                  label: 'Analyse le fichier ouvert',
-                  icon: Broken.search_normal,
-                  outlined: true,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  onTap: () => onSend('Analyse le fichier ouvert'),
-                ),
-              ),
-            ],
+          SizedBox(
+            height: 42,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(right: 9),
+              itemCount: suggestions.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 6),
+              itemBuilder: (context, index) {
+                final suggestion = suggestions[index];
+                return _PandaSuggestionCard(
+                  label: suggestion.$1,
+                  icon: suggestion.$2,
+                  onStart: () => onSend(suggestion.$1),
+                );
+              },
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PandaSuggestionCard extends StatelessWidget {
+  const _PandaSuggestionCard({
+    required this.label,
+    required this.icon,
+    required this.onStart,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: 218,
+      decoration: BoxDecoration(
+        color: colors.surface.withValues(alpha: 0.32),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.72)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 9),
+          Icon(icon, size: 17, color: colors.onSurfaceVariant),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.onSurface,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: onStart,
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 34),
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              foregroundColor: colors.primary,
+              textStyle: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            child: const Text('Start'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerContextButton extends StatelessWidget {
+  const _ComposerContextButton({
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final String label;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PandaAgentMicButton extends StatelessWidget {
+  const _PandaAgentMicButton({
+    required this.isListening,
+    required this.onPressed,
+  });
+
+  final bool isListening;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: isListening ? 'Arrêter la dictée' : 'Dicter un message',
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: isListening
+              ? colors.primary.withValues(alpha: 0.14)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(7),
+        ),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 220),
+          scale: isListening ? 1.08 : 1,
+          child: IconButton(
+            onPressed: onPressed,
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              transitionBuilder: (child, animation) =>
+                  ScaleTransition(scale: animation, child: child),
+              child: Icon(
+                isListening ? Broken.microphone : Broken.microphone_slash,
+                key: ValueKey(isListening),
+                size: 19,
+                color: isListening ? colors.primary : colors.onSurfaceVariant,
+              ),
+            ),
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
       ),
     );
   }

@@ -340,7 +340,10 @@ class _FlowComposerState extends State<FlowComposer> {
   /// outline's 1px included), its content — attachment strip and field —
   /// inset 18 further from the sides while the action row tucks in at 10,
   /// under a soft ambient shadow.
-  static const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(12));
+  // Keep the composer visibly rectangular. The controls inside it can still
+  // use their own compact shapes, but the main card should not read like a
+  // floating capsule.
+  static const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(10));
   static const EdgeInsetsGeometry _cardPadding = EdgeInsetsDirectional.fromSTEB(
     1,
     12,
@@ -362,7 +365,7 @@ class _FlowComposerState extends State<FlowComposer> {
 
   /// The field's floor for the compressed composer: a 34px input followed by
   /// the compact action row and the reduced inter-row gap.
-  static const double _fieldMinHeight = 30;
+  static const double _fieldMinHeight = 38;
 
   /// The design's outline: a 1px hairline over the ink, sweeping from the
   /// top-left toward the bottom-right where it thins — 14% → 8% at rest,
@@ -970,7 +973,7 @@ class _FlowComposerState extends State<FlowComposer> {
                         constraints: const BoxConstraints(
                           minHeight: _fieldMinHeight,
                         ),
-                        alignment: AlignmentDirectional.topStart,
+                        alignment: AlignmentDirectional.centerStart,
                         child: Focus(
                           onKeyEvent: _handleKeyEvent,
                           child: TextField(
@@ -979,6 +982,7 @@ class _FlowComposerState extends State<FlowComposer> {
                             enabled: widget.enabled,
                             minLines: 1,
                             maxLines: widget.maxLines,
+                            textAlignVertical: TextAlignVertical.center,
                             // The design's compressed composer: body face on
                             // the 1.3 control line, so the empty card stands
                             // at 116.

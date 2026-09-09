@@ -104,13 +104,47 @@ class PandaAgentFlowChat extends StatelessWidget {
           }
         } else if (type == 'text') {
           final value = _withoutThinking(block['text']?.toString() ?? '');
-          if (value.trim().isNotEmpty) parts.add(FlowTextPart(value));
+          final todo = _parseTodo(value);
+          if (todo == null) {
+            if (value.trim().isNotEmpty) parts.add(FlowTextPart(value));
+          } else {
+            final before = todo['before']?.toString().trim() ?? '';
+            final after = todo['after']?.toString().trim() ?? '';
+            if (before.isNotEmpty) parts.add(FlowTextPart(before));
+            parts.add(
+              FlowCustomPart(
+                type: 'todo',
+                data: {
+                  'title': todo['title'],
+                  'items': todo['items'],
+                },
+              ),
+            );
+            if (after.isNotEmpty) parts.add(FlowTextPart(after));
+          }
         }
       }
     } else {
       if (text.trim().isNotEmpty) {
         final value = _withoutThinking(text);
-        if (value.trim().isNotEmpty) parts.add(FlowTextPart(value));
+        final todo = _parseTodo(value);
+        if (todo == null) {
+          if (value.trim().isNotEmpty) parts.add(FlowTextPart(value));
+        } else {
+          final before = todo['before']?.toString().trim() ?? '';
+          final after = todo['after']?.toString().trim() ?? '';
+          if (before.isNotEmpty) parts.add(FlowTextPart(before));
+          parts.add(
+            FlowCustomPart(
+              type: 'todo',
+              data: {
+                'title': todo['title'],
+                'items': todo['items'],
+              },
+            ),
+          );
+          if (after.isNotEmpty) parts.add(FlowTextPart(after));
+        }
       }
       final calls = (source['toolCalls'] as List?)
               ?.whereType<Map>()
@@ -266,6 +300,52 @@ class PandaAgentFlowChat extends StatelessWidget {
         .trim();
   }
 
+  /// Converts the checkbox syntax agents commonly emit into a first-class
+  /// card. Keeping it as a custom part avoids trying to reproduce a todo
+  /// panel with markdown and gives the UI one consistent divider and row
+  /// rhythm.
+  static Map<String, dynamic>? _parseTodo(String value) {
+    final lines = value.split('\n');
+    final taskIndexes = <int>[];
+    final items = <Map<String, dynamic>>[];
+    final taskPattern = RegExp(
+      r'^\s*(?:[-*]|\d+\.)\s*\[([ xX])\]\s*(.+?)\s*$',
+    );
+    for (var index = 0; index < lines.length; index++) {
+      final match = taskPattern.firstMatch(lines[index]);
+      if (match == null) continue;
+      taskIndexes.add(index);
+      items.add({
+        'done': match.group(1)!.toLowerCase() == 'x',
+        'label': match.group(2)!.trim(),
+      });
+    }
+    if (items.isEmpty) return null;
+
+    final first = taskIndexes.first;
+    final last = taskIndexes.last;
+    final beforeLines = lines.take(first).toList();
+    final afterLines = lines.skip(last + 1).toList();
+    var title = 'Todos';
+    if (beforeLines.isNotEmpty) {
+      final candidate = beforeLines.last
+          .replaceFirst(RegExp(r'^#+\s*'), '')
+          .trim();
+      if (candidate.isNotEmpty &&
+          RegExp(r'todo|task|plan|étape|etape', caseSensitive: false)
+              .hasMatch(candidate)) {
+        title = candidate;
+        beforeLines.removeLast();
+      }
+    }
+    return {
+      'title': title,
+      'items': items,
+      'before': beforeLines.join('\n'),
+      'after': afterLines.join('\n'),
+    };
+  }
+
   static String? _attachmentKind(String? name) {
     if (name == null || name.isEmpty) return null;
     final dot = name.lastIndexOf('.');
@@ -336,6 +416,14 @@ class PandaAgentFlowChat extends StatelessWidget {
       'thinking' => PandaAgentFlowThinkingBlock(
           text: data['thinking']?.toString() ?? '',
           active: isGenerating && message.status == FlowMessageStatus.streaming,
+        ),
+      'todo' => PandaAgentTodoCard(
+          title: data['title']?.toString() ?? 'Todos',
+          items: (data['items'] as List?)
+                  ?.whereType<Map>()
+                  .map((item) => Map<String, dynamic>.from(item))
+                  .toList() ??
+              const <Map<String, dynamic>>[],
         ),
       _ => const SizedBox.shrink(),
     };
@@ -409,6 +497,139 @@ class _PandaAgentLiveActivity extends StatelessWidget {
             active: true,
             size: 13,
             color: colors.primary,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class PandaAgentTodoCard extends StatefulWidget {
+  const PandaAgentTodoCard({
+    super.key,
+    required this.title,
+    required this.items,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> items;
+
+  @override
+  State<PandaAgentTodoCard> createState() => _PandaAgentTodoCardState();
+}
+
+class _PandaAgentTodoCardState extends State<PandaAgentTodoCard> {
+  bool _expanded = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final completed = widget.items
+        .where((item) => item['done'] == true)
+        .length;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.8)),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              child: Row(
+                children: [
+                  Icon(
+                    _expanded ? Broken.arrow_down_2 : Broken.arrow_right_2,
+                    size: 19,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 7),
+                  Expanded(
+                    child: Text(
+                      '${widget.title} ($completed/${widget.items.length})',
+                      style: TextStyle(
+                        color: colors.onSurface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Broken.task,
+                    size: 19,
+                    color: colors.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: !_expanded
+                ? const SizedBox.shrink()
+                : Column(
+                    children: [
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: colors.outlineVariant.withValues(alpha: 0.7),
+                      ),
+                      for (final item in widget.items)
+                        _PandaTodoRow(
+                          label: item['label']?.toString() ?? '',
+                          done: item['done'] == true,
+                        ),
+                    ],
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PandaTodoRow extends StatelessWidget {
+  const _PandaTodoRow({required this.label, required this.done});
+
+  final String label;
+  final bool done;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(13, 7, 13, 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(
+              done ? Broken.tick_circle : Broken.radio,
+              size: 20,
+              color: done ? colors.tertiary : colors.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: done
+                    ? colors.onSurfaceVariant
+                    : colors.onSurface,
+                fontSize: 13.5,
+                height: 1.35,
+                decoration: done ? TextDecoration.lineThrough : null,
+              ),
+            ),
           ),
         ],
       ),
