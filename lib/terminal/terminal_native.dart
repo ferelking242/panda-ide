@@ -523,7 +523,7 @@ class _SetupTerminalState extends State<SetupTerminal>
   @override
   void didChangeMetrics() {
     // Gboard changes the available height without recreating the terminal.
-    // Give xterm one layout pass, then forward its new cell size to the PTY.
+    // Give xterm a layout pass, then forward its new cell size to the PTY.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncTerminalDimensions();
     });
@@ -817,6 +817,66 @@ class _SetupTerminalState extends State<SetupTerminal>
     }
   }
 
+  /// Reads the dimensions from the rendered terminal, not only from xterm's
+  /// cached viewport.  The cache can still contain its 80x24 defaults while a
+  /// TerminalView is waiting for its first layout pass.
+  ({int columns, int rows}) _measuredTerminalDimensions(
+    _TerminalRuntime runtime,
+  ) {
+    var columns = runtime.terminal.viewWidth;
+    var rows = runtime.terminal.viewHeight;
+
+    try {
+      final render = runtime.viewKey.currentState?.renderTerminal;
+      if (render != null &&
+          render.hasSize &&
+          render.cellSize.width > 0 &&
+          render.cellSize.height > 0) {
+        final measuredColumns = render.size.width ~/ render.cellSize.width;
+        final measuredRows = render.size.height ~/ render.cellSize.height;
+        if (measuredColumns > 0) columns = measuredColumns;
+        if (measuredRows > 0) rows = measuredRows;
+      }
+    } catch (_) {
+      // The view may be between two PageView layouts. Keep xterm's last
+      // known size and let the next frame reconcile it.
+    }
+
+    return (
+      columns: columns > 0 ? columns : 1,
+      rows: rows > 0 ? rows : 1,
+    );
+  }
+
+  void _applyMeasuredTerminalDimensions(_TerminalRuntime runtime) {
+    final measured = _measuredTerminalDimensions(runtime);
+    final process = runtime.pty;
+    var resizeSucceeded = true;
+    if (process != null &&
+        (runtime.ptyColumns != measured.columns ||
+            runtime.ptyRows != measured.rows)) {
+      try {
+        process.resize(measured.rows, measured.columns);
+      } catch (error) {
+        PandaLog.w(
+          'Terminal',
+          'PTY resize failed for ${runtime.sessionId}: $error',
+        );
+        resizeSucceeded = false;
+      }
+    }
+    if (process == null || resizeSucceeded) {
+      runtime.ptyColumns = measured.columns;
+      runtime.ptyRows = measured.rows;
+    }
+  }
+
+  void _applyMeasuredDimensionsToAllTerminals() {
+    for (final runtime in _sessionRuntimes.values) {
+      _applyMeasuredTerminalDimensions(runtime);
+    }
+  }
+
   double _terminalFontSizeFromConfig() {
     try {
       final raw = context
@@ -1079,13 +1139,23 @@ class _SetupTerminalState extends State<SetupTerminal>
             'bin=$prootBin args=${prootArgs.length} env=${sessionEnv.keys.join(',')}',
       );
 
+      // Install this before Pty.start. A TerminalView can finish its first
+      // layout while the process is being created; attaching the callback
+      // afterwards loses that resize event and leaves readline with a stale
+      // column count.
+      runtime.terminal.onResize = (w, h, pw, ph) {
+        _onTerminalResized(runtime, w, h, pw, ph);
+      };
+      final initialDimensions = _measuredTerminalDimensions(runtime);
+      runtime.ptyColumns = initialDimensions.columns;
+      runtime.ptyRows = initialDimensions.rows;
       final process = Pty.start(
         prootBin,
         arguments: prootArgs,
         workingDirectory: appDir,
         environment: sessionEnv,
-        rows: runtime.terminal.viewHeight,
-        columns: runtime.terminal.viewWidth,
+        rows: initialDimensions.rows,
+        columns: initialDimensions.columns,
       );
 
       runtime.pty = process;
@@ -1133,11 +1203,9 @@ class _SetupTerminalState extends State<SetupTerminal>
         _forwardTerminalInput(runtime, data, process.write);
       };
 
-      runtime.terminal.onResize = (w, h, pw, ph) {
-        _onTerminalResized(runtime, w, h, pw, ph);
-      };
-      // A TerminalView can lay itself out before the PTY callback is attached.
-      // Reconcile the dimensions once more after both sides are ready.
+      // A TerminalView can lay itself out again while the process is starting.
+      // Reconcile the dimensions once more after both sides are ready. This
+      // also covers a resize event emitted before the PTY was assigned.
       _syncTerminalDimensions();
     } catch (e) {
       PandaLog.e('Terminal', 'PRoot execution failed: $e', error: e.toString());
@@ -1823,7 +1891,15 @@ class _SetupTerminalState extends State<SetupTerminal>
     if (columns <= 0 || rows <= 0) return;
     if (runtime.pty != null &&
         (runtime.ptyColumns != columns || runtime.ptyRows != rows)) {
-      runtime.pty!.resize(rows, columns);
+      try {
+        runtime.pty!.resize(rows, columns);
+      } catch (error) {
+        PandaLog.w(
+          'Terminal',
+          'PTY resize callback failed for ${runtime.sessionId}: $error',
+        );
+        return;
+      }
     }
     runtime.ptyColumns = columns;
     runtime.ptyRows = rows;
@@ -1837,19 +1913,15 @@ class _SetupTerminalState extends State<SetupTerminal>
           render.markNeedsLayout();
         }
       } catch (_) {}
-
-      final process = runtime.pty;
-      if (process == null) continue;
-      final columns = runtime.terminal.viewWidth;
-      final rows = runtime.terminal.viewHeight;
-      if (columns > 0 &&
-          rows > 0 &&
-          (runtime.ptyColumns != columns || runtime.ptyRows != rows)) {
-        process.resize(rows, columns);
-        runtime.ptyColumns = columns;
-        runtime.ptyRows = rows;
-      }
     }
+
+    // markNeedsLayout() takes effect on the next frame. Reading
+    // terminal.viewWidth immediately here was the original race: it often
+    // returned the old keyboard-visible width and permanently sized readline
+    // to that stale value.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _applyMeasuredDimensionsToAllTerminals();
+    });
   }
 
   void _hideSelectionUI() {
