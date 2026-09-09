@@ -88,6 +88,7 @@ import 'agent/agent_widgets.dart';
 import '../agent/agent_v3.dart';
 import 'agent/panda_agent_controller.dart';
 import 'agent/panda_agent_page.dart';
+import 'agent/panda_agent_workspace_tools.dart';
 
 Map<String, String> _extractThinkingFromText(
   String rawText,
@@ -5427,6 +5428,15 @@ class _SelectTypeState extends State<SelectType>
                     ? const Settings(embedded: true)
                     : _agentPanelTab == 4
                     ? _buildAgentProvidersPage(context, appTheme)
+                    : _agentPanelTab == 5
+                    ? PandaFilesPage(
+                        workspacePath:
+                            _currentWorkspaceDir ?? _activeProjectDir() ?? '',
+                      )
+                    : _agentPanelTab == 6
+                    ? const PandaAgentSkillsPage()
+                    : _agentPanelTab == 7
+                    ? const PandaSecretsPage()
                     : _buildChatTabContent(context, appTheme, asPage),
               ),
             ),
@@ -5478,13 +5488,29 @@ class _SelectTypeState extends State<SelectType>
             ),
             const SizedBox(width: 6),
             Icon(
-              _agentPanelTab == 4 ? Broken.cpu_setting : Broken.setting,
+              _agentPanelTab == 4
+                  ? Broken.cpu_setting
+                  : _agentPanelTab == 5
+                      ? Broken.folder
+                      : _agentPanelTab == 6
+                          ? Broken.code_1
+                          : _agentPanelTab == 7
+                              ? Broken.lock
+                              : Broken.setting,
               size: 15,
               color: _kAccent,
             ),
             const SizedBox(width: 8),
             Text(
-              _agentPanelTab == 4 ? 'Providers' : 'User Settings',
+              _agentPanelTab == 4
+                  ? 'Providers'
+                  : _agentPanelTab == 5
+                      ? 'Files'
+                      : _agentPanelTab == 6
+                          ? 'Agent Skills'
+                          : _agentPanelTab == 7
+                              ? 'Secrets'
+                              : 'User Settings',
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -6638,6 +6664,12 @@ class _SelectTypeState extends State<SelectType>
 
     final tools = [
       (
+        icon: Broken.folder,
+        color: Colors.green[400]!,
+        title: 'Files',
+        desc: 'Browse and manage files in your workspace',
+      ),
+      (
         icon: Broken.lock,
         color: Colors.orange[400]!,
         title: 'Secrets',
@@ -6725,7 +6757,22 @@ class _SelectTypeState extends State<SelectType>
                   color: Colors.transparent,
                   child: InkWell(
                     onTap: () {
-                      if (t.title == 'Providers') {
+                      if (t.title == 'Files') {
+                        setState(() {
+                          _agentPanelPrevTab = _agentPanelTab;
+                          _agentPanelTab = 5;
+                        });
+                      } else if (t.title == 'Agent Skills') {
+                        setState(() {
+                          _agentPanelPrevTab = _agentPanelTab;
+                          _agentPanelTab = 6;
+                        });
+                      } else if (t.title == 'Secrets') {
+                        setState(() {
+                          _agentPanelPrevTab = _agentPanelTab;
+                          _agentPanelTab = 7;
+                        });
+                      } else if (t.title == 'Providers') {
                         setState(() {
                           _agentPanelPrevTab = _agentPanelTab;
                           _agentPanelTab = 4;
