@@ -101,11 +101,25 @@ class MainActivity : FlutterActivity() {
                     result.success(mediaDir?.absolutePath ?: "")
                 }
                 "startKeepAlive" -> {
-                    KeepAliveService.start(applicationContext)
+                    val taskId = call.argument<String>("taskId")
+                        ?.trim()?.ifBlank { "terminal" } ?: "terminal"
+                    val label = call.argument<String>("label")
+                        ?.trim()?.ifBlank { "Terminal" } ?: "Terminal"
+                    KeepAliveService.start(applicationContext, taskId, label)
                     result.success(true)
                 }
                 "stopKeepAlive" -> {
-                    KeepAliveService.stop(applicationContext)
+                    val taskId = call.argument<String>("taskId")
+                        ?.trim()?.ifBlank { "terminal" } ?: "terminal"
+                    KeepAliveService.stop(applicationContext, taskId)
+                    result.success(true)
+                }
+                "updateKeepAlive" -> {
+                    val taskId = call.argument<String>("taskId")?.trim()
+                        ?.ifBlank { "terminal" } ?: "terminal"
+                    val label = call.argument<String>("label")
+                        ?.trim()?.ifBlank { "Terminal" } ?: "Terminal"
+                    KeepAliveService.update(applicationContext, taskId, label)
                     result.success(true)
                 }
                 "showCommandNotification" -> {

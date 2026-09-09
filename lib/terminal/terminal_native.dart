@@ -538,17 +538,28 @@ class _SetupTerminalState extends State<SetupTerminal>
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.resumed) {
       if (_sessionRuntimes.values.any((runtime) => runtime.isRunning)) {
-        unawaited(_ensureKeepAlive());
+        final runtime = _sessionRuntimes.values.firstWhere(
+          (runtime) => runtime.isRunning,
+        );
+        unawaited(
+          _ensureKeepAlive(
+            taskId: runtime.sessionId,
+            label: runtime.title,
+          ),
+        );
       }
     }
   }
 
   Future<void> _ensureKeepAlive({
+    String taskId = 'terminal',
+    String label = 'Terminal',
     bool requestBatteryOptimizationExemption = false,
   }) async {
     try {
       await const MethodChannel('com.panda.ide').invokeMethod<bool>(
         'startKeepAlive',
+        {'taskId': taskId, 'label': label},
       );
       if (!requestBatteryOptimizationExemption ||
           !Platform.isAndroid ||
@@ -694,6 +705,7 @@ class _SetupTerminalState extends State<SetupTerminal>
     final runtime = _sessionRuntimes[sessionId];
     if (runtime == null) return;
     runtime.stopProcess();
+    unawaited(_stopKeepAlive(sessionId));
     runtime.currentInput = '';
     runtime.commandInput = '';
     if (_sessionBloc.state.activeSessionId == sessionId) {
@@ -706,6 +718,7 @@ class _SetupTerminalState extends State<SetupTerminal>
     final runtime = _sessionRuntimes[sessionId];
     if (runtime == null || !runtime.isRunning) return;
     runtime.stopProcess();
+    unawaited(_stopKeepAlive(sessionId));
     _sessionBloc.add(
       UpdateTerminalSessionStatus(id: sessionId, isRunning: false),
     );
@@ -718,6 +731,7 @@ class _SetupTerminalState extends State<SetupTerminal>
 
     if (isLastSession) {
       final runtime = _sessionRuntimes.remove(sessionId);
+      unawaited(_stopKeepAlive(sessionId));
       await runtime?.dispose();
       _sessionBloc.add(DeleteTerminalSession(sessionId));
       _hideSelectionUI();
@@ -732,6 +746,7 @@ class _SetupTerminalState extends State<SetupTerminal>
     }
 
     final runtime = _sessionRuntimes.remove(sessionId);
+    unawaited(_stopKeepAlive(sessionId));
     await runtime?.dispose();
     _sessionBloc.add(DeleteTerminalSession(sessionId));
 
@@ -1055,6 +1070,7 @@ class _SetupTerminalState extends State<SetupTerminal>
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
       );
+      unawaited(_stopKeepAlive(runtime.sessionId));
       return;
     }
     PandaLog.d('Terminal', 'Linux rootfs verified complete');
@@ -1094,6 +1110,7 @@ class _SetupTerminalState extends State<SetupTerminal>
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
       );
+      unawaited(_stopKeepAlive(runtime.sessionId));
       return;
     }
     PandaLog.i('Terminal', 'PRoot binary found: $prootBin');
@@ -1233,6 +1250,7 @@ class _SetupTerminalState extends State<SetupTerminal>
         _sessionBloc.add(
           UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
         );
+        unawaited(_stopKeepAlive(runtime.sessionId));
         _showExitBanner(runtime.sessionId, code);
       });
 
@@ -1258,6 +1276,7 @@ class _SetupTerminalState extends State<SetupTerminal>
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
       );
+      unawaited(_stopKeepAlive(runtime.sessionId));
       _showExitBanner(runtime.sessionId, 1);
     }
   }
@@ -1273,7 +1292,11 @@ class _SetupTerminalState extends State<SetupTerminal>
     // was only started in _startProotSession, leaving a Termux terminal
     // exposed to Android's background process policy.
     unawaited(
-      _ensureKeepAlive(requestBatteryOptimizationExemption: true),
+      _ensureKeepAlive(
+        taskId: runtime.sessionId,
+        label: runtime.title,
+        requestBatteryOptimizationExemption: true,
+      ),
     );
     if (externalServer == null) {
       await _startProotSession(runtime, args: args);
@@ -1335,14 +1358,27 @@ class _SetupTerminalState extends State<SetupTerminal>
       session.done.then((_) {
         if (!_sessionRuntimes.containsKey(runtime.sessionId)) return;
         final code = session.exitCode ?? 0;
+        runtime.sshSession = null;
         runtime.terminal.write('\r\n\n[Program finished with exit code $code]');
         _sessionBloc.add(
           UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: false),
         );
+        unawaited(_stopKeepAlive(runtime.sessionId));
         _showExitBanner(runtime.sessionId, code);
       });
 
       return;
+    }
+  }
+
+  Future<void> _stopKeepAlive(String taskId) async {
+    try {
+      await const MethodChannel('com.panda.ide').invokeMethod<bool>(
+        'stopKeepAlive',
+        {'taskId': taskId},
+      );
+    } catch (error) {
+      PandaLog.w('Terminal', 'Keep-alive service could not stop task: $error');
     }
   }
 
