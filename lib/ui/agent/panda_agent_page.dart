@@ -154,16 +154,6 @@ class PandaAgentPage extends StatelessWidget {
                 ),
                 onTap: () => _showModes(context),
               ),
-              _ComposerContextButton(
-                label: '@',
-                tooltip: 'Ajouter un fichier au contexte',
-                onTap: () => _insertContextToken(controller, '@'),
-              ),
-              _ComposerContextButton(
-                label: '#',
-                tooltip: 'Ajouter une référence au contexte',
-                onTap: () => _insertContextToken(controller, '#'),
-              ),
               if (modelOptions.isNotEmpty)
                 PandaAgentModelSelector(
                   models: modelOptions,
@@ -202,27 +192,6 @@ class PandaAgentPage extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-
-  void _insertContextToken(PandaAgentController controller, String token) {
-    final value = controller.inputController.value;
-    final selection = value.selection.isValid
-        ? value.selection
-        : TextSelection.collapsed(offset: value.text.length);
-    final prefix = selection.start > 0 &&
-            !RegExp(r'\s').hasMatch(value.text[selection.start - 1])
-        ? ' '
-        : '';
-    final insertion = '$prefix$token';
-    final start = selection.start.clamp(0, value.text.length).toInt();
-    final end = selection.end.clamp(start, value.text.length).toInt();
-    final nextText = value.text.replaceRange(start, end, insertion);
-    final caret = start + insertion.length;
-    controller.inputController.value = value.copyWith(
-      text: nextText,
-      selection: TextSelection.collapsed(offset: caret),
-      composing: TextRange.empty,
     );
   }
 
@@ -448,41 +417,6 @@ class _PandaSuggestionCard extends StatelessWidget {
             child: const Text('Start'),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ComposerContextButton extends StatelessWidget {
-  const _ComposerContextButton({
-    required this.label,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final String label;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 6),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: colors.onSurfaceVariant,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
       ),
     );
   }

@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -619,8 +618,9 @@ class _PandaTodoRow extends StatelessWidget {
           ),
           const SizedBox(width: 9),
           Expanded(
-            child: Text(
-              label,
+            child: FlowMarkdown(
+              text: label,
+              isStreaming: false,
               style: TextStyle(
                 color: done
                     ? colors.onSurfaceVariant
@@ -826,218 +826,249 @@ class PandaAgentFlowToolCard extends StatelessWidget {
   Widget _buildCard(
     BuildContext context, {
     required bool collapsed,
-    required bool showFullCommand,
+    required VoidCallback onToggle,
   }) {
     final approval = status == 'pending' || status == 'pending_approval';
     final running = status == 'running';
     final shell = _isShellCommand;
-    final background = dark
-        ? const Color(0xff202024)
-        : const Color(0xfff5f5f7);
+    final hasDetails = approval ||
+        _command.trim().isNotEmpty ||
+        (result?.trim().isNotEmpty ?? false);
+    final accent = approval
+        ? Colors.amber.shade700
+        : shell
+            ? (_failed ? Colors.redAccent : Colors.green)
+            : foreground;
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: approval
-            ? (dark ? const Color(0xff302719) : const Color(0xfffff8e5))
-            : background,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: approval
-              ? Colors.amber.withValues(alpha: 0.5)
-              : foreground.withValues(alpha: 0.12),
+    Widget iconTile() {
+      final child = shell && !approval
+          ? Text(
+              '>_',
+              style: TextStyle(
+                color: foreground,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                fontFamily: 'monospace',
+              ),
+            )
+          : Icon(
+              approval ? Broken.warning_2 : pandaAgentToolIcon(toolName),
+              size: 17,
+              color: accent,
+            );
+      return Container(
+        width: 30,
+        height: 30,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: foreground.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: foreground.withValues(alpha: 0.09)),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (shell && !approval)
-                Text(
-                  '>_',
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'monospace',
-                  ),
-                )
-              else
-                Icon(
-                  approval
-                      ? Broken.warning_2
-                      : pandaAgentToolIcon(toolName),
-                  size: 16,
-                  color: approval ? Colors.amber[700] : foreground,
-                ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  approval
-                      ? 'Approbation requise · $toolName'
-                      : shell
-                          ? (running
-                              ? 'Command running'
-                              : _failed
-                                  ? 'Command failed'
-                                  : 'Command executed')
-                          : toolName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
-              if (running)
-                const SizedBox.square(
-                  dimension: 14,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
-                )
-              else if (shell)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: (_failed ? Colors.redAccent : Colors.green)
-                        .withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Text(
-                    _failed ? 'FAIL' : 'OK',
-                    style: TextStyle(
-                      color: _failed ? Colors.redAccent : Colors.green,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                )
-              else if (onOpen != null)
-                IconButton(
-                  tooltip: 'Ouvrir dans un onglet',
-                  onPressed: onOpen,
-                  icon: Icon(Broken.export, size: 14, color: muted),
-                  padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints.tightFor(width: 24, height: 24),
-                ),
-            ],
-          ),
-          if (_command.isNotEmpty && !approval && !collapsed) ...[
-            const SizedBox(height: 7),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              decoration: BoxDecoration(
-                color: dark ? Colors.black.withValues(alpha: 0.28) : Colors.white,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: foreground.withValues(alpha: 0.08)),
-              ),
+        child: child,
+      );
+    }
+
+    Widget statusWidget() {
+      if (running) {
+        return const SizedBox.square(
+          dimension: 14,
+          child: CircularProgressIndicator(strokeWidth: 1.5),
+        );
+      }
+      if (shell) {
+        return Icon(
+          _failed ? Broken.close_circle : Broken.tick_circle,
+          size: 18,
+          color: _failed ? Colors.redAccent : Colors.green,
+        );
+      }
+      if (onOpen != null) {
+        return IconButton(
+          tooltip: 'Ouvrir dans un onglet',
+          onPressed: onOpen,
+          icon: Icon(Broken.export, size: 15, color: muted),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 26, height: 26),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: hasDetails ? onToggle : null,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    r'$',
-                    style: TextStyle(
-                      color: foreground.withValues(alpha: 0.46),
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                  const SizedBox(width: 7),
+                  iconTile(),
+                  const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      showFullCommand
-                          ? _command
-                          : pandaWrapLongTokensForDisplay(_command),
-                      maxLines: showFullCommand ? null : 1,
-                      overflow: showFullCommand
-                          ? TextOverflow.visible
-                          : TextOverflow.ellipsis,
+                      approval
+                          ? 'Approbation requise · $toolName'
+                          : toolName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: foreground.withValues(alpha: 0.82),
-                        fontSize: 11,
-                        height: 1.4,
+                        color: foreground,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                         fontFamily: 'monospace',
                       ),
                     ),
                   ),
+                  statusWidget(),
+                  const SizedBox(width: 2),
+                  if (hasDetails)
+                    Icon(
+                      collapsed ? Broken.arrow_right_2 : Broken.arrow_down_2,
+                      size: 17,
+                      color: muted,
+                    ),
                 ],
               ),
             ),
-          ],
-          if (result != null &&
-              result!.trim().isNotEmpty &&
-              !approval &&
-              !collapsed) ...[
-            const SizedBox(height: 7),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: dark ? Colors.black26 : Colors.white70,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: FlowMarkdown(
-                text: result!.trim(),
-                style: TextStyle(
-                  color: foreground.withValues(alpha: 0.82),
-                  fontSize: 11,
-                  height: 1.4,
-                ),
-                charactersPerSecond: 1000,
-              ),
-            ),
-          ],
-          if (approval) ...[
-            const SizedBox(height: 8),
-            Text(
-              args.isEmpty
-                  ? 'Cette action demande votre autorisation.'
-                  : _formattedArgs,
-              style: TextStyle(
-                color: foreground.withValues(alpha: 0.75),
-                fontSize: 11,
-                height: 1.35,
-                fontFamily: 'monospace',
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
+          ),
+        ),
+        if (hasDetails)
+          AnimatedSize(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: collapsed
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(left: 39, top: 3, bottom: 2),
+                    child: _buildDetails(
+                      context,
+                      approval: approval,
+                      showFullCommand: true,
+                    ),
+                  ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDetails(
+    BuildContext context, {
+    required bool approval,
+    required bool showFullCommand,
+  }) {
+    final panelColor = foreground.withValues(alpha: dark ? 0.07 : 0.045);
+    final panelBorder = foreground.withValues(alpha: 0.09);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: panelColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: panelBorder),
+      ),
+      child: approval
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _approvalButton(
-                  label: 'Autoriser',
-                  icon: Broken.check,
-                  color: Colors.green,
-                  onPressed: onAllow,
+                Text(
+                  args.isEmpty
+                      ? 'Cette action demande votre autorisation.'
+                      : _formattedArgs,
+                  style: TextStyle(
+                    color: foreground.withValues(alpha: 0.75),
+                    fontSize: 11,
+                    height: 1.35,
+                    fontFamily: 'monospace',
+                  ),
                 ),
-                _approvalButton(
-                  label: 'Toujours',
-                  icon: Broken.tick_circle,
-                  color: Colors.blue,
-                  onPressed: onAlways,
-                ),
-                _approvalButton(
-                  label: 'Refuser',
-                  icon: Broken.close_circle,
-                  color: Colors.redAccent,
-                  onPressed: onDeny,
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _approvalButton(
+                      label: 'Autoriser',
+                      icon: Broken.check,
+                      color: Colors.green,
+                      onPressed: onAllow,
+                    ),
+                    _approvalButton(
+                      label: 'Toujours',
+                      icon: Broken.tick_circle,
+                      color: Colors.blue,
+                      onPressed: onAlways,
+                    ),
+                    _approvalButton(
+                      label: 'Refuser',
+                      icon: Broken.close_circle,
+                      color: Colors.redAccent,
+                      onPressed: onDeny,
+                    ),
+                  ],
                 ),
               ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_command.isNotEmpty)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        r'$',
+                        style: TextStyle(
+                          color: foreground.withValues(alpha: 0.46),
+                          fontSize: 11,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      Expanded(
+                        child: Text(
+                          showFullCommand
+                              ? _command
+                              : pandaWrapLongTokensForDisplay(_command),
+                          style: TextStyle(
+                            color: foreground.withValues(alpha: 0.82),
+                            fontSize: 11,
+                            height: 1.4,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                if (_command.isNotEmpty &&
+                    result != null &&
+                    result!.trim().isNotEmpty)
+                  const SizedBox(height: 8),
+                if (result != null && result!.trim().isNotEmpty)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: Scrollbar(
+                      thumbVisibility: true,
+                      child: SingleChildScrollView(
+                        child: FlowMarkdown(
+                          text: result!.trim(),
+                          isStreaming: false,
+                          style: TextStyle(
+                            color: foreground.withValues(alpha: 0.82),
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -1071,54 +1102,15 @@ class _PandaToolCardInteraction extends StatefulWidget {
 }
 
 class _PandaToolCardInteractionState extends State<_PandaToolCardInteraction> {
-  Timer? _holdTimer;
-  bool _held = false;
   bool _collapsed = false;
-  bool _showFullCommand = false;
-
-  @override
-  void dispose() {
-    _holdTimer?.cancel();
-    super.dispose();
-  }
-
-  void _pressStarted() {
-    if (!widget.card._isShellCommand) return;
-    _held = false;
-    _holdTimer?.cancel();
-    _holdTimer = Timer(const Duration(milliseconds: 420), () {
-      if (!mounted) return;
-      setState(() {
-        _held = true;
-        _showFullCommand = true;
-        _collapsed = false;
-      });
-    });
-  }
-
-  void _pressEnded() {
-    _holdTimer?.cancel();
-    if (_held) {
-      _held = false;
-      return;
-    }
-    if (widget.card._isShellCommand) {
-      setState(() => _collapsed = !_collapsed);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final card = widget.card;
-    return Listener(
-      onPointerDown: (_) => _pressStarted(),
-      onPointerUp: (_) => _pressEnded(),
-      onPointerCancel: (_) => _holdTimer?.cancel(),
-      child: card._buildCard(
-        context,
-        collapsed: _collapsed,
-        showFullCommand: _showFullCommand,
-      ),
+    return card._buildCard(
+      context,
+      collapsed: _collapsed,
+      onToggle: () => setState(() => _collapsed = !_collapsed),
     );
   }
 }
@@ -1177,6 +1169,14 @@ class _PandaAgentFlowSpinnerState extends State<PandaAgentFlowSpinner>
 
 IconData pandaAgentToolIcon(String name) {
   final value = name.toLowerCase();
+  if (value.contains('think') || value.contains('reason')) {
+    return Broken.cpu;
+  }
+  if (value.contains('skill') ||
+      value.contains('capability') ||
+      value.contains('load')) {
+    return Broken.magic_star;
+  }
   if (value.contains('read') || value.contains('list') || value.contains('file')) {
     return Broken.document;
   }

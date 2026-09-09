@@ -524,13 +524,6 @@ class FlowMessage extends StatelessWidget {
         .merge(textStyle);
     final onCodeCopy = this.onCodeCopy;
 
-    // Only text parts get the streaming reveal; a message that ends in a
-    // code part streams its code without one (FlowCodeBlock renders each
-    // delivery whole).
-    final lastTextIndex = message.parts.lastIndexWhere(
-      (part) => part is FlowTextPart,
-    );
-
     final children = <Widget>[];
     for (var i = 0; i < message.parts.length; i++) {
       final part = message.parts[i];
@@ -541,9 +534,10 @@ class FlowMessage extends StatelessWidget {
             when markdown && message.role == FlowMessageRole.assistant =>
           FlowMarkdown(
             text: text,
-            isStreaming:
-                message.status == FlowMessageStatus.streaming &&
-                i == lastTextIndex,
+            // The agent already updates the message model progressively.
+            // Do not replay a second, artificial character-by-character
+            // animation on top of that live update.
+            isStreaming: false,
             style: style,
             charactersPerSecond: charactersPerSecond,
             onLinkTap: onLinkTap,
@@ -553,9 +547,7 @@ class FlowMessage extends StatelessWidget {
           ),
         FlowTextPart(:final text) => FlowStreamingText(
           text: text,
-          isStreaming:
-              message.status == FlowMessageStatus.streaming &&
-              i == lastTextIndex,
+          isStreaming: false,
           style: style,
           charactersPerSecond: charactersPerSecond,
         ),
