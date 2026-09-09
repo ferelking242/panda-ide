@@ -7,6 +7,13 @@ import 'gateway_installer.dart';
 /// États du gateway
 enum GatewayStatus { idle, installing, starting, running, stopping, error }
 
+/// Browser transport used by Panda AI.
+///
+/// WebView is the Android-native path. DevTools uses the small Node extension
+/// shipped by panda-ai and connects Python to an already running browser over
+/// Chrome DevTools Protocol.
+enum GatewayLaunchMode { webView, devTools }
+
 /// GatewayManager — gère le cycle de vie du serveur Python uvicorn.
 ///
 /// Émet des notifications via ChangeNotifier pour que l'UI réagisse.
@@ -22,6 +29,8 @@ class GatewayManager extends ChangeNotifier {
   String _token = '';
   String _installedVersion = 'unknown';
   String? _availableUpdate;
+  GatewayLaunchMode _launchMode = GatewayLaunchMode.webView;
+  String _devToolsUrl = 'http://127.0.0.1:9222';
 
   // Getters
   GatewayStatus get status => _status;
@@ -34,6 +43,8 @@ class GatewayManager extends ChangeNotifier {
   String get installedVersion => _installedVersion;
   String? get availableUpdate => _availableUpdate;
   bool get hasUpdate => _availableUpdate != null && _availableUpdate != _installedVersion;
+  GatewayLaunchMode get launchMode => _launchMode;
+  String get devToolsUrl => _devToolsUrl;
 
   void setProvider(String p) {
     _provider = p;
@@ -42,6 +53,19 @@ class GatewayManager extends ChangeNotifier {
 
   void setToken(String t) {
     _token = t;
+    notifyListeners();
+  }
+
+  void setLaunchMode(GatewayLaunchMode mode) {
+    if (_status == GatewayStatus.running || _status == GatewayStatus.starting) return;
+    _launchMode = mode;
+    notifyListeners();
+  }
+
+  void setDevToolsUrl(String url) {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return;
+    _devToolsUrl = trimmed;
     notifyListeners();
   }
 
@@ -92,8 +116,9 @@ class GatewayManager extends ChangeNotifier {
       'API_HOST': '127.0.0.1',
       'API_PORT': '$_apiPort',
       'PROVIDER': _provider,
-      'BROWSER_MODE': 'android',
+      'BROWSER_MODE': _launchMode == GatewayLaunchMode.devTools ? 'cdp' : 'android',
       'WEBVIEW_BRIDGE_PORT': '9221',
+      if (_launchMode == GatewayLaunchMode.devTools) 'BROWSER_CDP_URL': _devToolsUrl,
       'HEADLESS': 'true',
       'SLOW_MO': '0',
       'LOG_LEVEL': 'INFO',
@@ -119,20 +144,36 @@ class GatewayManager extends ChangeNotifier {
     }
 
     try {
+      final useExtension = _launchMode == GatewayLaunchMode.devTools;
+      final extensionEntry = File('$installDir/extension/gateway.js');
+      if (useExtension && !await extensionEntry.exists()) {
+        throw Exception('extension/gateway.js introuvable dans $installDir');
+      }
+
+      final executable = useExtension ? await _findNode() : pythonBin;
+      if (executable == null) {
+        throw Exception('Node.js introuvable pour le mode DevTools');
+      }
+      final arguments = useExtension
+          ? ['extension/gateway.js']
+          : [
+              '-m', 'uvicorn', 'src.api.server:app',
+              '--host', '127.0.0.1',
+              '--port', '$_apiPort',
+              '--log-level', 'info',
+            ];
       _pythonProcess = await Process.start(
-        pythonBin,
-        [
-          '-m', 'uvicorn', 'src.api.server:app',
-          '--host', '127.0.0.1',
-          '--port', '$_apiPort',
-          '--log-level', 'info',
-        ],
+        executable,
+        arguments,
         workingDirectory: installDir,
         environment: env,
         runInShell: false,
       );
 
-      _addLog('PID Python: ${_pythonProcess!.pid}');
+      _addLog(
+        'PID ${useExtension ? 'DevTools extension' : 'Python'}: '
+        '${_pythonProcess!.pid}',
+      );
       _listenProcess(_pythonProcess!);
 
     } catch (e) {
@@ -215,23 +256,22 @@ class GatewayManager extends ChangeNotifier {
   // ── Helpers ───────────────────────────────────────────────────────────────
 
   Future<String?> _findPython() async {
-    final candidates = [
-      '/data/data/com.termux.app/files/usr/bin/python3',
-      '/usr/bin/python3',
-      '/usr/local/bin/python3',
-      '/usr/bin/python',
-    ];
-    for (final p in candidates) {
-      if (await File(p).exists()) return p;
-    }
-    // Essai via PATH
     try {
-      final result = await Process.run('which', ['python3']);
+      final result = await Process.run('python3', ['--version']);
       if (result.exitCode == 0) {
-        final p = (result.stdout as String).trim();
-        if (p.isNotEmpty) return p;
+        return 'python3';
       }
     } catch (_) {}
+    return null;
+  }
+
+  Future<String?> _findNode() async {
+    for (final candidate in ['node', 'nodejs']) {
+      try {
+        final result = await Process.run(candidate, ['--version']);
+        if (result.exitCode == 0) return candidate;
+      } catch (_) {}
+    }
     return null;
   }
 

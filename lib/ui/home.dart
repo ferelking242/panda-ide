@@ -67,6 +67,7 @@ import 'widgets.dart';
 import 'panda_ai_ui/components.dart';
 import 'notifications.dart';
 import 'flutter_device_panel.dart';
+import 'preview_panel.dart';
 import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
 import 'agent/panda_activity_dock.dart';
@@ -1823,7 +1824,8 @@ class _SelectTypeState extends State<SelectType>
     final iconColor = isDark ? _kActivityIconDark : _kActivityIconLight;
     final selColor = isDark ? _kActivitySelDark : _kActivitySelLight;
 
-    // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent, Gateway, Nav, Copilot
+    // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent, Gateway,
+    // Nav, Preview, Copilot
     // ensuite les panneaux classiques de l'éditeur.
     final topItems = <_RailItem>[
       _RailItem(icon: Broken.element_3, label: 'Explorateur', idx: 1),
@@ -1836,6 +1838,7 @@ class _SelectTypeState extends State<SelectType>
 
       _RailItem(icon: Broken.cpu, label: 'Gateway AI', idx: 7),
       _RailItem(icon: Broken.global, label: 'Navigateur', idx: 8),
+      _RailItem(icon: Icons.preview_outlined, label: 'Preview', idx: 15),
       _RailItem(
         icon: Broken.message_programming,
         label: 'GitHub Copilot',
@@ -1927,6 +1930,27 @@ class _SelectTypeState extends State<SelectType>
                                 (t) => t.id == 'browser',
                               );
                             }
+                            _sidebarState = 1;
+                            _activeRail = 0;
+                          });
+                          return;
+                        }
+                        // Preview opens as an editor tab so the full WebView
+                        // remains usable on small screens.
+                        if (item.idx == 15) {
+                          setState(() {
+                            if (!_openTabs.any((t) => t.id == 'preview')) {
+                              _openTabs.add(
+                                const _TabDef(
+                                  id: 'preview',
+                                  title: 'Preview',
+                                  icon: Icons.preview_outlined,
+                                ),
+                              );
+                            }
+                            _activeTabIdx = _openTabs.indexWhere(
+                              (t) => t.id == 'preview',
+                            );
                             _sidebarState = 1;
                             _activeRail = 0;
                           });
@@ -2263,6 +2287,7 @@ class _SelectTypeState extends State<SelectType>
       12: 'OUTLINE',
       13: 'TIMELINE',
        14: 'EXTENSIONS',
+      15: 'PREVIEW',
     };
 
     Widget panelBody;
@@ -5222,6 +5247,9 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'browser') {
       return const BrowserPanel();
     }
+    if (tab.id == 'preview') {
+      return const PreviewPanel();
+    }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);
     }
@@ -5331,6 +5359,9 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'browser') {
       return const BrowserPanel();
+    }
+    if (tab.id == 'preview') {
+      return const PreviewPanel();
     }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);

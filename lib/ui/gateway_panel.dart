@@ -24,7 +24,7 @@ const _kAmber   = Color(0xffffa726);
 const _kMuted   = Color(0xff6b7a99);
 const _kPanda   = Color(0xff5090c8);
 
-/// GatewayPanel — interface complète pour panda-browser-gateway.
+/// GatewayPanel — interface complète pour Panda AI Gateway.
 ///
 /// Sections :
 ///  • En-tête avec état Python + actions install/start
@@ -59,6 +59,9 @@ class _GatewayPanelState extends State<GatewayPanel>
 
   // Token for Panda Open Gateway
   final _tokenCtrl = TextEditingController();
+  final _devToolsUrlController = TextEditingController(
+    text: 'http://127.0.0.1:9222',
+  );
   bool _tokenVisible = false;
 
   // Models
@@ -306,6 +309,9 @@ class _GatewayPanelState extends State<GatewayPanel>
               ),
           ]),
 
+          const SizedBox(height: 12),
+          _buildBrowserModeSelector(dark),
+
           // ── Install log ───────────────────────────────────────────────────
           if (_installing && _installLog.isNotEmpty) ...[
             const SizedBox(height: 10),
@@ -335,7 +341,80 @@ class _GatewayPanelState extends State<GatewayPanel>
               icon: Icons.info_outline_rounded,
               color: _kAccent,
               dark: dark,
-              text: 'Appuyez sur "Installer" pour télécharger panda-browser-gateway.',
+              text: 'Appuyez sur "Installer" pour télécharger Panda AI Gateway.',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBrowserModeSelector(bool dark) {
+    final surface = dark ? const Color(0xff131720) : Colors.white;
+    final border = dark ? _kBorder : _kBorderL;
+    final fg = dark ? Colors.grey[200]! : Colors.grey[900]!;
+    final isDevTools = _manager.launchMode == GatewayLaunchMode.devTools;
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'BROWSER TRANSPORT',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+              color: _kMuted,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Wrap(
+            spacing: 6,
+            children: [
+              ChoiceChip(
+                label: const Text('WebView intégré'),
+                selected: !isDevTools,
+                onSelected: (_) => _manager.setLaunchMode(
+                  GatewayLaunchMode.webView,
+                ),
+              ),
+              ChoiceChip(
+                label: const Text('Extension DevTools'),
+                selected: isDevTools,
+                onSelected: (_) => _manager.setLaunchMode(
+                  GatewayLaunchMode.devTools,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            isDevTools
+                ? 'Lance l’extension Node et se connecte à Chrome via CDP.'
+                : 'Utilise la WebView Flutter et le bridge local sur le port 9221.',
+            style: TextStyle(fontSize: 11, color: _kMuted),
+          ),
+          if (isDevTools) ...[
+            const SizedBox(height: 8),
+            TextField(
+              controller: _devToolsUrlController,
+              style: TextStyle(fontSize: 12, color: fg),
+              decoration: InputDecoration(
+                labelText: 'URL DevTools Protocol',
+                hintText: 'http://127.0.0.1:9222',
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+              ),
+              onSubmitted: _manager.setDevToolsUrl,
             ),
           ],
         ],
@@ -900,6 +979,7 @@ class _GatewayPanelState extends State<GatewayPanel>
     _manager.dispose();
     _tabCtrl.dispose();
     _tokenCtrl.dispose();
+    _devToolsUrlController.dispose();
     super.dispose();
   }
 }

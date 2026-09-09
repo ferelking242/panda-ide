@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_archive/flutter_archive.dart';
@@ -8,10 +7,9 @@ import 'package:flutter_archive/flutter_archive.dart';
 /// GatewayInstaller — télécharge et installe Panda AI Gateway.
 ///
 /// Stratégie :
-///   1. Si le répertoire d'installation existe et est valide → skip
-///   2. Sinon : télécharger depuis GitHub Releases (panda-ai)
-///   3. Fallback : extraire depuis assets/gateway/ (bundlé dans l'APK)
-///   4. Lancer pip install -r requirements.txt
+///   1. Si le répertoire d'installation existe et est complet → skip
+///   2. Sinon : télécharger le dépôt complet depuis GitHub
+///   3. Lancer pip install -r requirements.txt
 class GatewayInstaller {
   static const _githubRepo = 'ferelking242/panda-ai';
   static const _releaseAsset = 'panda-ai.zip';
@@ -26,11 +24,18 @@ class GatewayInstaller {
   /// Vérifie si le gateway est déjà installé et valide.
   static Future<bool> isInstalled() async {
     final dir = await getInstallDir();
-    final marker = File('$dir/requirements.txt');
-    return marker.exists();
+    final requiredFiles = [
+      File('$dir/requirements.txt'),
+      File('$dir/src/api/server.py'),
+      File('$dir/extension/gateway.js'),
+    ];
+    final results = await Future.wait(
+      requiredFiles.map((file) => file.exists()),
+    );
+    return results.every((exists) => exists);
   }
 
-  /// Retourne la version installée (tag GitHub ou 'bundled').
+  /// Retourne la version installée (tag GitHub).
   static Future<String> getInstalledVersion() async {
     final dir = await getInstallDir();
     final vFile = File('$dir/$_versionFile');
@@ -83,28 +88,18 @@ class GatewayInstaller {
     log('📦 Installation de Panda AI Gateway…');
     await Directory(dir).create(recursive: true);
 
-    // 1. Tenter le téléchargement GitHub
-    bool downloaded = false;
+    // Télécharger le dépôt complet : aucun fallback partiel n'est viable.
     String? tag;
     try {
-      final result = await _downloadFromGitHub(dir, log: log);
-      downloaded = result.$1;
-      tag = result.$2;
+      tag = await _downloadFromGitHub(dir, log: log);
     } catch (e) {
-      log('⚠ Téléchargement GitHub échoué: $e');
+      throw Exception('Téléchargement de Panda AI impossible: $e');
     }
 
-    // 2. Fallback : assets bundlés
-    if (!downloaded) {
-      log('📦 Extraction depuis les assets embarqués…');
-      await _extractFromAssets(dir, log: log);
-      tag = 'bundled';
-    }
-
-    // 3. pip install
+    // Python est déjà fourni par l'environnement de Panda IDE.
     await _pipInstall(dir, log: log);
 
-    // 4. Sauvegarder la version
+    // Sauvegarder la version.
     if (tag != null) {
       await File('$dir/$_versionFile').writeAsString(tag);
     }
@@ -121,7 +116,7 @@ class GatewayInstaller {
 
   // ── GitHub download ────────────────────────────────────────────────────────
 
-  static Future<(bool, String?)> _downloadFromGitHub(
+  static Future<String> _downloadFromGitHub(
     String destDir, {
     void Function(String)? log,
   }) async {
@@ -129,34 +124,40 @@ class GatewayInstaller {
 
     final apiUrl =
         'https://api.github.com/repos/$_githubRepo/releases/latest';
-    final resp = await http.get(
+    final releaseResponse = await http.get(
       Uri.parse(apiUrl),
       headers: {'Accept': 'application/vnd.github+json'},
     ).timeout(const Duration(seconds: 15));
 
-    if (resp.statusCode != 200) {
-      throw Exception('GitHub API ${resp.statusCode}');
-    }
-
-    final release = json.decode(resp.body) as Map<String, dynamic>;
-    final assets = (release['assets'] as List?) ?? [];
-    final tagName = release['tag_name'] as String? ?? 'latest';
-
-    // Chercher l'asset ZIP
-    String? downloadUrl;
-    for (final asset in assets) {
-      final name = asset['name'] as String;
-      if (name.contains('panda-ai') && name.endsWith('.zip')) {
-        downloadUrl = asset['browser_download_url'] as String;
-        break;
+    String downloadUrl;
+    String version;
+    if (releaseResponse.statusCode == 200) {
+      final release = json.decode(releaseResponse.body) as Map<String, dynamic>;
+      final assets = (release['assets'] as List?) ?? [];
+      version = release['tag_name'] as String? ?? 'latest';
+      downloadUrl = '';
+      for (final asset in assets) {
+        final name = asset['name'] as String;
+        if (name == _releaseAsset) {
+          downloadUrl = asset['browser_download_url'] as String;
+          break;
+        }
       }
+      // A release without the packaged asset is still usable through its tag.
+      if (downloadUrl.isEmpty) {
+        downloadUrl =
+            'https://github.com/$_githubRepo/archive/refs/tags/$version.zip';
+      }
+    } else if (releaseResponse.statusCode == 404) {
+      // The repository may not publish releases yet; use its complete main
+      // branch archive rather than an incomplete bundled fallback.
+      version = 'main';
+      downloadUrl = 'https://github.com/$_githubRepo/archive/refs/heads/main.zip';
+    } else {
+      throw Exception('GitHub API ${releaseResponse.statusCode}');
     }
 
-    // Fallback : zipball de la release
-    downloadUrl ??=
-        'https://github.com/$_githubRepo/archive/refs/tags/$tagName.zip';
-
-    log?.call('⬇ Téléchargement $tagName…');
+    log?.call('⬇ Téléchargement $version…');
 
     final zipResp =
         await http.get(Uri.parse(downloadUrl)).timeout(const Duration(seconds: 120));
@@ -171,31 +172,7 @@ class GatewayInstaller {
 
     await _extractZip(zipFile, destDir, log: log);
     await zipFile.delete();
-    return (true, tagName);
-  }
-
-  // ── Assets bundlés ────────────────────────────────────────────────────────
-
-  static Future<void> _extractFromAssets(
-    String destDir, {
-    void Function(String)? log,
-  }) async {
-    final assetFiles = ['package.json', 'requirements.txt', 'android.env'];
-    for (final name in assetFiles) {
-      try {
-        final data = await rootBundle.load('assets/gateway/$name');
-        final file = File('$destDir/$name');
-        await file.writeAsBytes(data.buffer.asUint8List());
-        log?.call('  ✓ $name');
-      } catch (e) {
-        log?.call('  ⚠ assets/gateway/$name: $e');
-      }
-    }
-    // Créer les dossiers nécessaires
-    await Directory('$destDir/src/api').create(recursive: true);
-    await Directory('$destDir/src/browser').create(recursive: true);
-    log?.call('Note: assets limités — clonez le repo complet.');
-    log?.call('git clone https://github.com/$_githubRepo');
+    return version;
   }
 
   // ── ZIP extraction ────────────────────────────────────────────────────────
