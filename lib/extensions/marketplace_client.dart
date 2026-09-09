@@ -18,7 +18,8 @@ class MarketplaceContent {
 
 class ExtensionMarketplaceClient {
   static const _galleryUrl =
-      'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery';
+      'https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery'
+      '?api-version=7.2-preview.1';
   static const _timeout = Duration(seconds: 20);
 
   final http.Client _http;

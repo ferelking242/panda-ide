@@ -895,7 +895,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
 
         // README content
         Expanded(
-          child: _DetailReadme(client: _client, ext: ext),
+          child: _DetailReadme(
+            key: ValueKey('${ext.id}@${ext.version}'),
+            client: _client,
+            ext: ext,
+          ),
         ),
       ],
     );
