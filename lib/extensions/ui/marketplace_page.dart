@@ -1018,11 +1018,21 @@ class _DetailReadmeState extends State<_DetailReadme> {
   }
 
   Future<void> _load() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _readme = null;
+        _error = null;
+      });
+    }
     try {
       final r = await widget.client.getReadme(
           widget.ext.namespace, widget.ext.name, widget.ext.version);
       if (!mounted) return;
-      setState(() { _readme = r; _loading = false; });
+      setState(() {
+        _readme = r;
+        _loading = false;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -1040,49 +1050,44 @@ class _DetailReadmeState extends State<_DetailReadme> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_readme == null || _readme!.content.trim().isEmpty) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_error != null) ...[
-              Row(
-                children: [
-                  Icon(Icons.info_outline, size: 18, color: cs.error),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'README indisponible, description marketplace affichée.',
-                      style: TextStyle(
-                          color: cs.onSurface, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
+    if (_readme == null || _readme!.content.trim().isEmpty || _error != null) {
+      final message = _error == null
+          ? 'Le README est vide ou absent pour cette version.'
+          : _error!.replaceFirst('Bad state: ', '');
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline_rounded, size: 34, color: cs.error),
+              const SizedBox(height: 12),
+              Text(
+                'Impossible de charger le README',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: cs.onSurface, fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 6),
-              Text(_error!,
-                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11)),
+              const SizedBox(height: 8),
+              Text(
+                '${widget.ext.namespace}.${widget.ext.name}@${widget.ext.version}',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 11),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+              ),
               const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh_rounded, size: 17),
+                label: const Text('Réessayer'),
+              ),
             ],
-            Text(
-              widget.ext.description.isEmpty
-                  ? 'Cette extension ne publie pas de description.'
-                  : widget.ext.description,
-              style: TextStyle(
-                  color: cs.onSurface, fontSize: 14, height: 1.55),
-            ),
-            if (widget.ext.repository != null) ...[
-              const SizedBox(height: 20),
-              Text('Repository',
-                  style: TextStyle(
-                      color: cs.onSurface, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(widget.ext.repository!,
-                  style:
-                      TextStyle(color: cs.primary, fontSize: 12)),
-            ],
-          ],
+          ),
         ),
       );
     }

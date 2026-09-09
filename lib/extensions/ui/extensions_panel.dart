@@ -392,7 +392,8 @@ class _ReadmePageState extends State<_ReadmePage> {
       return;
     }
 
-    // Fallback: fetch from Open VSX
+    // Fetch the published README; never replace a failed request with
+    // placeholder prose that looks like extension content.
     final manifest = widget.extension.manifest;
     final parts = manifest.id.split('.');
     if (parts.length >= 2) {
@@ -400,19 +401,32 @@ class _ReadmePageState extends State<_ReadmePage> {
         final client = OpenVsxClient();
         final readme = await client.getReadme(parts[0], parts.sublist(1).join('.'), manifest.version);
         client.dispose();
+        if (readme == null || readme.trim().isEmpty) {
+          throw StateError(
+              'README introuvable pour ${manifest.id}@${manifest.version}');
+        }
         if (mounted) {
           setState(() {
-            _readme = readme ?? '*Aucun README disponible.*';
+            _readme = readme;
             _loading = false;
           });
         }
         return;
-      } catch (_) {}
+      } catch (error) {
+        if (mounted) {
+          setState(() {
+            _error = error.toString().replaceFirst('Bad state: ', '');
+            _loading = false;
+          });
+        }
+        return;
+      }
     }
 
     if (mounted) {
       setState(() {
-        _readme = '*Aucun README disponible.*';
+        _error =
+            'README introuvable pour ${manifest.id}@${manifest.version}';
         _loading = false;
       });
     }
@@ -440,7 +454,27 @@ class _ReadmePageState extends State<_ReadmePage> {
                       const PreConfig(theme: {'root': TextStyle(color: Colors.white70)}),
                   ]),
                 )
-              : Center(child: Text(_error ?? 'README non disponible')),
+              : Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline_rounded,
+                            color: Colors.redAccent, size: 34),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Impossible de charger le README',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(_error ?? 'Erreur inconnue',
+                            textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                ),
     );
   }
 }

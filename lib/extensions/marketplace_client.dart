@@ -99,8 +99,9 @@ class ExtensionMarketplaceClient {
     return _openVsx.getDownloadUrl(namespace, name, version);
   }
 
-  Future<MarketplaceContent?> getReadme(
+  Future<MarketplaceContent> getReadme(
       String namespace, String name, String version) async {
+    Object? galleryError;
     try {
       final extension = await _queryOne(namespace, name);
       final versions = _versions(extension);
@@ -119,12 +120,27 @@ class ExtensionMarketplaceClient {
           }
         }
       }
-    } catch (_) {}
+    } catch (error) {
+      galleryError = error;
+    }
 
-    final fallback = await _openVsx.getReadme(namespace, name, version);
-    return fallback == null || fallback.trim().isEmpty
-        ? null
-        : MarketplaceContent(fallback, isHtml: false);
+    // Open VSX remains a provider for extensions that are not published in
+    // Microsoft's gallery, but an empty response is never treated as content.
+    try {
+      final openVsxReadme =
+          await _openVsx.getReadme(namespace, name, version);
+      if (openVsxReadme != null && openVsxReadme.trim().isNotEmpty) {
+        return MarketplaceContent(openVsxReadme, isHtml: false);
+      }
+    } catch (_) {
+      // The final error below contains the actionable failure from the
+      // official gallery; do not turn this into a misleading description.
+    }
+
+    throw StateError(
+      'README introuvable pour $namespace.$name@$version'
+      '${galleryError == null ? '' : ' (${galleryError.toString()})'}',
+    );
   }
 
   Future<Map<String, dynamic>> _queryOne(String namespace, String name) async {
