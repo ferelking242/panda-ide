@@ -121,6 +121,24 @@ Future<T> _safe<T>(Future<T> Function() fn, T Function() fallback) async {
 }
 
 Future<void> _finishAndroidStartup() async {
+  // Start the extension host setup before the storage migration.  The setup
+  // installs ExtensionHostManager's configuration loader synchronously, so a
+  // fast tap on an extension cannot race the deferred Android startup.
+  try {
+    final dir = await getApplicationDocumentsDirectory();
+    ExtensionRegistry.setRoot(dir.path);
+    final sharedPath = await NativeChannel.getLibraryPath();
+    unawaited(
+      ExtensionHostSetup.init(sharedPath: sharedPath).catchError((error) {
+        // The editor remains usable without Node.js.  A later activation
+        // retries the setup after the user installs the runtime.
+        print('[ExtensionHost] deferred: $error');
+      }),
+    );
+  } catch (e) {
+    print('[ExtensionHost] bootstrap deferred: $e');
+  }
+
   try {
     await importPublicProjectsToPrivate().timeout(const Duration(seconds: 15));
   } catch (e) {
@@ -129,17 +147,6 @@ Future<void> _finishAndroidStartup() async {
     print('[StorageMigration] deferred: $e');
   }
 
-  try {
-    final dir = await getApplicationDocumentsDirectory();
-    ExtensionRegistry.setRoot(dir.path);
-    final sharedPath = await NativeChannel.getLibraryPath();
-    await ExtensionHostSetup.init(sharedPath: sharedPath)
-        .timeout(const Duration(seconds: 20));
-  } catch (e) {
-    // Extensions are optional; the editor must remain usable without them.
-    // ignore: avoid_print
-    print('[ExtensionHost] deferred: $e');
-  }
 }
 
 // ── Palette ────────────────────────────────────────────────────────────────────

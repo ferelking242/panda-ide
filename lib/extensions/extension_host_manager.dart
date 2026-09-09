@@ -58,6 +58,7 @@ class ExtensionHostManager {
   /// volontairement différée, mais une action utilisateur peut arriver avant
   /// la fin de cette initialisation.
   Future<void> Function()? _configurationLoader;
+  String? _configurationError;
 
   // ── Initialisation ───────────────────────────────────────────────────────
 
@@ -65,6 +66,7 @@ class ExtensionHostManager {
   void configure({required String nodeBinPath, required String hostJsPath}) {
     _nodeBinPath = nodeBinPath;
     _hostJsPath = hostJsPath;
+    _configurationError = null;
   }
 
   bool get isConfigured => _nodeBinPath != null && _hostJsPath != null;
@@ -82,7 +84,7 @@ class ExtensionHostManager {
     if (!isConfigured) {
       throw StateError(
         'Extension host indisponible : Node.js ou host.js est manquant. '
-        'Exécutez « panda update » puis réessayez.',
+        '${_configurationError ?? "Exécutez « panda update » puis réessayez."}',
       );
     }
   }
@@ -108,13 +110,20 @@ class ExtensionHostManager {
     }
 
     // Spawn Node.js
+    final nodeDirectory = p.dirname(_nodeBinPath!);
+    final runtimeLibraryDirectory = p.dirname(nodeDirectory);
     final process = await Process.start(
       _nodeBinPath!,
       [_hostJsPath!, entryPoint],
       environment: {
+        ...Platform.environment,
         'PANDA_EXT_ID': id,
         'PANDA_EXT_PATH': ext.installPath,
         'PANDA_EXT_VERSION': ext.manifest.version,
+        'PATH': '$nodeDirectory:${Platform.environment['PATH'] ?? ''}',
+        'LD_LIBRARY_PATH':
+            '$runtimeLibraryDirectory:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
+        'HOME': Platform.environment['HOME'] ?? ext.installPath,
         // Désactive les couleurs ANSI dans les logs Node.js
         'NO_COLOR': '1',
         'FORCE_COLOR': '0',

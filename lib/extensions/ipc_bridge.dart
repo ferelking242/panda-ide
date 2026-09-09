@@ -24,6 +24,7 @@ class IpcBridge {
   int _nextId = 1;
   final Map<int, Completer<dynamic>> _pending = {};
   StreamSubscription<String>? _sub;
+  Future<void>? _exitMonitor;
   bool _closed = false;
 
   IpcBridge._(this._process, this._onApiCall);
@@ -94,7 +95,7 @@ class IpcBridge {
         .listen(
           _handleLine,
           onError: (e) => _closeWithError('stdout error: $e'),
-          onDone: () => _closed = true,
+          onDone: () => _closeWithError('Extension host stdout closed'),
         );
 
     // Les erreurs stderr sont loggées mais n'interrompent pas le bridge
@@ -104,6 +105,12 @@ class IpcBridge {
         .listen((line) {
       // ignore: avoid_print
       print('[ExtHost stderr] $line');
+    });
+
+    _exitMonitor = _process.exitCode.then((code) {
+      if (!_closed) {
+        _closeWithError('Extension host exited with code $code');
+      }
     });
   }
 

@@ -82,9 +82,10 @@ class ExtensionHostSetup {
     // 2. Initialize Node.js runtime.
     final nodeReady = await NodeRuntimeManager.instance.init();
     if (!nodeReady) {
-      print('[ExtensionHostSetup] ⚠️ Node.js runtime not found. Extensions requiring Node.js will not work.');
-      print('[ExtensionHostSetup] Run "panda update" in a Debian/Ubuntu terminal '
-          'to install the terminal toolchain.');
+      throw StateError(
+        'Node.js runtime indisponible ou inexécutable. '
+        'Installez Node.js avec « panda update », puis réessayez.',
+      );
     }
 
     // 3. Configurer le manager avec les chemins corrects.
@@ -98,9 +99,11 @@ class ExtensionHostSetup {
         hostJsPath: hostJsPath,
       );
     } else {
-      print('[ExtensionHostSetup] Node.js is unavailable; '
-          'run "panda update" in an Ubuntu/Debian terminal before using '
-          'Node-based extensions.');
+      throw StateError(
+        'Extension host incomplet : '
+        'Node.js=${effectiveNodePath ?? "absent"}, '
+        'host.js=${File(hostJsPath).existsSync() ? "présent" : "absent"}.',
+      );
     }
 
     // 3. Brancher TasksBridge sur le shell Android (libbash.so).

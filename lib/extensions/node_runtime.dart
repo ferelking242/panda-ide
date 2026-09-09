@@ -31,11 +31,26 @@ class NodeRuntimeManager {
   Future<bool> init() async {
     // 1. Check if node binary already exists at the expected path
     final expectedPath = '$binDir/node';
-    if (File(expectedPath).existsSync()) {
-      _nodePath = expectedPath;
-      _installed = true;
+    final existingPaths = <String>[
+      expectedPath,
+      '$runtimesDir/node/bin/node',
+      '$runtimesDir/node',
+      '$appDir/node/bin/node',
+      '$appDir/terminals/ubuntu/usr/bin/node',
+      '$appDir/terminals/debian/usr/bin/node',
+      '$appDir/terminals/alpine/usr/bin/node',
+    ];
+    for (final candidate in existingPaths) {
+      if (!File(candidate).existsSync()) continue;
+      _nodePath = candidate;
       _version = await _getVersion();
-      return true;
+      if (_version != null) {
+        _installed = true;
+        return true;
+      }
+      // A stale/incompatible candidate must not hide a later working one.
+      _nodePath = null;
+      _version = null;
     }
 
     // 2. Check alternative paths
@@ -49,8 +64,12 @@ class NodeRuntimeManager {
     for (final path in altPaths) {
       if (File(path).existsSync()) {
         _nodePath = path;
-        _installed = true;
         _version = await _getVersion();
+        if (_version == null) {
+          _nodePath = null;
+          continue;
+        }
+        _installed = true;
         // Copy to expected location for consistency
         await _copyToExpectedPath(path);
         return true;
@@ -194,11 +213,28 @@ class NodeRuntimeManager {
   Future<String?> _getVersion() async {
     if (_nodePath == null) return null;
     try {
-      final result = await Process.run(_nodePath!, ['--version']);
+      final nodeDirectory = Directory(_nodePath!).parent.path;
+      final runtimeLibraryDirectory = Directory(nodeDirectory).parent.path;
+      final environment = <String, String>{
+        ...Platform.environment,
+        'PATH': '$nodeDirectory:${Platform.environment['PATH'] ?? ''}',
+        'LD_LIBRARY_PATH':
+            '$runtimeLibraryDirectory:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
+        'HOME': Platform.environment['HOME'] ?? appDir,
+        'TMPDIR': Platform.environment['TMPDIR'] ?? tempDir,
+      };
+      final result = await Process.run(
+        _nodePath!,
+        ['--version'],
+        environment: environment,
+      ).timeout(const Duration(seconds: 10));
       if (result.exitCode == 0) {
         return (result.stdout as String).trim();
       }
-    } catch (_) {}
+      print('[NodeRuntime] --version failed (${result.exitCode}): ${result.stderr}');
+    } catch (error) {
+      print('[NodeRuntime] Unable to execute $_nodePath: $error');
+    }
     return null;
   }
 
