@@ -478,6 +478,7 @@ class _SetupTerminalState extends State<SetupTerminal>
   bool _isSplitView = false;
   String? _splitSessionId;
   Axis _splitAxis = Axis.horizontal;
+  bool _batteryOptimizationPrompted = false;
 
   // ── Pinch-to-zoom ────────────────────────────────────────────────────────
   double _pinchBaseFontSize = kDefaultTerminalFontSize;
@@ -525,6 +526,47 @@ class _SetupTerminalState extends State<SetupTerminal>
     // Gboard changes the available height without recreating the terminal.
     // Give xterm a layout pass, then forward its new cell size to the PTY.
     _scheduleTerminalDimensionSync();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // A foreground notification only protects work after the service has
+    // actually been started. Re-assert it before the Activity goes inactive
+    // and when it returns, including Termux/SSH sessions.
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.resumed) {
+      if (_sessionRuntimes.values.any((runtime) => runtime.isRunning)) {
+        unawaited(_ensureKeepAlive());
+      }
+    }
+  }
+
+  Future<void> _ensureKeepAlive({
+    bool requestBatteryOptimizationExemption = false,
+  }) async {
+    try {
+      await const MethodChannel('com.panda.ide').invokeMethod<bool>(
+        'startKeepAlive',
+      );
+      if (!requestBatteryOptimizationExemption ||
+          !Platform.isAndroid ||
+          _batteryOptimizationPrompted) {
+        return;
+      }
+      _batteryOptimizationPrompted = true;
+      final exempt = await const MethodChannel('com.panda.ide').invokeMethod<bool>(
+        'isIgnoringBatteryOptimization',
+      );
+      if (exempt != true) {
+        await const MethodChannel('com.panda.ide').invokeMethod<bool>(
+          'requestIgnoreBatteryOptimization',
+        );
+      }
+    } catch (error) {
+      PandaLog.w('Terminal', 'Keep-alive service could not be refreshed: $error');
+    }
   }
 
   Future<void> _bootstrapTerminalPage() async {
@@ -1164,9 +1206,6 @@ class _SetupTerminalState extends State<SetupTerminal>
       _sessionBloc.add(
         UpdateTerminalSessionStatus(id: runtime.sessionId, isRunning: true),
       );
-      // Notification persistante « Panda IDE working » → anti-kill Android
-      const MethodChannel('com.panda.ide').invokeMethod('startKeepAlive');
-
       process.output
           .cast<List<int>>()
           .transform(const Utf8Decoder(allowMalformed: true))
@@ -1230,6 +1269,12 @@ class _SetupTerminalState extends State<SetupTerminal>
     List<String> args = const [],
     SSHInfo? externalServer,
   }) async {
+    // Start this for both local PRoot and Termux/SSH. Previously the service
+    // was only started in _startProotSession, leaving a Termux terminal
+    // exposed to Android's background process policy.
+    unawaited(
+      _ensureKeepAlive(requestBatteryOptimizationExemption: true),
+    );
     if (externalServer == null) {
       await _startProotSession(runtime, args: args);
       return;
@@ -1254,6 +1299,14 @@ class _SetupTerminalState extends State<SetupTerminal>
       };
 
       if (widget.termuxId != null) {
+        // Keep Termux's CPU awake while the remote shell is compiling. This
+        // is deliberately guarded because regular SSH servers do not have
+        // the Termux helper command.
+        session.write(
+          utf8.encode(
+            "command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock || true\n",
+          ),
+        );
         session.write(utf8.encode("cd ${widget.projectDir}\n"));
       }
 

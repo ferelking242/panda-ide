@@ -62,6 +62,7 @@
         <service
             android:name=".KeepAliveService"
             android:exported="false"
+            android:stopWithTask="false"
             android:foregroundServiceType="dataSync"
         />
 
