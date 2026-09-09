@@ -11,7 +11,7 @@ class AlpineSetup {
   static const String _alpineDirName = 'alpine-linux';
   static const String rootfsVersion = 'alpine-3.22.5';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-profile v4';
+  static const String profileVersion = 'panda-profile v5';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -293,14 +293,23 @@ __panda_git() {
   local b
   b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return
   [ -n "\$(git status --porcelain 2>/dev/null)" ] && b="\$b *"
-  printf ' 033[38;5;141m %s033[0m' "\$b"
+  printf '%s' "\$b"
 }
 __panda_prompt() {
   local code=\$?
   printf '\\033]777;PANDA_STATUS;%s\\007' "\$code"
-  local c='033[38;5;75m'
-  [ "\$code" -ne 0 ] && c='033[38;5;203m'
-  PS1="033[38;5;110m╭─ 033[38;5;183mw033[0m\$(__panda_git) 033[38;5;110m[\${code}]033[0m\\n\${c}╰─❯ 033[0m"
+  local c='75'
+  [ "\$code" -ne 0 ] && c='203'
+  local p
+  case "\$PWD" in
+    "\$HOME") p="~" ;;
+    "\$HOME"/*) p="~\${PWD#\$HOME}" ;;
+    *) p="\$PWD" ;;
+  esac
+  local g="\$(__panda_git)"
+  PS1="\\[\\033[38;5;110m\\]╭─ \\[\\033[38;5;183m\\]\$p"
+  [ -n "\$g" ] && PS1+=" \\[\\033[38;5;141m\\]\$g"
+  PS1+=" \\[\\033[38;5;110m\\][\${code}]\\[\\033[0m\\]\\n\\[\\033[38;5;\${c}m\\]╰─❯ \\[\\033[0m\\]"
 }
 PROMPT_COMMAND=__panda_prompt
 __panda_prompt

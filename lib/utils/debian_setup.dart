@@ -18,7 +18,7 @@ class DebianSetup {
   static const String _debianDirName = 'debian-arm64';
   static const String rootfsVersion = 'debian-bookworm-arm64 v1';
   static const String workspaceMount = '/root/workspace';
-  static const String profileVersion = 'panda-debian-profile v7';
+  static const String profileVersion = 'panda-debian-profile v8';
 
   static String? _cachedNativeLibDir;
   static String? _cachedProotBin;
@@ -484,27 +484,28 @@ __panda_git() {
     local b
     b=\$(git symbolic-ref --short HEAD 2>/dev/null) || return 0
     [ -n "\$(git status --porcelain 2>/dev/null)" ] && b="\$b *"
-    printf '\\033[38;5;141m%s\\033[0m' "\$b"
+    printf '%s' "\$b"
 }
 
-  __panda_ps() {
+__panda_ps() {
     local p
     case "\$PWD" in
         "\$HOME") p="~" ;;
         "\$HOME"/*) p="~\${PWD#\$HOME}" ;;
         *) p="\$PWD" ;;
     esac
-    printf '\\033[38;5;110m╭─ \\033[38;5;183m%s\\033[0m' "\$p"
-    local g="\$(\$__panda_git)"
-    [ -n "\$g" ] && printf ' %s' "\$g"
-    printf '\\n\\033[38;5;110m╰─❯ \\033[0m'
+    local g="\$(__panda_git)"
+    PS1="\\[\\033[38;5;110m\\]╭─ \\[\\033[38;5;183m\\]\$p"
+    [ -n "\$g" ] && PS1+=" \\[\\033[38;5;141m\\]\$g"
+    PS1+="\\[\\033[0m\\]\\n\\[\\033[38;5;110m\\]╰─❯ \\[\\033[0m\\]"
   }
 __panda_prompt() {
     local code=\$?
     printf '\\033]777;PANDA_STATUS;%s\\007' "\$code"
+    __panda_ps
 }
 PROMPT_COMMAND=__panda_prompt
-PS1='\$(__panda_ps)'
+__panda_ps
 ''';
 
   /// Single, repeatable setup command exposed inside every Panda terminal.
