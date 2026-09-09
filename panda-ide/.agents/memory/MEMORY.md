@@ -1,0 +1,14 @@
+- [Flutter validation](flutter-toolchain.md) — the repository is Flutter-based, but this workspace does not provide the Flutter SDK for local analyze/build checks.
+- [Terminal runtime profiles](terminal-runtime.md) — install command markers in each generated login profile; environment-only hooks can be overwritten by Bash startup.
+- [GitHub AI providers](github-ai-providers.md) — GitHub Models and GitHub Copilot are separate services; verify their current availability before adding a provider.
+- [Panda Agent stream lifecycle](panda-agent-stream-lifecycle.md) — setup failures before streaming must close the stream and reset the UI instead of leaving generation infinite.
+- [iOS Llama pod build](ios-llama-pod-build.md) — generated CocoaPods specs need persistent ARC and explicit Llama/ggml source patches for iOS.
+- [Android first-launch storage](android-first-launch-storage.md) — initialize Panda IDE against private storage before requesting public storage permission.
+- [Panda Agent provider navigation](panda-agent-provider-navigation.md) — keep provider configuration in the embedded provider-only page and resolve it from the Agent profile.
+- [Flutter validation environment](flutter-validation-environment.md) — the shell may lack Flutter/Dart even for a Flutter project; check before running analyzer commands.
+- [Alpine rootfs packaging](alpine-rootfs-packaging.md) — ship the official Alpine tarball and extract it with static BusyBox; public storage is never the active workspace.
+- [GitHub Pages Flutter preview](github-pages-flutter-preview.md) — automated screenshots may stop on the splash frame before the routed UI appears.
+- [GitHub push authentication](github-push-authentication.md) — use the secure PAT with an x-access-token URL rewrite when the GitHub extraheader flow returns invalid credentials.
+- [Flutter Pub cache isolation](flutter-pub-cache-isolation.md) — every workspace needs a deterministic Pub cache inside PRoot to avoid misleading Git checkout failures.
+- [Panda Agent runtime constraints](panda-agent-runtime-constraints.md) — rebuild tool closures per turn and use AgentSettingsService as the canonical agent secret vault.
+- [VS Code extension module loading](vscode-extension-module-loading.md) — bare `require('vscode')` needs a Module._load shim, not only a require.cache entry.

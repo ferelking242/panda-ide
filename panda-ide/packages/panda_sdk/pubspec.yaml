@@ -1,0 +1,9 @@
+name: panda_sdk
+description: Panda IDE Extension SDK — build native Dart extensions for Panda IDE
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  path: ^1.8.0

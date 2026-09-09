@@ -1,0 +1,57 @@
+{
+  "name": "panda-device",
+  "displayName": "Panda Device",
+  "description": "Appairage WiFi Debugging — connecte ton téléphone Android via adb pair/connect. Saisie manuelle du code. Gestion Flutter SDK.",
+  "version": "1.1.0",
+  "publisher": "ferelking",
+  "license": "MIT",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "keywords": ["adb", "android", "device", "flutter", "debugging"],
+  "icon": "icon.svg",
+  "activationEvents": [
+    "onCommand:panda-device.pair",
+    "onCommand:panda-device.connect",
+    "onCommand:panda-device.status",
+    "onCommand:panda-device.ensureFlutter",
+    "onCommand:panda-device.run"
+  ],
+  "contributes": {
+    "commands": [
+      { "command": "panda-device.pair", "title": "Panda Device: Pair (WiFi Debugging)" },
+      { "command": "panda-device.connect", "title": "Panda Device: Connect (Debug Port)" },
+      { "command": "panda-device.status", "title": "Panda Device: Show Status" },
+      { "command": "panda-device.ensureFlutter", "title": "Panda Device: Check / Install Flutter SDK" },
+      { "command": "panda-device.run", "title": "Panda Device: Run on Device", "icon": "$(debug-start)" }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "panda-device",
+          "title": "Panda Device",
+          "icon": "icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "panda-device": [
+        {
+          "id": "panda-device.setup",
+          "name": "Device Setup",
+          "type": "webview"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Panda Device",
+      "properties": {
+        "panda-device.flutterChannel": {
+          "type": "string",
+          "default": "stable",
+          "enum": ["stable", "beta", "master"],
+          "description": "Canal du SDK Flutter"
+        }
+      }
+    }
+  }
+}

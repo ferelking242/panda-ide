@@ -1,0 +1,194 @@
+name: Build & Release APK
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-build
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove unavailable Git LFS placeholders
+        # The repository's LFS budget is currently exhausted. With LFS
+        # disabled, checkout leaves tiny pointer files in Android's native
+        # asset directories; Gradle/llvm-strip must not treat those as .so
+        # binaries. Real assets are left untouched.
+        run: |
+          set -euo pipefail
+          removed=0
+          while IFS= read -r -d '' file; do
+            if [ "$(head -n 1 "$file")" = "version https://git-lfs.github.com/spec/v1" ]; then
+              rm "$file"
+              removed=$((removed + 1))
+            fi
+          done < <(find android/app/src -type f -print0)
+          echo "Removed $removed unavailable Git LFS placeholder(s)."
+          if [ "$removed" -gt 0 ]; then
+            echo "PANDA_LFS_FALLBACK=true" >> "$GITHUB_ENV"
+          else
+            echo "PANDA_LFS_FALLBACK=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Keep empty dynamic features resource-buildable
+        # Some on-demand features contain only LFS-managed payloads. Once
+        # those unavailable placeholders are removed, AGP has no processed
+        # resource output for the feature. Add a CI-only resource so the
+        # feature remains a valid, empty-on-disk module.
+        run: |
+          set -euo pipefail
+          [ "${PANDA_LFS_FALLBACK:-false}" = "true" ] || exit 0
+          for module in android/app/src/*_feature; do
+            [ -d "$module" ] || continue
+            if ! find "$module/src/main" -type f ! -name AndroidManifest.xml -print -quit | grep -q .; then
+              mkdir -p "$module/src/main/res/values"
+              cat > "$module/src/main/res/values/ci_lfs_fallback.xml" <<'EOF'
+          <resources>
+              <string name="ci_lfs_fallback" translatable="false">Panda IDE optional feature</string>
+          </resources>
+          EOF
+              echo "Added fallback resource to $(basename "$module")."
+            fi
+          done
+
+      - name: Skip unavailable dynamic features
+        # Dynamic feature payloads are all Git LFS-managed in this checkout.
+        # Do not ask AGP to build modules whose native payloads are absent.
+        run: |
+          set -euo pipefail
+          [ "${PANDA_LFS_FALLBACK:-false}" = "true" ] || exit 0
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          app_gradle = Path("android/app/build.gradle.kts")
+          app_source = app_gradle.read_text()
+          new_app_source, count = re.subn(
+              r'^\s*dynamicFeatures\.addAll\([\s\S]*?\)\s*\)\s*\n?',
+              "",
+              app_source,
+              flags=re.MULTILINE,
+          )
+          if count > 0:
+              app_gradle.write_text(new_app_source)
+              print(f"Removed dynamicFeatures block ({count} match).")
+          else:
+              print("dynamicFeatures block not found or already removed — continuing.")
+
+          settings_gradle = Path("android/settings.gradle.kts")
+          settings_source = settings_gradle.read_text()
+          settings_source, removed = re.subn(
+              r'^\s*(?:include|project)\(":app:[^"]+_feature"\).*\n?',
+              "",
+              settings_source,
+              flags=re.MULTILINE,
+          )
+          if removed > 0:
+              settings_gradle.write_text(settings_source)
+              print(f"Disabled {removed} dynamic feature declarations for the LFS fallback build.")
+          else:
+              print("No dynamic feature declarations found in settings.gradle.kts — continuing.")
+          PY
+
+      - name: Verify embedded PRoot runtime binaries
+        # PRoot et ses dependances ELF doivent etre de vrais binaires natifs
+        # dans le checkout (hors Git LFS). Si un pointeur/placeholder passe,
+        # l'APK produit echouera au runtime avec
+        # "library libtalloc.so not found: needed by main executable".
+        run: |
+          set -euo pipefail
+          dir=android/app/src/main/jniLibs/arm64-v8a
+          for lib in libproot.so libtalloc.so libandroid-shmem.so libproot-loader.so libbusybox.so; do
+            path="$dir/$lib"
+            if [ ! -f "$path" ]; then
+              echo "::error::$path manquant"; exit 1
+            fi
+            magic=$(head -c 4 "$path" | od -An -tx1 | tr -d ' \n')
+            if [ "$magic" != "7f454c46" ]; then
+              echo "::error::$path n'est pas un ELF valide (magic=$magic)"; exit 1
+            fi
+            echo "OK  $lib  ($(stat -c%s "$path") octets)  $(file -b "$path")"
+          done
+          echo "--- dependances ELF ---"
+          readelf -d "$dir/libproot.so" | grep NEEDED
+          echo "Rootfs downloaded at runtime (not bundled) -- skipping archive check"
+      - name: Set up Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Setup release keystore
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_B64 }}" ] && [ -n "${{ secrets.KEYSTORE_PASSWORD }}" ] && [ -n "${{ secrets.KEY_PASSWORD }}" ] && [ -n "${{ secrets.KEY_ALIAS }}" ]; then
+            echo "Configuring release keystore..."
+            echo "${{ secrets.KEYSTORE_B64 }}" | base64 -d > android/app/panda-ide.keystore
+            echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > android/key.properties
+            echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+            echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+            echo "storeFile=../app/panda-ide.keystore" >> android/key.properties
+            echo "✓ Keystore release configuré avec succès"
+          else
+            echo "⚠️ Secrets de signature manquants. Le build utilisera la signature debug par défaut."
+          fi
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk --release --target-platform android-arm64 --split-per-abi --no-tree-shake-icons
+
+      - name: Prepare APK release artifacts
+        run: |
+          mkdir -p build/out
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/out/panda-ide-arm64-release.apk 2>/dev/null || cp build/app/outputs/flutter-apk/app-release.apk build/out/panda-ide-release.apk
+          cp build/app/outputs/flutter-apk/app-release.apk build/out/panda-ide-universal-release.apk 2>/dev/null || true
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: panda-ide-apk
+          path: build/out/*.apk
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/v')
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v2.3.3-build.${{ github.run_number }}"
+          name: "Release v2.3.3 Build ${{ github.run_number }}"
+          body: |
+            Automated build from commit ${{ github.sha }}
+            
+            - Features: Inline agent command approval UI, Autopilot mode, Session permission whitelist
+            - Auto-update sidebar progress tracker
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: build/out/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

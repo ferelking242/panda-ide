@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none">
+  <!-- Panda Agent icon — monochrome, tintable via colorFilter -->
+  <!-- ears -->
+  <circle cx="5.9" cy="7.2" r="2.6" fill="currentColor"/>
+  <circle cx="18.1" cy="7.2" r="2.6" fill="currentColor"/>
+  <!-- head -->
+  <path d="M12 3.9c4.42 0 7.6 3.2 7.6 7.6 0 4.62-3.4 7.9-7.6 7.9s-7.6-3.28-7.6-7.9c0-4.4 3.18-7.6 7.6-7.6z"
+        stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+  <!-- eye patches -->
+  <ellipse cx="9.05" cy="11.1" rx="1.95" ry="2.35" fill="currentColor"/>
+  <ellipse cx="14.95" cy="11.1" rx="1.95" ry="2.35" fill="currentColor"/>
+  <!-- muzzle / nose -->
+  <path d="M10.55 15.15h2.9c.5 0 .78.56.48.95l-1.45 1.9-1.45-1.9c-.3-.39-.02-.95.48-.95z"
+        fill="currentColor"/>
+  <!-- agent spark -->
+  <path d="M20.4 2.2l.62 1.62 1.62.62-1.62.62-.62 1.62-.62-1.62L18.16 4.44l1.62-.62z"
+        fill="currentColor"/>
+</svg>

@@ -1,0 +1,9 @@
+name: panda_cli
+description: CLI tool for managing Panda IDE extensions
+version: 1.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  path: ^1.8.0

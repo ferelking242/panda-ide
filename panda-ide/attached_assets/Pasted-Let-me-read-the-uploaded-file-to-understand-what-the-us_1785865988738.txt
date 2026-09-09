@@ -1,0 +1,145 @@
+Let me read the uploaded file to understand what the user wants.
+
+The file contains a message from the user asking to clone the repo ferelking242/panda-ide and make several changes. The file also contains some internal notes/thoughts from a previous session that hit the quota limit.
+
+Let me read the git-remote and environment-secrets skills to understand how to clone the repo with the PAT secret.
+
+The user wants me to clone the repo ferelking242/panda-ide using the PAT stored in the Pat secret, make several changes, and push. Let me start by cloning the repo using the PAT secret via shell commands.
+
+The PAT is stored as a secret named Pat. I need to use it to clone the repo. I'll use git clone with the PAT embedded in the URL.
+
+Je vais cloner le repo et explorer sa structure avant de faire les changements.
+
+Let me explore the cloned repo structure to understand what we're working with.
+
+I have explored the Flutter codebase at /home/runner/workspace/panda-ide/lib and identified the key components as requested.
+
+1. Full Directory Structure under lib/
+The lib directory contains the following main subdirectories:
+
+bloc/: Contains Business Logic Components for repository and UI states.
+core/: Core UI components like icons.
+extensions/: Logic for VS Code-like extensions, including bridge between Dart and VS Code API.
+gateway/: Management for AI gateways.
+services/: Background services like updates, SDK management, and Shizuku.
+terminal/: Implementation for the embedded terminal.
+ui/: Main UI screens, pages, and widgets.
+utils/: Constants, helper functions, AI tools, and theme definitions.
+2. Key Files Found
+Update Service: lib/services/android_update_service.dart (Checks GitHub for APK updates).
+Editor Page: lib/ui/editor_page.dart (Large complex file handling code editing, syntax highlighting via code_forge, and file previewing).
+Home / Main Scaffold: lib/ui/home.dart (Main entry point after splash; coordinates sidebar, activity bar, editor tabs, and bottom panels).
+Activity Bar & Sidebar Panels: Implemented within lib/ui/home.dart:
+_buildActivityBar: Renders the left-side icons.
+_buildSidebarPanel: Renders the content of panels like Explorer, Search, Git, Debug (Execute), and AI.
+Status Bar: _buildStatusBar in lib/ui/home.dart (Displays branch, errors/warnings, and remote status).
+Terminal Widget: lib/terminal/terminal.dart (exports terminal_native.dart). The main widget is SetupTerminal and EmbeddedTerminal.
+Run Button / Service: Located in lib/ui/editor_page.dart (line 3152+) and lib/ui/home.dart (Execute panel). Uses SetupTerminal with specific language commands.
+Agent Mode: lib/ui/agent_runner.dart (streaming logic) and lib/ui/agent_settings.dart. The UI is _buildPandaAgentPanel in lib/ui/home.dart.
+AI Provider Files: lib/utils/ai.dart (Core AI completion and tool calling logic), lib/utils/agentic_tools.dart, and lib/ui/gateway_panel.dart.
+3. File Summaries (First 50 Lines)
+android_update_service.dart: Defines AndroidUpdateInfo and AndroidUpdateService with a MethodChannel for updates.
+editor_page.dart: Uses code_forge for editing. EditorPage is a StatefulWidget managing the editor lifecycle.
+home.dart: Large scaffold. Imports all major UI modules and services. Uses MultiSplitView for layout.
+terminal.dart: Conditional export between terminal_native.dart and terminal_stub.dart.
+agent_runner.dart: Handles streaming AI interactions with "thinking" and "tool calling" phases.
+ai.dart: Defines AiCompletion, supported Models, and functions for building tool-calling requests.
+panda_surface.dart: Centralized UI theme decorations for cards and panels.
+file_manager.dart: Manages local file system access and directory browsing.
+The architecture follows a BLoC-driven approach with a centralized scaffold (home.dart) that manages dynamic tabs for editors, terminals, and specialized tools like the AI agent or browser.
+
+Let me read the key files I need to understand before making changes.
+
+Let me read the key files simultaneously to understand what needs to change.
+
+Let me read the specific sections I need to make all the changes.
+
+Let me read all the critical sections I need in parallel.
+
+Let me read more critical sections in parallel.
+
+Let me continue reading the critical sections needed.
+
+Let me search for the specific error and read remaining critical sections.
+
+Let me search for the specific error and read the remaining critical sections.
+
+Let me find the agent error and read the remaining critical sections I need.
+
+Let me read the remaining key sections I need in parallel.
+
+Let me find the _agentSend function and the agent mode resolution logic to understand the "Provider not found for zv" error.
+
+Let me read the remaining key sections I need before implementing all changes.
+
+Let me read the _modelFromAiConfig function and the terminal keyboard section before implementing.
+
+Let me read the terminal keyboard section before implementing all changes.
+
+Let me read the keyboard widget section before implementing all changes in parallel.
+
+Now I have full context. Let me implement all changes in parallel across the 4 files.
+
+I now have all the context I need. Let me implement all changes in parallel across all 4 files.
+
+Let me read the specific sections I need to edit in editor_page.dart and home.dart simultaneously.
+
+Let me read the sections needed for the remaining changes in parallel.
+
+Let me read the imports and activity bar to complete the context needed for all changes.
+
+Let me read the activity bar and the EditorPage main scaffold section.
+
+Now I have all the context. Let me implement all changes in parallel across all four files.
+
+Let me now apply the remaining editor_page.dart scaffold changes and all home.dart edits in parallel.
+
+Now let me make the remaining edits in parallel batches — EditorPage AppBar conditional, split editor embedded flag, agent mode fix, diagnostics sidebar, 3-dot menu, and terminal keyboard.
+
+Good, I can see the split editor section. Let me apply all remaining home.dart changes now.
+
+Continuing with the remaining changes — sidebar diagnostics, 3-dot menu, sidebarDebug terminal fix, APK download tracking, and terminal keyboard — all in parallel.
+
+Now let me add the APK download state, Diagnostics activity bar item, Diagnostics sidebar panel method, and fix the terminal keyboard — all in parallel.
+
+Let me continue with the remaining changes — dispose cleanup, diagnostics activity bar item, diagnostics panel, tunnel sidebar fix, and terminal keyboard redesign — all in parallel.
+
+Let me read the dispose section and implement all remaining changes in parallel.
+
+Let me implement all remaining changes in parallel — dispose cleanup, diagnostics activity bar entry, diagnostics panel method, tunnel fix, and terminal keyboard redesign.
+
+Now let me add the Diagnostics sidebar widget method, the APK download indicator in the activity bar, and rewrite the terminal keyboard — all in parallel.
+
+Now let me add the APK download indicator in the activity bar, the Diagnostics sidebar panel method, and rewrite the terminal keyboard — all in parallel.
+
+Let me check the diagnostics imports and verify the EditorPage AppBar closing bracket structure is correct.
+
+Let me check the diagnostics data structure and ActiveEditor model to fix my implementation.
+
+Let me check the ActiveEditor structure to fix the diagnostics panel implementation correctly.
+
+Let me check the ActiveEditor controller structure and fix the diagnostics panel.
+
+Let me check the diagnostics type on the controller and fix the implementation.
+
+Let me check the LspErrors structure to fix the diagnostics panel correctly.
+
+Let me check the LspErrors class structure and fix the diagnostics panel.
+
+Let me find LspErrors and fix the diagnostics panel to use the correct API.
+
+LspErrors comes from package:code_forge. Let me fix the diagnostics panel to use the correct API — ed.controller.diagnostics and ActiveEditorBloc instead of the unavailable DiagnosticsTickBloc.
+
+Let me fix the diagnostics panel to use the correct API - ed.controller.diagnostics instead of ed.diagnostics, and use ActiveEditorBloc instead of DiagnosticsTickBloc.
+
+Also, I need to:
+
+Check if LspErrors has a message field (let me check)
+Check if the range field is a Map with start.line and start.character
+Let me also look at the imports needed in home.dart for the diagnostics. The code_forge package is imported via editor_page.dart... but home.dart doesn't import code_forge directly. Let me check. I'm realizing that home.dart uses LspErrors from the code_forge package in the _sidebarDiagnostics method, but home.dart doesn't directly import code_forge. I need to either add that import or access the diagnostics data differently to avoid the import issue. Let me check what fields
+
+Let me fix the diagnostics panel by looking at LspErrors API and fixing the method.
+
+You've reached your daily free quota limit. It will reset at 12:00 AM UTC.
+
+Le pat rst en secret tu va clone panda-ide depuis ferelking242 code vitw push.
