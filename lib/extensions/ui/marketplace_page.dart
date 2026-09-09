@@ -1000,7 +1000,11 @@ class _MarketplacePageState extends State<MarketplacePage> {
 class _DetailReadme extends StatefulWidget {
   final ExtensionMarketplaceClient client;
   final MarketplaceExtension ext;
-  const _DetailReadme({required this.client, required this.ext});
+  const _DetailReadme({
+    super.key,
+    required this.client,
+    required this.ext,
+  });
 
   @override
   State<_DetailReadme> createState() => _DetailReadmeState();
