@@ -1387,12 +1387,13 @@ class LocalLlamaBloc extends Bloc<LocalLlamaEvent, LocalLlamaState> {
     try {
       _controller = LlamaController();
 
-      GpuInfo? gpuInfo = state.gpuInfo;
-      gpuInfo ??= await _controller!.detectGpu();
-
-      final layers = event.model.gpuLayers == 0
-        ? gpuInfo.recommendedGpuLayers
-        : event.model.gpuLayers;
+      // Do not call the native GPU probe implicitly here. Some Android
+      // devices/builds return a null native payload from detectGpu(), which
+      // used to crash with "Null check operator used on a null value" before
+      // the downloaded GGUF could be used. Zero is the safe CPU fallback;
+      // explicit GPU layer settings still work.
+      final gpuInfo = state.gpuInfo;
+      final layers = event.model.gpuLayers;
 
       await _controller!.loadModel(
         modelPath: event.model.modelPath,
@@ -1405,7 +1406,7 @@ class LocalLlamaBloc extends Bloc<LocalLlamaEvent, LocalLlamaState> {
         status: LocalLlamaStatus.ready,
         loadedModelPath: event.model.modelPath,
         loadedModelName: event.model.displayName,
-        gpuInfo: gpuInfo,
+         gpuInfo: gpuInfo,
       ));
     } catch (e) {
       await _controller?.dispose();

@@ -699,7 +699,7 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       if (entry.value is! Map<String, dynamic>) continue;
       final config = entry.value as Map<String, dynamic>;
       final provider = (config['apiProvider'] ?? config['provider'] ?? '').toString();
-      final isLocalLlama = provider == 'LocalLlama';
+      final isLocalLlama = provider.toLowerCase() == 'localllama';
       final modelName = (isLocalLlama
           ? (config['modelName'] ?? config['model'] ?? entry.key)
           : (config['model'] ?? entry.key)).toString();
@@ -2881,18 +2881,20 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                                         selectedModelId = aiState.config.keys.first;
                                                       }
                                                       final selectedModelConfig = aiState.config[selectedModelId];
-                                                      final isLocalModel = selectedModelConfig is Map &&
-                                                          (selectedModelConfig['apiProvider'] ?? selectedModelConfig['provider']) == 'LocalLlama';
+                                                       final isLocalModel = selectedModelConfig is Map &&
+                                                           (selectedModelConfig['apiProvider'] ?? selectedModelConfig['provider'])
+                                                               .toString()
+                                                               .toLowerCase() == 'localllama';
                                                       final isCopilotModel = chatState.models.any((model) => model['id'] == selectedModelId);
 
                                                       if (isLocalModel) {
                                                         final config = selectedModelConfig as Map<String, dynamic>;
                                                         final localModel = LocalLlama(
-                                                          modelPath: config['modelPath'] ?? '',
-                                                          displayName: config['modelName'] ?? config['model'] ?? 'Local Model',
-                                                          threads: config['threads'] ?? 4,
-                                                          contextSize: config['contextSize'] ?? 4096,
-                                                          gpuLayers: config['gpuLayers'] ?? 0,
+                                                           modelPath: (config['modelPath'] ?? '').toString().trim(),
+                                                           displayName: (config['modelName'] ?? config['model'] ?? 'Local Model').toString(),
+                                                           threads: (config['threads'] as num?)?.toInt() ?? 4,
+                                                           contextSize: (config['contextSize'] as num?)?.toInt() ?? 4096,
+                                                           gpuLayers: (config['gpuLayers'] as num?)?.toInt() ?? 0,
                                                            temperature: (config['temperature'] as num?)?.toDouble() ?? 0.7,
                                                            topP: (config['topP'] as num?)?.toDouble() ?? 0.9,
                                                            topK: (config['topK'] as num?)?.toInt() ?? 40,
