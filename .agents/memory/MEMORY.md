@@ -12,3 +12,4 @@
 - [Flutter Pub cache isolation](flutter-pub-cache-isolation.md) — every workspace needs a deterministic Pub cache inside PRoot to avoid misleading Git checkout failures.
 - [Panda Agent runtime constraints](panda-agent-runtime-constraints.md) — rebuild tool closures per turn and use AgentSettingsService as the canonical agent secret vault.
 - [VS Code extension module loading](vscode-extension-module-loading.md) — bare `require('vscode')` needs a Module._load shim, not only a require.cache entry.
+- [CEF runtime boundary](cef-runtime-boundary.md) — only report CEF ready after validating its manifest and required files; never fake a runtime download.
