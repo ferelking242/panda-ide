@@ -237,6 +237,40 @@ class PandaAgentController extends ChangeNotifier {
         prompt.isEmpty ? (attachments.first.label ?? 'Pièce jointe') : prompt,
       );
     }
+    messages
+      ..add(<String, dynamic>{
+        'role': 'user',
+        'text': prompt,
+        'attachments': attachments
+            .map(
+              (attachment) => <String, dynamic>{
+                'path': attachment.id,
+                'name': attachment.label ?? attachment.id,
+                'mimeType': attachment.mimeType,
+              },
+            )
+            .toList(),
+        'phase': 'done',
+      })
+      ..add(<String, dynamic>{
+        'role': 'agent',
+        'text': '',
+        'thinking': '',
+        'showThinkingLine': true,
+        'activityLabel': 'Préparation de la demande…',
+        'activityState': 'working',
+        'phase': 'streaming',
+        'toolCalls': <Map<String, dynamic>>[],
+        'blocks': <Map<String, dynamic>>[],
+      });
+    inputController.clear();
+    pendingAttachments.clear();
+    _streamBuffer = '';
+    _visibleStreamBuffer = '';
+    _currentTool = '';
+    _turnFinalized = false;
+    // Create the assistant turn before resolving the model so the startup
+    // orb is visible immediately, including while credentials are loading.
     notifyListeners();
 
     try {
@@ -278,36 +312,6 @@ class PandaAgentController extends ChangeNotifier {
       maxTokens = _contextLimit(config);
       _promptTokens = usedTokens;
       notifyListeners();
-      messages
-        ..add(<String, dynamic>{
-          'role': 'user',
-          'text': prompt,
-           'attachments': attachments
-               .map(
-                 (attachment) => <String, dynamic>{
-                   'path': attachment.id,
-                   'name': attachment.label ?? attachment.id,
-                   'mimeType': attachment.mimeType,
-                 },
-               )
-               .toList(),
-          'phase': 'done',
-        })
-        ..add(<String, dynamic>{
-          'role': 'agent',
-          'text': '',
-          'thinking': '',
-           'showThinkingLine': true,
-          'phase': 'streaming',
-          'toolCalls': <Map<String, dynamic>>[],
-          'blocks': <Map<String, dynamic>>[],
-        });
-      inputController.clear();
-      pendingAttachments.clear();
-      _streamBuffer = '';
-      _visibleStreamBuffer = '';
-      _currentTool = '';
-      _turnFinalized = false;
       // Keep the persistent activity row in "Starting/Thinking" until the
       // first model chunk arrives. The message itself is streaming, but the
       // visible phase should not skip the opening analysis state.
@@ -601,15 +605,32 @@ class PandaAgentController extends ChangeNotifier {
     switch (chunk.phase) {
       case AgentPhase.thinking:
         phase = AgentPhase.thinking;
+        message['activityLabel'] = _thinkingActivityLabel(chunk.text);
+        message['activityState'] = 'working';
         final thinking = chunk.text.trim();
         if (thinking.isNotEmpty) {
+          _closeThinkingBlocks(blocks);
           message['thinking'] =
               '${message['thinking'] ?? ''}${chunk.text}';
-          _appendBlock(blocks, 'thinking', {'thinking': chunk.text});
+          _appendBlock(
+            blocks,
+            'thinking',
+            {
+              'thinking': chunk.text,
+              'label': _thinkingActivityLabel(chunk.text),
+              'active': true,
+            },
+          );
         }
       case AgentPhase.toolRunning:
         phase = AgentPhase.toolRunning;
+        _closeThinkingBlocks(blocks);
         _currentTool = chunk.toolName ?? 'outil';
+        message['activityLabel'] = _activityLabelForTool(
+          _currentTool,
+          chunk.toolArgs ?? const <String, dynamic>{},
+        );
+        message['activityState'] = _orbStateForTool(_currentTool);
         final id = '${chunk.blockId ?? DateTime.now().microsecondsSinceEpoch}:$_currentTool';
         blocks.add({
           'type': 'toolCall',
@@ -620,6 +641,9 @@ class PandaAgentController extends ChangeNotifier {
           'status': 'running',
         });
       case AgentPhase.toolDone:
+        _closeThinkingBlocks(blocks);
+        message['activityLabel'] = 'Analyse du résultat…';
+        message['activityState'] = 'solving';
         final index = blocks.lastIndexWhere((block) =>
             block['type'] == 'toolCall' &&
             block['name'] == (chunk.toolName ?? _currentTool) &&
@@ -631,6 +655,9 @@ class PandaAgentController extends ChangeNotifier {
         _currentTool = '';
       case AgentPhase.streaming:
         phase = AgentPhase.streaming;
+        _closeThinkingBlocks(blocks);
+        message['activityLabel'] = 'Rédaction de la réponse…';
+        message['activityState'] = 'composing';
         _streamBuffer += chunk.text;
         usedTokens = math.min(
           maxTokens,
@@ -695,6 +722,7 @@ class PandaAgentController extends ChangeNotifier {
         lastError = error;
       } else {
         messages.last['phase'] = 'done';
+        messages.last['activityLabel'] = 'Action terminée';
       }
       messages.last['thinking'] = '';
       messages.last['blocks'] = _blocks();
@@ -740,6 +768,9 @@ class PandaAgentController extends ChangeNotifier {
     if (type == 'thinking' && blocks.isNotEmpty && blocks.last['type'] == type) {
       blocks.last['thinking'] =
           '${blocks.last['thinking'] ?? ''}${data['thinking'] ?? ''}';
+      if (data['active'] == true) blocks.last['active'] = true;
+      final label = data['label']?.toString().trim() ?? '';
+      if (label.isNotEmpty) blocks.last['label'] = label;
       return;
     }
     if (type == 'text' && blocks.isNotEmpty && blocks.last['type'] == type) {
@@ -747,6 +778,100 @@ class PandaAgentController extends ChangeNotifier {
       return;
     }
     blocks.add({'type': type, ...data});
+  }
+
+  void _closeThinkingBlocks(List<Map<String, dynamic>> blocks) {
+    for (final block in blocks) {
+      if (block['type'] == 'thinking') block['active'] = false;
+    }
+  }
+
+  String _thinkingActivityLabel(String text) {
+    final lower = text.toLowerCase();
+    if (lower.contains('explor') ||
+        lower.contains('méthode') ||
+        lower.contains('approach') ||
+        lower.contains('option')) {
+      return 'Exploration des différentes méthodes…';
+    }
+    if (lower.contains('plan') ||
+        lower.contains('étape') ||
+        lower.contains('step')) {
+      return 'Construction du plan…';
+    }
+    if (lower.contains('vérif') ||
+        lower.contains('test') ||
+        lower.contains('check')) {
+      return 'Vérification de la solution…';
+    }
+    if (lower.contains('fichier') ||
+        lower.contains('dépôt') ||
+        lower.contains('repo') ||
+        lower.contains('projet')) {
+      return 'Analyse du projet…';
+    }
+    return 'Réflexion sur la demande…';
+  }
+
+  String _activityLabelForTool(String toolName, Map<String, dynamic> args) {
+    final name = toolName.toLowerCase();
+    final command = (args['command'] ?? args['cmd'] ?? '').toString();
+    if (command.contains('git clone')) return 'Clonage du dépôt…';
+    if (command.contains('npm install') ||
+        command.contains('bun install') ||
+        command.contains('pip install') ||
+        command.contains('flutter pub get')) {
+      return 'Installation des dépendances…';
+    }
+    if (command.contains('git')) return 'Opération Git en cours…';
+    if (name.contains('search') ||
+        name.contains('grep') ||
+        name.contains('glob') ||
+        name.contains('find')) {
+      return 'Exploration du projet…';
+    }
+    if (name.contains('read') || name.contains('list')) {
+      return 'Lecture du projet…';
+    }
+    if (name.contains('write') ||
+        name.contains('edit') ||
+        name.contains('create') ||
+        name.contains('patch')) {
+      return 'Modification du projet…';
+    }
+    if (name.contains('shell') ||
+        name.contains('command') ||
+        name.contains('exec') ||
+        name.contains('run')) {
+      return 'Exécution de la commande…';
+    }
+    return 'Action en cours…';
+  }
+
+  String _orbStateForTool(String toolName) {
+    final name = toolName.toLowerCase();
+    if (name.contains('search') ||
+        name.contains('grep') ||
+        name.contains('glob') ||
+        name.contains('find') ||
+        name.contains('read') ||
+        name.contains('list')) {
+      return 'searching';
+    }
+    if (name.contains('write') ||
+        name.contains('edit') ||
+        name.contains('create') ||
+        name.contains('patch')) {
+      return 'shaping';
+    }
+    if (name.contains('shell') ||
+        name.contains('command') ||
+        name.contains('exec') ||
+        name.contains('run') ||
+        name.contains('git')) {
+      return 'solving';
+    }
+    return 'working';
   }
 
   ({String text, String thinking}) _stripThinking(String value) {

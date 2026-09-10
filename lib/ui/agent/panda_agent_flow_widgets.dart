@@ -109,8 +109,10 @@ class PandaAgentFlowChat extends StatelessWidget {
         if (type == 'toolCall') {
           parts.add(FlowCustomPart(type: 'tool', data: block));
         } else if (type == 'thinking') {
-          // Thinking is represented by the persistent inline activity line.
-          // Do not add a second expandable card for the same turn.
+          final thinking = block['thinking']?.toString().trim() ?? '';
+          if (thinking.isNotEmpty) {
+            parts.add(FlowCustomPart(type: 'thinking', data: block));
+          }
         } else if (type == 'text') {
           final value = _withoutThinking(block['text']?.toString() ?? '');
           final todo = _parseTodo(value);
@@ -179,7 +181,10 @@ class PandaAgentFlowChat extends StatelessWidget {
           type: 'thinkingLine',
           data: {
             'active': isGeneratingMessage(source),
-            'state': _orbStateFor(sourcePhase, blocks).name,
+            'label': _activityLabelFor(source, sourcePhase, blocks),
+            'state': (source['activityState']?.toString().isNotEmpty == true
+                    ? source['activityState'].toString()
+                    : _orbStateFor(sourcePhase, blocks).name),
           },
         ),
       );
@@ -237,6 +242,26 @@ class PandaAgentFlowChat extends StatelessWidget {
       return FlowOrbState.solving;
     }
     return FlowOrbState.working;
+  }
+
+  static String _activityLabelFor(
+    Map<String, dynamic> source,
+    String phase,
+    List<Map<String, dynamic>> blocks,
+  ) {
+    final explicit = source['activityLabel']?.toString().trim() ?? '';
+    if (explicit.isNotEmpty) return explicit;
+    if (phase == 'done') return 'Action terminée';
+    if (phase == 'error') return 'Action interrompue';
+    final activeTool = blocks.lastWhere(
+      (block) =>
+          block['type'] == 'toolCall' && block['status'] == 'running',
+      orElse: () => const <String, dynamic>{},
+    );
+    final toolName = activeTool['name']?.toString() ?? '';
+    if (toolName.isNotEmpty) return 'Action en cours…';
+    if (phase == 'streaming') return 'Rédaction de la réponse…';
+    return 'Exploration des différentes méthodes…';
   }
 
   static String _withoutThinking(String value) {
@@ -474,7 +499,13 @@ class PandaAgentFlowChat extends StatelessWidget {
           active: data['active'] == true &&
               isGenerating &&
               message.status == FlowMessageStatus.streaming,
+          label: data['label']?.toString() ?? 'Action en cours…',
           state: _orbStateFromName(data['state']?.toString()),
+        ),
+      'thinking' => PandaAgentThinkingCard(
+          text: data['thinking']?.toString() ?? '',
+          active: data['active'] == true && isGenerating,
+          title: data['label']?.toString(),
         ),
       'todo' => PandaAgentTodoCard(
           title: data['title']?.toString() ?? 'Todos',
@@ -652,10 +683,12 @@ class PandaAgentFlowThinkingLine extends StatelessWidget {
     super.key,
     this.active = false,
     this.state = FlowOrbState.working,
+    this.label = 'Action en cours…',
   });
 
   final bool active;
   final FlowOrbState state;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -665,11 +698,160 @@ class PandaAgentFlowThinkingLine extends StatelessWidget {
       child: Row(
         children: [
           FlowThinkingIndicator(
-            label: 'Thinking',
+            label: label,
             active: active,
             size: 12,
             color: colors.primary,
             orbState: state,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A completed reasoning segment kept in the chronological agent timeline.
+///
+/// The live action line below the turn is intentionally separate: this card
+/// records what the agent was exploring, while the orb remains available for
+/// the next action.
+class PandaAgentThinkingCard extends StatefulWidget {
+  const PandaAgentThinkingCard({
+    super.key,
+    required this.text,
+    this.active = false,
+    this.title,
+  });
+
+  final String text;
+  final bool active;
+  final String? title;
+
+  @override
+  State<PandaAgentThinkingCard> createState() => _PandaAgentThinkingCardState();
+}
+
+class _PandaAgentThinkingCardState extends State<PandaAgentThinkingCard> {
+  bool _expanded = true;
+
+  String get _title {
+    final explicit = widget.title?.trim() ?? '';
+    if (explicit.isNotEmpty) return explicit;
+    final lower = widget.text.toLowerCase();
+    if (lower.contains('explor') ||
+        lower.contains('méthode') ||
+        lower.contains('approach') ||
+        lower.contains('option')) {
+      return 'Exploration des différentes méthodes';
+    }
+    if (lower.contains('plan') ||
+        lower.contains('étape') ||
+        lower.contains('step')) {
+      return 'Construction du plan';
+    }
+    if (lower.contains('vérif') ||
+        lower.contains('test') ||
+        lower.contains('check')) {
+      return 'Vérification de la solution';
+    }
+    if (lower.contains('fichier') ||
+        lower.contains('dépôt') ||
+        lower.contains('repo') ||
+        lower.contains('projet')) {
+      return 'Analyse du projet';
+    }
+    return 'Réflexion sur la demande';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final text = widget.text.trim();
+    if (text.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: colors.primary.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: colors.primary.withValues(alpha: 0.18)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+              child: Row(
+                children: [
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.keyboard_arrow_right_rounded,
+                    size: 18,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.psychology_outlined,
+                    size: 18,
+                    color: colors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: colors.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (widget.active)
+                    FlowThinkingIndicator(
+                      active: true,
+                      size: 11,
+                      color: colors.primary,
+                    ),
+                ],
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: !_expanded
+                ? const SizedBox.shrink()
+                : Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                    child: Column(
+                      children: [
+                        Divider(
+                          height: 1,
+                          color: colors.primary.withValues(alpha: 0.14),
+                        ),
+                        const SizedBox(height: 9),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: FlowMarkdown(
+                            text: text,
+                            isStreaming: widget.active,
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
+                              fontSize: 12.5,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
         ],
       ),
