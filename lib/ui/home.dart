@@ -30,6 +30,8 @@ import 'about.dart';
 import 'donation_page.dart';
 import 'file_manager.dart';
 import 'editor_page.dart';
+import 'editor/outline_view.dart';
+import 'editor/symbol_picker.dart';
 import 'menu_screen.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -2428,7 +2430,16 @@ class _SelectTypeState extends State<SelectType>
           t,
           Broken.folder_2,
           'Gestionnaire de fichiers',
-          () => _push(ctx, const FileManagerPage()),
+          () => _push(
+            ctx,
+            FileManagerPage(
+              rootDir: _activeProjectDir() ?? projectDir,
+              onFileOpen: (file) => _openFileFromWorkspace(
+                file,
+                _activeProjectDir() ?? projectDir,
+              ),
+            ),
+          ),
         ),
         const Divider(indent: 12, endIndent: 12),
         Padding(
@@ -2490,13 +2501,6 @@ class _SelectTypeState extends State<SelectType>
           },
         ),
         const Divider(indent: 12, endIndent: 12),
-        _panelItem(
-          ctx,
-          t,
-          Broken.document_download,
-          'Téléchargements',
-          () => _push(ctx, const MarketplacePage()),
-        ),
       ],
     );
   }
@@ -2532,20 +2536,53 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Outline panel ──────────────────────────────────────────────────────
   Widget _sidebarOutline(BuildContext ctx, AppTheme t, bool dark) {
-    return DirectoryTreeViewerCustom(
-      rootPath: _activeProjectDir() ?? _currentWorkspaceDir ?? '/',
-      appTheme: t,
-      isUnfoldedFirst: true,
-      enableCreateFileOption: false,
-      enableCreateFolderOption: false,
-      enableDeleteFileOption: false,
-      enableDeleteFolderOption: false,
-      enableRenameFileOption: false,
-      enableRenameFolderOption: false,
-      onFileTap: (file) {
-        _openFileFromWorkspace(
-          file,
-          _activeProjectDir() ?? _currentWorkspaceDir ?? '/',
+    final editor = _activeEditorConfig();
+    final file = editor?.file;
+    final rootDir = _activeProjectDir() ?? _currentWorkspaceDir ?? projectDir;
+    if (file == null) {
+      return Center(
+        child: Text(
+          'Open a file to see its symbols.',
+          style: TextStyle(
+            color: dark ? Colors.grey[500] : Colors.grey[600],
+            fontSize: 12,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    return FutureBuilder<String>(
+      key: ValueKey('outline:${file.path}'),
+      future: file.readAsString(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Unable to read this file.',
+              style: TextStyle(
+                color: dark ? Colors.grey[500] : Colors.grey[600],
+                fontSize: 12,
+              ),
+            ),
+          );
+        }
+
+        final symbols = SymbolExtractor.extract(snapshot.data ?? '')
+            .map(
+              (symbol) => CodeSymbol(
+                name: symbol.name,
+                kind: _outlineSymbolKind(symbol.kind),
+                line: symbol.line,
+              ),
+            )
+            .toList();
+        return OutlineView(
+          symbols: symbols,
+          onSymbolTap: (_) => _openFileFromWorkspace(file, rootDir),
         );
       },
     );
@@ -2569,10 +2606,43 @@ class _SelectTypeState extends State<SelectType>
         ),
       );
     }
+    final filePath = _activeEditorConfig()?.file?.path;
+    if (filePath == null || filePath.isEmpty) {
+      return Center(
+        child: Text(
+          'Open a file to see its timeline.',
+          style: TextStyle(
+            color: dark ? Colors.grey[500]! : Colors.grey[600]!,
+            fontSize: 12,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
     return TimelineView(
-      filePath: _activeEditorConfig()?.file?.path ?? '',
+      key: ValueKey('timeline:$projectDir:$filePath'),
+      filePath: filePath,
       workspacePath: projectDir,
     );
+  }
+
+  SymbolKind _outlineSymbolKind(String kind) {
+    switch (kind) {
+      case 'class':
+        return SymbolKind.class_;
+      case 'enum':
+        return SymbolKind.enum_;
+      case 'function':
+        return SymbolKind.function;
+      case 'method':
+        return SymbolKind.method;
+      case 'variable':
+        return SymbolKind.variable;
+      case 'constant':
+        return SymbolKind.constant;
+      default:
+        return SymbolKind.property;
+    }
   }
 
   // ── Search panel ──────────────────────────────────────────────────────────

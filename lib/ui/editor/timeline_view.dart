@@ -46,6 +46,19 @@ class _TimelineViewState extends State<TimelineView> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(covariant TimelineView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filePath != widget.filePath ||
+        oldWidget.workspacePath != widget.workspacePath) {
+      setState(() {
+        _entries = [];
+        _loading = true;
+      });
+      _load();
+    }
+  }
+
   Future<void> _load() async {
     try {
       final relativePath = p.relative(widget.filePath, from: widget.workspacePath);

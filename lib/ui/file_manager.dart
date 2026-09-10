@@ -54,7 +54,6 @@ List<_QuickLocation> _quickLocations() => [
       _QuickLocation(label: 'Libraries', path: libDir, icon: Icons.memory, color: const Color(0xFF607D8B)),
       _QuickLocation(label: 'Certificates', path: certDir, icon: Icons.security, color: const Color(0xFF455A64)),
       _QuickLocation(label: 'Models', path: modelsDir, icon: Icons.smart_toy_rounded, color: const Color(0xFF009688)),
-      _QuickLocation(label: 'Downloads', path: downloadsCacheDir, icon: Icons.download_rounded, color: const Color(0xFF3F51B5)),
       _QuickLocation(label: 'Cache', path: pandaTempCacheDir, icon: Icons.cleaning_services, color: const Color(0xFF795548)),
       _QuickLocation(label: 'Temp', path: tempDir, icon: Icons.timer, color: const Color(0xFFFF5722)),
       _QuickLocation(label: 'Home', path: homeDir, icon: Icons.home, color: const Color(0xFF8BC34A)),
@@ -70,10 +69,12 @@ List<_QuickLocation> _quickLocations() => [
 
 class FileManagerPage extends StatefulWidget {
   final String rootDir;
+  final void Function(File file)? onFileOpen;
 
   const FileManagerPage({
     super.key,
     String? rootDir,
+    this.onFileOpen,
   }) : rootDir = rootDir ?? '';
 
   @override
@@ -314,24 +315,6 @@ class _FileManagerPageState extends State<FileManagerPage> {
       } else if (entity is Directory) {
         await _copyDirectory(entity, Directory(destPath));
       }
-    }
-  }
-
-  Future<void> _exportToStorage(FileSystemEntity entity) async {
-    try {
-      final name = p.basename(entity.path);
-      final destPath = p.join(publicPandaRootDir, name);
-
-      if (entity is File) {
-        await entity.copy(destPath);
-      } else if (entity is Directory) {
-        await _copyDirectory(entity, Directory(destPath));
-      }
-
-      await _loadEntries();
-      _showSnack('Exported to $destPath');
-    } catch (e) {
-      _showSnack('Export failed: $e', isError: true);
     }
   }
 
@@ -940,11 +923,6 @@ class _FileManagerPageState extends State<FileManagerPage> {
               onTap: () { Navigator.pop(ctx); _cutEntity(entity); },
             ),
             ListTile(
-              leading: const Icon(Icons.file_download),
-              title: const Text('Export to Public'),
-              onTap: () { Navigator.pop(ctx); _exportToStorage(entity); },
-            ),
-            ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
               title: const Text('Delete', style: TextStyle(color: Colors.red)),
               onTap: () { Navigator.pop(ctx); _deleteEntity(entity); },
@@ -961,7 +939,6 @@ class _FileManagerPageState extends State<FileManagerPage> {
       PopupMenuItem(value: 'rename', child: const Text('Rename')),
       PopupMenuItem(value: 'copy', child: const Text('Copy')),
       PopupMenuItem(value: 'cut', child: const Text('Cut')),
-      PopupMenuItem(value: 'export', child: const Text('Export')),
       PopupMenuItem(
         value: 'delete',
         child: const Text('Delete', style: TextStyle(color: Colors.red)),
@@ -983,9 +960,6 @@ class _FileManagerPageState extends State<FileManagerPage> {
       case 'cut':
         _cutEntity(entity);
         break;
-      case 'export':
-        _exportToStorage(entity);
-        break;
       case 'delete':
         _deleteEntity(entity);
         break;
@@ -998,17 +972,22 @@ class _FileManagerPageState extends State<FileManagerPage> {
     if (entity is Directory) {
       _navigateTo(entity.path);
     } else if (entity is File) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EditorPage(
+      final file = File(entity.path);
+      if (widget.onFileOpen != null) {
+        widget.onFileOpen!(file);
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EditorPage(
               languageDetails: null,
               rootDir: _rootPath,
               isProject: false,
-              file: File(entity.path),
+              file: file,
             ),
-        ),
-      );
+          ),
+        );
+      }
     }
   }
 
