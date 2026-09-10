@@ -1901,16 +1901,10 @@ class _SetupTerminalState extends State<SetupTerminal>
   ) {
     if (widget.readOnly) return;
 
-    // Ctrl+A is a selection action in Panda, matching the terminal toolbar
-    // and the native xterm shortcut. It must not be sent to bash first.
+    // Keep the desktop-style visible "select all" action, but do not swallow
+    // the terminal byte: readline still receives Ctrl+A as 0x01.
     if (_modCtrl && data.length == 1 && data.toLowerCase() == 'a') {
       _selectAll(runtime);
-      _modResetCallback?.call();
-      _modCtrl = false;
-      _modAlt = false;
-      _modShift = false;
-      _modResetCallback = null;
-      return;
     }
     if (_modCtrl && data.length == 1 && data.toLowerCase() == 'v') {
       _modResetCallback?.call();
@@ -1921,33 +1915,13 @@ class _SetupTerminalState extends State<SetupTerminal>
       unawaited(_pasteIntoTerminal(runtime));
       return;
     }
-    if (_modCtrl &&
-        data.length == 1 &&
-        data.toLowerCase() == 'c' &&
-        runtime.controller.selection != null) {
-      unawaited(_copySelection(runtime));
-      _modResetCallback?.call();
-      _modCtrl = false;
-      _modAlt = false;
-      _modShift = false;
-      _modResetCallback = null;
-      return;
-    }
 
     var sequence = data;
     if (_modCtrl && data.length == 1) {
-      final code = data.toLowerCase().codeUnitAt(0);
-      sequence = switch (code) {
-        >= 97 && <= 122 => String.fromCharCode(code - 96),
-        91 => '\x1b',
-        92 => '\x1c',
-        93 => '\x1d',
-        94 => '\x1e',
-        95 => '\x1f',
-        63 => '\x7f',
-        32 => '\x00',
-        _ => data,
-      };
+      final controlCode = _terminalControlCode(data);
+      if (controlCode != null) {
+        sequence = String.fromCharCode(controlCode);
+      }
     }
     if (_modAlt) sequence = '\x1b$sequence';
     if (_modShift) sequence = sequence.toUpperCase();
@@ -1965,6 +1939,27 @@ class _SetupTerminalState extends State<SetupTerminal>
     if (_sessionBloc.state.activeSessionId == runtime.sessionId) {
       _handleInputForAutocomplete(runtime, sequence);
     }
+  }
+
+  /// Returns the byte expected by a POSIX terminal for Ctrl+[key].
+  ///
+  /// This is deliberately shared by Gboard input and the hardware keyboard
+  /// path. In particular, Ctrl+C must remain 0x03 even when xterm currently
+  /// has a text selection; copying is an explicit toolbar action.
+  int? _terminalControlCode(String value) {
+    if (value.length != 1) return null;
+    final code = value.toLowerCase().codeUnitAt(0);
+    if (code >= 97 && code <= 122) return code - 96;
+    return switch (code) {
+      64 || 32 => 0,
+      91 => 27,
+      92 => 28,
+      93 => 29,
+      94 => 30,
+      95 => 31,
+      63 => 127,
+      _ => null,
+    };
   }
 
   void _onTerminalResized(
@@ -2077,10 +2072,6 @@ class _SetupTerminalState extends State<SetupTerminal>
     }[event.logicalKey];
     if (controlCode == null) return KeyEventResult.ignored;
 
-    if (event.logicalKey == LogicalKeyboardKey.keyA) {
-      _selectAll(runtime);
-      return KeyEventResult.handled;
-    }
     // xterm's Actions implement copy/paste and selection. Do not consume
     // those combinations in the terminal-to-shell control-byte path.
     if (event.logicalKey == LogicalKeyboardKey.keyV ||
@@ -2089,6 +2080,9 @@ class _SetupTerminalState extends State<SetupTerminal>
       return KeyEventResult.ignored;
     }
 
+    if (event.logicalKey == LogicalKeyboardKey.keyA) {
+      _selectAll(runtime);
+    }
     runtime.pty?.write(Uint8List.fromList([controlCode]));
     return KeyEventResult.handled;
   }
@@ -3046,6 +3040,10 @@ class _SetupTerminalState extends State<SetupTerminal>
                       TerminalKeyboardMenu(
                         onSendSequence: sendToPty,
                         onModifierChanged: (ctrl, alt, shift, resetCallback) {
+                          final runtime = _activeRuntime();
+                          if (runtime != null && !runtime.focusNode.hasFocus) {
+                            runtime.focusNode.requestFocus();
+                          }
                           _setTerminalOutputWithAutocomplete(
                             ctrl: ctrl,
                             alt: alt,
