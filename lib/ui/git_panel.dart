@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import '../utils/git/git_operations.dart' show gitStash, gitStashPop, gitStashDrop, gitStashList, GitStashEntry;
+import '../utils/git/terminal_git.dart';
 
 
 
@@ -95,8 +96,7 @@ class GitOperations {
   /// Run a git command and return output.
   Future<String> _runGit(List<String> args) async {
     try {
-      final result = await Process.run(
-        'git',
+      final result = await TerminalGit.run(
         args,
         workingDirectory: workspacePath,
         environment: {'GIT_TERMINAL_PROMPT': '0'},

@@ -14,6 +14,7 @@ import '../../utils/functions.dart';
 import '../../utils/languages.dart';
 import '../../utils/themes.dart';
 import '../../utils/constants.dart';
+import '../../utils/git/terminal_git.dart';
 
 // Git source control panel
 // Extracted from widgets.dart
@@ -136,8 +137,7 @@ class _SourceControlState extends State<SourceControl> {
 
   Future<ProcessResult> _runGitCommand(List<String> args) async {
     final sharedPath = await NativeChannel.getLibraryPath();
-    return Process.run(
-      '$binDir/git',
+    return TerminalGit.run(
       args,
       workingDirectory: widget.workSpace,
       environment: gitEnvs(sharedPath),

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' hide Process;
+import 'dart:io' as io;
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as path;
@@ -8,6 +9,41 @@ import '../constants.dart';
 import '../languages.dart';
 import '../extractors.dart';
 import '../models/editor_models.dart';
+import 'terminal_git.dart';
+
+/// Compatibility facade for the legacy Git helpers in this file.
+/// Every Git invocation is routed through the active terminal.
+class Process {
+  static Future<ProcessResult> run(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    Encoding? stdoutEncoding,
+    Encoding? stderrEncoding,
+  }) {
+    return TerminalGit.run(
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      stdoutEncoding: stdoutEncoding ?? utf8,
+      stderrEncoding: stderrEncoding ?? utf8,
+    );
+  }
+
+  static Future<io.Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+  }) {
+    return TerminalGit.start(
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+    );
+  }
+}
 
 // Git operations — clone, commit, push, pull, branch, etc.
 // Extracted from functions.dart
@@ -188,12 +224,9 @@ Future<File> setTempFile(String extension) async {
 }
 
 Map<String, String> gitEnvs(String sharedPath) => {
-  'PATH': '$binDir:/bin:/usr/bin',
   'HOME': homeDir,
-  'GIT_EXEC_PATH': '$binDir/git-core',
-  'GIT_SSL_CAINFO': '$certDir/cacert.pem',
-  'LD_LIBRARY_PATH': "$sharedPath:$libDir",
   'ROXUM_SHARED_PATH': sharedPath,
+  'GIT_TERMINAL_PROMPT': '0',
 };
 
 Future<void> cloneRepo(
@@ -225,7 +258,7 @@ Future<void> cloneRepo(
   }
 
   final process = await Process.start(
-    '$binDir/git',
+    'git',
     cloneArgs,
     workingDirectory: location,
     environment: gitEnvs(sharedPath),
@@ -257,21 +290,21 @@ Future<void> cloneRepo(
 Future<void> initRepo(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
-    "$binDir/git",
+    "git",
     ["init"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
 
   await Process.run(
-    "$binDir/git",
+    "git",
     ["config", "--local", "user.name", "Panda user"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
 
   await Process.run(
-    "$binDir/git",
+    "git",
     ["config", "--local", "user.email", "panda@local"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -431,7 +464,7 @@ List<String> _getGitignorePatterns() {
 Future<ProcessResult> getRepoStatus(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["status", "--porcelain=v1", "-uall"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -441,7 +474,7 @@ Future<ProcessResult> getRepoStatus(String workspacePath) async {
 Future<void> stageChange(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
-    "$binDir/git",
+    "git",
     ["add", fileName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -451,7 +484,7 @@ Future<void> stageChange(String fileName, String workspacePath) async {
 Future<void> stageAll(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
-    "$binDir/git",
+    "git",
     ["add", "--all"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -469,7 +502,7 @@ Future<void> unstageChange(String fileName, String workspacePath) async {
       : ["reset", fileName];
 
   await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: env,
@@ -485,7 +518,7 @@ Future<void> unstageAll(String workspacePath) async {
   final args = hasHead ? ["restore", "--staged", "."] : ["reset", "."];
 
   await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: env,
@@ -497,7 +530,7 @@ Future<bool> _hasInitialCommit(
   Map<String, String> env,
 ) async {
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["rev-parse", "--verify", "HEAD"],
     workingDirectory: workspacePath,
     environment: env,
@@ -519,7 +552,7 @@ Future<ProcessResult> gitCommit(
   args.addAll(['-m', message]);
 
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -532,7 +565,7 @@ Future<ProcessResult> gitCommit(
 Future<List<CommitNode>> getGraph(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["log", "--all", "--date=short", "--pretty=format:%H%x01%P%x01%an%x01%s%x01%ad"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -542,7 +575,7 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
   String? upstreamHash;
 
   final headResult = await Process.run(
-    "$binDir/git",
+    "git",
     ["rev-parse", "HEAD"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -552,7 +585,7 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
   }
 
   final upstreamResult = await Process.run(
-    "$binDir/git",
+    "git",
     ["rev-parse", "--verify", "@{u}"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -595,7 +628,7 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
 Future<void> gitRestoreFile(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await Process.run(
-    "$binDir/git",
+    "git",
     ["restore", fileName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -619,7 +652,7 @@ Future<ProcessResult> gitStash(String workspacePath, {String? message, bool incl
     args.addAll(['-m', message]);
   }
   return await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -629,7 +662,7 @@ Future<ProcessResult> gitStash(String workspacePath, {String? message, bool incl
 Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ['stash', 'pop'] + (stashRef != null ? [stashRef] : []),
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -639,7 +672,7 @@ Future<ProcessResult> gitStashPop(String workspacePath, {String? stashRef}) asyn
 Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ['stash', 'apply'] + (stashRef != null ? [stashRef] : []),
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -649,7 +682,7 @@ Future<ProcessResult> gitStashApply(String workspacePath, {String? stashRef}) as
 Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ['stash', 'drop'] + (stashRef != null ? [stashRef] : []),
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -659,7 +692,7 @@ Future<ProcessResult> gitStashDrop(String workspacePath, {String? stashRef}) asy
 Future<ProcessResult> gitStashClear(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ['stash', 'clear'],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -669,7 +702,7 @@ Future<ProcessResult> gitStashClear(String workspacePath) async {
 Future<List<GitStashEntry>> gitStashList(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ['stash', 'list', '--pretty=format:%gd%x01%gs%x01%gd%x01%ci'],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -694,7 +727,7 @@ Future<List<GitStashEntry>> gitStashList(String workspacePath) async {
 Future<String> gitStashShow(String workspacePath, String stashRef) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "\$binDir/git",
+    "git",
     ["stash", "show", "-p", stashRef],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),

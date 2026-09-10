@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' hide Process;
+import 'dart:io' as io;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +14,43 @@ import 'package:http/http.dart' as http;
 import '../constants.dart';
 import '../extractors.dart';
 import 'git_operations.dart';
+import 'terminal_git.dart';
 import '../editors/editor_theme.dart';
+import 'terminal_git.dart';
+
+/// Compatibility facade for the legacy Git helpers in this file.
+/// Every Git invocation is routed through the active terminal.
+class Process {
+  static Future<ProcessResult> run(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+    Encoding? stdoutEncoding,
+    Encoding? stderrEncoding,
+  }) {
+    return TerminalGit.run(
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      stdoutEncoding: stdoutEncoding ?? utf8,
+      stderrEncoding: stderrEncoding ?? utf8,
+    );
+  }
+
+  static Future<io.Process> start(
+    String executable,
+    List<String> arguments, {
+    String? workingDirectory,
+    Map<String, String>? environment,
+  }) {
+    return TerminalGit.start(
+      arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+    );
+  }
+}
 
 // Git diff parsing and result model
 // Extracted from functions.dart
@@ -33,7 +70,7 @@ class GitDiffResult {
 Future<GitDiffResult> getGitDiff(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["diff", "--function-context", fileName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -128,7 +165,7 @@ Future<ProcessResult> gitPush(
   if (remote != null) args.add(remote);
   if (branch != null) args.add(branch);
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -148,7 +185,7 @@ Future<ProcessResult> gitPull(
   if (remote != null) args.add(remote);
   if (branch != null) args.add(branch);
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -166,7 +203,7 @@ Future<ProcessResult> gitFetch(
   if (all) args.add('--all');
   if (remote != null && !all) args.add(remote);
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -177,7 +214,7 @@ Future<ProcessResult> gitFetch(
 Future<ProcessResult> gitSync(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final pullResult = await Process.run(
-    "$binDir/git",
+    "git",
     ["pull", "--rebase"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -185,7 +222,7 @@ Future<ProcessResult> gitSync(String workspacePath) async {
   if (pullResult.exitCode != 0) return pullResult;
 
   final pushResult = await Process.run(
-    "$binDir/git",
+    "git",
     ["push"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -206,7 +243,7 @@ Future<List<String>> gitListBranches(
     args.add('-r');
   }
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -222,7 +259,7 @@ Future<List<String>> gitListBranches(
 Future<String?> gitCurrentBranch(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["branch", "--show-current"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -232,7 +269,7 @@ Future<String?> gitCurrentBranch(String workspacePath) async {
 
   if (branch.isEmpty) {
     final descResult = await Process.run(
-      "$binDir/git",
+      "git",
       ["describe", "--tags", "--exact-match", "HEAD"],
       workingDirectory: workspacePath,
       environment: gitEnvs(sharedPath),
@@ -242,7 +279,7 @@ Future<String?> gitCurrentBranch(String workspacePath) async {
     }
 
     final refResult = await Process.run(
-      "$binDir/git",
+      "git",
       ["rev-parse", "--short", "HEAD"],
       workingDirectory: workspacePath,
       environment: gitEnvs(sharedPath),
@@ -265,7 +302,7 @@ Future<ProcessResult> gitCreateBranch(
   final args = <String>['checkout', '-b', branchName];
   if (fromRef != null) args.add(fromRef);
   return await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -278,7 +315,7 @@ Future<ProcessResult> gitCheckoutBranch(
 ) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["checkout", branchName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -292,7 +329,7 @@ Future<ProcessResult> gitRenameBranch(
 ) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["branch", "-m", oldName, newName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -306,7 +343,7 @@ Future<ProcessResult> gitDeleteBranch(
 }) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["branch", force ? "-D" : "-d", branchName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -320,7 +357,7 @@ Future<ProcessResult> gitDeleteRemoteBranch(
 }) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["push", remote, "--delete", branchName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -337,7 +374,7 @@ Future<ProcessResult> gitMergeBranch(
   if (noFf) args.add('--no-ff');
   args.add(branchName);
   return await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -350,7 +387,7 @@ Future<ProcessResult> gitRebaseBranch(
 ) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["rebase", branchName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -364,7 +401,7 @@ Future<ProcessResult> gitPublishBranch(
 }) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["push", "-u", remote, branchName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -374,7 +411,7 @@ Future<ProcessResult> gitPublishBranch(
 Future<List<Map<String, String>>> gitListStashes(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["stash", "list", "--format=%gd%x01%s"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -396,7 +433,7 @@ Future<List<Map<String, String>>> gitListStashes(String workspacePath) async {
 Future<List<String>> gitListTags(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["tag", "-l"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -423,7 +460,7 @@ Future<ProcessResult> gitCreateTag(
   }
   if (ref != null) args.add(ref);
   return await Process.run(
-    "$binDir/git",
+    "git",
     args,
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -433,7 +470,7 @@ Future<ProcessResult> gitCreateTag(
 Future<ProcessResult> gitDeleteTag(String workspacePath, String tagName) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["tag", "-d", tagName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -447,7 +484,7 @@ Future<ProcessResult> gitDeleteRemoteTag(
 }) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["push", remote, "--delete", "refs/tags/$tagName"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -461,7 +498,7 @@ Future<ProcessResult> gitPushTag(
 }) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["push", remote, tagName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -471,7 +508,7 @@ Future<ProcessResult> gitPushTag(
 Future<List<String>> gitListRemotes(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["remote"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -489,7 +526,7 @@ Future<String?> gitGetRemoteUrl(
 }) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["remote", "get-url", remote],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -505,7 +542,7 @@ Future<ProcessResult> gitAddRemote(
 ) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   return await Process.run(
-    "$binDir/git",
+    "git",
     ["remote", "add", name, url],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -520,7 +557,7 @@ Future<bool> hasRemote(String workspacePath) async {
 Future<int> getUnpushedCommitCount(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["rev-list", "--count", "@{u}..HEAD"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -533,7 +570,7 @@ Future<int> getUnpulledCommitCount(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   await gitFetch(workspacePath);
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["rev-list", "--count", "HEAD..@{u}"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -545,7 +582,7 @@ Future<int> getUnpulledCommitCount(String workspacePath) async {
 Future<bool> hasUpstream(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
   final result = await Process.run(
-    "$binDir/git",
+    "git",
     ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
@@ -655,14 +692,14 @@ Future<void> _configureGitIdentity(Map<String, dynamic> user) async {
   final name = user['name'] ?? user['login'];
   final email = resolveGitEmail(user);
 
-  await Process.run("$binDir/git", [
+  await Process.run("git", [
     "config",
     "--global",
     "user.name",
     name,
   ], environment: gitEnvs(sharedPath));
 
-  await Process.run("$binDir/git", [
+  await Process.run("git", [
     "config",
     "--global",
     "user.email",
@@ -673,7 +710,7 @@ Future<void> _configureGitIdentity(Map<String, dynamic> user) async {
 Future<void> _configureGitCredentialHelper() async {
   final sharedPath = await NativeChannel.getLibraryPath();
 
-  await Process.run("$binDir/git", [
+  await Process.run("git", [
     "config",
     "--global",
     "credential.helper",
@@ -684,7 +721,7 @@ Future<void> _configureGitCredentialHelper() async {
 Future<void> _approveGithubCredentials(String token) async {
   final sharedPath = await NativeChannel.getLibraryPath();
 
-  final process = await Process.start("$binDir/git", [
+  final process = await Process.start("git", [
     "credential-store",
     "store",
   ], environment: gitEnvs(sharedPath));
@@ -704,7 +741,7 @@ Future<void> clearGitCredentials() async {
   final sharedPath = await NativeChannel.getLibraryPath();
 
   await Process.run(
-    "$binDir/git",
+    "git",
     ["credential", "reject"],
     environment: gitEnvs(sharedPath),
     stdoutEncoding: utf8,

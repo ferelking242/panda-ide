@@ -22,29 +22,25 @@ fi
 
 log "Installing LSP servers for Panda IDE..."
 
-# ── 1. Update apt ──
+# ── 1. Update package lists for non-Node tools ──
 apt-get update -qq 2>/dev/null || warn "apt update had warnings"
 
-# ── 2. Install Node.js if missing (needed for most LSP servers) ──
-if ! command -v node &>/dev/null; then
-  log "Installing Node.js..."
-  apt-get install -y -qq curl ca-certificates >/dev/null 2>&1
-  ARCH=$(uname -m)
-  case "$ARCH" in
-    aarch64) NODE_ARCH="linux-arm64" ;;
-    *)       NODE_ARCH="linux-arm64" ;;
-  esac
-  NODE_VERSION="20.18.1"
-  NODE_URL="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${NODE_ARCH}.tar.xz"
-  cd /tmp
-  curl -fSL "$NODE_URL" -o node.tar.xz 2>/dev/null
-  tar -xJf node.tar.xz -C /usr/local --strip-components=1
-  rm -f node.tar.xz
-  cd -
-  ok "Node.js $(node --version) installed"
+# ── 2. Validate terminal Node.js/npm ──
+if ! command -v node &>/dev/null || ! command -v npm &>/dev/null; then
+  err "Node.js/npm are not installed in the Panda terminal."
+  err "Open the terminal and run: panda update"
+  exit 1
 fi
+NODE_VER=$(node --version 2>/dev/null | sed 's/^v//')
+NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
+if [ -z "$NODE_MAJOR" ] || [ "$NODE_MAJOR" -lt 18 ] 2>/dev/null; then
+  err "Node.js >= 18 is required, but the terminal has ${NODE_VER:-no version}."
+  err "Open the terminal and run: panda update"
+  exit 1
+fi
+ok "Using terminal Node.js v${NODE_VER} and npm $(npm --version)"
 
-# ── 3. TypeScript + JSON + HTML + CSS (via npm) ──
+# ── 3. TypeScript + JSON + HTML + CSS (via terminal npm) ──
 log "Installing TypeScript LSP..."
 npm install -g typescript-language-server typescript 2>&1 | tail -2
 ok "TypeScript LSP installed"

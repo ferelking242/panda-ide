@@ -19,6 +19,7 @@ import 'package:panda/bloc/ui_bloc/ui_bloc.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
 import 'package:panda/utils/agent_settings_service.dart';
+import 'package:panda/utils/git/terminal_git.dart';
 
 typedef AgentConfirmCallback = Future<bool> Function({
   required String toolName,
@@ -1059,7 +1060,6 @@ class AgenticTools {
       'LD_LIBRARY_PATH': '$sharedPath:$libDir:$runtimesDir/clang',
       'PREFIX': '/data/data/com.panda.ide',
       'JAVA_HOME': '$runtimesDir/java-21-openjdk',
-      'GIT_EXEC_PATH': '$binDir/git-core',
       'GIT_SSL_CAINFO': '$certDir/cacert.pem',
       'CARGO_HTTP_CAINFO': '$certDir/cacert.pem',
       'RUSTFLAGS': '--sysroot $runtimesDir/rust',
@@ -1187,9 +1187,8 @@ class AgenticTools {
           rootfsPath: rootfsDir,
         );
 
-        // Un git installé par l'utilisateur (apk add git) doit être utilisé
-        // en entier : on retire l'override GIT_EXEC_PATH qui pointerait sur
-        // le git-core hôte bionic et casserait le git musl de l'invité.
+        // An installed guest Git must be used in full; do not override its
+        // executable path with an Android-host binary.
         if (File('$rootfsDir/usr/bin/git').existsSync()) {
           env.remove('GIT_EXEC_PATH');
           // Le git apk utilise ses propres CA (/etc/ssl/certs du rootfs).
@@ -1218,25 +1217,12 @@ class AgenticTools {
   }
 
   Future<ProcessResult> _runGitCommand(List<String> args) async {
-    final env = await _buildAgentShellEnvironment(workspacePath);
-    final guest = await _runGuestShell(
-      'git ${args.map((a) => "'$a'").join(' ')}',
-      envs: env,
+    return TerminalGit.run(
+      args,
+      workingDirectory:
+          workspacePath.trim().isNotEmpty ? workspacePath : appDir,
       timeout: const Duration(seconds: 120),
-      timeoutLabel: 'git ${args.first}',
     );
-    // git absent de l'invité (exit 127) → repli binaire git hôte.
-    final out = '${guest.stdout}${guest.stderr}';
-    if (guest.exitCode == 127 || out.contains('not found')) {
-      return _runProcessSafe(
-        'git',
-        args,
-        environment: env,
-        workingDirectory: workspacePath.trim().isNotEmpty ? workspacePath : appDir,
-        timeout: const Duration(seconds: 120),
-      );
-    }
-    return guest;
   }
 
   Future<ToolResult<GitStatusInfo>> gitStatus() async {

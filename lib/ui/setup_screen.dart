@@ -11,6 +11,7 @@ import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import 'home.dart';
 import '../terminal/panda_bridge.dart';
+import '../utils/git/terminal_git.dart';
 
 
 // ── Tool lists (shared with start_screen) ──────────────────────────────────────
@@ -319,7 +320,7 @@ class _SetupScreenState extends State<SetupScreen>
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> _createDirectories() async {
-    final dirs = [binDir, libDir, homeDir, '$binDir/git-core', '$appDir/Templates', '$appDir/Logs'];
+    final dirs = [binDir, libDir, homeDir, '$appDir/Templates', '$appDir/Logs'];
     for (final p in dirs) {
       try {
         final d = Directory(p);
@@ -331,7 +332,7 @@ class _SetupScreenState extends State<SetupScreen>
         print('[SetupScreen] Dir create failed for $p: $e');
       }
     }
-    _addLog('Created: bin, lib, Home, git-core, Templates, Logs');
+    _addLog('Created: bin, lib, Home, Templates, Logs');
   }
 
   Future<void> _installCertificates() async {
@@ -416,10 +417,8 @@ class _SetupScreenState extends State<SetupScreen>
     }
 
     // ── Git global config ──
-    final gitCore = '$binDir/git-core';
     try {
-      await Process.run(
-        '$binDir/git',
+      await TerminalGit.run(
         ['config', '--global', '--add', 'safe.directory', '*'],
         environment: gitEnvs(sharedPath),
       ).timeout(const Duration(seconds: 3));
@@ -451,14 +450,12 @@ class _SetupScreenState extends State<SetupScreen>
       {'src': '$sharedPath/libicudata.so',    'dst': '$libDir/libicudata.so.78'},
       {'src': '$sharedPath/libbash.so',       'dst': '$binDir/bash'},
       {'src': '$sharedPath/libbash.so',       'dst': '$binDir/sh'},
-      {'src': '$sharedPath/libgit-remote-https.so', 'dst': '$gitCore/git-remote-https'},
-      {'src': '$sharedPath/libgit-remote-https.so', 'dst': '$gitCore/git-remote-http'},
       {'src': '$sharedPath/libccls.so',       'dst': '$binDir/ccls'},
       {'src': '$sharedPath/libless.so',       'dst': '$binDir/less',  'env': <String, String>{'LD_LIBRARY_PATH': libDir}},
       {'src': '$sharedPath/libless.so',       'dst': '$binDir/pager', 'env': <String, String>{'LD_LIBRARY_PATH': libDir}},
       ...[
         'clang', 'clang++', 'clangloader', 'node', 'python', 'python3',
-        'npm', 'npx', 'pip', 'pip3', 'tsc', 'kotlinc', 'git', 'ruby', 'lua',
+         'npm', 'npx', 'pip', 'pip3', 'tsc', 'kotlinc', 'ruby', 'lua',
       ].map((t) => loader(t, env: {'ROXUM_SHARED_PATH': sharedPath})),
       ..._javaTools.map((t) => loader(t, env: {'ROXUM_SHARED_PATH': sharedPath})),
       {'src': '$binDir/clang',  'dst': '$binDir/aarch64-linux-android-clang'},
