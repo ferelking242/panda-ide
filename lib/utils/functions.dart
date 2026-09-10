@@ -15,7 +15,10 @@ import 'package:path/path.dart' as path;
 import '../utils/constants.dart';
 
 export 'git/git_operations.dart';
-export 'git/git_diff.dart';
+// Both legacy Git modules contain a private compatibility facade named
+// Process. Keep the canonical dart:io Process visible to callers while still
+// re-exporting all Git helpers from git_diff.dart.
+export 'git/git_diff.dart' hide Process;
 export 'string_utils.dart';
 export 'extractors.dart';
 export 'models/editor_models.dart';

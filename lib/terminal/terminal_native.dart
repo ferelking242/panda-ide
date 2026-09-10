@@ -2040,10 +2040,22 @@ class _SetupTerminalState extends State<SetupTerminal>
     final shift = keyboard.isShiftPressed;
     if (!ctrl && !alt && !shift) return KeyEventResult.ignored;
 
-    // AltGr is represented as Ctrl+Alt on several Android keyboard layouts.
-    // Let xterm/text input receive it so characters such as @, | and € are
-    // not turned into terminal control bytes.
-    if (keyboard.isAltGraphPressed) return KeyEventResult.ignored;
+    // AltGr is represented as Ctrl+right-Alt on several Android keyboard
+    // layouts. Let xterm/text input receive printable characters such as @,
+    // | and € instead of turning them into terminal control bytes. Do not
+    // swallow Ctrl+left-Alt shortcuts.
+    final rightAltIsPressed = keyboard.logicalKeysPressed.contains(
+      LogicalKeyboardKey.altRight,
+    );
+    final character = event.character;
+    if (ctrl &&
+        alt &&
+        rightAltIsPressed &&
+        character != null &&
+        character.isNotEmpty &&
+        character.runes.any((rune) => rune >= 0x20 && rune != 0x7f)) {
+      return KeyEventResult.ignored;
+    }
 
     final key = event.logicalKey;
     if (ctrl &&

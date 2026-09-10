@@ -1093,7 +1093,7 @@ class AgenticTools {
     final stderrF = proc.stderr
         .fold<List<int>>([], (buf, chunk) => buf..addAll(chunk));
 
-    final results = await Future.wait([
+    final results = await Future.wait<Object>([
       proc.exitCode,
       stdoutF,
       stderrF,
