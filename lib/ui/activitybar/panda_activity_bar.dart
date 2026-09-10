@@ -20,7 +20,6 @@ class PandaActivityBar extends StatelessWidget {
   final void Function() onOpenGithubTab;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenMarketplace;
-  final VoidCallback onOpenCopilot;
 
   const PandaActivityBar({
     super.key,
@@ -32,7 +31,6 @@ class PandaActivityBar extends StatelessWidget {
     required this.onOpenGithubTab,
     required this.onOpenSettings,
     required this.onOpenMarketplace,
-    required this.onOpenCopilot,
   });
 
   static const Color _kAccent = Color(0xff76b4ea);
@@ -60,10 +58,6 @@ class PandaActivityBar extends StatelessWidget {
       RailItem(icon: Broken.routing_2, label: 'Tunnel', idx: 5),
       RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
       RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
-      RailItem(
-          icon: Broken.message_programming,
-          label: 'GitHub Copilot',
-          idx: 9),
     ];
 
     return Container(
@@ -86,10 +80,6 @@ class PandaActivityBar extends StatelessWidget {
                           onTap: () {
                             if (item.idx == 6) {
                               onOpenMarketplace();
-                              return;
-                            }
-                            if (item.idx == 9) {
-                              onOpenCopilot();
                               return;
                             }
                             if (item.idx == 10) {

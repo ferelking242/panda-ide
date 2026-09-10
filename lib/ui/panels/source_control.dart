@@ -4324,69 +4324,48 @@ $diffText
                           decoration: InputDecoration(
                             suffixIcon: BlocBuilder<AIBloc, AIState>(
                               builder: (context, aiState) {
-                                return BlocBuilder<GithubAuthCubit, GithubAuthState>(
-                                  builder: (context, authState) {
-                                    return BlocBuilder<CopilotChatBloc, CopilotChatState>(
-                                      builder: (context, chatState) {
-                                        final copilotSignedIn = context.read<CopilotBloc>().state.isSignedIn;
-                                        _requestCopilotModelsIfNeeded(authState.isSignedIn, copilotSignedIn, chatState);
-
-                                        final canGenerate = !_isGeneratingCommitMessage &&
-                                            _canGenerateCommitMessage(
-                                              aiState: aiState,
-                                              githubSignedIn: authState.isSignedIn,
-                                              copilotSignedIn: copilotSignedIn,
-                                              chatState: chatState,
-                                            );
-
-                                        final tooltip = _isGeneratingCommitMessage
-                                            ? 'Generating commit message...'
-                                            : (!aiState.isEnabled
-                                                ? 'AI is disabled in settings'
-                                                : canGenerate
-                                                    ? 'Generate commit message'
-                                                    : (chatState.isFetchingModels
-                                                        ? 'Loading AI models...'
-                                                        : 'No AI model available'));
-
-                                        return Tooltip(
-                                          message: tooltip,
-                                          child: IconButton(
-                                            onPressed: canGenerate
-                                                ? () => _generateCommitMessage(
-                                                      context: context,
-                                                      aiState: aiState,
-                                                      chatState: chatState,
-                                                      githubSignedIn: authState.isSignedIn,
-                                                      copilotSignedIn: copilotSignedIn,
-                                                    )
-                                                : null,
-                                            icon: _isGeneratingCommitMessage
-                                                ? const SizedBox(
-                                                    height: 20,
-                                                    width: 20,
-                                                    child: CircularProgressIndicator(
-                                                      strokeWidth: 2,
-                                                    ),
-                                                  )
-                                                : SvgPicture.asset(
-                                                    'assets/icons/ai.svg',
-                                                    height: 20,
-                                                    width: 20,
-                                                    colorFilter: ColorFilter.mode(
-                                                      canGenerate
-                                                          ? widget.appTheme.selectScreenCardTextColor
-                                                              .withValues(alpha: 0.85)
-                                                          : widget.appTheme.selectScreenCardTextColor
-                                                              .withValues(alpha: 0.35),
-                                                      BlendMode.srcIn,
-                                                    ),
-                                                  ),
+                                final canGenerate =
+                                    !_isGeneratingCommitMessage &&
+                                    aiState.isEnabled &&
+                                    _collectExternalCommitModels(aiState).isNotEmpty;
+                                return Tooltip(
+                                  message: _isGeneratingCommitMessage
+                                      ? 'Generating commit message...'
+                                      : canGenerate
+                                          ? 'Generate commit message'
+                                          : 'No AI model available',
+                                  child: IconButton(
+                                    onPressed: canGenerate
+                                        ? () => _generateCommitMessage(
+                                            context: context,
+                                            aiState: aiState,
+                                            chatState: CopilotChatState.initial(),
+                                            githubSignedIn: false,
+                                            copilotSignedIn: false,
+                                          )
+                                        : null,
+                                    icon: _isGeneratingCommitMessage
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : SvgPicture.asset(
+                                            'assets/icons/ai.svg',
+                                            height: 20,
+                                            width: 20,
+                                            colorFilter: ColorFilter.mode(
+                                              canGenerate
+                                                  ? widget.appTheme.selectScreenCardTextColor
+                                                      .withValues(alpha: 0.85)
+                                                  : widget.appTheme.selectScreenCardTextColor
+                                                      .withValues(alpha: 0.35),
+                                              BlendMode.srcIn,
+                                            ),
                                           ),
-                                        );
-                                      },
-                                    );
-                                  },
+                                  ),
                                 );
                               },
                             ),

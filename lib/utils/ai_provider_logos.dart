@@ -26,7 +26,6 @@ class AiProviderLogos {
     'perplexity': 'perplexity',
     'groq': 'groq',
     'cohere': 'cohere',
-    'copilot': 'copilot',
     'ollama': 'ollama',
     'lmstudio': 'github',
   };
@@ -86,7 +85,6 @@ class AiProviderLogos {
     'mistral': Color(0xffff7000),
     'togetherai': Color(0xff00c9b1),
     'perplexity': Color(0xff20b2aa),
-    'copilot': Color(0xff8b5cf6),
     'groq': Color(0xfff97316),
     'fireworks': Color(0xffef4444),
     'cohere': Color(0xff39d353),

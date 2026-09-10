@@ -31,20 +31,6 @@ class PackageCatalogService {
 
   static final List<Extension> _catalogExtensions = [
     Extension(
-      name: 'Github Copilot',
-      details: 'Enable github copilot in the editor.\nNote: Nodejs runtime is required',
-      archiveName: 'copilot-language-server.zip',
-      parentName: 'copilot-language-server',
-      archiveSize: 12,
-      url: 'https://github.com/heckmon/android-arm64-shared-libraries/releases/download/extensions/copilot-language-server.zip',
-      fileExtension: const [],
-      serverFile: const [
-        '\$extensionDir/copilot-language-server/language-server.js',
-      ],
-      iconUrl: 'assets/icons/github-copilot-icon.svg',
-      githubUrl: 'https://github.com/orgs/github/packages/npm/package/copilot-language-server',
-    ),
-    Extension(
       name: 'Ty',
       details: 'Language server for Python.',
       archiveName: 'libty.so',

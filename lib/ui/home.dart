@@ -45,7 +45,6 @@ import '../terminal/terminal_bridge.dart';
 import 'debug/debug_launcher.dart'
     if (dart.library.html) 'debug/debug_launcher_stub.dart';
 import '../utils/ai.dart';
-import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
 import '../ui/github_page.dart';
 import '../utils/constants.dart';
@@ -173,9 +172,12 @@ class _SelectTypeState extends State<SelectType>
 
   // Active activity-bar item (0 = none/welcome)
   int _activeRail = 0;
-  bool _clineInstalled = false;
   // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
   int _sidebarState = 1;
+  final Map<String, bool> _explorerSectionExpanded = {
+    'OUTLINE': false,
+    'TIMELINE': false,
+  };
   bool _rightPanelOpen = false;
   bool _bottomPanelOpen = false;
 
@@ -457,25 +459,8 @@ class _SelectTypeState extends State<SelectType>
       context.read<ChatSessionBloc>().add(LoadChatSessions());
       checkAndRequestMissingPermissions(context);
       _bootstrapExtensionHost();
-      _refreshClineSidebar();
       _registerTabOpener();
     });
-  }
-
-  Future<void> _refreshClineSidebar() async {
-    try {
-      await ExtensionRegistry.instance.load();
-      final installed = ExtensionRegistry.instance.all.any(
-        (extension) =>
-            extension.manifest.id == 'saoudrizwan.claude-dev' ||
-            extension.manifest.displayName.toLowerCase() == 'cline',
-      );
-      if (mounted && installed != _clineInstalled) {
-        setState(() => _clineInstalled = installed);
-      }
-    } catch (error) {
-      PandaLog.w('Extensions', 'Unable to discover Cline: $error');
-    }
   }
 
   /// Enregistre le service global d'ouverture d'onglets IDE.
@@ -1488,7 +1473,9 @@ class _SelectTypeState extends State<SelectType>
                                                                           ),
                                                                           child: KeyedSubtree(
                                                                             key: ValueKey(
-                                                                              _activeTabIdx,
+                                                                              _openTabs.isEmpty
+                                                                                  ? 'empty-editor'
+                                                                                  : _openTabs[_activeTabIdx].id,
                                                                             ),
                                                                             child: _buildActiveTab(
                                                                               context,
@@ -1884,7 +1871,7 @@ class _SelectTypeState extends State<SelectType>
     final selColor = isDark ? _kActivitySelDark : _kActivitySelLight;
 
     // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent,
-    // Preview et Copilot. Outline/Timeline restent dans Explorer comme dans VS Code.
+    // Preview et modèles locaux.
     final topItems = <_RailItem>[
       _RailItem(icon: Broken.element_3, label: 'Explorateur', idx: 1),
       _RailItem(icon: Broken.search_normal, label: 'Rechercher', idx: 2),
@@ -1894,19 +1881,7 @@ class _SelectTypeState extends State<SelectType>
       _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
       _RailItem(icon: Broken.cpu_setting, label: 'Modèles locaux', idx: 11),
       _RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
-
       _RailItem(icon: Icons.preview_outlined, label: 'Preview', idx: 15),
-      if (_clineInstalled)
-        _RailItem(
-          icon: Broken.message_programming,
-          label: 'Cline',
-          idx: 16,
-        ),
-      _RailItem(
-        icon: Broken.message_programming,
-        label: 'GitHub Copilot',
-        idx: 9,
-      ),
     ];
 
     return Container(
@@ -1957,16 +1932,6 @@ class _SelectTypeState extends State<SelectType>
                             _sidebarState = 1;
                             _activeRail = 0;
                           });
-                          return;
-                        }
-                        // Copilot is a real sidebar panel: its controls must stay
-                        // reachable after the extension has been installed.
-                        if (item.idx == 9) {
-                          setState(() {
-                            _activeRail = 9;
-                            _sidebarState = 2;
-                          });
-                          _ensureCopilotInitialized();
                           return;
                         }
                         // Panda Agent always opens directly in the editor.
@@ -2267,11 +2232,9 @@ class _SelectTypeState extends State<SelectType>
       4: 'EXÉCUTER / DEBUG',
       5: 'TUNNEL / SSH',
       6: 'MARKETPLACE',
-      9: 'GITHUB COPILOT',
       10: 'PANDA AGENT',
       11: 'MODÈLES LOCAUX',
       15: 'PREVIEW',
-      16: 'CLINE',
     };
 
     Widget panelBody;
@@ -2296,12 +2259,6 @@ class _SelectTypeState extends State<SelectType>
         break;
       case 11: // Local Models
         panelBody = _sidebarLocalModels(context, appTheme, isDark);
-        break;
-      case 9: // GitHub Copilot
-        panelBody = _sidebarCopilot(context, appTheme, isDark);
-        break;
-      case 16: // Cline contributed views
-        panelBody = const ExtensionContributionsPanel();
         break;
       default:
         panelBody = const SizedBox.shrink();
@@ -2407,12 +2364,6 @@ class _SelectTypeState extends State<SelectType>
             title: 'TIMELINE',
             icon: Broken.clock,
             child: _sidebarTimeline(context, t, dark),
-          ),
-          _buildExplorerBottomSection(
-            title: 'VUES EXTENSIONS',
-            icon: Broken.element_3,
-            height: 190,
-            child: const ExtensionContributionsPanel(),
           ),
         ],
       );
@@ -2533,12 +2484,6 @@ class _SelectTypeState extends State<SelectType>
           icon: Broken.clock,
           child: _sidebarTimeline(context, t, dark),
         ),
-        _buildExplorerBottomSection(
-          title: 'VUES EXTENSIONS',
-          icon: Broken.element_3,
-          height: 190,
-          child: const ExtensionContributionsPanel(),
-        ),
       ],
     );
   }
@@ -2549,36 +2494,49 @@ class _SelectTypeState extends State<SelectType>
     required Widget child,
     double height = 178,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SizedBox(
-      height: height,
-      child: Column(
-        children: [
-          Container(
+    final expanded = _explorerSectionExpanded[title] ?? false;
+    final foreground = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: () => setState(() {
+            _explorerSectionExpanded[title] = !expanded;
+          }),
+          child: SizedBox(
             height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xff2d2d2d) : const Color(0xffe9e9e9),
-              border: Border(
-                top: BorderSide(
-                  color: isDark ? const Color(0xff3c3c3c) : const Color(0xffd4d4d4),
-                ),
-              ),
-            ),
             child: Row(
               children: [
-                Icon(icon, size: 14),
+                const SizedBox(width: 6),
+                Icon(
+                  expanded ? Icons.expand_more : Icons.chevron_right,
+                  size: 16,
+                  color: foreground,
+                ),
+                const SizedBox(width: 2),
+                Icon(icon, size: 14, color: foreground),
                 const SizedBox(width: 6),
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: foreground,
+                  ),
                 ),
               ],
             ),
           ),
-          Expanded(child: child),
-        ],
-      ),
+        ),
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 120),
+          firstChild: const SizedBox.shrink(),
+          secondChild: SizedBox(height: height, child: child),
+          crossFadeState: expanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+        ),
+      ],
     );
   }
 
@@ -5476,9 +5434,6 @@ class _SelectTypeState extends State<SelectType>
         ),
       );
     }
-    if (tab.id == 'copilot-chat') {
-      return _buildCopilotChatPage();
-    }
     if (tab.id == 'preview') {
       return const PreviewPanel();
     }
@@ -5586,9 +5541,6 @@ class _SelectTypeState extends State<SelectType>
               _buildPandaAgentPanel(panelContext, appTheme, asPage: true),
         ),
       );
-    }
-    if (tab.id == 'copilot-chat') {
-      return _buildCopilotChatPage();
     }
     if (tab.id == 'preview') {
       return const PreviewPanel();
@@ -7890,7 +7842,7 @@ class _SelectTypeState extends State<SelectType>
 
                         // ── Multi API Key Selector Bar ───────────────────
                         if (apiKeys.isNotEmpty ||
-                            providerRaw.toLowerCase() != 'copilot') ...[
+                            true) ...[
                           Container(
                             margin: const EdgeInsets.only(
                               left: 26,
@@ -8213,7 +8165,6 @@ class _SelectTypeState extends State<SelectType>
     if (p.contains('deepseek')) return const Color(0xff4b6ef5);
     if (p.contains('mistral')) return const Color(0xffff7000);
     if (p.contains('openrouter')) return const Color(0xff8b5cf6);
-    if (p.contains('copilot')) return const Color(0xff8b5cf6);
     if (p.contains('together')) return const Color(0xff00c9b1);
     if (p.contains('perplexity')) return const Color(0xff20b2aa);
     return const Color(0xff888888);
@@ -8222,7 +8173,6 @@ class _SelectTypeState extends State<SelectType>
   /// Returns a representative icon for a given provider string.
   IconData _providerIcon(String provider) {
     final p = provider.toLowerCase();
-    if (p.contains('copilot')) return Broken.message_programming;
     if (p.contains('openai') || p.contains('gpt')) return Broken.global;
     if (p.contains('claude') || p.contains('anthropic')) return Broken.cpu;
     if (p.contains('gemini') || p.contains('google'))
@@ -8235,60 +8185,8 @@ class _SelectTypeState extends State<SelectType>
   }
 
   /// Resolves the selected Agent model at send time.
-  ///
-  /// Copilot is deliberately different from API-key providers: GitHub issues
-  /// a short-lived Copilot token, so it must never be persisted in AI config.
-  /// The configured model is normally `auto`; in that case we select the first
-  /// chat-capable model returned by GitHub's live catalog.
   Future<Models?> _resolveAgentModel(Map<String, dynamic> cfg) async {
-    final provider = (cfg['provider'] ?? cfg['apiProvider'] ?? '')
-        .toString()
-        .toLowerCase();
-    if (provider != 'copilot') {
-      return _modelFromAiConfig(cfg);
-    }
-
-    final auth = await CopilotChat.loadAuthContext();
-    if (auth == null) return null;
-
-    final client =
-        context.read<CopilotChatBloc>().chatClient ??
-        CopilotChat(
-          authToken: auth.authToken,
-          initialApiEndpoint: auth.apiEndpoint,
-        );
-    final configuredModel = (cfg['modelName'] ?? cfg['model'] ?? '')
-        .toString()
-        .trim();
-    var modelName = configuredModel;
-    if (modelName.isEmpty || modelName == 'auto') {
-      final payload = await client.getCopilotModels();
-      final models =
-          (payload['data'] as List?)
-              ?.whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .where((item) => item['id'] != null)
-              .where((item) => item['model_picker_enabled'] != false)
-              .where((item) {
-                final endpoints = item['supported_endpoints'];
-                if (endpoints is! List || endpoints.isEmpty) return true;
-                return endpoints.any((endpoint) {
-                  final value = endpoint.toString().toLowerCase();
-                  return value.contains('chat/completions') ||
-                      value.contains('/responses');
-                });
-              })
-              .toList() ??
-          const <Map<String, dynamic>>[];
-      modelName = models.isNotEmpty ? models.first['id'].toString() : '';
-    }
-    if (modelName.isEmpty) return null;
-
-    return Copilot(
-      authToken: auth.authToken,
-      apiEndpoint: auth.apiEndpoint,
-      model: modelName,
-    );
+    return _modelFromAiConfig(cfg);
   }
 
   Widget _buildAgentEmptyState(bool isDark, Color muted, Color fg) {
@@ -9364,7 +9262,6 @@ class _SelectTypeState extends State<SelectType>
     if (name.contains('gemini')) return 'assets/icons/ai.svg';
     if (name.contains('claude')) return 'assets/icons/ai.svg';
     if (name.contains('openai')) return 'assets/icons/ai.svg';
-    if (name.contains('copilot')) return 'assets/icons/github-copilot-icon.svg';
     return 'assets/icons/app-icon.png';
   }
 
@@ -9996,7 +9893,6 @@ class _SelectTypeState extends State<SelectType>
       (id: 'openrouter', name: 'OpenRouter', hint: 'sk-or-...'),
       (id: 'mistral', name: 'Mistral', hint: '...'),
       (id: 'groq', name: 'Groq', hint: 'gsk_...'),
-      (id: 'copilot', name: 'Copilot', hint: ''),
       (id: 'custom', name: 'Custom', hint: ''),
     ];
 
@@ -10044,7 +9940,7 @@ class _SelectTypeState extends State<SelectType>
               newCfg[modelId] = {
                 'provider': selectedId,
                 'apiProvider': selectedId,
-                if (selectedId != 'copilot') 'apiKey': apiKey.trim(),
+                'apiKey': apiKey.trim(),
                 'modelName': '',
                 'model': '',
                 if (selectedId == 'custom') 'url': customUrl.trim(),
@@ -10139,8 +10035,7 @@ class _SelectTypeState extends State<SelectType>
                     }).toList(),
                   ),
                   const SizedBox(height: 16),
-                  // API key field (not for copilot)
-                  if (selectedId != 'copilot' && selectedId != 'custom') ...[
+                  if (selectedId != 'custom') ...[
                     Text(
                       'Clé API',
                       style: TextStyle(
@@ -10887,12 +10782,6 @@ class _SelectTypeState extends State<SelectType>
             'PandaAgent',
             'Provider resolved — model=${model?.runtimeType ?? '<none>'}',
           );
-          if (model == null &&
-              selectedConfig['provider']?.toString().toLowerCase() ==
-                  'copilot') {
-            modelResolutionError =
-                'GitHub Copilot n’est pas disponible avec cette session ou ce compte.';
-          }
         }
       } catch (error) {
         modelResolutionError = 'Impossible de charger le modèle IA : $error';
@@ -12055,7 +11944,12 @@ class _RailPandaBtnState extends State<_RailPandaBtn>
                       child: Center(child: child),
                     );
                   },
-                  child: Icon(Broken.cpu, size: 20, color: c),
+                  child: SvgPicture.asset(
+                    'assets/icons/github-copilot-icon.svg',
+                    width: 20,
+                    height: 20,
+                    colorFilter: ColorFilter.mode(c, BlendMode.srcIn),
+                  ),
                 ),
               ),
             ],

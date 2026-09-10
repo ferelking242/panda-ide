@@ -909,59 +909,6 @@ Future<String> getRecent() async {
   return recent ?? '[]';
 }
 
-const String copilotEnabledPrefKey = 'isCopilotEnabled';
-const String copilotSignedPrefKey = 'isSignedCopilot';
-
-Future<bool> ensureCopilotEnabledPrefInitialized() async {
-  final prefs = await SharedPreferences.getInstance();
-  final currentValue = prefs.getBool(copilotEnabledPrefKey);
-  if (currentValue == null) {
-    await prefs.setBool(copilotEnabledPrefKey, false);
-    return false;
-  }
-  return currentValue;
-}
-
-Future<bool> ensureCopilotSignedPrefInitialized() async {
-  final prefs = await SharedPreferences.getInstance();
-  final currentValue = prefs.getBool(copilotSignedPrefKey);
-  if (currentValue == null) {
-    await prefs.setBool(copilotSignedPrefKey, false);
-    return false;
-  }
-  return currentValue;
-}
-
-Future<bool> isCopilotSignedPref() async {
-  final prefs = await SharedPreferences.getInstance();
-  final currentValue = prefs.getBool(copilotSignedPrefKey);
-  if (currentValue == null) {
-    await prefs.setBool(copilotSignedPrefKey, false);
-    return false;
-  }
-  return currentValue;
-}
-
-Future<void> setCopilotSignedPref(bool isSignedIn) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(copilotSignedPrefKey, isSignedIn);
-}
-
-Future<bool> isCopilotEnabledPref() async {
-  final prefs = await SharedPreferences.getInstance();
-  final currentValue = prefs.getBool(copilotEnabledPrefKey);
-  if (currentValue == null) {
-    await prefs.setBool(copilotEnabledPrefKey, false);
-    return false;
-  }
-  return currentValue;
-}
-
-Future<void> setCopilotEnabledPref(bool isEnabled) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(copilotEnabledPrefKey, isEnabled);
-}
-
 Future<String> getAppTheme() async {
   final prefs = await SharedPreferences.getInstance();
   final savedAppTheme = prefs.getString("savedAppTheme");

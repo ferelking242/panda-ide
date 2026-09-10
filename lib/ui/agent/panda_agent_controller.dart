@@ -10,7 +10,6 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../utils/ai.dart';
-import '../../utils/copilot_chat.dart';
 import '../../utils/panda_log.dart';
 import '../agent_runner.dart';
 import 'flow_ui/models/flow_attachment.dart';
@@ -197,7 +196,7 @@ class PandaAgentController extends ChangeNotifier {
 
   bool providerNeedsKey(String provider) {
     return provider.isNotEmpty &&
-        !{'copilot', 'ollama', 'lmstudio', 'localllama', 'custom'}
+        !{'ollama', 'lmstudio', 'localllama', 'custom'}
             .contains(provider);
   }
 
@@ -488,32 +487,6 @@ class PandaAgentController extends ChangeNotifier {
   Future<Models?> _resolveModel(Map<String, dynamic>? config) async {
     if (config == null) return null;
     final provider = providerName(config);
-    if (provider == 'copilot') {
-      final auth = await CopilotChat.loadAuthContext();
-      if (auth == null) return null;
-      final client = CopilotChat(
-        authToken: auth.authToken,
-        initialApiEndpoint: auth.apiEndpoint,
-      );
-      var selectedModel = modelName(config);
-      if (selectedModel.isEmpty || selectedModel == 'auto') {
-        final payload = await client.getCopilotModels();
-        final catalog = (payload['data'] as List?)
-                ?.whereType<Map>()
-                .map((item) => Map<String, dynamic>.from(item))
-                .where((item) => item['id'] != null)
-                .where((item) => item['model_picker_enabled'] != false)
-                .toList() ??
-            const <Map<String, dynamic>>[];
-        selectedModel = catalog.isEmpty ? '' : catalog.first['id'].toString();
-      }
-      if (selectedModel.isEmpty) return null;
-      return Copilot(
-        authToken: auth.authToken,
-        apiEndpoint: auth.apiEndpoint,
-        model: selectedModel,
-      );
-    }
     final key = Models.resolveApiKey(config);
     if (providerNeedsKey(provider) && key.isEmpty) return null;
     return _modelFromConfig({...config, 'apiKey': key, 'key': key});

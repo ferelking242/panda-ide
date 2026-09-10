@@ -112,16 +112,6 @@ const providerDefs = <ProviderDef>[
     apiKeyHint: 'pplx-...',
   ),
   ProviderDef(
-    id: 'copilot',
-    name: 'GitHub Copilot',
-    description: 'GPT-4o via votre abonnement GitHub Copilot',
-    icon: Broken.message_programming,
-    color: Color(0xff8b5cf6),
-    docsUrl: 'https://github.com/settings/copilot',
-    hasApiKey: false,
-    apiKeyHint: 'optionnel',
-  ),
-  ProviderDef(
     id: 'groq',
     name: 'Groq',
     description: 'Llama 3, Mixtral — ultra-rapide (inference cloud)',

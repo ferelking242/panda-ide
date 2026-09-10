@@ -111,7 +111,6 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
       !(!widget.isProject && widget.isCloned),
       "Cloned directory should be a project.",
     );
-    _initializeCopilotForEditorIfEnabled();
     _loadVitePreviewInfo();
   }
 
@@ -342,28 +341,6 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
         setState(() => _isOpeningVitePreview = false);
       }
     }
-  }
-
-  Future<void> _initializeCopilotForEditorIfEnabled() async {
-    final isCopilotEnabled = await isCopilotEnabledPref();
-    final isCopilotSignedIn = await isCopilotSignedPref();
-    if ((!isCopilotEnabled && !isCopilotSignedIn) || !mounted) {
-      return;
-    }
-
-    if (!Directory('$extensionDir/copilot-language-server').existsSync()) {
-      return;
-    }
-
-    final copilotBloc = context.read<CopilotBloc>();
-    if (copilotBloc.state.isInitialized ||
-        copilotBloc.state.status == CopilotStatus.initializing) {
-      return;
-    }
-
-    copilotBloc.add(
-      CopilotInitialize(configPath: filesDir, workspacePath: widget.rootDir),
-    );
   }
 
   String _lspLanguageIdForPath(Language language, String filePath) {

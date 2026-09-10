@@ -831,8 +831,8 @@ class _SettingsState extends State<Settings> {
     return Column(
       children: [
         _buildCardGroup(
-          title: 'Google Gemini & Copilot',
-          subtitle: 'Clés API et services de génération de code',
+          title: 'Google Gemini',
+          subtitle: 'Clé API du service de génération',
           icon: Icons.security_rounded,
           isDark: isDark,
           cs: cs,
@@ -855,19 +855,6 @@ class _SettingsState extends State<Settings> {
                     ),
                   ),
                 ],
-              ),
-            ),
-            Divider(height: 1, color: cs.outlineVariant.withValues(alpha: 0.2)),
-            ListTile(
-              title: const Text('GitHub Copilot', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              subtitle: const Text("Paramètres et état d'authentification Copilot", style: TextStyle(fontSize: 11)),
-              trailing: ElevatedButton.icon(
-                icon: const Icon(Icons.account_circle, size: 14),
-                label: const Text('Gérer'),
-                onPressed: () {
-                  final copilotState = context.read<CopilotBloc>().state;
-                  _showCopilotSettings(context, copilotState, appThemeState);
-                },
               ),
             ),
           ],
@@ -971,34 +958,6 @@ class _SettingsState extends State<Settings> {
                 );
               },
             ),
-          ),
-        );
-      },
-    );
-  }
-
-
-  void _showCopilotSettings(
-    BuildContext context,
-    CopilotState copilotState,
-    AppThemeState appThemeState,
-  ) {
-    showDialog(
-      context: context,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          title: const Text('GitHub Copilot'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Statut : ${copilotState.status}'),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(dialogCtx),
-                child: const Text('Fermer'),
-              ),
-            ],
           ),
         );
       },

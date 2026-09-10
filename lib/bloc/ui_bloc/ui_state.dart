@@ -579,46 +579,6 @@ class CopilotCompletionData {
   });
 }
 
-class CopilotChatMessage {
-  final String role;
-  final String content;
-  final DateTime timestamp;
-  final bool isStreaming;
-
-  CopilotChatMessage({
-    required this.role,
-    required this.content,
-    required this.timestamp,
-    this.isStreaming = false,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'role': role,
-    'content': content,
-    'timestamp': timestamp.toIso8601String(),
-  };
-
-  factory CopilotChatMessage.fromJson(Map<String, dynamic> json) => CopilotChatMessage(
-    role: json['role'],
-    content: json['content'],
-    timestamp: DateTime.parse(json['timestamp']),
-  );
-
-  CopilotChatMessage copyWith({
-    String? role,
-    String? content,
-    DateTime? timestamp,
-    bool? isStreaming,
-  }) {
-    return CopilotChatMessage(
-      role: role ?? this.role,
-      content: content ?? this.content,
-      timestamp: timestamp ?? this.timestamp,
-      isStreaming: isStreaming ?? this.isStreaming,
-    );
-  }
-}
-
 class CopilotState {
   final CopilotStatus status;
   final String? user;
@@ -638,12 +598,10 @@ class CopilotState {
     this.currentCompletion,
   });
 
-  factory CopilotState.initial() => CopilotState(
-    status: CopilotStatus.notInitialized,
-  );
+  factory CopilotState.initial() =>
+      CopilotState(status: CopilotStatus.notInitialized);
 
   bool get isSignedIn => status == CopilotStatus.signedIn;
-  bool get canUseCompletion => isSignedIn && isEnabled;
 
   CopilotState copyWith({
     CopilotStatus? status,
@@ -662,12 +620,26 @@ class CopilotState {
       error: error,
       isInitialized: isInitialized ?? this.isInitialized,
       isEnabled: isEnabled ?? this.isEnabled,
-      signInPayload: clearSignInPayload
-          ? null
-          : (signInPayload ?? this.signInPayload),
-      currentCompletion: clearCompletion ? null : (currentCompletion ?? this.currentCompletion),
+      signInPayload:
+          clearSignInPayload ? null : (signInPayload ?? this.signInPayload),
+      currentCompletion:
+          clearCompletion ? null : (currentCompletion ?? this.currentCompletion),
     );
   }
+}
+
+class CopilotChatMessage {
+  final String role;
+  final String content;
+  final DateTime timestamp;
+  final bool isStreaming;
+
+  CopilotChatMessage({
+    required this.role,
+    required this.content,
+    required this.timestamp,
+    this.isStreaming = false,
+  });
 }
 
 class CopilotChatState {

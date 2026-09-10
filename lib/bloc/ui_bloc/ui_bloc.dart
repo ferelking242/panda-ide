@@ -275,34 +275,17 @@ class ActiveEditorBloc extends Bloc<EditorEvent, ActiveEditorState>{
 class AIBloc extends Bloc<AIEvent, AIState> {
   final Map<String, dynamic> config, modelSelected;
   final bool isEnabled, showSuggestionOntap;
-  final CopilotBloc? copilotBloc;
   AIBloc(
       Map<String, dynamic> rawConfig,
       this.isEnabled,
       Map<String, dynamic> modelSelectedInput,
       this.showSuggestionOntap,
-      {this.copilotBloc}
     ) : config = normalizeAiConfigMap(rawConfig),
-        modelSelected = (() {
-          if (copilotBloc != null && copilotBloc.state.status == CopilotStatus.signedIn) {
-            final ms = Map<String, dynamic>.from(modelSelectedInput);
-            if (ms['code'] == null || ms['code'] == '') {
-              ms['code'] = 'copilot';
-            }
-            return ms;
-          }
-          return Map<String, dynamic>.from(modelSelectedInput);
-        })(),
+        modelSelected = Map<String, dynamic>.from(modelSelectedInput),
         super(AIState(
           normalizeAiConfigMap(rawConfig),
           isEnabled,
-          (() {
-            final ms = normalizeAiConfigMap(modelSelectedInput);
-            if (copilotBloc != null && copilotBloc.state.status == CopilotStatus.signedIn) {
-              if (ms['code'] == null || ms['code'] == '') ms['code'] = 'copilot';
-            }
-            return ms;
-          })(),
+          normalizeAiConfigMap(modelSelectedInput),
           showSuggestionOntap,
         )) {
     on<AIConfigEvent>((event, emit) => emit(
@@ -313,25 +296,6 @@ class AIBloc extends Bloc<AIEvent, AIState> {
       state.copyWith(modelSelected: normalizeAiConfigMap(event.modelSelected)),
     ));
     on<AIModeEvent>((event, emit) => emit(state.copyWith(showSuggestionOntap: event.showSuggestionOntap)));
-
-    copilotBloc?.stream.listen((copilotState) {
-      try {
-        final status = copilotState.status;
-        if (status == CopilotStatus.signedIn) {
-          final ms = Map<String, dynamic>.from(state.modelSelected);
-          if (ms['code'] == null || ms['code'] == '') {
-            ms['code'] = 'copilot';
-            add(ModelSelectEvent(ms));
-          }
-        } else {
-          final ms = Map<String, dynamic>.from(state.modelSelected);
-          if (ms['code'] == 'copilot') {
-            ms.remove('code');
-            add(ModelSelectEvent(ms));
-          }
-        }
-      } catch (_) {}
-    });
   }
 }
 

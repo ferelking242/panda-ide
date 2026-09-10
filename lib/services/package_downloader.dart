@@ -204,15 +204,6 @@ class PackageDownloader {
       final archiveFile = File(archivePath);
       if (await archiveFile.exists()) await archiveFile.delete();
 
-      if (archiveName == 'copilot-language-server.zip') {
-        final sharedPath = await NativeChannel.getLibraryPath();
-        await Process.run('ln', [
-          '-sf',
-          '$sharedPath/librg.so',
-          '$extensionDir/copilot-language-server/bin/linux/arm64/rg',
-        ]);
-      }
-
       final n = runtimeParentName?.toLowerCase();
       if (n == 'python'      || archiveName == 'python.zip')           await _createPythonSymlinks();
       if (n == 'java'        || n == 'java-21-openjdk' || archiveName == 'java-21-openjdk.zip') await _copyJavaLibraries();
@@ -482,8 +473,6 @@ class PackageDownloader {
       'typescript': 'node',
       'flutter': 'dart',
       'android-sdk': 'java-21-openjdk',
-      'copilot': 'copilot-language-server',
-      'github-copilot': 'copilot-language-server',
     };
     return aliases[key] ?? key;
   }
