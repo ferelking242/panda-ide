@@ -1,0 +1,1027 @@
+Panda IDE — Embedded Browser complet avec CEF
+
+Objectif
+
+Ajouter à Panda IDE un véritable navigateur intégré accessible depuis la sidebar.
+
+Le navigateur doit :
+
+- être une page native du Workbench Panda IDE ;
+- avoir ses propres onglets ;
+- avoir navigation complète ;
+- supporter ChatGPT, Claude, GitHub, YouTube et les applications web modernes ;
+- supporter JavaScript moderne, WebGL, WebGPU, WebRTC, WASM, Service Workers, IndexedDB, cookies, localStorage, téléchargements, etc. ;
+- utiliser Chromium via CEF ;
+- être rendu directement dans Panda IDE ;
+- ne jamais utiliser VNC, streaming vidéo, screenshots ou contrôle d'une fenêtre externe ;
+- utiliser le GPU lorsque disponible ;
+- rester séparé du reste de l'IDE ;
+- pouvoir fonctionner indépendamment de Panda AI.
+
+---
+
+1. Nouvelle entrée Sidebar
+
+Ajouter une nouvelle icône dans la sidebar principale :
+
+Explorer
+Search
+Source Control
+Run / Debug
+Browser
+Extensions
+Settings
+
+L'icône Browser doit être clairement identifiable comme navigateur, avec le même langage visuel que les autres icônes de Panda.
+
+Au clic :
+
+Sidebar Browser
+        ↓
+Browser Workbench
+        ↓
+initialiser Browser Runtime
+        ↓
+vérifier CEF
+        ↓
+si absent → installation
+        ↓
+si présent → démarrer CEF
+        ↓
+afficher navigateur
+
+L'ouverture du navigateur doit être instantanée lorsque le runtime est déjà installé.
+
+---
+
+2. Le navigateur est une vraie page Panda
+
+Ne pas créer une fenêtre CEF externe.
+
+Ne pas utiliser :
+
+- VNC ;
+- remote desktop ;
+- screenshots ;
+- capture d'écran ;
+- streaming ;
+- navigateur externe ;
+- iframe distante ;
+- image/texture représentant une capture du navigateur.
+
+CEF doit être intégré comme composant natif Linux dans la surface du Workbench.
+
+Architecture :
+
+Panda IDE
+│
+├── Flutter Workbench
+│
+├── Browser Page
+│      │
+│      └── Native CEF View
+│             │
+│             ├── Chromium
+│             ├── Blink
+│             ├── V8
+│             ├── GPU
+│             └── Network
+│
+└── Browser Runtime Manager
+
+Le rendu doit être direct :
+
+CEF renderer
+      ↓
+GPU/compositor
+      ↓
+native Panda surface
+      ↓
+écran
+
+Aucune étape de capture ou de streaming.
+
+---
+
+3. CEF n'est PAS inclus dans Panda
+
+Le binaire principal de Panda ne doit pas embarquer tous les binaires CEF.
+
+Créer :
+
+Browser Runtime Manager
+
+Responsabilités :
+
+- détecter si CEF est installé ;
+- déterminer la version compatible ;
+- télécharger les composants nécessaires ;
+- afficher la progression ;
+- vérifier l'intégrité ;
+- extraire dans le répertoire runtime ;
+- gérer les permissions ;
+- initialiser CEF ;
+- vérifier les bibliothèques ;
+- réparer une installation corrompue ;
+- mettre à jour le runtime ;
+- conserver plusieurs versions si nécessaire pour rollback.
+
+Exemple :
+
+Panda
+│
+├── app
+│
+├── browser-runtime
+│     └── cef/
+│           ├── binaries
+│           ├── locales
+│           ├── resources
+│           ├── snapshots
+│           └── ...
+│
+└── projects
+
+Le dossier exact doit être adapté aux conventions Linux/XDG.
+
+---
+
+4. Premier lancement
+
+Lorsque l'utilisateur clique Browser pour la première fois :
+
+Browser Runtime
+
+Chromium Browser Runtime is required.
+
+Size: ~XXX MB
+Version: XXX
+
+[ Download & Install ]
+
+Après confirmation :
+
+Downloading...
+████████████████░░░░ 78%
+
+Chromium runtime
+Downloading components...
+Verifying...
+Extracting...
+Initializing GPU...
+Starting browser...
+
+Puis automatiquement :
+
+Browser
+
+L'utilisateur ne doit pas avoir à installer manuellement Chromium.
+
+---
+
+5. Runtime séparé du projet
+
+Le runtime CEF doit être global à Panda, pas copié dans chaque projet.
+
+Mauvais :
+
+projectA/
+  cef/
+
+projectB/
+  cef/
+
+projectC/
+  cef/
+
+Correct :
+
+Panda
+└── runtime/
+      └── cef/
+
+Tous les projets Panda utilisent le même runtime.
+
+Cela économise énormément d'espace disque.
+
+---
+
+6. Runtime Manager
+
+Créer une abstraction :
+
+BrowserRuntimeManager
+
+API conceptuelle :
+
+Future<RuntimeStatus> getStatus();
+
+Future<void> install();
+
+Future<void> update();
+
+Future<void> repair();
+
+Future<void> remove();
+
+Future<void> launch();
+
+Future<void> shutdown();
+
+États :
+
+notInstalled
+checking
+downloading
+verifying
+extracting
+installing
+ready
+starting
+running
+updating
+repairing
+error
+
+Le Browser UI ne doit jamais gérer directement le téléchargement CEF.
+
+---
+
+7. Vérification du runtime
+
+Ne jamais faire confiance uniquement à la présence des fichiers.
+
+Après téléchargement :
+
+download
+   ↓
+checksum verification
+   ↓
+archive validation
+   ↓
+required files validation
+   ↓
+CEF initialization test
+   ↓
+GPU initialization test
+   ↓
+runtime = READY
+
+En cas d'échec :
+
+Runtime corrupted
+
+[Repair]
+[Redownload]
+
+---
+
+8. Téléchargement robuste
+
+Le downloader doit supporter :
+
+- reprise après interruption ;
+- téléchargement par morceaux si possible ;
+- pause/reprise ;
+- progression réelle ;
+- vérification checksum ;
+- suppression du fichier temporaire corrompu ;
+- retry ;
+- miroir/CDN configurable ;
+- espace disque disponible avant installation.
+
+Exemple :
+
+CEF Runtime
+Downloading
+
+1.24 GB / 1.61 GB
+
+███████████████░░░░░
+
+Network: 4.2 MB/s
+Remaining: 1m 31s
+
+[Pause] [Cancel]
+
+Ne pas afficher une fausse progression.
+
+---
+
+9. Navigateur
+
+Créer une couche indépendante :
+
+PandaBrowser
+
+avec :
+
+BrowserManager
+BrowserTab
+BrowserProfile
+BrowserNavigation
+BrowserDownloads
+BrowserExtensions
+BrowserDevTools
+BrowserRuntime
+
+---
+
+10. Onglets
+
+Le navigateur doit supporter plusieurs onglets :
+
+┌──────────────────────────────────────────────────────────────┐
+│ ChatGPT × │ Claude × │ GitHub × │ +                         │
+├──────────────────────────────────────────────────────────────┤
+│ ← → ↻   https://chatgpt.com                    ☆   ⋮         │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│                         Web content                           │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+
+Chaque onglet possède sa propre instance/navigation logique.
+
+Préserver :
+
+- historique ;
+- cookies ;
+- localStorage ;
+- session ;
+- état de page lorsque possible.
+
+Ne pas recréer inutilement le moteur lorsque l'utilisateur passe d'un onglet à l'autre.
+
+---
+
+11. Barre de navigation
+
+Fonctions :
+
+- Back ;
+- Forward ;
+- Reload ;
+- Stop ;
+- URL/search field ;
+- Secure connection indicator ;
+- Bookmark ;
+- Downloads ;
+- Browser menu.
+
+Le champ URL doit accepter :
+
+https://...
+http://localhost:5173
+localhost:3000
+search query
+
+Les recherches peuvent utiliser un moteur configurable.
+
+---
+
+12. Profiles
+
+Créer des profils séparés :
+
+Default
+Development
+Temporary
+
+Chaque profil peut avoir :
+
+cookies
+localStorage
+IndexedDB
+cache
+permissions
+extensions
+history
+
+Le profil Default doit persister entre les sessions.
+
+Ainsi :
+
+ChatGPT login
+
+reste connecté après fermeture/réouverture de Panda.
+
+---
+
+13. ChatGPT / Claude / applications modernes
+
+La priorité absolue est la compatibilité Chromium.
+
+Ne pas désactiver par défaut :
+
+JavaScript
+WebAssembly
+WebGL
+WebGPU
+WebRTC
+Service Workers
+IndexedDB
+Storage
+WebSockets
+HTTP/2
+HTTP/3 lorsque disponible
+cookies
+
+Le navigateur doit être capable de charger des applications web lourdes comme :
+
+- ChatGPT ;
+- Claude ;
+- GitHub ;
+- Figma ;
+- YouTube ;
+- Google Docs ;
+- applications React ;
+- applications Next.js ;
+- applications Vite ;
+- applications WebGL/WebGPU.
+
+Tester réellement plusieurs applications modernes après intégration.
+
+---
+
+14. DevTools
+
+CEF doit exposer Chrome DevTools Protocol.
+
+Ajouter dans Panda :
+
+Browser
+ ├── DevTools
+ │    ├── Elements
+ │    ├── Console
+ │    ├── Network
+ │    ├── Sources
+ │    ├── Performance
+ │    ├── Application
+ │    └── Security
+
+Ne pas refaire artificiellement toutes les fonctionnalités de Chrome DevTools si CEF permet d'utiliser son frontend/DevTools directement.
+
+Prévoir :
+
+Open DevTools
+Open DevTools in Panel
+Open DevTools in Separate Panda Tab
+
+---
+
+15. Extensions Chrome
+
+Utiliser le mode CEF approprié permettant le support Chrome-style des extensions.
+
+Créer :
+
+Browser Extensions
+
+avec :
+
+Installed
+Available
+Developer Mode
+Load unpacked
+Remove
+Disable
+
+Supporter autant que possible les extensions Chromium/WebExtensions.
+
+Important :
+
+ne jamais annoncer "100 % des extensions Chrome" sans test.
+
+Tester notamment :
+
+- content scripts ;
+- background/service workers ;
+- chrome.storage ;
+- chrome.runtime ;
+- chrome.tabs ;
+- permissions ;
+- popup ;
+- options pages ;
+- DevTools extensions.
+
+Documenter clairement les APIs non supportées par CEF.
+
+---
+
+16. Downloads
+
+Le navigateur doit avoir son propre gestionnaire de téléchargements :
+
+Downloads
+
+Ubuntu.iso
+████████████░░░░ 76%
+1.2 GB / 1.6 GB
+
+package.zip
+Completed
+
+image.png
+Completed
+
+Actions :
+
+- pause ;
+- resume ;
+- cancel ;
+- retry ;
+- open file ;
+- open folder ;
+- remove from list.
+
+Les téléchargements doivent être intégrés au système Linux.
+
+---
+
+17. Permissions
+
+Gérer proprement :
+
+Camera
+Microphone
+Notifications
+Location
+Clipboard
+Fullscreen
+Downloads
+Popups
+Autoplay
+
+Exemple :
+
+Claude wants to use your microphone.
+
+[Allow once]
+[Allow]
+[Block]
+
+Les permissions doivent être stockées par origine lorsque pertinent.
+
+---
+
+18. Browser ↔ Panda
+
+Créer une API native contrôlée.
+
+Exemple :
+
+Panda
+  ↓
+BrowserController
+  ↓
+CEF
+
+Fonctions :
+
+createTab()
+closeTab()
+navigate()
+reload()
+goBack()
+goForward()
+executeJavaScript()
+openDevTools()
+closeDevTools()
+getURL()
+getTitle()
+capturePage()
+download()
+
+Prévoir également des événements :
+
+onLoadStarted
+onLoadProgress
+onLoadFinished
+onTitleChanged
+onAddressChanged
+onConsoleMessage
+onDownload
+onPermissionRequest
+onCrashed
+
+---
+
+19. Preview du projet
+
+Le navigateur doit également servir de Preview Panda.
+
+Depuis un projet :
+
+Run
+Preview
+
+Panda peut :
+
+detect project
+     ↓
+detect dev server
+     ↓
+start process
+     ↓
+detect localhost port
+     ↓
+health check
+     ↓
+BrowserTab
+     ↓
+http://127.0.0.1:5173
+
+Le navigateur général et la Preview doivent partager le même moteur mais rester logiquement séparés.
+
+Exemple :
+
+Browser
+├── ChatGPT
+├── Claude
+└── GitHub
+
+Project Preview
+└── localhost:5173
+
+---
+
+20. Performance
+
+Objectif :
+
+aucun comportement VNC-like.
+
+Interdit :
+
+browser → screenshot → Flutter → display
+
+Interdit :
+
+browser externe → capture → Panda
+
+Le rendu doit être :
+
+CEF
+ ↓
+Chromium compositor
+ ↓
+GPU
+ ↓
+native window/surface
+ ↓
+Panda
+
+Ne pas utiliser un pipeline Flutter qui reconvertit chaque frame en image.
+
+Éviter les copies CPU inutiles.
+
+Le navigateur doit être suspendu/libéré lorsqu'il n'est plus utilisé, mais sans détruire inutilement les onglets actifs.
+
+---
+
+21. Gestion mémoire
+
+Prévoir :
+
+Browser Runtime
+     │
+     ├── process management
+     ├── renderer lifecycle
+     ├── GPU process
+     └── crash recovery
+
+Ne pas appliquer des optimisations qui cassent les sites modernes.
+
+Priorité :
+
+compatibilité
+   >
+stabilité
+   >
+performance
+   >
+mémoire minimale
+
+L'objectif n'est pas de battre un navigateur minimaliste sur la RAM au prix de casser ChatGPT/Claude.
+
+---
+
+22. Crash recovery
+
+Si Chromium/CEF crash :
+
+Browser crashed
+
+[Restart Browser]
+
+Panda doit pouvoir restaurer :
+
+tabs
+URLs
+profiles
+
+sans faire planter l'IDE entier.
+
+Le navigateur est un sous-système isolé.
+
+---
+
+23. Settings
+
+Ajouter :
+
+Settings
+└── Browser
+     ├── Runtime
+     ├── Default profile
+     ├── Search engine
+     ├── Downloads
+     ├── Extensions
+     ├── Privacy
+     ├── GPU
+     ├── WebGPU
+     ├── Cache
+     ├── DevTools
+     └── Advanced
+
+Afficher :
+
+CEF version
+Chromium version
+Runtime size
+GPU status
+Sandbox status
+Extensions support
+
+---
+
+24. Runtime Updates
+
+Ne pas mettre CEF à jour silencieusement pendant son utilisation.
+
+Architecture :
+
+Current Runtime
+      │
+      └── version 1
+
+New Runtime
+      │
+      └── version 2
+
+Télécharger version 2 à côté.
+
+Tester :
+
+CEF initialization
+GPU
+basic page
+DevTools
+
+Puis seulement :
+
+version 2 = active
+
+Conserver temporairement l'ancienne version pour rollback.
+
+---
+
+25. Sandbox et sécurité
+
+Ne pas désactiver les protections Chromium simplement pour simplifier l'intégration.
+
+Préserver autant que possible :
+
+- sandbox ;
+- site isolation ;
+- process isolation ;
+- permission model ;
+- HTTPS security ;
+- certificate validation.
+
+Toute option dangereuse doit être explicitement justifiée.
+
+---
+
+26. Architecture des packages
+
+Préparer une séparation claire :
+
+packages/
+├── panda_browser_core/
+├── panda_browser_cef/
+├── panda_browser_runtime/
+└── panda_browser_flutter/
+
+Responsabilités :
+
+panda_browser_core
+
+Interfaces indépendantes du moteur :
+
+Browser
+Tab
+Profile
+Navigation
+Download
+Permission
+DevTools
+Extension
+
+panda_browser_cef
+
+Implémentation Chromium/CEF.
+
+panda_browser_runtime
+
+Téléchargement, installation, mise à jour et validation du runtime CEF.
+
+panda_browser_flutter
+
+Widgets Flutter et communication avec la couche native.
+
+Cette séparation permettra éventuellement de supporter plus tard un autre moteur sans refaire l'UI.
+
+---
+
+27. Architecture finale
+
+                         PANDA IDE
+                            │
+                    ┌───────┴────────┐
+                    │                │
+                Flutter UI       Native Linux
+                    │                │
+                    │          Panda Browser Host
+                    │                │
+                    │              CEF
+                    │                │
+                    │       ┌────────┼────────┐
+                    │       │        │        │
+                    │     Blink      V8       GPU
+                    │       │        │        │
+                    │       └────────┼────────┘
+                    │                │
+                    │          Chrome Web
+                    │           Platform
+                    │
+             Browser Workbench
+                    │
+        ┌───────────┼────────────┐
+        │           │            │
+      Tabs       DevTools    Downloads
+        │
+        └────── Browser Profiles
+
+
+             BROWSER RUNTIME MANAGER
+                       │
+             ┌─────────┴─────────┐
+             │                   │
+        Download Manager     Runtime Validator
+             │                   │
+             └─────────┬─────────┘
+                       │
+                  CEF Runtime
+                       │
+             ~/.local/share/panda/
+                       │
+                    cef/
+
+---
+
+28. Ordre d'implémentation
+
+Ne pas tout coder simultanément.
+
+Phase 1 — Runtime
+
+1. BrowserRuntimeManager
+2. téléchargement CEF
+3. checksum
+4. extraction
+5. validation
+6. état Ready/Error
+7. installation/réparation
+
+Phase 2 — Native CEF
+
+1. CEF initialization
+2. Chrome-style browser
+3. native Linux surface
+4. navigation
+5. GPU
+6. lifecycle
+
+Phase 3 — Panda UI
+
+1. Sidebar Browser
+2. Browser Workbench
+3. toolbar
+4. tabs
+5. URL bar
+6. loading states
+
+Phase 4 — Browser features
+
+1. profiles
+2. cookies/storage
+3. downloads
+4. permissions
+5. popups
+6. fullscreen
+7. notifications
+
+Phase 5 — DevTools
+
+1. CDP
+2. DevTools
+3. console
+4. network
+5. inspection
+6. performance
+
+Phase 6 — Extensions
+
+1. extension manager
+2. load unpacked
+3. manifest parsing
+4. permissions
+5. popup
+6. background/service worker
+7. Chrome API compatibility testing
+
+Phase 7 — Project Preview
+
+1. process manager
+2. port detection
+3. health check
+4. automatic server launch
+5. Preview tab
+6. hot reload
+
+Phase 8 — optimisation
+
+Mesurer réellement :
+
+- startup time ;
+- RAM idle ;
+- RAM ChatGPT ;
+- RAM Claude ;
+- GPU usage ;
+- CPU ;
+- scrolling ;
+- WebGL ;
+- WebGPU ;
+- WebRTC ;
+- multiple tabs ;
+- extension overhead.
+
+Ne pas optimiser à l'aveugle.
+
+---
+
+29. Critère de réussite
+
+Le travail n'est terminé que lorsque ce scénario fonctionne :
+
+Fresh Panda installation
+        ↓
+click Browser
+        ↓
+Panda détecte CEF absent
+        ↓
+Download Runtime
+        ↓
+Install
+        ↓
+Start CEF
+        ↓
+Browser appears directly inside Panda
+        ↓
+open ChatGPT
+        ↓
+login
+        ↓
+open Claude in another tab
+        ↓
+install/test extension
+        ↓
+open DevTools
+        ↓
+open Panda project
+        ↓
+run local dev server
+        ↓
+open localhost in Preview
+
+Et tout cela doit se produire dans Panda, sans fenêtre Chrome externe et sans VNC/screenshot streaming.
+
+Règle fondamentale
+
+CEF est une dépendance runtime téléchargeable, pas une dépendance lourde empaquetée dans l'application Panda principale.
+
+Le navigateur est embarqué, mais son moteur est téléchargé séparément.
+
+L'interface Panda doit rester légère ; le runtime Chromium n'est téléchargé que lorsque l'utilisateur utilise le Browser/Preview pour la première fois.
