@@ -268,7 +268,9 @@ Future<void> cloneRepo(
     r'(Receiving objects|Resolving deltas|Compressing objects):\s+(\d+)%',
   );
 
-  process.stderr.listen((data) {
+  final stderrBytes = <int>[];
+  final stderrDone = process.stderr.forEach((data) {
+    stderrBytes.addAll(data);
     final text = String.fromCharCodes(data);
 
     final match = progressRegex.firstMatch(text);
@@ -277,12 +279,16 @@ Future<void> cloneRepo(
       onProgress(percent / 100);
     }
   });
+  final stdoutDone = process.stdout.drain<void>();
 
   final exitCode = await process.exitCode;
+  await Future.wait<void>([stderrDone, stdoutDone]);
   if (exitCode != 0) {
+    final details = String.fromCharCodes(stderrBytes).trim();
     throw Exception(
       'git clone failed with exit code $exitCode'
-      '${branch != null && branch.trim().isNotEmpty ? ' for branch "${branch.trim()}"' : ''}',
+      '${branch != null && branch.trim().isNotEmpty ? ' for branch "${branch.trim()}"' : ''}'
+      '${details.isEmpty ? '' : ': $details'}',
     );
   }
 }

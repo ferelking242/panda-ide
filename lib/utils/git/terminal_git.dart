@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../constants.dart';
 import '../debian_setup.dart';
+import '../rootfs_manager.dart';
 
 /// Runs Git from the active terminal environment.
 ///
@@ -35,7 +36,8 @@ class TerminalGit {
       );
     }
 
-    final rootfs = DebianSetup.debianDir;
+    final rootfs = await RootfsManager.getActiveRootfsPath();
+    await DebianSetup.ensureRuntimeFilesForRootfs(rootfs);
     final proot = await DebianSetup.locateProotBinary(rootfs);
     if (proot == null) {
       throw StateError(

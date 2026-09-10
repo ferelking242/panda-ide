@@ -2,6 +2,7 @@ import 'dart:io';
 
 import '../utils/constants.dart';
 import '../utils/debian_setup.dart';
+import '../utils/rootfs_manager.dart';
 
 /// Starts Node.js from the active Panda terminal environment.
 ///
@@ -14,6 +15,7 @@ class TerminalNodeLauncher {
 
   bool _available = false;
   String? _version;
+  String? _rootfsPath;
 
   bool get isAvailable => _available;
   String? get version => _version;
@@ -23,8 +25,10 @@ class TerminalNodeLauncher {
     _version = null;
 
     try {
+      final rootfsPath =
+          Platform.isAndroid ? await RootfsManager.getActiveRootfsPath() : null;
       final result = Platform.isAndroid
-          ? await _runInTerminal(['--version'])
+          ? await _runInTerminal(['--version'], rootfsPath: rootfsPath!)
           : await Process.run('node', ['--version'])
               .timeout(const Duration(seconds: 10));
       if (result.exitCode != 0) return false;
@@ -32,6 +36,7 @@ class TerminalNodeLauncher {
       final version = result.stdout.toString().trim();
       if (version.isEmpty) return false;
       _version = version;
+      _rootfsPath = rootfsPath;
       _available = true;
       return true;
     } catch (_) {
@@ -53,7 +58,26 @@ class TerminalNodeLauncher {
     required String workingDirectory,
     Map<String, String> environment = const {},
   }) async {
-    final command = await prepareNodeCommand(
+    return startCommand(
+      executable: 'node',
+      arguments: arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+    );
+  }
+
+  /// Starts a command from the active Panda terminal environment.
+  ///
+  /// This is used for npm as well as node-based extension processes. Both
+  /// commands must run through the same PRoot/rootfs boundary as the PTY.
+  Future<Process> startCommand({
+    required String executable,
+    required List<String> arguments,
+    required String workingDirectory,
+    Map<String, String> environment = const {},
+  }) async {
+    final command = await prepareCommand(
+      executable: executable,
       arguments: arguments,
       workingDirectory: workingDirectory,
       environment: environment,
@@ -73,7 +97,35 @@ class TerminalNodeLauncher {
     Map<String, String> environment = const {},
     String? hostWorkingDirectory,
   }) async {
-    if (!_available && !await init()) {
+    return prepareCommand(
+      executable: 'node',
+      arguments: arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      hostWorkingDirectory: hostWorkingDirectory,
+    );
+  }
+
+  Future<TerminalNodeCommand> prepareCommand({
+    required String executable,
+    required List<String> arguments,
+    required String workingDirectory,
+    Map<String, String> environment = const {},
+    String? hostWorkingDirectory,
+  }) async {
+    final activeRootfsPath =
+        Platform.isAndroid ? await RootfsManager.getActiveRootfsPath() : null;
+    if (!_available ||
+        (Platform.isAndroid && _rootfsPath != activeRootfsPath)) {
+      if (!await init()) {
+        throw StateError(
+          'Node.js is unavailable in the active terminal. '
+          'Open the terminal and run `panda update` first.',
+        );
+      }
+    }
+
+    if (!_available) {
       throw StateError(
         'Node.js is unavailable in the terminal. '
         'Open the terminal and run `panda update` first.',
@@ -92,7 +144,7 @@ class TerminalNodeLauncher {
       );
     }
 
-    final rootfs = DebianSetup.debianDir;
+    final rootfs = activeRootfsPath!;
     final proot = await DebianSetup.locateProotBinary(rootfs);
     if (proot == null) {
       throw StateError(
@@ -127,7 +179,7 @@ class TerminalNodeLauncher {
         ...prootArgs,
         '-w',
         guestWorkingDirectory,
-        'node',
+        executable,
         ...arguments,
       ],
       hostWorkingDirectory: hostWorkingDirectory ?? appDir,
@@ -135,8 +187,11 @@ class TerminalNodeLauncher {
     );
   }
 
-  Future<ProcessResult> _runInTerminal(List<String> arguments) async {
-    final rootfs = DebianSetup.debianDir;
+  Future<ProcessResult> _runInTerminal(
+    List<String> arguments, {
+    required String rootfsPath,
+  }) async {
+    final rootfs = rootfsPath;
     final proot = await DebianSetup.locateProotBinary(rootfs);
     if (proot == null) {
       throw StateError('PRoot is unavailable');

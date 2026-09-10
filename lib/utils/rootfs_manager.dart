@@ -276,6 +276,22 @@ class RootfsManager {
     return TerminalType.fromString(v);
   }
 
+  /// Returns the exact rootfs used by the currently selected terminal.
+  ///
+  /// Consumers that launch commands outside the interactive PTY must use this
+  /// path instead of scanning for the first installed rootfs. Otherwise
+  /// `panda update` can install a tool in one distro while Node/Git look in
+  /// another installed distro.
+  static Future<String> getActiveRootfsPath() async {
+    final type = await getActiveTerminal();
+    if (type == TerminalType.bionic) {
+      throw StateError(
+        'Android Bionic has no Panda Linux toolchain. Select Ubuntu, Debian or Alpine.',
+      );
+    }
+    return (await rootfsDir(type)).path;
+  }
+
   static Future<void> setActiveTerminal(TerminalType type) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('active_terminal', type.id);
