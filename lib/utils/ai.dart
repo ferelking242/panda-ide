@@ -1059,6 +1059,59 @@ class OpenAI extends Models {
   }
 }
 
+class Copilot extends Models {
+  @override
+  ToolCallingMethod get toolCallingMethod => ToolCallingMethod.openAiCompatible;
+
+  final String authToken;
+  final String apiEndpoint;
+  @override
+  final String model;
+
+  Copilot({
+    required this.authToken,
+    required this.model,
+    String? apiEndpoint,
+  }) : apiEndpoint = (apiEndpoint ?? 'https://api.githubcopilot.com')
+            .trim()
+            .replaceAll(RegExp(r'/+$'), '')
+            .replaceFirst(RegExp(r'/chat/completions$'), '');
+
+  @override
+  String get url => '$apiEndpoint/chat/completions';
+
+  @override
+  String get chatUrl => url;
+
+  @override
+  String get apiKey => authToken;
+
+  @override
+  Map<String, String> get headers => {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': 'Bearer $authToken',
+        'Accept': 'application/json',
+      };
+
+  @override
+  Map<String, dynamic> buildRequest(String code) => {
+        'model': model,
+        'messages': [
+          {'role': 'system', 'content': Models.instruction},
+          {'role': 'user', 'content': code},
+        ],
+      };
+
+  @override
+  String responseParser(dynamic response) {
+    try {
+      return response['choices']?[0]?['message']?['content']?.toString() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+}
+
 class Claude extends Models {
   @override
   ToolCallingMethod get toolCallingMethod => ToolCallingMethod.anthropicMessages;

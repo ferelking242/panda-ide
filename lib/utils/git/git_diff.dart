@@ -18,6 +18,44 @@ import 'terminal_git.dart';
 import '../editors/editor_theme.dart';
 import 'terminal_git.dart';
 
+const String copilotEnabledPrefKey = 'isCopilotEnabled';
+const String copilotSignedPrefKey = 'isSignedCopilot';
+
+Future<bool> ensureCopilotEnabledPrefInitialized() async {
+  final prefs = await SharedPreferences.getInstance();
+  final value = prefs.getBool(copilotEnabledPrefKey);
+  if (value == null) {
+    await prefs.setBool(copilotEnabledPrefKey, false);
+    return false;
+  }
+  return value;
+}
+
+Future<bool> ensureCopilotSignedPrefInitialized() async {
+  final prefs = await SharedPreferences.getInstance();
+  final value = prefs.getBool(copilotSignedPrefKey);
+  if (value == null) {
+    await prefs.setBool(copilotSignedPrefKey, false);
+    return false;
+  }
+  return value;
+}
+
+Future<bool> isCopilotSignedPref() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool(copilotSignedPrefKey) ?? false;
+}
+
+Future<void> setCopilotSignedPref(bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(copilotSignedPrefKey, value);
+}
+
+Future<void> setCopilotEnabledPref(bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(copilotEnabledPrefKey, value);
+}
+
 /// Compatibility facade for the legacy Git helpers in this file.
 /// Every Git invocation is routed through the active terminal.
 class Process {
