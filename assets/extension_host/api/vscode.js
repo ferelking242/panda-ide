@@ -748,27 +748,6 @@ const panda = {
       ipc.callFlutter('panda.device.isAdbAvailable', []),
   },
 
-  // ── AI Gateway (Panda AI server) ──
-  gateway: {
-    /** Démarre le serveur Python uvicorn */
-    start: (provider = 'chatgpt') =>
-      ipc.callFlutter('panda.gateway.start', [provider]),
-    /** Arrête le serveur */
-    stop: () =>
-      ipc.callFlutter('panda.gateway.stop', []),
-    /** Statut du serveur */
-    status: () =>
-      ipc.callFlutter('panda.gateway.status', []),
-    /** Vérifie si Python est installé */
-    isPythonAvailable: () =>
-      ipc.callFlutter('panda.gateway.isPythonAvailable', []),
-    /** Clonne et installe panda-ai depuis GitHub */
-    install: () =>
-      ipc.callFlutter('panda.gateway.install', []),
-    /** URL du dashboard (WebView) */
-    dashboardUrl: () => 'http://127.0.0.1:8000',
-  },
-
   // ── Proot (environnement Linux) ──
   proot: {
     /** Vérifie si le rootfs est installé */

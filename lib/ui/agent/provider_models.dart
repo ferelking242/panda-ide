@@ -112,16 +112,6 @@ const providerDefs = <ProviderDef>[
     apiKeyHint: 'pplx-...',
   ),
   ProviderDef(
-    id: 'pandagateway',
-    name: 'Panda Gateway',
-    description: 'Accès unifié sans clé API (abonnement Panda)',
-    icon: Broken.cpu_setting,
-    color: Color(0xff5090c8),
-    docsUrl: '',
-    hasApiKey: false,
-    apiKeyHint: 'optionnel',
-  ),
-  ProviderDef(
     id: 'copilot',
     name: 'GitHub Copilot',
     description: 'GPT-4o via votre abonnement GitHub Copilot',

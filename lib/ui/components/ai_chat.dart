@@ -1941,7 +1941,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       case Perplexity():
       case OpenRouter():
       case FireWorks():
-      case PandaGateway():
       case CustomModel():
       case Cohere():
       case Cerebras():
@@ -2022,7 +2021,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       case Perplexity():
       case OpenRouter():
       case FireWorks():
-      case PandaGateway():
       case CustomModel():
       case Cohere():
       case Cerebras():

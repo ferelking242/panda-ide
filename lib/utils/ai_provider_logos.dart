@@ -86,7 +86,6 @@ class AiProviderLogos {
     'mistral': Color(0xffff7000),
     'togetherai': Color(0xff00c9b1),
     'perplexity': Color(0xff20b2aa),
-    'pandagateway': Color(0xff5090c8),
     'copilot': Color(0xff8b5cf6),
     'groq': Color(0xfff97316),
     'fireworks': Color(0xffef4444),

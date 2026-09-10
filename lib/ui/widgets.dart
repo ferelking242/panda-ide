@@ -119,9 +119,6 @@ export '../extensions/open_vsx_marketplace.dart';
 export '../extensions/ui/extension_host_status_page.dart';
 export '../extensions/permission_dialog.dart';
 
-// ── Gateway ──
-export '../gateway/panda_remote_gateway.dart';
-
 // ── Indexing ──
 export '../indexing/codebase_indexer.dart';
 export '../indexing/semantic_workspace_indexer.dart';

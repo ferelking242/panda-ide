@@ -465,7 +465,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('AI Gateway'),
+        _sectionTitle('AI providers'),
         _tile('Default Provider', 'AI provider for chat', DropdownButton<String>(
           value: _s.aiDefaultProvider,
           items: const [
@@ -480,8 +480,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
           onChanged: (v) { if (v != null) setState(() => _s.aiDefaultProvider = v); },
         )),
-        _tile('Gateway URL', 'Panda AI Gateway endpoint', Text('http://localhost:8000', style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontFamily: 'monospace'))),
-        _tile('API Token', 'Authentication token', const Text('pnd_•••••••••••', style: TextStyle(fontSize: 11, fontFamily: 'monospace'))),
         _tile('Enable Inline Completions', 'AI-powered code suggestions', Switch(
           value: _s.aiInlineCompletions,
           onChanged: (v) => setState(() => _s.aiInlineCompletions = v),

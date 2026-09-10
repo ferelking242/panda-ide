@@ -181,11 +181,6 @@ Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
         gpuLayers: (modelConfig['gpuLayers'] as num?)?.toInt() ?? 0,
       );
 
-    // ── Panda Open Gateway (local uvicorn OpenAI-compat server) ──────────────
-    case 'pandagateway':
-      final port = (modelConfig['port'] as num?)?.toInt() ?? 8000;
-      return PandaGateway(apiKey: apiKey, model: modelName, port: port);
-
     case 'custom':
       final url = (modelConfig['url'] ?? '').toString().trim();
       if (url.isEmpty) return null;

@@ -59,7 +59,6 @@ import '../extensions/terminal_node.dart';
 import '../extensions/ui/command_palette.dart';
 import '../services/ide_tab_opener.dart';
 import '../extensions/language_feature_router.dart';
-import '../ui/gateway_panel.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
@@ -1825,8 +1824,8 @@ class _SelectTypeState extends State<SelectType>
     final iconColor = isDark ? _kActivityIconDark : _kActivityIconLight;
     final selColor = isDark ? _kActivitySelDark : _kActivitySelLight;
 
-    // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent, Gateway,
-    // Nav, Preview, Copilot
+    // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent,
+    // WebView, Preview, Copilot
     // ensuite les panneaux classiques de l'éditeur.
     final topItems = <_RailItem>[
       _RailItem(icon: Broken.element_3, label: 'Explorateur', idx: 1),
@@ -1837,8 +1836,7 @@ class _SelectTypeState extends State<SelectType>
       _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
       _RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
 
-      _RailItem(icon: Broken.cpu, label: 'Gateway AI', idx: 7),
-      _RailItem(icon: Broken.global, label: 'Navigateur', idx: 8),
+      _RailItem(icon: Broken.global, label: 'WebView / Navigateur', idx: 8),
       _RailItem(icon: Icons.preview_outlined, label: 'Preview', idx: 15),
       _RailItem(
         icon: Broken.message_programming,
@@ -1858,13 +1856,13 @@ class _SelectTypeState extends State<SelectType>
           const SizedBox(height: 6),
 
           // ── Sidebar items (scrollable so they never overlap bottom) ───
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ...topItems.map(
-                    (item) => _ActivityBtnEx(
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              physics: const ClampingScrollPhysics(),
+              children: [
+                ...topItems.map(
+                  (item) => _ActivityBtnEx(
                       item: item,
                       selected: _sidebarState == 2 && _activeRail == item.idx,
                       iconColor: iconColor,
@@ -1892,29 +1890,8 @@ class _SelectTypeState extends State<SelectType>
                           });
                           return;
                         }
-                        // Gateway AI (idx:7) opens as an editor tab, not sidebar
-                        if (item.idx == 7) {
-                          setState(() {
-                            if (!_openTabs.any((t) => t.id == 'gateway')) {
-                              _openTabs.add(
-                                const _TabDef(
-                                  id: 'gateway',
-                                  title: 'Gateway AI',
-                                  icon: Broken.cpu,
-                                ),
-                              );
-                              _activeTabIdx = _openTabs.length - 1;
-                            } else {
-                              _activeTabIdx = _openTabs.indexWhere(
-                                (t) => t.id == 'gateway',
-                              );
-                            }
-                            _sidebarState = 1;
-                            _activeRail = 0;
-                          });
-                          return;
-                        }
-                        // Navigateur (idx:8) opens as an editor tab, not sidebar
+                        // WebView (idx:8) opens as an editor tab so Chromium
+                        // receives the full available width.
                         if (item.idx == 8) {
                           setState(() {
                             if (!_openTabs.any((t) => t.id == 'browser')) {
@@ -2006,11 +1983,10 @@ class _SelectTypeState extends State<SelectType>
                       },
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-          const Spacer(),
           const SizedBox(height: 6),
 
           // ── Detached Bottom Section (Theme, Account, Settings) ─────────
@@ -2280,8 +2256,7 @@ class _SelectTypeState extends State<SelectType>
       4: 'EXÉCUTER / DEBUG',
       5: 'TUNNEL / SSH',
       6: 'MARKETPLACE',
-      7: 'GATEWAY AI',
-      8: 'NAVIGATEUR',
+      8: 'WEBVIEW / NAVIGATEUR',
       9: 'GITHUB COPILOT',
       10: 'PANDA AGENT',
       11: 'MODÈLES LOCAUX',
@@ -5224,9 +5199,6 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
     }
-    if (tab.id == 'gateway') {
-      return const GatewayPanel();
-    }
     if (tab.id == 'browser') {
       return const BrowserPanel();
     }
@@ -5336,9 +5308,6 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
-    }
-    if (tab.id == 'gateway') {
-      return const GatewayPanel();
     }
     if (tab.id == 'browser') {
       return const BrowserPanel();
@@ -7943,8 +7912,7 @@ class _SelectTypeState extends State<SelectType>
         provider != 'ollama' &&
         provider != 'lmstudio' &&
         provider != 'localllama' &&
-        provider != 'custom' &&
-        provider != 'pandagateway';
+        provider != 'custom';
   }
 
   /// Returns a branded color for a provider string.
@@ -7963,7 +7931,6 @@ class _SelectTypeState extends State<SelectType>
     if (p.contains('copilot')) return const Color(0xff8b5cf6);
     if (p.contains('together')) return const Color(0xff00c9b1);
     if (p.contains('perplexity')) return const Color(0xff20b2aa);
-    if (p.contains('panda') || p.contains('gateway')) return _kAccent;
     return const Color(0xff888888);
   }
 
@@ -9300,9 +9267,6 @@ class _SelectTypeState extends State<SelectType>
       case 'lmstudio':
         final lmsPort = (cfg['port'] as num?)?.toInt() ?? 1234;
         return LmStudio(model: modelName, port: lmsPort);
-      case 'pandagateway':
-        final port = (cfg['port'] as num?)?.toInt() ?? 8000;
-        return PandaGateway(apiKey: apiKey, model: modelName, port: port);
       case 'localllama':
         final mp = (cfg['modelPath'] ?? '').toString().trim();
         if (mp.isEmpty) return null;

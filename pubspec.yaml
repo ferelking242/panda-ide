@@ -79,7 +79,6 @@ flutter:
     - assets/extension_host/api/scm.js
     - assets/extension_host/api/tasks.js
     - assets/extension_host/api/debug.js
-    - assets/gateway/
     - assets/scripts/
     - assets/local_models_catalog.json
   fonts:

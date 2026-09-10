@@ -197,7 +197,7 @@ class PandaAgentController extends ChangeNotifier {
 
   bool providerNeedsKey(String provider) {
     return provider.isNotEmpty &&
-        !{'copilot', 'ollama', 'lmstudio', 'localllama', 'custom', 'pandagateway'}
+        !{'copilot', 'ollama', 'lmstudio', 'localllama', 'custom'}
             .contains(provider);
   }
 
@@ -541,8 +541,6 @@ class PandaAgentController extends ChangeNotifier {
         return Ollama(model: model, port: (config['port'] as num?)?.toInt() ?? 11434);
       case 'lmstudio':
         return LmStudio(model: model, port: (config['port'] as num?)?.toInt() ?? 1234);
-      case 'pandagateway':
-        return PandaGateway(apiKey: key, model: model, port: (config['port'] as num?)?.toInt() ?? 8000);
       case 'localllama':
         final modelPath = (config['modelPath'] ?? '').toString().trim();
         if (modelPath.isEmpty) return null;

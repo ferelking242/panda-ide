@@ -20,7 +20,6 @@ class PandaActivityBar extends StatelessWidget {
   final void Function() onOpenGithubTab;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenMarketplace;
-  final VoidCallback onOpenGateway;
   final VoidCallback onOpenBrowser;
   final VoidCallback onOpenCopilot;
 
@@ -34,7 +33,6 @@ class PandaActivityBar extends StatelessWidget {
     required this.onOpenGithubTab,
     required this.onOpenSettings,
     required this.onOpenMarketplace,
-    required this.onOpenGateway,
     required this.onOpenBrowser,
     required this.onOpenCopilot,
   });
@@ -64,8 +62,7 @@ class PandaActivityBar extends StatelessWidget {
       RailItem(icon: Broken.routing_2, label: 'Tunnel', idx: 5),
       RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
       RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
-      RailItem(icon: Broken.cpu, label: 'Gateway AI', idx: 7),
-      RailItem(icon: Broken.global, label: 'Navigateur', idx: 8),
+      RailItem(icon: Broken.global, label: 'WebView / Navigateur', idx: 8),
       RailItem(
           icon: Broken.message_programming,
           label: 'GitHub Copilot',
@@ -78,12 +75,12 @@ class PandaActivityBar extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 6),
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: topItems
-                    .map((item) => _ActivityBtnEx(
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              physics: const ClampingScrollPhysics(),
+              children: topItems
+                  .map((item) => _ActivityBtnEx(
                           item: item,
                           selected:
                               sidebarState == 2 && activeRail == item.idx,
@@ -92,10 +89,6 @@ class PandaActivityBar extends StatelessWidget {
                           onTap: () {
                             if (item.idx == 6) {
                               onOpenMarketplace();
-                              return;
-                            }
-                            if (item.idx == 7) {
-                              onOpenGateway();
                               return;
                             }
                             if (item.idx == 8) {
@@ -112,12 +105,10 @@ class PandaActivityBar extends StatelessWidget {
                             }
                             onTapItem(item.idx);
                           },
-                        ))
-                    .toList(),
-              ),
+                      ))
+                  .toList(),
             ),
           ),
-          const Spacer(),
           const SizedBox(height: 6),
 
           // ── Bottom: Theme toggle ─────────────────────────────────

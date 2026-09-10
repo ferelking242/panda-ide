@@ -378,8 +378,6 @@ class SubagentOrchestrator extends ChangeNotifier {
         return Ollama(model: modelName, port: (cfg['port'] as num?)?.toInt() ?? 11434);
       case 'lmstudio':
         return LmStudio(model: modelName, port: (cfg['port'] as num?)?.toInt() ?? 1234);
-      case 'pandagateway':
-        return PandaGateway(apiKey: apiKey, model: modelName, port: (cfg['port'] as num?)?.toInt() ?? 8000);
       case 'custom':
         final url = (cfg['url'] ?? '').toString().trim();
         if (url.isEmpty) return null;

@@ -177,7 +177,7 @@ class SettingsService {
   set workbenchColorTheme(String v) => _prefs.setString('workbench.colorTheme', v);
 
   // ══════════════════════════════════════════════════════════════════════════
-  // AI / GATEWAY
+  // AI
   // ══════════════════════════════════════════════════════════════════════════
 
   String get aiDefaultProvider => _prefs.getString('ai.defaultProvider') ?? 'chatgpt';

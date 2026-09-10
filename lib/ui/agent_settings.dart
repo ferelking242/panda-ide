@@ -872,9 +872,6 @@ class _AgentSettingsState extends State<AgentSettings>
       case 'lmstudio':
         final lmsPort = (cfg['port'] as num?)?.toInt() ?? 1234;
         return LmStudio(model: modelName, port: lmsPort);
-      case 'pandagateway':
-        final port = (cfg['port'] as num?)?.toInt() ?? 8000;
-        return PandaGateway(apiKey: apiKey, model: modelName, port: port);
       case 'localllama':
         final mp = (cfg['modelPath'] ?? '').toString().trim();
         if (mp.isEmpty) return null;
@@ -1045,7 +1042,6 @@ class _AgentSettingsState extends State<AgentSettings>
       'cerebras':    'https://api.cerebras.ai/v1/models',
       'novita':      'https://api.novita.ai/v3/openai/models',
       'hyperbolic':  'https://api.hyperbolic.xyz/v1/models',
-      'pandagateway': 'http://127.0.0.1:8000/v1/models',
     };
 
     if (provider == 'custom') {
@@ -1062,10 +1058,8 @@ class _AgentSettingsState extends State<AgentSettings>
     if (provider == 'claude') {
       headers['x-api-key']         = apiKey;
       headers['anthropic-version']  = '2023-06-01';
-    } else if (provider != 'gemini' && provider != 'pandagateway') {
+    } else if (provider != 'gemini') {
       headers['Authorization'] = 'Bearer $apiKey';
-    } else if (provider == 'pandagateway') {
-      headers['x-user-token'] = apiKey;
     }
 
     final resp = await http.get(Uri.parse(url), headers: headers);
