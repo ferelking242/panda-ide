@@ -42,6 +42,8 @@ import 'settings.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../terminal/terminal.dart';
 import '../terminal/terminal_bridge.dart';
+import 'debug/debug_launcher.dart'
+    if (dart.library.html) 'debug/debug_launcher_stub.dart';
 import '../utils/ai.dart';
 import '../utils/copilot_chat.dart';
 import '../ui/contribute.dart';
@@ -404,6 +406,13 @@ class _SelectTypeState extends State<SelectType>
   // explicitly closes the workspace from the menu.
   String? _currentWorkspaceDir;
   String? _currentWorkspaceName;
+
+  // ── Run / Debug state ─────────────────────────────────────────────
+  String _debugStatus = 'idle'; // idle | starting | running | stopped | error
+  String? _debugTarget;
+  String? _debugCommand;
+  String? _debugError;
+  final List<String> _debugLog = [];
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
   @override
@@ -2914,6 +2923,249 @@ class _SelectTypeState extends State<SelectType>
   }
 
   // ── Debug panel ───────────────────────────────────────────────────────────
+  Future<void> _runDebugTarget(BuildContext ctx, {bool restart = false}) async {
+    final workspaceDir = _activeProjectDir() ?? _currentWorkspaceDir;
+    final filePath = _activeEditorConfig()?.file?.path;
+    if (workspaceDir == null || workspaceDir.isEmpty) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        const SnackBar(
+          content: Text('Ouvrez un projet avant de lancer Run/Debug.'),
+        ),
+      );
+      return;
+    }
+
+    if (restart) {
+      await DebugLauncher.instance.stopCurrent();
+    }
+    if (mounted) {
+      setState(() {
+        _bottomPanelOpen = true;
+        _debugStatus = 'starting';
+        _debugTarget = filePath ?? workspaceDir;
+        _debugError = null;
+        _debugLog.add(
+          restart
+              ? '↻ Redémarrage de ${filePath ?? workspaceDir}'
+              : '▶ Démarrage de ${filePath ?? workspaceDir}',
+        );
+      });
+    }
+
+    // Opening the panel may create the first PTY on this frame.
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    final result = await DebugLauncher.instance.runTarget(
+      filePath: filePath,
+      workspaceDir: workspaceDir,
+    );
+    if (!mounted) return;
+    setState(() {
+      _debugStatus = result.started ? 'running' : 'error';
+      _debugCommand = result.command;
+      _debugError = result.error;
+      _debugLog.add(
+        result.started
+            ? '✓ ${result.command}'
+            : '✕ ${result.error ?? 'Impossible de démarrer la cible'}',
+      );
+    });
+    if (!result.started) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(content: Text(result.error ?? 'Run/Debug a échoué.')),
+      );
+    }
+  }
+
+  Future<void> _stopDebugTarget(BuildContext ctx) async {
+    await DebugLauncher.instance.stopCurrent();
+    if (!mounted) return;
+    setState(() {
+      _debugStatus = 'stopped';
+      _debugLog.add('■ Session arrêtée');
+    });
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      const SnackBar(content: Text('Session Run/Debug arrêtée')),
+    );
+  }
+
+  Future<void> _sendDebugControl(
+    BuildContext ctx,
+    String sequence,
+    String label,
+  ) async {
+    final sent = await DebugLauncher.instance.sendControl(sequence);
+    if (!mounted) return;
+    setState(() {
+      _debugLog.add(sent ? '⚡ $label' : '✕ $label : aucun terminal actif');
+    });
+    if (!sent) {
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(content: Text('$label impossible : ouvrez un terminal.')),
+      );
+    }
+  }
+
+  Widget _debugStatusCard(BuildContext ctx, bool dark) {
+    final statusColor = switch (_debugStatus) {
+      'running' => Colors.greenAccent,
+      'starting' => Colors.amber,
+      'error' => Colors.redAccent,
+      'stopped' => Colors.grey,
+      _ => dark ? Colors.grey[400]! : Colors.grey[700]!,
+    };
+    final statusLabel = switch (_debugStatus) {
+      'running' => 'EN COURS',
+      'starting' => 'DÉMARRAGE…',
+      'error' => 'ERREUR',
+      'stopped' => 'ARRÊTÉ',
+      _ => 'PRÊT',
+    };
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: dark ? const Color(0xff202020) : Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: statusColor.withValues(alpha: 0.45)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  _debugStatus == 'running'
+                      ? Icons.play_circle_filled
+                      : Icons.bug_report_outlined,
+                  size: 17,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    _debugTarget == null
+                        ? 'Aucune cible sélectionnée'
+                        : path.basename(_debugTarget!),
+                    style: TextStyle(
+                      color: dark ? Colors.grey[200] : Colors.grey[850],
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_debugCommand != null) ...[
+              const SizedBox(height: 5),
+              Text(
+                _debugCommand!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: dark ? Colors.grey[500] : Colors.grey[600],
+                  fontSize: 10,
+                  fontFamily: 'jetBrainsMono',
+                ),
+              ),
+            ],
+            if (_debugError != null) ...[
+              const SizedBox(height: 5),
+              Text(
+                _debugError!,
+                style: const TextStyle(color: Colors.redAccent, fontSize: 10),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _debugStatus == 'starting'
+                        ? null
+                        : () => _runDebugTarget(ctx),
+                    icon: const Icon(Icons.play_arrow, size: 15),
+                    label: const Text(
+                      'Démarrer',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      padding: const EdgeInsets.symmetric(vertical: 7),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                IconButton(
+                  onPressed: _debugStatus == 'starting'
+                      ? null
+                      : () => _runDebugTarget(ctx, restart: true),
+                  tooltip: 'Redémarrer',
+                  icon: const Icon(Icons.restart_alt, size: 18),
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  onPressed: _debugStatus == 'running'
+                      ? () => _stopDebugTarget(ctx)
+                      : null,
+                  tooltip: 'Arrêter',
+                  icon: const Icon(Icons.stop, size: 18),
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
+            ),
+            if (_debugLog.isNotEmpty) ...[
+              const Divider(height: 14),
+              Text(
+                'CONSOLE',
+                style: TextStyle(
+                  color: dark ? Colors.grey[500] : Colors.grey[600],
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1,
+                ),
+              ),
+              const SizedBox(height: 3),
+              ..._debugLog.reversed.take(4).map(
+                    (line) => Text(
+                      line,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: dark ? Colors.grey[400] : Colors.grey[700],
+                        fontSize: 10,
+                        fontFamily: 'jetBrainsMono',
+                      ),
+                    ),
+                  ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _sidebarDebug(BuildContext ctx, AppTheme t, bool dark) {
     final fg = dark ? Colors.grey[200]! : Colors.grey[800]!;
     final cardBg = dark ? const Color(0xff2d2d2d) : const Color(0xffffffff);
@@ -2961,15 +3213,7 @@ class _SelectTypeState extends State<SelectType>
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'Starting debug session... (Auto launch config applied)',
-                        ),
-                      ),
-                    );
-                  },
+                  onPressed: () => _runDebugTarget(ctx),
                   icon: const Icon(
                     Icons.play_arrow_rounded,
                     color: Colors.white,
@@ -2991,13 +3235,11 @@ class _SelectTypeState extends State<SelectType>
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
-                            content: Text('⚡ Hot Reload triggered'),
-                          ),
-                        );
-                      },
+                      onPressed: () => _sendDebugControl(
+                        ctx,
+                        'r',
+                        'Hot Reload',
+                      ),
                       icon: const Icon(
                         Icons.bolt,
                         size: 14,
@@ -3018,13 +3260,11 @@ class _SelectTypeState extends State<SelectType>
                   const SizedBox(width: 6),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {
-                        ScaffoldMessenger.of(ctx).showSnackBar(
-                          const SnackBar(
-                            content: Text('🔄 Hot Restart triggered'),
-                          ),
-                        );
-                      },
+                      onPressed: () => _sendDebugControl(
+                        ctx,
+                        'R',
+                        'Hot Restart',
+                      ),
                       icon: const Icon(
                         Icons.refresh,
                         size: 14,
@@ -3048,6 +3288,7 @@ class _SelectTypeState extends State<SelectType>
           ),
         ),
 
+        _debugStatusCard(ctx, dark),
         const SizedBox(height: 12),
 
         // Quick Tools Cards
@@ -3066,7 +3307,7 @@ class _SelectTypeState extends State<SelectType>
           t,
           Broken.play_circle,
           'Exécuter le fichier actif…',
-          () => _doOpenFile(ctx),
+          () => _runDebugTarget(ctx),
         ),
 
         const SizedBox(height: 12),

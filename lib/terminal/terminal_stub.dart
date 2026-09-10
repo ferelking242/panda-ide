@@ -299,6 +299,17 @@ class TerminalSessionBloc
   }
 }
 
+/// Web has no native PTY. The API exists so Run/Debug can fail explicitly
+/// instead of trying to import dart:ffi into the web build.
+class TerminalSessionStore {
+  TerminalSessionStore._();
+  static final TerminalSessionStore instance = TerminalSessionStore._();
+
+  TerminalSessionBloc? bloc;
+
+  bool sendToActivePty(String sequence) => false;
+}
+
 // ── TerminalKeyboardMenu ──────────────────────────────────────────────────────
 class TerminalKeyboardMenu extends StatelessWidget {
   const TerminalKeyboardMenu({super.key});

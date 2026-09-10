@@ -1,6 +1,22 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../../extensions/debug_bridge.dart';
+import '../../terminal/terminal.dart';
+
+class DebugLaunchResult {
+  final bool started;
+  final String command;
+  final String? sessionId;
+  final String? error;
+
+  const DebugLaunchResult({
+    required this.started,
+    required this.command,
+    this.sessionId,
+    this.error,
+  });
+}
 
 /// Service to launch debug sessions for different runtimes.
 /// Connects to debug adapters (debugpy, node --inspect) running inside PRoot.
@@ -13,6 +29,77 @@ class DebugLauncher {
   /// Callback to send commands to the active PRoot terminal PTY.
   /// Set this from the terminal widget on init.
   void Function(String command)? sendToPty;
+
+  Future<DebugLaunchResult> runTarget({
+    String? filePath,
+    required String workspaceDir,
+  }) async {
+    final target = filePath ?? workspaceDir;
+    final extension = filePath == null
+        ? ''
+        : filePath.split('.').last.toLowerCase();
+
+    if (filePath != null &&
+        const {'js', 'ts', 'mjs', 'cjs', 'py', 'go'}.contains(extension)) {
+      final sessionId = await launchForFile(filePath);
+      if (sessionId != null) {
+        return DebugLaunchResult(
+          started: true,
+          command: 'Debug $target',
+          sessionId: sessionId,
+        );
+      }
+    }
+
+    final isFlutterProject =
+        File('$workspaceDir${Platform.pathSeparator}pubspec.yaml').existsSync();
+    final command = filePath == null
+        ? (isFlutterProject ? 'flutter run' : 'sh')
+        : extension == 'dart'
+            ? (isFlutterProject
+                ? 'flutter run --target "$filePath"'
+                : 'dart run "$filePath"')
+            : extension == 'py'
+                ? 'python "$filePath"'
+                : extension == 'js' ||
+                        extension == 'ts' ||
+                        extension == 'mjs' ||
+                        extension == 'cjs'
+                    ? 'node "$filePath"'
+                    : 'sh "$filePath"';
+
+    final sent = _sendCommand('cd "${_quote(workspaceDir)}" && $command\n');
+    return sent
+        ? DebugLaunchResult(started: true, command: command)
+        : DebugLaunchResult(
+            started: false,
+            command: command,
+            error: 'Aucun terminal actif. Ouvrez un terminal puis réessayez.',
+          );
+  }
+
+  Future<bool> sendControl(String sequence) async {
+    return _sendCommand(sequence);
+  }
+
+  Future<void> stopCurrent() async {
+    await DebugBridge.instance.stopDebugging(null);
+    _sendCommand('\x03');
+  }
+
+  String _quote(String value) =>
+      value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+
+  bool _sendCommand(String command) {
+    try {
+      if (TerminalSessionStore.instance.sendToActivePty(command)) return true;
+      sendToPty?.call(command);
+      return sendToPty != null;
+    } catch (e) {
+      debugPrint('[DebugLauncher] Terminal command error: $e');
+      return false;
+    }
+  }
 
   /// Start a Node.js debug session for a JS/TS file.
   /// Launches `node --inspect-brk=0.0.0.0:9229 <file>` in PRoot,

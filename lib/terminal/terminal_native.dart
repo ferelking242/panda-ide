@@ -434,6 +434,27 @@ class TerminalSessionStore {
   /// Bloc partagé : police, sessions, onglet actif restent cohérents
   /// entre la vue embarquée et la vue étendue.
   TerminalSessionBloc? bloc;
+
+  /// Sends a shell sequence to the currently selected PTY.
+  ///
+  /// Keeping this on the global store lets Run/Debug use the same terminal
+  /// session whether it is currently shown in the bottom panel or in a tab.
+  bool sendToActivePty(String sequence) {
+    final activeId = bloc?.state.activeSessionId;
+    _TerminalRuntime? runtime = activeId == null ? null : runtimes[activeId];
+    if (runtime?.pty == null) {
+      for (final candidate in runtimes.values) {
+        if (candidate.pty != null) {
+          runtime = candidate;
+          break;
+        }
+      }
+    }
+    final pty = runtime?.pty;
+    if (pty == null) return false;
+    pty.write(Uint8List.fromList(utf8.encode(sequence)));
+    return true;
+  }
 }
 
 class _SetupTerminalState extends State<SetupTerminal>
