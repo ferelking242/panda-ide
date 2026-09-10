@@ -1928,25 +1928,12 @@ class _SelectTypeState extends State<SelectType>
                       iconColor: iconColor,
                       selColor: selColor,
                       onTap: () {
-                        // Marketplace (idx:6) opens as an editor tab, not sidebar
+                        // Marketplace is a workbench view, like VS Code's
+                        // Extensions view. It must never create an editor tab.
                         if (item.idx == 6) {
                           setState(() {
-                            if (!_openTabs.any((t) => t.id == 'marketplace')) {
-                              _openTabs.add(
-                                const _TabDef(
-                                  id: 'marketplace',
-                                  title: 'Extensions',
-                                  icon: Broken.shop,
-                                ),
-                              );
-                              _activeTabIdx = _openTabs.length - 1;
-                            } else {
-                              _activeTabIdx = _openTabs.indexWhere(
-                                (t) => t.id == 'marketplace',
-                              );
-                            }
-                            _sidebarState = 1;
-                            _activeRail = 0;
+                            _activeRail = 6;
+                            _sidebarState = 2;
                           });
                           return;
                         }
@@ -3516,94 +3503,7 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Marketplace panel ─────────────────────────────────────────────────────
   Widget _sidebarMarketplace(BuildContext ctx, AppTheme t, bool dark) {
-    final bool nodeAvailable =
-        kIsWeb || TerminalNodeLauncher.instance.isAvailable;
-
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        // ── Bannière Node.js si absent ────────────────────────────────
-        if (!nodeAvailable) ...[
-          Container(
-            margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: dark ? 0.15 : 0.10),
-              border: Border.all(
-                color: Colors.orange.withValues(alpha: 0.5),
-                width: 1,
-              ),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              children: [
-                const Icon(Broken.warning_2, size: 14, color: Colors.orange),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Runtime Node.js absent. Installez-le pour activer les extensions.',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: dark ? Colors.orange[300] : Colors.orange[800],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                GestureDetector(
-                  onTap: () => _push(ctx, const MarketplacePage()),
-                  child: Text(
-                    'Installer',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.orange[400],
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 4),
-        ],
-
-        // ── Section Modèles & runtimes ────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-          child: Text(
-            'MODÈLES & RUNTIMES',
-            style: _kSectionTitle.copyWith(
-              color: dark ? Colors.grey[500] : Colors.grey[500],
-            ),
-          ),
-        ),
-        _panelItem(
-          ctx,
-          t,
-          Broken.cpu,
-          'Parcourir les modèles IA',
-          () => _push(ctx, const MenuScreen()),
-        ),
-        _panelItem(
-          ctx,
-          t,
-          Broken.document_download,
-          'Téléchargements / Paquets',
-          () => _push(ctx, const MarketplacePage()),
-        ),
-        const Divider(indent: 12, endIndent: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Text(
-            'Téléchargez des runtimes, extensions et modèles de projet.',
-            style: TextStyle(
-              fontSize: 12,
-              color: dark ? Colors.grey[500] : Colors.grey[600],
-            ),
-          ),
-        ),
-      ],
-    );
+    return const MarketplacePage(embedded: true);
   }
 
   void _ensureCopilotInitialized() {
@@ -5580,9 +5480,6 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'copilot-chat') {
       return _buildCopilotChatPage();
     }
-    if (tab.id == 'marketplace') {
-      return const MarketplacePage(embedded: true);
-    }
     if (tab.id == 'preview') {
       return const PreviewPanel();
     }
@@ -5693,9 +5590,6 @@ class _SelectTypeState extends State<SelectType>
     }
     if (tab.id == 'copilot-chat') {
       return _buildCopilotChatPage();
-    }
-    if (tab.id == 'marketplace') {
-      return const MarketplacePage(embedded: true);
     }
     if (tab.id == 'preview') {
       return const PreviewPanel();
@@ -11900,7 +11794,10 @@ class _SelectTypeState extends State<SelectType>
                     subtitle:
                         'Configurez votre éditeur, téléchargez les runtimes et commencez à coder.',
                     isDark: isDark,
-                    onTap: () => _push(context, const MarketplacePage()),
+                    onTap: () => setState(() {
+                      _activeRail = 6;
+                      _sidebarState = 2;
+                    }),
                   ),
                   const SizedBox(height: 10),
                   _WalkthroughCard(

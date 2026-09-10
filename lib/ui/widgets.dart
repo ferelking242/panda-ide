@@ -111,7 +111,6 @@ export '../utils/agent_settings_service.dart';
 // ── Extensions (additional) ──
 export '../extensions/extension_host_isolate.dart';
 export '../extensions/lsp_bridge.dart';
-export '../extensions/open_vsx_marketplace.dart';
 export '../extensions/ui/extension_host_status_page.dart';
 export '../extensions/permission_dialog.dart';
 

@@ -119,7 +119,7 @@ class VsixInstaller {
       return InstallFailure(
           'Cette extension utilise des binaires natifs (.node) compilés pour x64 PC — '
           'incompatibles avec Android ARM64. '
-          'Cherchez une alternative sur open-vsx.org.');
+          'Cette extension ne peut pas être installée dans Panda IDE.');
     }
 
     // 5. Vérifier si déjà installée
@@ -190,11 +190,11 @@ class VsixInstaller {
 
   Future<File> _download(String url) async {
     final uri = Uri.parse(url);
-    const allowedHosts = {
-      'marketplace.visualstudio.com',
-      'open-vsx.org',
-    };
-    if (uri.scheme != 'https' || !allowedHosts.contains(uri.host)) {
+    final isOfficialMarketplaceHost =
+        uri.host == 'marketplace.visualstudio.com' ||
+        uri.host.endsWith('.gallerycdn.vsassets.io') ||
+        uri.host.endsWith('.gallery.vsassets.io');
+    if (uri.scheme != 'https' || !isOfficialMarketplaceHost) {
       throw ArgumentError('Source d’extension non autorisée');
     }
     final response = await http.get(uri);
