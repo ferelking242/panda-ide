@@ -17,3 +17,4 @@
 - [Terminal shortcuts](terminal-shortcuts.md) — preserve PTY control bytes for Gboard and hardware shortcuts; Ctrl+C must always interrupt instead of copying.
 - [Dart Process export collision](dart-process-export-collision.md) — legacy Git facades named Process must stay hidden from shared barrel exports.
 - [Official Marketplace assets](official-marketplace-assets.md) — use Microsoft Gallery as the single source and allow its publisher CDN hosts for VSIX downloads.
+- [Local GGUF GPU fallback](local-gguf-gpu-fallback.md) — native GPU probing can return a null payload on Android; local model loading must remain safe on CPU by default.
