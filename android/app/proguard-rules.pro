@@ -14,6 +14,11 @@
 # Keep Shizuku
 -keep class dev.rikka.shizuku.** { *; }
 
+# Flutter's deferred-components embedding references Play Core optionally.
+# Panda installs runtimes directly through the terminal, so Play Core is not
+# packaged; suppress only these unused optional references for R8.
+-dontwarn com.google.android.play.core.**
+
 # Keep MethodChannel-bridged classes (all plugins use them)
 -keepclassmembers class * {
     @io.flutter.plugin.common.MethodChannel.Method *;
