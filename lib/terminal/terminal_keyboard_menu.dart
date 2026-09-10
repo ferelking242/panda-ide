@@ -152,32 +152,17 @@ class _TerminalKeyboardMenuState extends State<TerminalKeyboardMenu> {
   }
 
   void _send(String sequence) {
-    _resetModifiers();
     widget.onSendSequence(sequence);
+    // The parent must see the active modifiers while it encodes the sequence.
+    // Reset only after dispatching so arrow keys and function keys do not
+    // silently lose Ctrl/Alt/Shift.
+    _resetModifiers();
   }
 
   void _sendWithModifiers(String value) {
-    var sequence = value;
-    if (_ctrl && value.length == 1) {
-      final code = value.toLowerCase().codeUnitAt(0);
-      if (code >= 97 && code <= 122) {
-        sequence = String.fromCharCode(code - 96);
-      } else {
-        sequence = switch (value) {
-          '[' => '\x1b',
-          '\\' => '\x1c',
-          ']' => '\x1d',
-          '^' => '\x1e',
-          '_' => '\x1f',
-          '?' => '\x7f',
-          ' ' => '\x00',
-          _ => value,
-        };
-      }
-    }
-    if (_alt) sequence = '\x1b$sequence';
-    if (_shift) sequence = sequence.toUpperCase();
-    _send(sequence);
+    // Modifier encoding is centralized in the terminal owner. This method is
+    // retained as the semantic entry point for text-like keys such as TAB.
+    _send(value);
   }
 
   void _resetModifiers() {

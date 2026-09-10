@@ -22,6 +22,7 @@ import '../utils/functions.dart';
 import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import './terminal_bridge.dart';
+import './terminal_input.dart';
 import './terminal_keyboard_menu.dart';
 
 /// Taille de police par défaut du terminal — source de vérité du zoom
@@ -1901,38 +1902,42 @@ class _SetupTerminalState extends State<SetupTerminal>
   ) {
     if (widget.readOnly) return;
 
+    final ctrl = _modCtrl;
+    final alt = _modAlt;
+    final shift = _modShift;
+
     // Keep the desktop-style visible "select all" action, but do not swallow
     // the terminal byte: readline still receives Ctrl+A as 0x01.
-    if (_modCtrl && data.length == 1 && data.toLowerCase() == 'a') {
+    if (ctrl && data.length == 1 && data.toLowerCase() == 'a') {
       _selectAll(runtime);
     }
-    if (_modCtrl && data.length == 1 && data.toLowerCase() == 'v') {
-      _modResetCallback?.call();
-      _modCtrl = false;
-      _modAlt = false;
-      _modShift = false;
-      _modResetCallback = null;
+
+    // Ubuntu follows the conventional terminal split: Ctrl+Shift+C/V are
+    // clipboard operations, while Ctrl+C interrupts and Ctrl+V sends ^V.
+    if (ctrl &&
+        shift &&
+        data.length == 1 &&
+        data.toLowerCase() == 'c') {
+      _resetTerminalModifiers();
+      unawaited(_copySelection(runtime));
+      return;
+    }
+    if (ctrl &&
+        shift &&
+        data.length == 1 &&
+        data.toLowerCase() == 'v') {
+      _resetTerminalModifiers();
       unawaited(_pasteIntoTerminal(runtime));
       return;
     }
 
-    var sequence = data;
-    if (_modCtrl && data.length == 1) {
-      final controlCode = _terminalControlCode(data);
-      if (controlCode != null) {
-        sequence = String.fromCharCode(controlCode);
-      }
-    }
-    if (_modAlt) sequence = '\x1b$sequence';
-    if (_modShift) sequence = sequence.toUpperCase();
-
-    if (_modCtrl || _modAlt || _modShift) {
-      _modResetCallback?.call();
-      _modCtrl = false;
-      _modAlt = false;
-      _modShift = false;
-      _modResetCallback = null;
-    }
+    final sequence = TerminalInputEncoder.encode(
+      data,
+      ctrl: ctrl,
+      alt: alt,
+      shift: shift,
+    );
+    _resetTerminalModifiers();
 
     if (sequence.isEmpty) return;
     write(Uint8List.fromList(utf8.encode(sequence)));
@@ -1941,25 +1946,12 @@ class _SetupTerminalState extends State<SetupTerminal>
     }
   }
 
-  /// Returns the byte expected by a POSIX terminal for Ctrl+[key].
-  ///
-  /// This is deliberately shared by Gboard input and the hardware keyboard
-  /// path. In particular, Ctrl+C must remain 0x03 even when xterm currently
-  /// has a text selection; copying is an explicit toolbar action.
-  int? _terminalControlCode(String value) {
-    if (value.length != 1) return null;
-    final code = value.toLowerCase().codeUnitAt(0);
-    if (code >= 97 && code <= 122) return code - 96;
-    return switch (code) {
-      64 || 32 => 0,
-      91 => 27,
-      92 => 28,
-      93 => 29,
-      94 => 30,
-      95 => 31,
-      63 => 127,
-      _ => null,
-    };
+  void _resetTerminalModifiers() {
+    _modResetCallback?.call();
+    _modCtrl = false;
+    _modAlt = false;
+    _modShift = false;
+    _modResetCallback = null;
   }
 
   void _onTerminalResized(
@@ -2027,64 +2019,119 @@ class _SetupTerminalState extends State<SetupTerminal>
     _selectionToolbarOverlay = null;
   }
 
-  /// Keep hardware Ctrl shortcuts in the same path as the accessory keyboard.
+  /// Keep hardware shortcuts in the same path as the accessory keyboard.
   ///
-  /// Flutter's text-input layer does not forward every Ctrl combination to
-  /// xterm on Android. Handling the control bytes here makes a physical
-  /// keyboard behave like the on-screen Ctrl modifier followed by a letter.
+  /// Flutter's text-input layer does not forward every Ctrl/Alt combination
+  /// to xterm on Android. Handling the complete modified key sequence here
+  /// makes a physical Ubuntu keyboard behave like the accessory keyboard.
   KeyEventResult _handleTerminalKeyEvent(
     _TerminalRuntime runtime,
     FocusNode focusNode,
     KeyEvent event,
   ) {
-    if (event is! KeyDownEvent ||
-        !HardwareKeyboard.instance.isControlPressed) {
+    if (widget.readOnly ||
+        (event is! KeyDownEvent && event is! KeyRepeatEvent)) {
       return KeyEventResult.ignored;
     }
 
-    final controlCode = <LogicalKeyboardKey, int>{
-      LogicalKeyboardKey.keyA: 1,
-      LogicalKeyboardKey.keyB: 2,
-      LogicalKeyboardKey.keyC: 3,
-      LogicalKeyboardKey.keyD: 4,
-      LogicalKeyboardKey.keyE: 5,
-      LogicalKeyboardKey.keyF: 6,
-      LogicalKeyboardKey.keyG: 7,
-      LogicalKeyboardKey.keyH: 8,
-      LogicalKeyboardKey.keyI: 9,
-      LogicalKeyboardKey.keyJ: 10,
-      LogicalKeyboardKey.keyK: 11,
-      LogicalKeyboardKey.keyL: 12,
-      LogicalKeyboardKey.keyM: 13,
-      LogicalKeyboardKey.keyN: 14,
-      LogicalKeyboardKey.keyO: 15,
-      LogicalKeyboardKey.keyP: 16,
-      LogicalKeyboardKey.keyQ: 17,
-      LogicalKeyboardKey.keyR: 18,
-      LogicalKeyboardKey.keyS: 19,
-      LogicalKeyboardKey.keyT: 20,
-      LogicalKeyboardKey.keyU: 21,
-      LogicalKeyboardKey.keyV: 22,
-      LogicalKeyboardKey.keyW: 23,
-      LogicalKeyboardKey.keyX: 24,
-      LogicalKeyboardKey.keyY: 25,
-      LogicalKeyboardKey.keyZ: 26,
-    }[event.logicalKey];
-    if (controlCode == null) return KeyEventResult.ignored;
+    final keyboard = HardwareKeyboard.instance;
+    final ctrl = keyboard.isControlPressed;
+    final alt = keyboard.isAltPressed;
+    final shift = keyboard.isShiftPressed;
+    if (!ctrl && !alt && !shift) return KeyEventResult.ignored;
 
-    // xterm's Actions implement copy/paste and selection. Do not consume
-    // those combinations in the terminal-to-shell control-byte path.
-    if (event.logicalKey == LogicalKeyboardKey.keyV ||
-        (event.logicalKey == LogicalKeyboardKey.keyC &&
-            HardwareKeyboard.instance.isShiftPressed)) {
-      return KeyEventResult.ignored;
+    // AltGr is represented as Ctrl+Alt on several Android keyboard layouts.
+    // Let xterm/text input receive it so characters such as @, | and € are
+    // not turned into terminal control bytes.
+    if (keyboard.isAltGraphPressed) return KeyEventResult.ignored;
+
+    final key = event.logicalKey;
+    if (ctrl &&
+        shift &&
+        key == LogicalKeyboardKey.keyC &&
+        event is KeyDownEvent) {
+      unawaited(_copySelection(runtime));
+      return KeyEventResult.handled;
+    }
+    if (ctrl &&
+        shift &&
+        key == LogicalKeyboardKey.keyV &&
+        event is KeyDownEvent) {
+      unawaited(_pasteIntoTerminal(runtime));
+      return KeyEventResult.handled;
     }
 
-    if (event.logicalKey == LogicalKeyboardKey.keyA) {
+    final sequence = _hardwareKeySequence(event);
+    if (sequence == null) return KeyEventResult.ignored;
+
+    final encoded = TerminalInputEncoder.encode(
+      sequence,
+      ctrl: ctrl,
+      alt: alt,
+      shift: shift,
+      isKeySequence: _isTerminalKeySequence(sequence),
+    );
+    if (encoded.isEmpty) return KeyEventResult.handled;
+
+    if (ctrl && key == LogicalKeyboardKey.keyA) {
       _selectAll(runtime);
     }
-    runtime.pty?.write(Uint8List.fromList([controlCode]));
+
+    runtime.pty?.write(Uint8List.fromList(utf8.encode(encoded)));
     return KeyEventResult.handled;
+  }
+
+  String? _hardwareKeySequence(KeyEvent event) {
+    final key = event.logicalKey;
+    final special = <LogicalKeyboardKey, String>{
+      LogicalKeyboardKey.escape: '\x1b',
+      LogicalKeyboardKey.tab: '\t',
+      LogicalKeyboardKey.enter: '\r',
+      LogicalKeyboardKey.numpadEnter: '\r',
+      LogicalKeyboardKey.backspace: '\x7f',
+      LogicalKeyboardKey.delete: '\x1b[3~',
+      LogicalKeyboardKey.insert: '\x1b[2~',
+      LogicalKeyboardKey.home: '\x1b[H',
+      LogicalKeyboardKey.end: '\x1b[F',
+      LogicalKeyboardKey.pageUp: '\x1b[5~',
+      LogicalKeyboardKey.pageDown: '\x1b[6~',
+      LogicalKeyboardKey.arrowUp: '\x1b[A',
+      LogicalKeyboardKey.arrowDown: '\x1b[B',
+      LogicalKeyboardKey.arrowLeft: '\x1b[D',
+      LogicalKeyboardKey.arrowRight: '\x1b[C',
+      LogicalKeyboardKey.f1: '\x1bOP',
+      LogicalKeyboardKey.f2: '\x1bOQ',
+      LogicalKeyboardKey.f3: '\x1bOR',
+      LogicalKeyboardKey.f4: '\x1bOS',
+      LogicalKeyboardKey.f5: '\x1b[15~',
+      LogicalKeyboardKey.f6: '\x1b[17~',
+      LogicalKeyboardKey.f7: '\x1b[18~',
+      LogicalKeyboardKey.f8: '\x1b[19~',
+      LogicalKeyboardKey.f9: '\x1b[20~',
+      LogicalKeyboardKey.f10: '\x1b[21~',
+      LogicalKeyboardKey.f11: '\x1b[23~',
+      LogicalKeyboardKey.f12: '\x1b[24~',
+    }[key];
+    if (special != null) return special;
+
+    // Ctrl+letter must use the logical base key, not event.character: some
+    // Android layouts report the already translated control byte there.
+    final keyboard = HardwareKeyboard.instance;
+    final character = event.character;
+    if (keyboard.isControlPressed) {
+      final label = key.keyLabel;
+      if (label.length == 1) return label;
+      if (key == LogicalKeyboardKey.space) return ' ';
+    }
+    if (character != null && character.isNotEmpty) return character;
+    final label = key.keyLabel;
+    return label.length == 1 ? label : null;
+  }
+
+  bool _isTerminalKeySequence(String sequence) {
+    return sequence == '\t' ||
+        sequence.length > 1 ||
+        sequence.startsWith('\x1b');
   }
 
   void sendToPty(String sequence) {
@@ -2092,7 +2139,15 @@ class _SetupTerminalState extends State<SetupTerminal>
     final runtime = _activeRuntime();
     if (runtime == null) return;
     if (!runtime.focusNode.hasFocus) runtime.focusNode.requestFocus();
-    runtime.pty?.write(const Utf8Encoder().convert(sequence));
+    final encoded = TerminalInputEncoder.encode(
+      sequence,
+      ctrl: _modCtrl,
+      alt: _modAlt,
+      shift: _modShift,
+      isKeySequence: _isTerminalKeySequence(sequence),
+    );
+    _resetTerminalModifiers();
+    runtime.pty?.write(Uint8List.fromList(utf8.encode(encoded)));
   }
 
   void _setTerminalOutputWithAutocomplete({
