@@ -1031,8 +1031,6 @@ class CopilotBloc extends Bloc<CopilotEvent, CopilotState> {
       'isSignedIn': isSignedIn,
       'isEnabled': state.isEnabled,
     }));
-    await setCopilotSignedPref(isSignedIn);
-    await setCopilotEnabledPref(isCopilotEnabled);
   }
 
   Future<void> _loadConfig(Emitter<CopilotState> emit) async {
@@ -1050,14 +1048,7 @@ class CopilotBloc extends Bloc<CopilotEvent, CopilotState> {
         
         debugPrint('Loaded Copilot config: signedIn=$wasSignedIn, enabled=$isEnabled');
 
-        final storedSignedPref = prefs.getBool(copilotSignedPrefKey);
-        if (storedSignedPref == null) {
-          await setCopilotSignedPref(wasSignedIn);
-        }
       }
-
-      await ensureCopilotEnabledPrefInitialized();
-      await ensureCopilotSignedPrefInitialized();
     } catch (e) {
       debugPrint('Failed to load Copilot config: $e');
     }

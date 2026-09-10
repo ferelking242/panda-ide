@@ -1025,7 +1025,9 @@ class _AgentSettingsState extends State<AgentSettings>
         .toList() ?? [];
     final modelName = models.isNotEmpty ? models.first['id'].toString() : '';
     if (modelName.isEmpty) return null;
-    return Copilot(authToken: auth.authToken, apiEndpoint: auth.apiEndpoint, model: modelName);
+    // The Copilot provider was removed from the model registry. Keep this
+    // legacy branch harmless for configurations saved by older versions.
+    return null;
   }
 
   void _chatStop() {

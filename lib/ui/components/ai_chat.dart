@@ -139,7 +139,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
     _promptController.text = uiState.promptText;
     _promptController.addListener(_onPromptChanged);
     _scrollController.addListener(_onScrollChanged);
-    _loadCopilotSignInPref();
     _copilotStateSubscription = context.read<CopilotBloc>().stream.listen((state) {
       final nextValue = state.isSignedIn;
       if (nextValue == _copilotSignedInFromPrefs || !mounted) {
@@ -150,19 +149,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
       });
     });
     _reloadPendingEdits();
-  }
-
-  Future<void> _loadCopilotSignInPref() async {
-    final isSignedIn = await isCopilotSignedPref();
-    if (!mounted) {
-      return;
-    }
-    if (_copilotSignedInFromPrefs == isSignedIn) {
-      return;
-    }
-    setState(() {
-      _copilotSignedInFromPrefs = isSignedIn;
-    });
   }
 
   @override
@@ -1932,7 +1918,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
         }
         
       case OpenAI():
-      case Copilot():
       case Grok():
       case Groq():
       case DeepSeek():
@@ -2012,7 +1997,6 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
           "messages": messages,
         };
       case OpenAI():
-      case Copilot():
       case Grok():
       case Groq():
       case DeepSeek():
