@@ -324,6 +324,8 @@ class LocalLlamaLoadModel extends LocalLlamaEvent {
   LocalLlamaLoadModel(this.model);
 }
 
+class LocalLlamaRestoreActiveModel extends LocalLlamaEvent {}
+
 class LocalLlamaUnloadModel extends LocalLlamaEvent {}
 
 class LocalLlamaStopGeneration extends LocalLlamaEvent {}

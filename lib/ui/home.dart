@@ -1974,25 +1974,16 @@ class _SelectTypeState extends State<SelectType>
                           _openAgentTab();
                           return;
                         }
-                        // Local Models opens as an editor tab.
+                        // Local Models is a real sidebar panel, like Marketplace.
                         if (item.idx == 11) {
                           setState(() {
-                            if (!_openTabs.any((t) => t.id == 'local_models')) {
-                              _openTabs.add(
-                                const _TabDef(
-                                  id: 'local_models',
-                                  title: 'Local Models',
-                                  icon: Broken.cpu_setting,
-                                ),
-                              );
-                              _activeTabIdx = _openTabs.length - 1;
+                            if (_activeRail == 11 && _sidebarState == 2) {
+                              _sidebarState = 1;
+                              _activeRail = 0;
                             } else {
-                              _activeTabIdx = _openTabs.indexWhere(
-                                (t) => t.id == 'local_models',
-                              );
+                              _activeRail = 11;
+                              _sidebarState = 2;
                             }
-                            _sidebarState = 1;
-                            _activeRail = 0;
                           });
                           return;
                         }
@@ -2302,6 +2293,9 @@ class _SelectTypeState extends State<SelectType>
         break;
       case 6: // Marketplace
         panelBody = _sidebarMarketplace(context, appTheme, isDark);
+        break;
+      case 11: // Local Models
+        panelBody = _sidebarLocalModels(context, appTheme, isDark);
         break;
       case 9: // GitHub Copilot
         panelBody = _sidebarCopilot(context, appTheme, isDark);
@@ -3505,6 +3499,10 @@ class _SelectTypeState extends State<SelectType>
   // ── Marketplace panel ─────────────────────────────────────────────────────
   Widget _sidebarMarketplace(BuildContext ctx, AppTheme t, bool dark) {
     return const MarketplacePage(embedded: true);
+  }
+
+  Widget _sidebarLocalModels(BuildContext ctx, AppTheme t, bool dark) {
+    return const LocalModelsPage(embedded: true);
   }
 
   void _ensureCopilotInitialized() {
@@ -9563,6 +9561,18 @@ class _SelectTypeState extends State<SelectType>
           threads: (cfg['threads'] as num?)?.toInt() ?? 4,
           contextSize: (cfg['contextSize'] as num?)?.toInt() ?? 4096,
           gpuLayers: (cfg['gpuLayers'] as num?)?.toInt() ?? 0,
+          temperature: (cfg['temperature'] as num?)?.toDouble() ?? 0.7,
+          topP: (cfg['topP'] as num?)?.toDouble() ?? 0.9,
+          topK: (cfg['topK'] as num?)?.toInt() ?? 40,
+          repeatPenalty: (cfg['repeatPenalty'] as num?)?.toDouble() ?? 1.1,
+          frequencyPenalty: (cfg['frequencyPenalty'] as num?)?.toDouble() ?? 0,
+          presencePenalty: (cfg['presencePenalty'] as num?)?.toDouble() ?? 0,
+          repeatLastN: (cfg['repeatLastN'] as num?)?.toInt() ?? 64,
+          seed: (cfg['seed'] as num?)?.toInt() ?? 42,
+          maxTokens: (cfg['maxTokens'] as num?)?.toInt() ?? 512,
+          mirostat: (cfg['mirostat'] as num?)?.toInt() ?? 0,
+          mirostatTau: (cfg['mirostatTau'] as num?)?.toDouble() ?? 5,
+          mirostatEta: (cfg['mirostatEta'] as num?)?.toDouble() ?? 0.1,
         );
       case 'custom':
         final url = (cfg['url'] ?? '').toString().trim();

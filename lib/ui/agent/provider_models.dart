@@ -176,6 +176,16 @@ const providerDefs = <ProviderDef>[
     apiKeyHint: 'eyJ...',
   ),
   ProviderDef(
+    id: 'localllama',
+    name: 'Local Model',
+    description: 'GGUF local — exécution native, sans clé API',
+    icon: Broken.cpu_setting,
+    color: Color(0xff22c55e),
+    docsUrl: '',
+    hasApiKey: false,
+    apiKeyHint: 'aucune clé nécessaire',
+  ),
+  ProviderDef(
     id: 'custom',
     name: 'Custom / Local',
     description: 'Endpoint OpenAI-compatible (Ollama, LM Studio…)',

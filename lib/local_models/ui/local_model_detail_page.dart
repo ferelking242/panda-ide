@@ -695,7 +695,7 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
         modelEntry:   m,
         quantLevel:   _selectedQuant!.level,
         profile:      widget.profile!,
-        setAsDefault: false,
+        setAsDefault: true,
       );
       // ModelActivationService persists the provider, but the running
       // AIBloc (and therefore Panda Agent's model picker) also needs the
@@ -718,6 +718,28 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
             ),
           );
         }
+        final cfg = Map<String, dynamic>.from(
+          (jsonDecode(rawConfig) as Map)[result.modelId] as Map,
+        );
+        context.read<LocalLlamaBloc>().add(LocalLlamaLoadModel(LocalLlama(
+          modelPath: cfg['modelPath'].toString(),
+          displayName: cfg['modelName'].toString(),
+          threads: (cfg['threads'] as num?)?.toInt() ?? 4,
+          contextSize: (cfg['contextSize'] as num?)?.toInt() ?? 4096,
+          gpuLayers: (cfg['gpuLayers'] as num?)?.toInt() ?? 0,
+          temperature: (cfg['temperature'] as num?)?.toDouble() ?? 0.7,
+          topP: (cfg['topP'] as num?)?.toDouble() ?? 0.9,
+          topK: (cfg['topK'] as num?)?.toInt() ?? 40,
+          repeatPenalty: (cfg['repeatPenalty'] as num?)?.toDouble() ?? 1.1,
+          frequencyPenalty: (cfg['frequencyPenalty'] as num?)?.toDouble() ?? 0,
+          presencePenalty: (cfg['presencePenalty'] as num?)?.toDouble() ?? 0,
+          repeatLastN: (cfg['repeatLastN'] as num?)?.toInt() ?? 64,
+          seed: (cfg['seed'] as num?)?.toInt() ?? 42,
+          maxTokens: (cfg['maxTokens'] as num?)?.toInt() ?? 512,
+          mirostat: (cfg['mirostat'] as num?)?.toInt() ?? 0,
+          mirostatTau: (cfg['mirostatTau'] as num?)?.toDouble() ?? 5,
+          mirostatEta: (cfg['mirostatEta'] as num?)?.toDouble() ?? 0.1,
+        )));
       }
       if (!mounted) return;
       setState(() {

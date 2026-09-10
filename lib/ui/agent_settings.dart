@@ -25,6 +25,8 @@ import 'package:markdown_widget/widget/all.dart';
 import 'package:markdown_widget/config/configs.dart';
 import 'package:path_provider/path_provider.dart';
 import '../utils/ai_provider_logos.dart';
+import '../local_models/models/ai_model_entry.dart';
+import '../local_models/services/model_download_manager.dart';
 import 'widgets.dart';
 
 part 'agent/agent_settings_widgets.dart';
@@ -109,11 +111,29 @@ class _AgentSettingsState extends State<AgentSettings>
   final _apiKeyCtrl         = TextEditingController();
   final _keyProfileNameCtrl = TextEditingController();
   final _customUrlCtrl      = TextEditingController();
+  final _localModelPathCtrl = TextEditingController();
+  final _localThreadsCtrl = TextEditingController(text: '4');
+  final _localContextCtrl = TextEditingController(text: '4096');
+  final _localGpuLayersCtrl = TextEditingController(text: '0');
+  final _localTemperatureCtrl = TextEditingController(text: '0.7');
+  final _localTopPCtrl = TextEditingController(text: '0.9');
+  final _localTopKCtrl = TextEditingController(text: '40');
+  final _localRepeatPenaltyCtrl = TextEditingController(text: '1.1');
+  final _localFrequencyPenaltyCtrl = TextEditingController(text: '0.0');
+  final _localPresencePenaltyCtrl = TextEditingController(text: '0.0');
+  final _localRepeatLastNCtrl = TextEditingController(text: '64');
+  final _localSeedCtrl = TextEditingController(text: '42');
+  final _localMaxTokensCtrl = TextEditingController(text: '512');
+  final _localMirostatCtrl = TextEditingController(text: '0');
+  final _localMirostatTauCtrl = TextEditingController(text: '5.0');
+  final _localMirostatEtaCtrl = TextEditingController(text: '0.1');
+  final _localBatchSizeCtrl = TextEditingController(text: '512');
   bool _obscureKey          = true;
   bool _testingKey          = false;
   bool? _testKeyResult;
   String _testKeyMessage    = '';
   List<Map<String, dynamic>> _availableModels = const [];
+  List<InstalledModel> _installedLocalModels = const [];
 
   // Memory settings
   final _memoryNotesCtrl   = TextEditingController();
@@ -136,6 +156,7 @@ class _AgentSettingsState extends State<AgentSettings>
     _chatInputCtrl.addListener(() => setState(() {}));
     _chatScrollCtrl.addListener(_onChatScroll);
     _loadMemorySettings();
+    _loadLocalModels();
     KeyRotationBrain.instance;
     SubagentOrchestrator.instance.load().then((_) {
       if (!mounted) return;
@@ -157,6 +178,39 @@ class _AgentSettingsState extends State<AgentSettings>
     } catch (_) {
       _speechAvailable = false;
     }
+  }
+
+  Future<void> _loadLocalModels() async {
+    await ModelDownloadManager.instance.init();
+    if (!mounted) return;
+    final installed = ModelDownloadManager.instance.allInstalled
+        .where((m) => File(m.filePath).existsSync())
+        .toList();
+    final current = context.read<AIBloc>().state.config['agent_localllama'];
+    if (current is Map) {
+      _localModelPathCtrl.text =
+          current['modelPath']?.toString() ?? _localModelPathCtrl.text;
+      void setText(TextEditingController c, dynamic value) {
+        if (value != null) c.text = value.toString();
+      }
+      setText(_localThreadsCtrl, current['threads']);
+      setText(_localContextCtrl, current['contextSize']);
+      setText(_localGpuLayersCtrl, current['gpuLayers']);
+      setText(_localTemperatureCtrl, current['temperature']);
+      setText(_localTopPCtrl, current['topP']);
+      setText(_localTopKCtrl, current['topK']);
+      setText(_localRepeatPenaltyCtrl, current['repeatPenalty']);
+      setText(_localFrequencyPenaltyCtrl, current['frequencyPenalty']);
+      setText(_localPresencePenaltyCtrl, current['presencePenalty']);
+      setText(_localRepeatLastNCtrl, current['repeatLastN']);
+      setText(_localSeedCtrl, current['seed']);
+      setText(_localMaxTokensCtrl, current['maxTokens']);
+      setText(_localMirostatCtrl, current['mirostat']);
+      setText(_localMirostatTauCtrl, current['mirostatTau']);
+      setText(_localMirostatEtaCtrl, current['mirostatEta']);
+      setText(_localBatchSizeCtrl, current['batchSize']);
+    }
+    setState(() => _installedLocalModels = installed);
   }
 
   void _toggleListening() async {
@@ -351,6 +405,16 @@ class _AgentSettingsState extends State<AgentSettings>
     _apiKeyCtrl.dispose();
     _keyProfileNameCtrl.dispose();
     _customUrlCtrl.dispose();
+    for (final c in [
+      _localModelPathCtrl, _localThreadsCtrl, _localContextCtrl,
+      _localGpuLayersCtrl, _localTemperatureCtrl, _localTopPCtrl,
+      _localTopKCtrl, _localRepeatPenaltyCtrl, _localFrequencyPenaltyCtrl,
+      _localPresencePenaltyCtrl, _localRepeatLastNCtrl, _localSeedCtrl,
+      _localMaxTokensCtrl, _localMirostatCtrl, _localMirostatTauCtrl,
+      _localMirostatEtaCtrl, _localBatchSizeCtrl,
+    ]) {
+      c.dispose();
+    }
     _memoryNotesCtrl.dispose();
     _systemPromptCtrl.dispose();
     try { _speech?.stop(); } catch (_) {}
@@ -448,7 +512,14 @@ class _AgentSettingsState extends State<AgentSettings>
     final aiState = context.read<AIBloc>().state;
     final selectedId = aiState.modelSelected['chat']?.toString();
     final selectedConfig = selectedId == null ? null : aiState.config[selectedId];
-    final isAgentProfile = selectedId != null && selectedId.startsWith('agent_');
+    final selectedProvider = selectedConfig is Map
+        ? (selectedConfig['provider'] ?? selectedConfig['apiProvider'])
+            ?.toString()
+            .toLowerCase()
+        : null;
+    final isAgentProfile =
+        (selectedId != null && selectedId.startsWith('agent_')) ||
+            selectedProvider == 'localllama';
 
     if (!isAgentProfile || selectedConfig == null) {
       setState(() {
@@ -881,6 +952,18 @@ class _AgentSettingsState extends State<AgentSettings>
           threads: (cfg['threads'] as num?)?.toInt() ?? 4,
           contextSize: (cfg['contextSize'] as num?)?.toInt() ?? 4096,
           gpuLayers: (cfg['gpuLayers'] as num?)?.toInt() ?? 0,
+          temperature: (cfg['temperature'] as num?)?.toDouble() ?? 0.7,
+          topP: (cfg['topP'] as num?)?.toDouble() ?? 0.9,
+          topK: (cfg['topK'] as num?)?.toInt() ?? 40,
+          repeatPenalty: (cfg['repeatPenalty'] as num?)?.toDouble() ?? 1.1,
+          frequencyPenalty: (cfg['frequencyPenalty'] as num?)?.toDouble() ?? 0,
+          presencePenalty: (cfg['presencePenalty'] as num?)?.toDouble() ?? 0,
+          repeatLastN: (cfg['repeatLastN'] as num?)?.toInt() ?? 64,
+          seed: (cfg['seed'] as num?)?.toInt() ?? 42,
+          maxTokens: (cfg['maxTokens'] as num?)?.toInt() ?? 512,
+          mirostat: (cfg['mirostat'] as num?)?.toInt() ?? 0,
+          mirostatTau: (cfg['mirostatTau'] as num?)?.toDouble() ?? 5,
+          mirostatEta: (cfg['mirostatEta'] as num?)?.toDouble() ?? 0.1,
         );
       case 'custom':
         final url = (cfg['url'] ?? '').toString().trim();
@@ -983,6 +1066,17 @@ class _AgentSettingsState extends State<AgentSettings>
     }
     if (provider.hasApiKey && apiKey.isEmpty) {
       setState(() { _testKeyResult = false; _testKeyMessage = 'Entrez la clé API avant de valider.'; });
+      return;
+    }
+    if (_selectedProviderId == 'localllama') {
+      await _saveLocalProviderConfig(context);
+      if (mounted) {
+        setState(() {
+          _testingKey = false;
+          _testKeyResult = true;
+          _testKeyMessage = '✓ Modèle local activé.';
+        });
+      }
       return;
     }
     if (_selectedProviderId == 'custom' && _customUrlCtrl.text.trim().isEmpty) {
@@ -1226,6 +1320,152 @@ class _AgentSettingsState extends State<AgentSettings>
     selected['chat'] = modelId;
     aiBloc.add(ModelSelectEvent(selected));
     await prefs.setString('modelSelected', jsonEncode(selected));
+    context.read<LocalLlamaBloc>().add(LocalLlamaLoadModel(LocalLlama(
+      modelPath: path,
+      displayName: fileName,
+      threads: _localInt(_localThreadsCtrl, 4, min: 1),
+      contextSize: _localInt(_localContextCtrl, 4096, min: 128),
+      gpuLayers: _localInt(_localGpuLayersCtrl, 0),
+      temperature: _localDouble(_localTemperatureCtrl, 0.7, max: 2),
+      topP: _localDouble(_localTopPCtrl, 0.9, max: 1),
+      topK: _localInt(_localTopKCtrl, 40),
+      repeatPenalty: _localDouble(_localRepeatPenaltyCtrl, 1.1, min: 0.1, max: 3),
+      frequencyPenalty: _localDouble(_localFrequencyPenaltyCtrl, 0),
+      presencePenalty: _localDouble(_localPresencePenaltyCtrl, 0),
+      repeatLastN: _localInt(_localRepeatLastNCtrl, 64),
+      seed: _localInt(_localSeedCtrl, 42),
+      maxTokens: _localInt(_localMaxTokensCtrl, 512, min: 1),
+      mirostat: _localInt(_localMirostatCtrl, 0),
+      mirostatTau: _localDouble(_localMirostatTauCtrl, 5),
+      mirostatEta: _localDouble(_localMirostatEtaCtrl, 0.1),
+    )));
+  }
+
+  int _localInt(TextEditingController c, int fallback, {int min = 0}) =>
+      (int.tryParse(c.text.trim()) ?? fallback).clamp(min, 1000000);
+
+  double _localDouble(TextEditingController c, double fallback,
+      {double min = 0, double max = 100}) =>
+      (double.tryParse(c.text.trim()) ?? fallback).clamp(min, max);
+
+  Future<void> _saveLocalProviderConfig(BuildContext context) async {
+    final path = _localModelPathCtrl.text.trim();
+    if (path.isEmpty) {
+      setState(() {
+        _testKeyResult = false;
+        _testKeyMessage = 'Sélectionnez un modèle GGUF installé.';
+      });
+      return;
+    }
+
+    final aiBloc = context.read<AIBloc>();
+    final newCfg = Map<String, dynamic>.from(aiBloc.state.config);
+    const modelId = 'agent_localllama';
+    final fileName = path.split('/').last;
+    final localCfg = <String, dynamic>{
+      'provider': 'localllama',
+      'apiProvider': 'localllama',
+      'modelName': fileName,
+      'model': fileName,
+      'modelPath': path,
+      'threads': _localInt(_localThreadsCtrl, 4, min: 1),
+      'contextSize': _localInt(_localContextCtrl, 4096, min: 128),
+      'gpuLayers': _localInt(_localGpuLayersCtrl, 0),
+      'temperature': _localDouble(_localTemperatureCtrl, 0.7, max: 2),
+      'topP': _localDouble(_localTopPCtrl, 0.9, max: 1),
+      'topK': _localInt(_localTopKCtrl, 40),
+      'repeatPenalty': _localDouble(_localRepeatPenaltyCtrl, 1.1, min: 0.1, max: 3),
+      'frequencyPenalty': _localDouble(_localFrequencyPenaltyCtrl, 0),
+      'presencePenalty': _localDouble(_localPresencePenaltyCtrl, 0),
+      'repeatLastN': _localInt(_localRepeatLastNCtrl, 64),
+      'seed': _localInt(_localSeedCtrl, 42),
+      'maxTokens': _localInt(_localMaxTokensCtrl, 512, min: 1),
+      'mirostat': _localInt(_localMirostatCtrl, 0),
+      'mirostatTau': _localDouble(_localMirostatTauCtrl, 5.0),
+      'mirostatEta': _localDouble(_localMirostatEtaCtrl, 0.1),
+      'batchSize': _localInt(_localBatchSizeCtrl, 512, min: 1),
+    };
+    newCfg[modelId] = localCfg;
+    aiBloc.add(AIConfigEvent(newCfg));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('aiConfig', jsonEncode(newCfg));
+    final selected = Map<String, dynamic>.from(aiBloc.state.modelSelected);
+    selected['chat'] = modelId;
+    aiBloc.add(ModelSelectEvent(selected));
+    await prefs.setString('modelSelected', jsonEncode(selected));
+  }
+
+  Widget _localSettingsGrid({
+    required bool isDark,
+    required Color card,
+    required Color fg,
+    required Color muted,
+    required Color border,
+  }) {
+    Widget field(TextEditingController controller, String label, String hint) {
+      return _SettingsField(
+        controller: controller,
+        label: label,
+        hint: hint,
+        isDark: isDark,
+        card: card,
+        fg: fg,
+        muted: muted,
+        border: border,
+      );
+    }
+
+    return Column(
+      children: [
+        Row(children: [
+          Expanded(child: field(_localThreadsCtrl, 'Threads CPU', '4')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localContextCtrl, 'Contexte', '4096')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: field(_localGpuLayersCtrl, 'GPU layers', '0 = auto')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localMaxTokensCtrl, 'Max tokens', '512')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: field(_localTemperatureCtrl, 'Temperature', '0.7')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localTopPCtrl, 'Top-p', '0.9')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: field(_localTopKCtrl, 'Top-k', '40')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localRepeatPenaltyCtrl, 'Repeat penalty', '1.1')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: field(_localFrequencyPenaltyCtrl, 'Frequency penalty', '0')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localPresencePenaltyCtrl, 'Presence penalty', '0')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: field(_localRepeatLastNCtrl, 'Repeat last N', '64')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localSeedCtrl, 'Seed', '42')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: field(_localMirostatCtrl, 'Mirostat (0/1/2)', '0')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localMirostatTauCtrl, 'Mirostat tau', '5.0')),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: field(_localMirostatEtaCtrl, 'Mirostat eta', '0.1')),
+          const SizedBox(width: 8),
+          Expanded(child: field(_localBatchSizeCtrl, 'Batch / throughput', '512')),
+        ]),
+      ],
+    );
   }
 
   bool _looksChatCapable(Map<String, dynamic> model) {
@@ -2273,8 +2513,15 @@ class _AgentSettingsState extends State<AgentSettings>
       Color card, Color fg, Color muted, Color border) {
     return BlocBuilder<AIBloc, AIState>(
       builder: (ctx, aiState) {
-        final configured =
-            aiState.config.entries.where((e) => e.key.startsWith('agent_')).toList();
+        final configured = aiState.config.entries.where((e) {
+          if (e.key.startsWith('agent_')) return true;
+          final value = e.value;
+          if (value is! Map) return false;
+          return (value['provider'] ?? value['apiProvider'])
+                  ?.toString()
+                  .toLowerCase() ==
+              'localllama';
+        }).toList();
         String currentDefaultModel = '';
         try {
           final cc = aiState.config['agent_$_selectedProviderId'];
@@ -2298,7 +2545,7 @@ class _AgentSettingsState extends State<AgentSettings>
                 final name = cfg['modelName']?.toString() ?? id;
                 final provider = cfg['provider']?.toString() ?? '';
                 final pDef = providerDefs.firstWhere(
-                    (p) => p.id == provider,
+                    (p) => p.id.toLowerCase() == provider.toLowerCase(),
                     orElse: () => providerDefs.last);
                 return _ProviderRowCompact(
                   name: pDef.name,
@@ -2423,6 +2670,67 @@ class _AgentSettingsState extends State<AgentSettings>
                     ),
                     const SizedBox(height: 10),
                   ],
+                  if (_selectedProviderId == 'localllama') ...[
+                    if (_installedLocalModels.isNotEmpty) ...[
+                      Text('MODÈLES INSTALLÉS', style: TextStyle(
+                        fontSize: 10, fontWeight: FontWeight.w800, color: muted,
+                        letterSpacing: 1.1,
+                      )),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: card,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            isExpanded: true,
+                            value: _installedLocalModels.any(
+                                    (m) => m.filePath == _localModelPathCtrl.text)
+                                ? _localModelPathCtrl.text
+                                : null,
+                            hint: Text('Choisir un modèle GGUF',
+                                style: TextStyle(fontSize: 12, color: muted)),
+                            dropdownColor: card,
+                            style: TextStyle(fontSize: 12, color: fg),
+                            items: _installedLocalModels.map((model) {
+                              return DropdownMenuItem<String>(
+                                value: model.filePath,
+                                child: Text(
+                                  '${model.modelId} · ${model.quantLevel}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              if (value == null) return;
+                              setState(() => _localModelPathCtrl.text = value);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
+                    _SettingsField(
+                      controller: _localModelPathCtrl,
+                      label: 'Chemin du fichier GGUF',
+                      hint: '/storage/.../model.gguf',
+                      isDark: isDark, card: card, fg: fg, muted: muted,
+                      border: border,
+                    ),
+                    const SizedBox(height: 12),
+                    Text('INFÉRENCE', style: TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.w800, color: muted,
+                      letterSpacing: 1.1,
+                    )),
+                    const SizedBox(height: 8),
+                    _localSettingsGrid(
+                      isDark: isDark, card: card, fg: fg, muted: muted, border: border,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   if (pDef.hasApiKey) ...[
                     // ── Nom du profil de clé (cerveau de rotation) ──────────
                     _SettingsField(
@@ -2475,14 +2783,16 @@ class _AgentSettingsState extends State<AgentSettings>
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                       ),
-                      onPressed: _testingKey ? null : _testApiKey,
+                       onPressed: _testingKey ? null : _testApiKey,
                       child: _testingKey
                           ? const SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white))
-                          : const Text('Valider et activer',
+                          : Text(_selectedProviderId == 'localllama'
+                              ? 'Enregistrer et activer'
+                              : 'Valider et activer',
                               style: TextStyle(
                                   fontSize: 13, fontWeight: FontWeight.w600)),
                     ),
@@ -2774,8 +3084,26 @@ class _AgentSettingsState extends State<AgentSettings>
       final st = context.read<AIBloc>().state;
       final sel = st.modelSelected['chat']?.toString();
       if (sel != null && sel.startsWith('agent_')) return sel;
+      final selectedCfg = sel == null ? null : st.config[sel];
+      if (selectedCfg is Map &&
+          (selectedCfg['provider'] ?? selectedCfg['apiProvider'])
+                  ?.toString()
+                  .toLowerCase() ==
+              'localllama') {
+        return sel;
+      }
       for (final k in st.config.keys) {
         if (k.startsWith('agent_')) return k;
+      }
+      for (final entry in st.config.entries) {
+        final cfg = entry.value;
+        if (cfg is Map &&
+            (cfg['provider'] ?? cfg['apiProvider'])
+                    ?.toString()
+                    .toLowerCase() ==
+                'localllama') {
+          return entry.key;
+        }
       }
     } catch (_) {}
     return '';

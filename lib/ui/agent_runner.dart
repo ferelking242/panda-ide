@@ -13,10 +13,13 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
 
+import '../bloc/ui_bloc/ui_bloc.dart';
 import '../utils/ai.dart';
+import '../utils/llama_wrapper.dart';
 import '../agent/events/agent_event.dart';
 import '../agent/events/agent_event_bus.dart';
 import '../utils/agentic_tools.dart';
@@ -530,7 +533,15 @@ $toolLines
         'toolCount=${toolSchemas.length} workspace=$workspacePath '
         'sessionId=$sessionId',
       );
-      if (model is Gemini) {
+      if (model is LocalLlama) {
+        await _runLocalLlama(
+          model,
+          messages,
+          systemPrompt,
+          ctrl,
+          context,
+        );
+      } else if (model is Gemini) {
         await _runGemini(
           model,
           messages,
@@ -584,6 +595,70 @@ $toolLines
         ctrl.add(const AgentChunk(phase: AgentPhase.done, text: ''));
       }
       await ctrl.close();
+    }
+  }
+
+  Future<void> _runLocalLlama(
+    LocalLlama model,
+    List<Map<String, dynamic>> messages,
+    String systemPrompt,
+    StreamController<AgentChunk> ctrl,
+    BuildContext? context,
+  ) async {
+    if (context == null) {
+      throw StateError('Le modèle local nécessite le contexte de Panda Agent.');
+    }
+
+    final bloc = context.read<LocalLlamaBloc>();
+    if (bloc.state.loadedModelPath != model.modelPath ||
+        !bloc.state.isReady) {
+      bloc.add(LocalLlamaLoadModel(model));
+      await bloc.stream.firstWhere((state) =>
+          state.isReady || state.status == LocalLlamaStatus.error).timeout(
+        const Duration(minutes: 5),
+        onTimeout: () => throw TimeoutException(
+          'Le chargement du modèle local a dépassé le délai prévu.',
+        ),
+      );
+      if (!bloc.state.isReady) {
+        throw StateError(
+          bloc.state.error ?? 'Impossible de charger le modèle local.',
+        );
+      }
+    }
+
+    final chatMessages = <ChatMessage>[
+      ChatMessage(role: 'system', content: systemPrompt),
+      ...messages.where((message) {
+        final role = message['role']?.toString();
+        return role == 'user' || role == 'assistant' || role == 'system';
+      }).map((message) => ChatMessage(
+            role: message['role']?.toString() ?? 'user',
+            content: message['content']?.toString() ?? '',
+          )),
+    ];
+
+    ctrl.add(const AgentChunk(phase: AgentPhase.streaming));
+    final stream = bloc.controller!.generateChat(
+      messages: chatMessages,
+      maxTokens: model.maxTokens,
+      temperature: model.temperature,
+      topP: model.topP,
+      topK: model.topK,
+      repeatPenalty: model.repeatPenalty,
+      frequencyPenalty: model.frequencyPenalty,
+      presencePenalty: model.presencePenalty,
+      repeatLastN: model.repeatLastN,
+      mirostat: model.mirostat,
+      mirostatTau: model.mirostatTau,
+      mirostatEta: model.mirostatEta,
+      seed: model.seed,
+    );
+
+    await for (final token in stream) {
+      if (token.isNotEmpty && !ctrl.isClosed) {
+        ctrl.add(AgentChunk(phase: AgentPhase.streaming, text: token));
+      }
     }
   }
 

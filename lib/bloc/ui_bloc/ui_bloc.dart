@@ -1363,13 +1363,57 @@ class LocalLlamaBloc extends Bloc<LocalLlamaEvent, LocalLlamaState> {
 
   LocalLlamaBloc() : super(const LocalLlamaState()) {
     on<LocalLlamaLoadModel>(_onLoadModel);
+    on<LocalLlamaRestoreActiveModel>(_onRestoreActiveModel);
     on<LocalLlamaUnloadModel>(_onUnloadModel);
     on<LocalLlamaStopGeneration>(_onStopGeneration);
     on<LocalLlamaDetectGpu>(_onDetectGpu);
     on<LocalLlamaGenerationDone>(_onGenerationDone);
+    add(LocalLlamaRestoreActiveModel());
   }
 
   LlamaController? get controller => _controller;
+
+  Future<void> _onRestoreActiveModel(
+    LocalLlamaRestoreActiveModel event,
+    Emitter<LocalLlamaState> emit,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final selected = jsonDecode(prefs.getString('modelSelected') ?? '{}');
+      final selectedId = selected is Map ? selected['chat']?.toString() : null;
+      final config = jsonDecode(prefs.getString('aiConfig') ?? '{}');
+      final raw = config is Map && selectedId != null ? config[selectedId] : null;
+      if (raw is! Map) return;
+      final cfg = Map<String, dynamic>.from(raw);
+      if ((cfg['provider'] ?? cfg['apiProvider']).toString().toLowerCase() !=
+          'localllama') {
+        return;
+      }
+      final modelPath = cfg['modelPath']?.toString().trim() ?? '';
+      if (modelPath.isEmpty || !await File(modelPath).exists()) return;
+      add(LocalLlamaLoadModel(LocalLlama(
+        modelPath: modelPath,
+        displayName: (cfg['modelName'] ?? modelPath.split('/').last).toString(),
+        threads: (cfg['threads'] as num?)?.toInt() ?? 4,
+        contextSize: (cfg['contextSize'] as num?)?.toInt() ?? 4096,
+        gpuLayers: (cfg['gpuLayers'] as num?)?.toInt() ?? 0,
+        temperature: (cfg['temperature'] as num?)?.toDouble() ?? 0.7,
+        topP: (cfg['topP'] as num?)?.toDouble() ?? 0.9,
+        topK: (cfg['topK'] as num?)?.toInt() ?? 40,
+        repeatPenalty: (cfg['repeatPenalty'] as num?)?.toDouble() ?? 1.1,
+        frequencyPenalty: (cfg['frequencyPenalty'] as num?)?.toDouble() ?? 0,
+        presencePenalty: (cfg['presencePenalty'] as num?)?.toDouble() ?? 0,
+        repeatLastN: (cfg['repeatLastN'] as num?)?.toInt() ?? 64,
+        seed: (cfg['seed'] as num?)?.toInt() ?? 42,
+        maxTokens: (cfg['maxTokens'] as num?)?.toInt() ?? 512,
+        mirostat: (cfg['mirostat'] as num?)?.toInt() ?? 0,
+        mirostatTau: (cfg['mirostatTau'] as num?)?.toDouble() ?? 5,
+        mirostatEta: (cfg['mirostatEta'] as num?)?.toDouble() ?? 0.1,
+      )));
+    } catch (_) {
+      // A missing or stale model must not prevent the rest of the app starting.
+    }
+  }
 
   Future<void> _onLoadModel(
     LocalLlamaLoadModel event,

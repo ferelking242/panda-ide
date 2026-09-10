@@ -170,6 +170,18 @@ Models? _modelFromConfig(Map<String, dynamic> modelConfig) {
         threads: (modelConfig['threads'] as num?)?.toInt() ?? 4,
         contextSize: (modelConfig['contextSize'] as num?)?.toInt() ?? 4096,
         gpuLayers: (modelConfig['gpuLayers'] as num?)?.toInt() ?? 0,
+        temperature: (modelConfig['temperature'] as num?)?.toDouble() ?? 0.7,
+        topP: (modelConfig['topP'] as num?)?.toDouble() ?? 0.9,
+        topK: (modelConfig['topK'] as num?)?.toInt() ?? 40,
+        repeatPenalty: (modelConfig['repeatPenalty'] as num?)?.toDouble() ?? 1.1,
+        frequencyPenalty: (modelConfig['frequencyPenalty'] as num?)?.toDouble() ?? 0,
+        presencePenalty: (modelConfig['presencePenalty'] as num?)?.toDouble() ?? 0,
+        repeatLastN: (modelConfig['repeatLastN'] as num?)?.toInt() ?? 64,
+        seed: (modelConfig['seed'] as num?)?.toInt() ?? 42,
+        maxTokens: (modelConfig['maxTokens'] as num?)?.toInt() ?? 512,
+        mirostat: (modelConfig['mirostat'] as num?)?.toInt() ?? 0,
+        mirostatTau: (modelConfig['mirostatTau'] as num?)?.toDouble() ?? 5,
+        mirostatEta: (modelConfig['mirostatEta'] as num?)?.toDouble() ?? 0.1,
       );
 
     case 'custom':

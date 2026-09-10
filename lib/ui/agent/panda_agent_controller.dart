@@ -554,6 +554,18 @@ class PandaAgentController extends ChangeNotifier {
           threads: (config['threads'] as num?)?.toInt() ?? 4,
           contextSize: (config['contextSize'] as num?)?.toInt() ?? 4096,
           gpuLayers: (config['gpuLayers'] as num?)?.toInt() ?? 0,
+          temperature: (config['temperature'] as num?)?.toDouble() ?? 0.7,
+          topP: (config['topP'] as num?)?.toDouble() ?? 0.9,
+          topK: (config['topK'] as num?)?.toInt() ?? 40,
+          repeatPenalty: (config['repeatPenalty'] as num?)?.toDouble() ?? 1.1,
+          frequencyPenalty: (config['frequencyPenalty'] as num?)?.toDouble() ?? 0,
+          presencePenalty: (config['presencePenalty'] as num?)?.toDouble() ?? 0,
+          repeatLastN: (config['repeatLastN'] as num?)?.toInt() ?? 64,
+          seed: (config['seed'] as num?)?.toInt() ?? 42,
+          maxTokens: (config['maxTokens'] as num?)?.toInt() ?? 512,
+          mirostat: (config['mirostat'] as num?)?.toInt() ?? 0,
+          mirostatTau: (config['mirostatTau'] as num?)?.toDouble() ?? 5,
+          mirostatEta: (config['mirostatEta'] as num?)?.toDouble() ?? 0.1,
         );
       case 'custom':
         final url = (config['url'] ?? '').toString().trim();
