@@ -10,6 +10,23 @@ import 'flow_ui/widgets/flow_markdown.dart';
 import 'flow_ui/widgets/flow_thinking_indicator.dart';
 import 'flow_ui/widgets/flow_thread.dart';
 
+FlowOrbState _orbStateFromName(String? value) {
+  switch (value) {
+    case 'searching':
+      return FlowOrbState.searching;
+    case 'solving':
+      return FlowOrbState.solving;
+    case 'listening':
+      return FlowOrbState.listening;
+    case 'composing':
+      return FlowOrbState.composing;
+    case 'shaping':
+      return FlowOrbState.shaping;
+    default:
+      return FlowOrbState.working;
+  }
+}
+
 /// The Panda host adapter for Flow UI.
 ///
 /// Domain messages stay in the shape used by the agent runner, while this
@@ -162,6 +179,7 @@ class PandaAgentFlowChat extends StatelessWidget {
           type: 'thinkingLine',
           data: {
             'active': isGeneratingMessage(source),
+            'state': _orbStateFor(sourcePhase, blocks).name,
           },
         ),
       );
@@ -179,6 +197,47 @@ class PandaAgentFlowChat extends StatelessWidget {
 
   static bool isGeneratingMessage(Map<String, dynamic> source) =>
       source['phase']?.toString() == 'streaming';
+
+  static FlowOrbState _orbStateFor(
+    String phase,
+    List<Map<String, dynamic>> blocks,
+  ) {
+    if (phase == 'streaming') return FlowOrbState.composing;
+    final activeTool = blocks.lastWhere(
+      (block) =>
+          block['type'] == 'toolCall' && block['status'] == 'running',
+      orElse: () => const <String, dynamic>{},
+    );
+    final name = (activeTool['name'] ?? '').toString().toLowerCase();
+    if (name.contains('search') ||
+        name.contains('web') ||
+        name.contains('read') ||
+        name.contains('list') ||
+        name.contains('find') ||
+        name.contains('grep')) {
+      return FlowOrbState.searching;
+    }
+    if (name.contains('write') ||
+        name.contains('edit') ||
+        name.contains('create') ||
+        name.contains('shape')) {
+      return FlowOrbState.shaping;
+    }
+    if (name.contains('listen') ||
+        name.contains('audio') ||
+        name.contains('speech') ||
+        name.contains('voice')) {
+      return FlowOrbState.listening;
+    }
+    if (name.contains('solve') ||
+        name.contains('test') ||
+        name.contains('build') ||
+        name.contains('debug') ||
+        name.contains('git')) {
+      return FlowOrbState.solving;
+    }
+    return FlowOrbState.working;
+  }
 
   static String _withoutThinking(String value) {
     if (value.trim().isEmpty) return '';
@@ -415,6 +474,7 @@ class PandaAgentFlowChat extends StatelessWidget {
           active: data['active'] == true &&
               isGenerating &&
               message.status == FlowMessageStatus.streaming,
+          state: _orbStateFromName(data['state']?.toString()),
         ),
       'todo' => PandaAgentTodoCard(
           title: data['title']?.toString() ?? 'Todos',
@@ -591,9 +651,11 @@ class PandaAgentFlowThinkingLine extends StatelessWidget {
   const PandaAgentFlowThinkingLine({
     super.key,
     this.active = false,
+    this.state = FlowOrbState.working,
   });
 
   final bool active;
+  final FlowOrbState state;
 
   @override
   Widget build(BuildContext context) {
@@ -607,6 +669,7 @@ class PandaAgentFlowThinkingLine extends StatelessWidget {
             active: active,
             size: 12,
             color: colors.primary,
+            orbState: state,
           ),
         ],
       ),
