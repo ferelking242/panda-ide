@@ -19,8 +19,8 @@
 - **Integrated terminal** — built-in PTY, Termux support, SSH remote connections
 - **Git & GitHub** — clone, commit, push, pull, branch management
 - **AI assistance** — local LLaMA model + GitHub Copilot integration + Panda Agent
-- **Marketplace** — official Visual Studio Marketplace extensions first, with
-  Open VSX fallback for extensions not published by Microsoft
+- **Marketplace** — official Visual Studio Marketplace extensions in a
+  VS Code-style sidebar with search, filters, details, changelog and install actions
 - **File manager** — full filesystem access with project workspace
 - **WebView** — in-app browser for preview and documentation
 - **VSCode-inspired UI** — activity bar, tabbed workspace, status bar, command palette
@@ -41,7 +41,7 @@ flutter run
 ```
 lib/
 ├── bloc/           # BLoC state management
-├── extensions/     # VSCode extension host (IPC bridge, Open VSX marketplace)
+├── extensions/     # VSCode extension host (IPC bridge, Microsoft Marketplace)
 │   ├── models/     # Extension manifest, IPC messages, marketplace models
 │   ├── ui/         # Marketplace page, extensions panel, webview
 │   └── …
@@ -68,14 +68,15 @@ Panda IDE includes a full VSCode extension host that allows running real `.vsix`
 | vscode.languages API | ✅ |
 | vscode.commands | ✅ |
 | vscode.extensions / env | ✅ |
-| Open VSX Marketplace UI | ✅ |
+| Visual Studio Marketplace UI | ✅ |
 | WebView panels | ✅ |
 | SCM / Tasks / Debug | ✅ |
 | CI/CD (Jest tests) | ✅ |
 
-Extensions are queried from the official [Visual Studio Marketplace](https://marketplace.visualstudio.com/) first. Open VSX is used as a
-fallback for extensions that are not available there. The app validates the
-download as a VSIX before installing it.
+Extensions are queried from the official [Visual Studio Marketplace](https://marketplace.visualstudio.com/)
+Gallery. Search results, icons, README details, changelog and VSIX download URLs
+come from the same Gallery response, and the app validates every download as a
+VSIX before installing it.
 
 ### Terminal toolchain
 

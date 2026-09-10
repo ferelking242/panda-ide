@@ -1,19 +1,23 @@
 /// Unified extension marketplace client.
 ///
-/// The official Visual Studio Marketplace is queried first. Open VSX is kept
-/// as a compatibility fallback for extensions which are not published there.
+/// This targets the official Visual Studio Marketplace Gallery only.
+/// Open VSX is intentionally not mixed into the results or install flow.
 library;
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'models/marketplace_extension.dart';
-import 'open_vsx_client.dart';
 
 class MarketplaceContent {
   final String content;
   final bool isHtml;
+  final Uri? baseUri;
 
-  const MarketplaceContent(this.content, {required this.isHtml});
+  const MarketplaceContent(
+    this.content, {
+    required this.isHtml,
+    this.baseUri,
+  });
 }
 
 class ExtensionMarketplaceClient {
@@ -23,11 +27,8 @@ class ExtensionMarketplaceClient {
   static const _timeout = Duration(seconds: 20);
 
   final http.Client _http;
-  final OpenVsxClient _openVsx;
 
-  ExtensionMarketplaceClient({http.Client? client})
-      : _http = client ?? http.Client(),
-        _openVsx = OpenVsxClient(client: client);
+  ExtensionMarketplaceClient({http.Client? client}) : _http = client ?? http.Client();
 
   Future<MarketplaceSearchResult> search({
     required String query,
@@ -51,7 +52,9 @@ class ExtensionMarketplaceClient {
             'sortBy': _sortValue(sortBy),
           },
         ],
-        'flags': 914,
+        // Latest version files/properties, statistics, asset URI and
+        // category/tag data, matching the data used by VS Code's view.
+        'flags': 918,
       };
       final response = await _http
           .post(
@@ -67,18 +70,10 @@ class ExtensionMarketplaceClient {
       _assertOk(response);
       final parsed =
           _parseSearch(jsonDecode(response.body) as Map<String, dynamic>);
-      // The gallery can return an empty successful response for an extension
-      // that is available in Open VSX. Do not show a false empty marketplace.
-      if (parsed.extensions.isNotEmpty) return parsed;
-    } catch (_) {
+      return parsed;
+    } catch (error) {
+      throw StateError('Marketplace Microsoft indisponible : $error');
     }
-    return _openVsx.search(
-      query: query,
-      offset: offset,
-      size: size,
-      category: category,
-      sortBy: sortBy == 'relevance' ? 'relevance' : 'downloadCount',
-    );
   }
 
   Future<MarketplaceSearchResult> featured({int size = 20}) =>
@@ -86,60 +81,76 @@ class ExtensionMarketplaceClient {
 
   Future<String> getDownloadUrl(
       String namespace, String name, String version) async {
-    try {
-      final extension = await _queryOne(namespace, name);
-      final versions = _versions(extension);
-      final match = versions.firstWhere(
-        (v) => v['version']?.toString() == version,
-        orElse: () => versions.isNotEmpty ? versions.first : const {},
-      );
-      final url = _assetUrl(match, 'Microsoft.VisualStudio.Services.VSIXPackage');
-      if (url != null && url.isNotEmpty) return url;
-    } catch (_) {}
-    return _openVsx.getDownloadUrl(namespace, name, version);
+    final extension = await _queryOne(namespace, name);
+    final versions = _versions(extension);
+    final match = versions.firstWhere(
+      (v) => v['version']?.toString() == version,
+      orElse: () => versions.isNotEmpty ? versions.first : const {},
+    );
+    final url = _assetUrl(match, 'Microsoft.VisualStudio.Services.VSIXPackage');
+    if (url == null || url.isEmpty) {
+      throw StateError('VSIX introuvable pour $namespace.$name@$version');
+    }
+    return url;
   }
 
   Future<MarketplaceContent> getReadme(
       String namespace, String name, String version) async {
-    Object? galleryError;
-    try {
-      final extension = await _queryOne(namespace, name);
-      final versions = _versions(extension);
-      final match = versions.firstWhere(
-        (v) => v['version']?.toString() == version,
-        orElse: () => versions.isNotEmpty ? versions.first : const {},
-      );
-      final url = _assetUrl(match, 'Microsoft.VisualStudio.Services.Content.Details');
-      if (url != null) {
-        final response =
-            await _http.get(Uri.parse(url)).timeout(_timeout);
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          final body = response.body.trim();
-          if (body.isNotEmpty) {
-            return MarketplaceContent(body, isHtml: _looksLikeHtml(body));
-          }
-        }
-      }
-    } catch (error) {
-      galleryError = error;
-    }
+    return _getContent(
+      namespace,
+      name,
+      version,
+      'Microsoft.VisualStudio.Services.Content.Details',
+      'README',
+    );
+  }
 
-    // Open VSX remains a provider for extensions that are not published in
-    // Microsoft's gallery, but an empty response is never treated as content.
-    try {
-      final openVsxReadme =
-          await _openVsx.getReadme(namespace, name, version);
-      if (openVsxReadme != null && openVsxReadme.trim().isNotEmpty) {
-        return MarketplaceContent(openVsxReadme, isHtml: false);
-      }
-    } catch (_) {
-      // The final error below contains the actionable failure from the
-      // official gallery; do not turn this into a misleading description.
-    }
+  Future<MarketplaceContent> getChangelog(
+      String namespace, String name, String version) {
+    return _getContent(
+      namespace,
+      name,
+      version,
+      'Microsoft.VisualStudio.Services.Content.Changelog',
+      'Changelog',
+    );
+  }
 
-    throw StateError(
-      'README introuvable pour $namespace.$name@$version'
-      '${galleryError == null ? '' : ' (${galleryError.toString()})'}',
+  Future<MarketplaceContent> _getContent(
+    String namespace,
+    String name,
+    String version,
+    String assetType,
+    String label,
+  ) async {
+    final extension = await _queryOne(namespace, name);
+    final versions = _versions(extension);
+    final match = versions.firstWhere(
+      (v) => v['version']?.toString() == version,
+      orElse: () => versions.isNotEmpty ? versions.first : const {},
+    );
+    final url = _assetUrl(match, assetType);
+    if (url == null || url.isEmpty) {
+      throw StateError('$label introuvable pour $namespace.$name@$version');
+    }
+    final response = await _http.get(Uri.parse(url)).timeout(_timeout);
+    _assertOk(response);
+    final body = response.body.trim();
+    if (body.isEmpty) {
+      throw StateError('$label vide pour $namespace.$name@$version');
+    }
+    final rawBase = match['assetUri']?.toString();
+    final fallbackBase =
+        Uri.tryParse(url)?.resolve('./') ??
+        Uri.parse('https://marketplace.visualstudio.com/');
+    final baseUri = rawBase == null
+        ? fallbackBase
+        : Uri.tryParse(rawBase.endsWith('/') ? rawBase : '$rawBase/') ??
+            fallbackBase;
+    return MarketplaceContent(
+      body,
+      isHtml: _looksLikeHtml(body),
+      baseUri: baseUri,
     );
   }
 
@@ -160,7 +171,7 @@ class ExtensionMarketplaceClient {
                 ],
               },
             ],
-            'flags': 914,
+            'flags': 918,
           }),
         )
         .timeout(_timeout);
@@ -214,6 +225,7 @@ class ExtensionMarketplaceClient {
       if (key != null) out[key] = item['value'];
       return out;
     });
+    final properties = _properties(latest);
     return MarketplaceExtension(
       namespace: namespace,
       name: name,
@@ -221,8 +233,14 @@ class ExtensionMarketplaceClient {
       description: value['shortDescription']?.toString() ?? '',
       version: version,
       iconUrl: _assetUrl(latest, 'Microsoft.VisualStudio.Services.Icons.Default'),
+      publisherDisplayName: publisher['displayName']?.toString(),
+      publisherDomain: publisher['domain']?.toString(),
       averageRating: _number(statistics['averagerating']),
+      reviewCount: _number(statistics['ratingcount'])?.toInt() ?? 0,
       downloadCount: _number(statistics['install'])?.toInt() ?? 0,
+      releaseDate: DateTime.tryParse(value['releaseDate']?.toString() ?? ''),
+      lastUpdated: DateTime.tryParse(value['lastUpdated']?.toString() ?? '') ??
+          DateTime.tryParse(latest['lastUpdated']?.toString() ?? ''),
       categories: (value['categories'] as List? ?? const [])
           .map((e) => e.toString())
           .toList(),
@@ -230,6 +248,24 @@ class ExtensionMarketplaceClient {
           .map((e) => e.toString())
           .toList(),
       repository: value['repositoryUrl']?.toString(),
+      homepage: properties['Microsoft.VisualStudio.Services.Links.Getstarted'] ??
+          properties['Microsoft.VisualStudio.Services.Links.Learn'],
+      supportUrl: properties['Microsoft.VisualStudio.Services.Links.Support'],
+      sourceUrl: properties['Microsoft.VisualStudio.Services.Links.Source'] ??
+          properties['Microsoft.VisualStudio.Services.Links.GitHub'],
+      sponsorUrl: properties['Microsoft.VisualStudio.Code.SponsorLink'],
+      engine: properties['Microsoft.VisualStudio.Code.Engine'],
+      extensionKind: properties['Microsoft.VisualStudio.Code.ExtensionKind'],
+      isVerified: publisher['flags']?.toString().contains('verified') == true,
+      contentBaseUrl: latest['assetUri']?.toString(),
+      detailsUrl: _assetUrl(
+        latest,
+        'Microsoft.VisualStudio.Services.Content.Details',
+      ),
+      changelogUrl: _assetUrl(
+        latest,
+        'Microsoft.VisualStudio.Services.Content.Changelog',
+      ),
       downloadUrl: _assetUrl(
         latest,
         'Microsoft.VisualStudio.Services.VSIXPackage',
@@ -242,6 +278,16 @@ class ExtensionMarketplaceClient {
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
+
+  Map<String, String> _properties(Map<String, dynamic> version) {
+    final properties = <String, String>{};
+    for (final item in (version['properties'] as List? ?? const [])) {
+      if (item is Map && item['key'] != null && item['value'] != null) {
+        properties[item['key'].toString()] = item['value'].toString();
+      }
+    }
+    return properties;
+  }
 
   String? _assetUrl(Map<String, dynamic> version, String assetType) {
     final files = (version['files'] as List? ?? const []).whereType<Map>();
@@ -282,6 +328,5 @@ class ExtensionMarketplaceClient {
 
   void dispose() {
     _http.close();
-    _openVsx.dispose();
   }
 }

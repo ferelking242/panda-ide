@@ -33,7 +33,8 @@ class _DownloadManagerState extends State<DownloadManager> {
   late final AppThemeState appThemeState;
 
   // Runtimes are now installed via Debian Linux (glibc).
-  // Extensions are downloaded from Open VSX marketplace.
+  // Extensions are downloaded from the official Visual Studio Marketplace
+  // through ExtensionMarketplaceClient.
 
   static const List<String> _pythonDynloadModules = [
     'array.cpython-313-aarch64-linux-android.so',

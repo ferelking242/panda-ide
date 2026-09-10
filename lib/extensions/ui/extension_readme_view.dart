@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:markdown/markdown.dart' as md;
+import 'package:url_launcher/url_launcher.dart';
 
 /// One README renderer for marketplace and installed extensions.
 ///
@@ -10,11 +11,13 @@ import 'package:markdown/markdown.dart' as md;
 class ExtensionReadmeView extends StatelessWidget {
   final String content;
   final bool isHtml;
+  final Uri? baseUri;
 
   const ExtensionReadmeView({
     super.key,
     required this.content,
     this.isHtml = false,
+    this.baseUri,
   });
 
   @override
@@ -25,9 +28,24 @@ class ExtensionReadmeView extends StatelessWidget {
         javaScriptEnabled: false,
         transparentBackground: true,
         supportZoom: true,
+        useShouldOverrideUrlLoading: true,
       ),
+      shouldOverrideUrlLoading: (controller, navigationAction) async {
+        final uri = navigationAction.request.url;
+        if (uri == null) return NavigationActionPolicy.ALLOW;
+        if (uri.scheme == 'http' || uri.scheme == 'https') {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return NavigationActionPolicy.CANCEL;
+        }
+        return NavigationActionPolicy.CANCEL;
+      },
       initialData: InAppWebViewInitialData(
-        data: extensionReadmeHtml(content, cs, isHtml: isHtml),
+        data: extensionReadmeHtml(
+          content,
+          cs,
+          isHtml: isHtml,
+          baseUri: baseUri,
+        ),
         mimeType: 'text/html',
         encoding: 'utf-8',
       ),
@@ -39,6 +57,7 @@ String extensionReadmeHtml(
   String content,
   ColorScheme cs, {
   bool isHtml = false,
+  Uri? baseUri,
 }) {
   final background = _color(cs.surface);
   final foreground = _color(cs.onSurface);
@@ -69,10 +88,12 @@ String extensionReadmeHtml(
         RegExp(r"\son\w+\s*=\s*'[^']*'", caseSensitive: false),
         '',
       );
+  final baseTag = baseUri == null ? '' : '<base href="${_htmlAttribute(baseUri.toString())}">';
 
   return '''<!doctype html>
 <html><head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+ $baseTag
 <style>
 :root { color-scheme: ${cs.brightness == Brightness.dark ? 'dark' : 'light'}; }
 body { background: $background; color: $foreground; font-family: sans-serif; font-size: 14px; line-height: 1.55; padding: 16px; margin: 0; overflow-wrap: anywhere; }
@@ -96,3 +117,9 @@ input[type="checkbox"] { accent-color: #5090c8; }
 
 String _color(Color color) =>
     '#${color.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+
+String _htmlAttribute(String value) => value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');

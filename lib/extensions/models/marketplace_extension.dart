@@ -1,21 +1,35 @@
-/// Résultat de recherche Open VSX — https://open-vsx.org/api/-/search
+/// Extension returned by the official Visual Studio Marketplace Gallery API.
 library;
 
 class MarketplaceExtension {
-  final String namespace;   // publisher
+  final String namespace; // publisher id used by Gallery URLs
   final String name;
   final String displayName;
   final String description;
   final String version;
   final String? iconUrl;
+  final String? publisherDisplayName;
+  final String? publisherDomain;
   final double? averageRating;
   final int reviewCount;
   final int downloadCount;
   final DateTime? timestamp;
+  final DateTime? releaseDate;
+  final DateTime? lastUpdated;
   final List<String> categories;
   final List<String> tags;
   final String? license;
   final String? repository;
+  final String? homepage;
+  final String? supportUrl;
+  final String? sourceUrl;
+  final String? sponsorUrl;
+  final String? engine;
+  final String? extensionKind;
+  final bool isVerified;
+  final String? contentBaseUrl;
+  final String? detailsUrl;
+  final String? changelogUrl;
 
   /// URL de téléchargement du .vsix pour la version courante.
   final String? downloadUrl;
@@ -27,14 +41,28 @@ class MarketplaceExtension {
     required this.description,
     required this.version,
     this.iconUrl,
+    this.publisherDisplayName,
+    this.publisherDomain,
     this.averageRating,
     this.reviewCount = 0,
     this.downloadCount = 0,
     this.timestamp,
+    this.releaseDate,
+    this.lastUpdated,
     this.categories = const [],
     this.tags = const [],
     this.license,
     this.repository,
+    this.homepage,
+    this.supportUrl,
+    this.sourceUrl,
+    this.sponsorUrl,
+    this.engine,
+    this.extensionKind,
+    this.isVerified = false,
+    this.contentBaseUrl,
+    this.detailsUrl,
+    this.changelogUrl,
     this.downloadUrl,
   });
 
@@ -57,8 +85,6 @@ class MarketplaceExtension {
       }
     }
 
-    // Open VSX search result format
-    // https://open-vsx.org/swagger-ui/#/registry-api/search
     return MarketplaceExtension(
       namespace: json['namespace'] as String? ?? json['publisher'] as String? ?? 'unknown',
       name: json['name'] as String? ?? 'unknown',
@@ -78,12 +104,6 @@ class MarketplaceExtension {
     );
   }
 
-  /// Construit l'URL de téléchargement direct depuis l'API Open VSX.
-  String buildDownloadUrl() {
-    if (downloadUrl != null) return downloadUrl!;
-    return 'https://open-vsx.org/api/$namespace/$name/$version/file/$namespace.$name-$version.vsix';
-  }
-
   Map<String, dynamic> toJson() => {
     'namespace': namespace,
     'name': name,
@@ -91,14 +111,28 @@ class MarketplaceExtension {
     'description': description,
     'version': version,
     if (iconUrl != null) 'iconUrl': iconUrl,
+    if (publisherDisplayName != null) 'publisherDisplayName': publisherDisplayName,
+    if (publisherDomain != null) 'publisherDomain': publisherDomain,
     if (averageRating != null) 'averageRating': averageRating,
     'reviewCount': reviewCount,
     'downloadCount': downloadCount,
     if (timestamp != null) 'timestamp': timestamp!.toIso8601String(),
+    if (releaseDate != null) 'releaseDate': releaseDate!.toIso8601String(),
+    if (lastUpdated != null) 'lastUpdated': lastUpdated!.toIso8601String(),
     'categories': categories,
     'tags': tags,
     if (license != null) 'license': license,
     if (repository != null) 'repository': repository,
+    if (homepage != null) 'homepage': homepage,
+    if (supportUrl != null) 'supportUrl': supportUrl,
+    if (sourceUrl != null) 'sourceUrl': sourceUrl,
+    if (sponsorUrl != null) 'sponsorUrl': sponsorUrl,
+    if (engine != null) 'engine': engine,
+    if (extensionKind != null) 'extensionKind': extensionKind,
+    'isVerified': isVerified,
+    if (contentBaseUrl != null) 'contentBaseUrl': contentBaseUrl,
+    if (detailsUrl != null) 'detailsUrl': detailsUrl,
+    if (changelogUrl != null) 'changelogUrl': changelogUrl,
     if (downloadUrl != null) 'downloadUrl': downloadUrl,
   };
 
@@ -106,7 +140,7 @@ class MarketplaceExtension {
   String toString() => 'MarketplaceExtension($id@$version)';
 }
 
-/// Résultat paginé d'une recherche Open VSX.
+/// Paginated result from the Visual Studio Marketplace Gallery.
 class MarketplaceSearchResult {
   final List<MarketplaceExtension> extensions;
   final int offset;
