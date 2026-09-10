@@ -32,6 +32,7 @@ import 'file_manager.dart';
 import 'editor_page.dart';
 import 'editor/outline_view.dart';
 import 'editor/symbol_picker.dart';
+import 'editor/global_search_dialog.dart';
 import 'menu_screen.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -492,24 +493,31 @@ class _SelectTypeState extends State<SelectType>
     try {
       final update = await AndroidUpdateService.checkForUpdate();
       if (!mounted || update == null) return;
-      // Open a dedicated update page tab instead of a popup
-      setState(() {
-        if (!_openTabs.any((t) => t.id == 'update')) {
-          _openTabs.add(
-            const _TabDef(
-              id: 'update',
-              title: 'Mise à jour',
-              icon: Broken.document_download,
-            ),
-          );
-          _activeTabIdx = _openTabs.length - 1;
-        } else {
-          _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'update');
-        }
-      });
+      _openUpdateTab();
+      // Start the APK download immediately. Installation remains explicit.
+      unawaited(AndroidUpdateService.download(update));
     } catch (error) {
       PandaLog.w('PandaAgent', 'Android update check failed: $error');
     }
+  }
+
+  void _openUpdateTab() {
+    if (!mounted) return;
+    // Open a dedicated update page tab instead of a popup.
+    setState(() {
+      if (!_openTabs.any((t) => t.id == 'update')) {
+        _openTabs.add(
+          const _TabDef(
+            id: 'update',
+            title: 'Mise à jour',
+            icon: Broken.document_download,
+          ),
+        );
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = _openTabs.indexWhere((t) => t.id == 'update');
+      }
+    });
   }
 
   @override
@@ -2097,6 +2105,7 @@ class _SelectTypeState extends State<SelectType>
 
               final isDownloading = updateState.status == 'downloading';
               final isAvailable = updateState.status == 'available';
+              final isDownloaded = updateState.status == 'downloaded';
               final isInstalling = updateState.status == 'installing';
               final isError = updateState.status == 'error';
               final percent = (updateState.progress * 100).toInt();
@@ -2108,27 +2117,20 @@ class _SelectTypeState extends State<SelectType>
                       ? 'Téléchargement maj ($percent%)\n${updateState.bytesText ?? ''}'
                       : isAvailable
                       ? 'Mise à jour v${updateState.updateInfo?.version} disponible !'
+                      : isDownloaded
+                      ? 'APK téléchargé — ouvrir pour installer'
                       : isInstalling
                       ? 'Installation de la mise à jour...'
                       : 'Mise à jour (Erreur)',
                   child: InkWell(
                     onTap: () async {
-                      if (isAvailable && updateState.updateInfo != null) {
-                        try {
-                          await AndroidUpdateService.install(
-                            updateState.updateInfo!,
-                          );
-                        } catch (e) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Mise à jour échouée : $e'),
-                              ),
-                            );
-                          }
-                        }
+                      if (isAvailable ||
+                          isDownloading ||
+                          isDownloaded ||
+                          isInstalling) {
+                        _openUpdateTab();
                       } else if (isError) {
-                        AndroidUpdateService.checkForUpdate();
+                        AndroidUpdateService.checkAndDownload();
                       }
                     },
                     borderRadius: BorderRadius.circular(8),
@@ -2141,7 +2143,7 @@ class _SelectTypeState extends State<SelectType>
                       decoration: BoxDecoration(
                         color: isDownloading
                             ? Colors.blue.withValues(alpha: 0.2)
-                            : isAvailable
+                            : isAvailable || isDownloaded
                             ? Colors.green.withValues(alpha: 0.2)
                             : isError
                             ? Colors.red.withValues(alpha: 0.2)
@@ -2150,7 +2152,7 @@ class _SelectTypeState extends State<SelectType>
                         border: Border.all(
                           color: isDownloading
                               ? Colors.blue
-                              : isAvailable
+                              : isAvailable || isDownloaded
                               ? Colors.green
                               : isError
                               ? Colors.red
@@ -2197,11 +2199,13 @@ class _SelectTypeState extends State<SelectType>
                             )
                           else
                             Icon(
-                              isAvailable
+                               isDownloaded
+                                   ? Icons.download_done
+                                   : isAvailable
                                   ? Broken.document_download
                                   : Broken.refresh,
                               size: 16,
-                              color: isAvailable
+                               color: isAvailable || isDownloaded
                                   ? Colors.green[400]
                                   : Colors.red[400],
                             ),
@@ -2209,7 +2213,7 @@ class _SelectTypeState extends State<SelectType>
                           Text(
                             isDownloading
                                 ? '$percent%'
-                                : isAvailable
+                                 : isAvailable || isDownloaded
                                 ? 'v${updateState.updateInfo?.version ?? 'NEW'}'
                                 : isInstalling
                                 ? 'INST'
@@ -2219,7 +2223,7 @@ class _SelectTypeState extends State<SelectType>
                               fontWeight: FontWeight.bold,
                               color: isDownloading
                                   ? Colors.blue
-                                  : isAvailable
+                                   : isAvailable || isDownloaded
                                   ? Colors.green[400]
                                   : isError
                                   ? Colors.red[400]
@@ -2706,6 +2710,32 @@ class _SelectTypeState extends State<SelectType>
 
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              icon: const Icon(Icons.manage_search, size: 16),
+              label: const Text('Recherche avancée'),
+              onPressed: activeDir == null
+                  ? null
+                  : () {
+                      showDialog(
+                        context: ctx,
+                        builder: (_) => GlobalSearchDialog(
+                          workspacePath: activeDir,
+                          onFileSelected: (filePath, _) {
+                            _openFileFromWorkspace(
+                              File(filePath),
+                              activeDir,
+                            );
+                          },
+                        ),
+                      );
+                    },
+            ),
+          ),
+        ),
         Padding(
           padding: const EdgeInsets.all(10),
           child: TextField(
@@ -11133,6 +11163,12 @@ class _SelectTypeState extends State<SelectType>
           ValueListenableBuilder<AndroidUpdateState>(
             valueListenable: AndroidUpdateService.stateNotifier,
             builder: (context, state, _) {
+              if (state.status == 'checking') {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                );
+              }
               if (state.status == 'idle') {
                 return Column(
                   children: [
@@ -11140,13 +11176,16 @@ class _SelectTypeState extends State<SelectType>
                       icon: Broken.refresh,
                       label: 'Vérifier les mises à jour',
                       color: _kAccent,
-                      onTap: () => AndroidUpdateService.checkForUpdate(),
+                      onTap: () => AndroidUpdateService.checkAndDownload(),
                       isDark: isDark,
                     ),
                   ],
                 );
               }
-              if (state.status == 'available' && state.updateInfo != null) {
+              if ((state.status == 'available' ||
+                      state.status == 'downloaded') &&
+                  state.updateInfo != null) {
+                final isDownloaded = state.status == 'downloaded';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -11171,7 +11210,9 @@ class _SelectTypeState extends State<SelectType>
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Nouvelle version disponible',
+                                isDownloaded
+                                    ? 'APK téléchargé — installation en attente'
+                                    : 'Nouvelle version disponible',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -11197,12 +11238,24 @@ class _SelectTypeState extends State<SelectType>
                     ),
                     const SizedBox(height: 12),
                     _buildUpdateActionButton(
-                      icon: Broken.document_download,
-                      label: 'Installer v${state.updateInfo!.version}',
-                      color: Colors.green,
+                      icon: isDownloaded
+                          ? Icons.install_mobile
+                          : Broken.document_download,
+                      label: isDownloaded
+                          ? 'Installer v${state.updateInfo!.version}'
+                          : 'Télécharger v${state.updateInfo!.version}',
+                      color: isDownloaded ? _kAccent : Colors.green,
                       onTap: () async {
                         try {
-                          await AndroidUpdateService.install(state.updateInfo!);
+                          if (isDownloaded) {
+                            await AndroidUpdateService.installDownloaded(
+                              state.updateInfo!,
+                            );
+                          } else {
+                            await AndroidUpdateService.download(
+                              state.updateInfo!,
+                            );
+                          }
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -11272,7 +11325,7 @@ class _SelectTypeState extends State<SelectType>
                       icon: Broken.refresh,
                       label: 'Réessayer',
                       color: _kAccent,
-                      onTap: () => AndroidUpdateService.checkForUpdate(),
+                      onTap: () => AndroidUpdateService.checkAndDownload(),
                       isDark: isDark,
                     ),
                   ],

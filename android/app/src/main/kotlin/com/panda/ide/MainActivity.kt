@@ -137,7 +137,7 @@ class MainActivity : FlutterActivity() {
         )
         updateChannel.setMethodCallHandler { call, result ->
             when (call.method) {
-                "downloadAndInstallApk" -> {
+                "downloadApk" -> {
                     val url = call.argument<String>("url")
                     val filename = call.argument<String>("filename")
                         ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
@@ -159,13 +159,8 @@ class MainActivity : FlutterActivity() {
                                 }
                             }
                             runOnUiThread {
-                                try {
-                                    updateChannel.invokeMethod("onStatus", "installing")
-                                    installUpdateApk(apk)
-                                    result.success(true)
-                                } catch (error: Exception) {
-                                    result.error("INSTALL_FAILED", error.message, null)
-                                }
+                                updateChannel.invokeMethod("onStatus", "downloaded")
+                                result.success(true)
                             }
                         } catch (error: Exception) {
                             runOnUiThread {
@@ -173,6 +168,23 @@ class MainActivity : FlutterActivity() {
                             }
                         }
                     }.start()
+                }
+                "installDownloadedApk" -> {
+                    val filename = call.argument<String>("filename")
+                        ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                        ?.ifBlank { "panda-ide-update.apk" }
+                        ?: "panda-ide-update.apk"
+                    val apk = File(cacheDir, filename)
+                    if (!apk.exists() || apk.length() == 0L) {
+                        result.error("APK_NOT_DOWNLOADED", "Download the update before installing it", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        installUpdateApk(apk)
+                        result.success(true)
+                    } catch (error: Exception) {
+                        result.error("INSTALL_FAILED", error.message, null)
+                    }
                 }
                 else -> result.notImplemented()
             }

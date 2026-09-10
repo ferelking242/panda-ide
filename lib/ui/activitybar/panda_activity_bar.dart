@@ -183,6 +183,7 @@ class PandaActivityBar extends StatelessWidget {
 
         final isDownloading = updateState.status == 'downloading';
         final isAvailable = updateState.status == 'available';
+        final isDownloaded = updateState.status == 'downloaded';
         final isInstalling = updateState.status == 'installing';
         final isError = updateState.status == 'error';
         final percent = (updateState.progress * 100).toInt();
@@ -194,14 +195,16 @@ class PandaActivityBar extends StatelessWidget {
                 ? 'Téléchargement maj ($percent%)\n${updateState.bytesText ?? ''}'
                 : isAvailable
                     ? 'Mise à jour v${updateState.updateInfo?.version} disponible !'
+                        : isDownloaded
+                            ? 'APK téléchargé — installer'
                     : isInstalling
                         ? 'Installation de la mise à jour...'
                         : 'Mise à jour (Erreur)',
             child: InkWell(
               onTap: () async {
-                if (isAvailable && updateState.updateInfo != null) {
+                if (isDownloaded && updateState.updateInfo != null) {
                   try {
-                    await AndroidUpdateService.install(
+                    await AndroidUpdateService.installDownloaded(
                         updateState.updateInfo!);
                   } catch (e) {
                     if (context.mounted) {
@@ -211,8 +214,10 @@ class PandaActivityBar extends StatelessWidget {
                       );
                     }
                   }
+                } else if (isAvailable && updateState.updateInfo != null) {
+                  await AndroidUpdateService.download(updateState.updateInfo!);
                 } else if (isError) {
-                  AndroidUpdateService.checkForUpdate();
+                  AndroidUpdateService.checkAndDownload();
                 }
               },
               borderRadius: BorderRadius.circular(8),

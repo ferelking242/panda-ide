@@ -34,7 +34,7 @@ class AndroidUpdateInfo {
 }
 
 class AndroidUpdateState {
-  final String status; // 'idle' | 'checking' | 'available' | 'downloading' | 'installing' | 'error'
+  final String status; // 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'error'
   final double progress; // 0.0 to 1.0
   final String? bytesText;
   final AndroidUpdateInfo? updateInfo;
@@ -54,13 +54,14 @@ class AndroidUpdateState {
     String? bytesText,
     AndroidUpdateInfo? updateInfo,
     String? errorMessage,
+    bool clearError = false,
   }) {
     return AndroidUpdateState(
       status: status ?? this.status,
       progress: progress ?? this.progress,
       bytesText: bytesText ?? this.bytesText,
       updateInfo: updateInfo ?? this.updateInfo,
-      errorMessage: errorMessage ?? this.errorMessage,
+      errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
 }
@@ -92,9 +93,10 @@ class AndroidUpdateService {
           bytesText: '$bytesMb / $totalMb MB',
         );
       } else if (call.method == 'onStatus') {
+        final status = call.arguments?.toString();
         stateNotifier.value = stateNotifier.value.copyWith(
-          status: 'installing',
-          progress: 1.0,
+          status: status == 'downloaded' ? 'downloaded' : 'installing',
+          progress: status == 'downloaded' ? 1.0 : stateNotifier.value.progress,
         );
       }
     });
@@ -189,7 +191,14 @@ class AndroidUpdateService {
     }
   }
 
-  static Future<bool> install(AndroidUpdateInfo update) async {
+  static Future<AndroidUpdateInfo?> checkAndDownload() async {
+    final update = await checkForUpdate();
+    if (update == null) return null;
+    await download(update);
+    return update;
+  }
+
+  static Future<bool> download(AndroidUpdateInfo update) async {
     init();
     if (update.apkUrl.isEmpty) return false;
 
@@ -197,13 +206,43 @@ class AndroidUpdateService {
       status: 'downloading',
       progress: 0.0,
       updateInfo: update,
-      errorMessage: null,
+      clearError: true,
     );
 
     try {
       final result = await _channel.invokeMethod<bool>(
-        'downloadAndInstallApk',
+        'downloadApk',
         {'url': update.apkUrl, 'filename': update.apkName},
+      );
+      if (result == true) {
+        stateNotifier.value = stateNotifier.value.copyWith(
+          status: 'downloaded',
+          progress: 1.0,
+          updateInfo: update,
+        );
+      }
+      return result == true;
+    } catch (error) {
+      stateNotifier.value = stateNotifier.value.copyWith(
+        status: 'error',
+        errorMessage: error.toString(),
+      );
+      rethrow;
+    }
+  }
+
+  static Future<bool> installDownloaded(AndroidUpdateInfo update) async {
+    init();
+    stateNotifier.value = stateNotifier.value.copyWith(
+      status: 'installing',
+      progress: 1.0,
+      updateInfo: update,
+      clearError: true,
+    );
+    try {
+      final result = await _channel.invokeMethod<bool>(
+        'installDownloadedApk',
+        {'filename': update.apkName},
       );
       return result == true;
     } catch (error) {
@@ -213,5 +252,15 @@ class AndroidUpdateService {
       );
       rethrow;
     }
+  }
+
+  /// Compatibility helper for callers that still request an install directly.
+  /// It now downloads first and leaves installation as a separate action.
+  static Future<bool> install(AndroidUpdateInfo update) async {
+    if (stateNotifier.value.status != 'downloaded') {
+      final downloaded = await download(update);
+      if (!downloaded) return false;
+    }
+    return installDownloaded(update);
   }
 }

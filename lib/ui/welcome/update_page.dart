@@ -62,16 +62,25 @@ class UpdatePage extends StatelessWidget {
           ValueListenableBuilder<AndroidUpdateState>(
             valueListenable: AndroidUpdateService.stateNotifier,
             builder: (context, state, _) {
+              if (state.status == 'checking') {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                );
+              }
               if (state.status == 'idle') {
                 return _actionButton(
                   icon: Broken.refresh,
                   label: 'Vérifier les mises à jour',
                   color: _kAccent,
-                  onTap: () => AndroidUpdateService.checkForUpdate(),
+                   onTap: () => AndroidUpdateService.checkAndDownload(),
                   isDark: isDark,
                 );
               }
-              if (state.status == 'available' && state.updateInfo != null) {
+              if ((state.status == 'available' ||
+                      state.status == 'downloaded') &&
+                  state.updateInfo != null) {
+                final isDownloaded = state.status == 'downloaded';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -90,7 +99,10 @@ class UpdatePage extends StatelessWidget {
                             Icon(Icons.check_circle,
                                 size: 18, color: Colors.green[400]),
                             const SizedBox(width: 8),
-                            Text('Nouvelle version disponible',
+                             Text(
+                                 isDownloaded
+                                     ? 'APK téléchargé — installation en attente'
+                                     : 'Nouvelle version disponible',
                                 style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
@@ -110,13 +122,24 @@ class UpdatePage extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     _actionButton(
-                      icon: Broken.document_download,
-                      label: 'Installer v${state.updateInfo!.version}',
-                      color: Colors.green,
+                       icon: isDownloaded
+                           ? Icons.install_mobile
+                           : Broken.document_download,
+                       label: isDownloaded
+                           ? 'Installer v${state.updateInfo!.version}'
+                           : 'Télécharger v${state.updateInfo!.version}',
+                       color: isDownloaded ? _kAccent : Colors.green,
                       onTap: () async {
                         try {
-                          await AndroidUpdateService.install(
-                              state.updateInfo!);
+                           if (isDownloaded) {
+                             await AndroidUpdateService.installDownloaded(
+                               state.updateInfo!,
+                             );
+                           } else {
+                             await AndroidUpdateService.download(
+                               state.updateInfo!,
+                             );
+                           }
                         } catch (e) {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -179,7 +202,7 @@ class UpdatePage extends StatelessWidget {
                       icon: Broken.refresh,
                       label: 'Réessayer',
                       color: _kAccent,
-                      onTap: () => AndroidUpdateService.checkForUpdate(),
+                       onTap: () => AndroidUpdateService.checkAndDownload(),
                       isDark: isDark,
                     ),
                   ],
