@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:code_forge/code_forge.dart';
+import 'package:panda/extensions/terminal_node.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as path;
@@ -180,6 +181,9 @@ bool isLspServerAvailable({
   required List<String> args,
 }) {
   if (executable == null || executable.isEmpty) return false;
+  if (executable == 'node') {
+    return TerminalNodeLauncher.instance.isAvailable;
+  }
   final executableExists = File(executable).existsSync();
   if (!executableExists) return false;
   final normalizedExt = ext.toLowerCase();
@@ -192,7 +196,7 @@ bool isLspServerAvailable({
 
   if (normalizedExt == 'js' || normalizedExt == 'ts') {
     return File(
-      '$runtimesDir/node/lib/node_modules/typescript-language-server/lib/cli.mjs',
+      '$extensionDir/node_modules/typescript-language-server/lib/cli.mjs',
     ).existsSync();
   }
 
@@ -309,7 +313,7 @@ Future<LspConfig?> startLspServer({
     final resolvedArgs = (() {
       if (normalizedExt == 'ts' || normalizedExt == 'js') {
         return [
-          "$runtimeDir/node/lib/node_modules/typescript-language-server/lib/cli.mjs",
+          "/usr/local/lib/node_modules/typescript-language-server/lib/cli.mjs",
           ...args,
         ];
       } else if (normalizedExt == 'py' || normalizedExt == 'pyi') {
@@ -339,7 +343,7 @@ Future<LspConfig?> startLspServer({
       ...environment ?? {},
       'PATH': '$binDir:$runtimeDir/dart/bin:/bin:/usr/bin:${Platform.environment['PATH'] ?? ''}',
       'ROXUM_SHARED_PATH': sharedPath,
-      'LD_LIBRARY_PATH': '${normalizedExt == 'dart' ? '$sharedPath:$libDir' : '$libDir:$runtimeDir/clang:$runtimeDir/node/lib:$sharedPath'}:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
+      'LD_LIBRARY_PATH': '${normalizedExt == 'dart' ? '$sharedPath:$libDir' : '$libDir:$runtimeDir/clang:$sharedPath'}:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
       if (normalizedExt == 'dart') 'DART_ROOT': dartRuntimeDir,
       'JAVA_HOME': '$runtimeDir/java-21-openjdk',
     };
@@ -351,6 +355,14 @@ Future<LspConfig?> startLspServer({
           capabilities: capabilities ?? const LspClientCapabilities(),
           args: resolvedArgs,
           environment: resolvedEnvironment,
+          processStarter: resolvedExecutable == 'node'
+              ? (executable, args, workingDirectory, environment) =>
+                  TerminalNodeLauncher.instance.startNode(
+                    arguments: args,
+                    workingDirectory: workingDirectory,
+                    environment: environment ?? const {},
+                  )
+              : null,
           workspacePath: workspacePath,
           languageId: langId.toLowerCase(),
         );
@@ -383,6 +395,14 @@ Future<LspConfig?> startLspServer({
       capabilities: capabilities ?? const LspClientCapabilities(),
       args: resolvedArgs,
       environment: resolvedEnvironment,
+      processStarter: resolvedExecutable == 'node'
+          ? (executable, args, workingDirectory, environment) =>
+              TerminalNodeLauncher.instance.startNode(
+                arguments: args,
+                workingDirectory: workingDirectory,
+                environment: environment ?? const {},
+              )
+          : null,
       workspacePath: workspacePath,
       languageId: langId.toLowerCase(),
     );

@@ -55,6 +55,7 @@ import '../extensions/ui/marketplace_page.dart';
 import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_contributions_panel.dart';
 import '../extensions/extension_host.dart';
+import '../extensions/terminal_node.dart';
 import '../extensions/ui/command_palette.dart';
 import '../services/ide_tab_opener.dart';
 import '../extensions/language_feature_router.dart';
@@ -3117,27 +3118,8 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Marketplace panel ─────────────────────────────────────────────────────
   Widget _sidebarMarketplace(BuildContext ctx, AppTheme t, bool dark) {
-    final bool nodeAvailable = kIsWeb
-        ? true
-        : () {
-            try {
-              // Vérifie si node est accessible via Termux ou le chemin standard
-              final paths = [
-                '/data/data/com.termux.app/files/usr/bin/node',
-                '/usr/bin/node',
-                '/usr/local/bin/node',
-              ];
-              return paths.any((p) {
-                try {
-                  return File(p).existsSync();
-                } catch (_) {
-                  return false;
-                }
-              });
-            } catch (_) {
-              return false;
-            }
-          }();
+    final bool nodeAvailable =
+        kIsWeb || TerminalNodeLauncher.instance.isAvailable;
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -3274,7 +3256,7 @@ class _SelectTypeState extends State<SelectType>
       return;
     }
     if (!Directory('$extensionDir/copilot-language-server').existsSync() ||
-        !File('$binDir/node').existsSync()) {
+        !TerminalNodeLauncher.instance.isAvailable) {
       return;
     }
     copilotBloc.add(
@@ -3323,7 +3305,8 @@ class _SelectTypeState extends State<SelectType>
     final extensionInstalled =
         kIsWeb ||
         Directory('$extensionDir/copilot-language-server').existsSync();
-    final nodeInstalled = kIsWeb || File('$binDir/node').existsSync();
+    final nodeInstalled =
+        kIsWeb || TerminalNodeLauncher.instance.isAvailable;
 
     return BlocBuilder<CopilotBloc, CopilotState>(
       builder: (context, state) {

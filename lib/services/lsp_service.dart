@@ -13,6 +13,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import '../utils/panda_log.dart';
 import '../utils/extractors.dart';
+import '../utils/debian_setup.dart';
 
 /// Supported language → server mapping.
 class LspServerInfo {
@@ -175,24 +176,13 @@ class LspService {
   /// Detect which servers are installed by checking filesystem.
   /// Uses common paths in PRoot rootfs rather than running shell commands.
   Future<void> _detectInstalled() async {
-    final runtimesDir = await _getRuntimesDir();
     for (final entry in kLspServers.entries) {
-      _installedCache[entry.key] = _checkServerInstalled(entry.value, runtimesDir);
+      _installedCache[entry.key] = _checkServerInstalled(entry.value);
     }
     PandaLog.i('LspService', 'LSP detection complete: ${_installedCache.entries.where((e) => e.value).map((e) => e.key).join(', ')}');
   }
 
-  static Future<String> _getRuntimesDir() async {
-    try {
-      final nativeLib = await NativeChannel.getLibraryPath();
-      // runtimesDir is typically <nativeLib>/../runtimes or similar
-      return p.dirname(p.dirname(nativeLib));
-    } catch (_) {
-      return '/data/user/0/com.panda.ide/app_flutter/runtimes';
-    }
-  }
-
-  bool _checkServerInstalled(LspServerInfo info, String runtimesDir) {
+  bool _checkServerInstalled(LspServerInfo info) {
     switch (info.languageId) {
       case 'typescript':
       case 'json':
@@ -202,8 +192,14 @@ class LspService {
       case 'bash':
       case 'dockerfile':
         // Check npm global bins
-        final npmBin = '$runtimesDir/node/bin/${info.serverCommand}';
-        return File(npmBin).existsSync() || File('/usr/local/bin/${info.serverCommand}').existsSync();
+        final rootfs = Platform.isAndroid ? DebianSetup.debianDir : '';
+        final candidates = [
+          if (rootfs.isNotEmpty) '$rootfs/usr/local/bin/${info.serverCommand}',
+          if (rootfs.isNotEmpty) '$rootfs/usr/bin/${info.serverCommand}',
+          '/usr/local/bin/${info.serverCommand}',
+          '/usr/bin/${info.serverCommand}',
+        ];
+        return candidates.any((candidate) => File(candidate).existsSync());
       case 'python':
         return File('/usr/local/bin/pylsp').existsSync() || File('/usr/bin/pylsp').existsSync();
       case 'c_cpp':

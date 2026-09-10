@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
+import 'package:panda/extensions/terminal_node.dart';
 
 enum CopilotAccountStatus {
   notSignedIn,
@@ -164,9 +165,12 @@ class CopilotLsp {
 
   Future<void> _startServer() async {
     final sharedPath = await NativeChannel.getLibraryPath();
-    _process = await Process.start(
-      '$binDir/node',
-      ['$extensionDir/copilot-language-server/language-server.js', '--stdio'],
+    _process = await TerminalNodeLauncher.instance.startNode(
+      arguments: [
+        '$extensionDir/copilot-language-server/language-server.js',
+        '--stdio',
+      ],
+      workingDirectory: extensionDir,
       environment: {
         'HOME': configPath,
         'XDG_CONFIG_HOME': configPath,

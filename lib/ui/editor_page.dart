@@ -15,6 +15,7 @@ import 'package:panda/utils/constants.dart';
 import 'webview.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../extensions/extension_host.dart';
+import '../extensions/terminal_node.dart';
 import '../utils/languages.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
@@ -227,20 +228,16 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
     }
 
     final sharedPath = await NativeChannel.getLibraryPath();
-    final process = await Process.start(
-      '$binDir/node',
-      [
+    final process = await TerminalNodeLauncher.instance.startNode(
+      arguments: [
         'node_modules/vite/bin/vite.js',
         '--host',
         '0.0.0.0',
       ],
       workingDirectory: widget.rootDir,
       environment: {
-        'PATH': '$binDir:/bin:/usr/bin',
         'HOME': homeDir,
         'ROXUM_SHARED_PATH': sharedPath,
-        'LD_LIBRARY_PATH':
-            '$runtimesDir/node/lib:$sharedPath:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
       },
     );
 

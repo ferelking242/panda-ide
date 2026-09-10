@@ -762,7 +762,6 @@ class _SetupTerminalState extends State<SetupTerminal>
       binDir,
       '$runtimesDir/flutter/bin',
       '$runtimesDir/android-sdk/platform-tools',
-      '$runtimesDir/node/bin',
       '/bin',
       '/usr/bin',
       '/sbin',

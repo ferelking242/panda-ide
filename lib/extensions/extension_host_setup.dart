@@ -15,7 +15,7 @@ import 'contributes/icon_theme_loader.dart';
 import 'contributes/snippet_loader.dart';
 import 'contributes/theme_loader.dart';
 import 'extension_host_manager.dart';
-import 'node_runtime.dart';
+import 'terminal_node.dart';
 import 'tasks_bridge.dart';
 
 
@@ -44,9 +44,6 @@ class ExtensionHostSetup {
   /// Chemin vers host.js sur le filesystem.
   static String get hostJsPath => '$hostDir/host.js';
 
-  /// Guest path used when Node is installed by `panda update`.
-  static String get nodeBinPath => NodeRuntimeManager.instance.nodePath ?? '/usr/bin/node';
-
   // ── Point d'entrée principal ───────────────────────────────────────────
 
   /// Initialise le système Extension Host.
@@ -61,7 +58,7 @@ class ExtensionHostSetup {
     final future = _doInit(sharedPath: sharedPath);
     _initFuture = future;
     future.catchError((_) {
-      // A missing runtime is recoverable after the user runs `panda update`.
+      // A missing terminal Node is recoverable after the user runs `panda update`.
       // Do not permanently cache a failed initialization attempt.
       if (identical(_initFuture, future)) _initFuture = null;
     });
@@ -79,29 +76,24 @@ class ExtensionHostSetup {
     // 1. Extraire les fichiers JS sur le filesystem.
     await _extractAssets();
 
-    // 2. Initialize Node.js runtime.
-    final nodeReady = await NodeRuntimeManager.instance.init();
+    // 2. Validate Node from the terminal environment.
+    final nodeReady = await TerminalNodeLauncher.instance.init();
     if (!nodeReady) {
       throw StateError(
-        'Node.js runtime indisponible ou inexécutable. '
-        'Installez Node.js avec « panda update », puis réessayez.',
+        'Node.js indisponible dans le terminal. '
+        'Exécutez « panda update », puis réessayez.',
       );
     }
 
-    // 3. Configurer le manager avec les chemins corrects.
-    final effectiveNodePath = NodeRuntimeManager.instance.nodePath;
-    final nodeAvailable = effectiveNodePath != null &&
-        (NodeRuntimeManager.instance.usesGuestRootfs ||
-            File(effectiveNodePath).existsSync());
-    if (nodeReady && nodeAvailable && File(hostJsPath).existsSync()) {
+    // 3. Configurer le manager avec host.js. Node reste fourni par le terminal.
+    if (nodeReady && File(hostJsPath).existsSync()) {
       ExtensionHostManager.instance.configure(
-        nodeBinPath: effectiveNodePath,
         hostJsPath: hostJsPath,
       );
     } else {
       throw StateError(
         'Extension host incomplet : '
-        'Node.js=${effectiveNodePath ?? "absent"}, '
+        'Node.js=${nodeReady ? "présent" : "absent"}, '
         'host.js=${File(hostJsPath).existsSync() ? "présent" : "absent"}.',
       );
     }
@@ -157,7 +149,7 @@ class ExtensionHostSetup {
         ['-c', command],
         workingDirectory: cwd ?? homeDir,
         environment: {
-          'PATH': '$binDir:$runtimesDir/node/bin:/bin:/usr/bin:/sbin:/usr/sbin',
+          'PATH': '$binDir:/bin:/usr/bin:/sbin:/usr/sbin',
           'HOME': homeDir,
           'PREFIX': appDir,
           'ROXUM_SHARED_PATH': sharedPath,

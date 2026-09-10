@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/re_highlight.dart';
 import 'package:panda/utils/constants.dart';
+import 'package:panda/extensions/terminal_node.dart';
 
 final txt = Mode();
 final unknown = Mode();
@@ -371,7 +372,7 @@ final langjavascript = Language(
   command: 'node',
   icon: SvgPicture.asset('assets/material_icons/javascript.svg',height: 35,width: 35),
   type: 'interpreted',
-  lspExecutable: "/data/data/com.panda.ide/bin/node",
+  lspExecutable: "node",
   args: ["--stdio"]
 );
 final langjsx = Language(
@@ -383,7 +384,7 @@ final langjsx = Language(
   command: 'node',
   icon: SvgPicture.asset('assets/material_icons/react.svg',height: 35,width: 35),
   type: 'interpreted',
-  lspExecutable: "/data/data/com.panda.ide/bin/node",
+  lspExecutable: "node",
   args: ["--stdio"]
 );
 final langtypescript = Language(
@@ -395,7 +396,7 @@ final langtypescript = Language(
     command: 'tsc',
     icon: SvgPicture.asset('assets/material_icons/typescript.svg',height: 35,width: 35),
     type: 'interpreted',
-    lspExecutable: "/data/data/com.panda.ide/bin/node",
+    lspExecutable: "node",
     args: ["--stdio"]
 );
 final langtsx = Language(
@@ -407,7 +408,7 @@ final langtsx = Language(
   command: 'tsc',
   icon: SvgPicture.asset('assets/material_icons/react.svg',height: 35,width: 35),
   type: 'interpreted',
-  lspExecutable: "/data/data/com.panda.ide/bin/node",
+    lspExecutable: "node",
   args: ["--stdio"]
 );
 final langjava = Language(
@@ -501,7 +502,7 @@ final langhtml = Language(
 ''',
   icon: SvgPicture.asset('assets/material_icons/html.svg',height: 35,width: 35),
   args: ["--stdio"],
-  lspExecutable: "/data/data/com.panda.ide/bin/node",
+  lspExecutable: "node",
 );
 final langcss = Language(
   name: 'CSS',
@@ -509,7 +510,7 @@ final langcss = Language(
   details: 'Used to style and format web pages.',
   language: builtinAllLanguages['css'],
   helloWorld: '/* Hello, World! */',
-  lspExecutable: "/data/data/com.panda.ide/bin/node",
+  lspExecutable: "node",
   args: ["--stdio"],
   icon: SvgPicture.asset('assets/material_icons/css.svg',height: 35,width: 35),
 );
@@ -623,7 +624,7 @@ final langjson = Language(
   details: 'A lightweight format for data interchange.',
   language: builtinAllLanguages['json'],
   icon: SvgPicture.asset('assets/material_icons/json.svg',height: 35,width: 35),
-  lspExecutable: "/data/data/com.panda.ide/bin/node",
+  lspExecutable: "node",
   args: ["--stdio"],
   helloWorld: '{ "hello": "world" }',
 );
@@ -682,7 +683,7 @@ final langbash = Language(
   helloWorld: 'echo "Hello, World!"',
   command: 'bash',
   icon: SvgPicture.asset('assets/material_icons/console.svg',height: 35,width: 35),
-  lspExecutable: '$binDir/node',
+  lspExecutable: 'node',
   args: ["start"],
   type: 'interpreted'
 );

@@ -2,7 +2,7 @@ import 'dart:io';
 import '../utils/constants.dart';
 import 'extension_host_manager.dart';
 import 'extension_host_setup.dart';
-import 'node_runtime.dart';
+import 'terminal_node.dart';
 
 /// Health check for the extension host system.
 /// Verifies that all components are in place for running extensions.
@@ -11,15 +11,15 @@ class ExtensionHostHealth {
   static Future<ExtensionHostReport> check() async {
     final checks = <ExtensionHostCheck>[];
 
-    // 1. Node.js binary
-    final nodeStatus = await NodeRuntimeManager.instance.getStatus();
+    // 1. Node.js supplied by the active terminal
+    final nodeStatus = await TerminalNodeLauncher.instance.getStatus();
     checks.add(ExtensionHostCheck(
-      name: 'Node.js Runtime',
-      passed: nodeStatus.installed,
-      message: nodeStatus.installed
-          ? 'v${nodeStatus.version ?? "?"} at ${nodeStatus.path}'
-          : 'Not installed — download from Settings → Runtimes',
-      severity: nodeStatus.installed ? CheckSeverity.ok : CheckSeverity.error,
+      name: 'Terminal Node.js',
+      passed: nodeStatus.available,
+      message: nodeStatus.available
+          ? 'v${nodeStatus.version ?? "?"} (${nodeStatus.path})'
+          : 'Unavailable — run `panda update` in the terminal',
+      severity: nodeStatus.available ? CheckSeverity.ok : CheckSeverity.error,
     ));
 
     // 2. host.js

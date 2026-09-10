@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../extension_host_health.dart';
 import '../extension_host_manager.dart';
-import '../node_runtime.dart';
+import '../terminal_node.dart';
 import '../../services/ide_tab_opener.dart';
 
 /// Extension host status and diagnostics page.
@@ -14,7 +14,7 @@ class ExtensionHostStatusPage extends StatefulWidget {
 
 class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
   ExtensionHostReport? _report;
-  NodeRuntimeStatus? _nodeStatus;
+  TerminalNodeStatus? _nodeStatus;
   bool _loading = true;
 
   @override
@@ -25,7 +25,7 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
 
   Future<void> _load() async {
     final report = await ExtensionHostHealth.check();
-    final nodeStatus = await NodeRuntimeManager.instance.getStatus();
+    final nodeStatus = await TerminalNodeLauncher.instance.getStatus();
     if (mounted) {
       setState(() {
         _report = report;
@@ -59,7 +59,7 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
                   _buildHealthHeader(cs),
                   const SizedBox(height: 24),
 
-                  // Node.js runtime
+                  // Node.js from the terminal
                   _buildNodeSection(cs),
                   const SizedBox(height: 24),
 
@@ -124,7 +124,7 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
   }
 
   Widget _buildNodeSection(ColorScheme cs) {
-    final installed = _nodeStatus?.installed ?? false;
+    final installed = _nodeStatus?.available ?? false;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -135,7 +135,7 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
               children: [
                 Icon(Icons.javascript, size: 18, color: installed ? Colors.green : Colors.grey),
                 const SizedBox(width: 8),
-                const Text('Node.js Runtime', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                 const Text('Terminal Node.js', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -144,7 +144,7 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    installed ? 'Installed' : 'Not Installed',
+                     installed ? 'Available' : 'Unavailable',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
@@ -157,8 +157,7 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
             const SizedBox(height: 12),
             if (installed) ...[
               _infoRow('Version', _nodeStatus?.version ?? 'Unknown'),
-              _infoRow('Path', _nodeStatus?.path ?? 'Unknown'),
-              _infoRow('Size', _nodeStatus?.sizeText ?? 'Unknown'),
+               _infoRow('Source', _nodeStatus?.path ?? 'Terminal'),
             ] else ...[
               Text(
                 'Node.js is required for running VS Code extensions (Live Server, ESLint, Prettier, etc.).',
@@ -168,7 +167,7 @@ class _ExtensionHostStatusPageState extends State<ExtensionHostStatusPage> {
               FilledButton.icon(
                 onPressed: _installNode,
                 icon: const Icon(Icons.download, size: 16),
-                label: const Text('Install Node.js'),
+                 label: const Text('Open terminal'),
               ),
             ],
           ],

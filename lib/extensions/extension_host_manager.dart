@@ -12,7 +12,7 @@ import 'ipc_bridge.dart';
 import 'command_registry.dart';
 import 'models/extension_manifest.dart';
 import 'models/extension_message.dart';
-import 'node_runtime.dart';
+import 'terminal_node.dart';
 
 
 
@@ -45,9 +45,6 @@ class ExtensionHostManager {
 
   final Map<String, ActiveExtensionHost> _hosts = {};
 
-  /// Guest or host path for Node, depending on the active platform.
-  String? _nodeBinPath;
-
   /// Chemin vers host.js (extrait de assets/ au premier lancement).
   String? _hostJsPath;
 
@@ -63,14 +60,13 @@ class ExtensionHostManager {
 
   // ── Initialisation ───────────────────────────────────────────────────────
 
-  /// À appeler depuis main.dart après avoir localisé node et extrait host.js.
-  void configure({required String nodeBinPath, required String hostJsPath}) {
-    _nodeBinPath = nodeBinPath;
+  /// À appeler depuis main.dart après avoir validé le Node du terminal.
+  void configure({required String hostJsPath}) {
     _hostJsPath = hostJsPath;
     _configurationError = null;
   }
 
-  bool get isConfigured => _nodeBinPath != null && _hostJsPath != null;
+  bool get isConfigured => _hostJsPath != null;
 
   void setConfigurationLoader(Future<void> Function() loader) {
     _configurationLoader = loader;
@@ -118,7 +114,7 @@ class ExtensionHostManager {
     // Android's terminal Node binary is a Linux guest executable. It must be
     // started through the same PRoot wrapper as the terminal, never with a
     // direct Process.start() from the Android host.
-    final process = await NodeRuntimeManager.instance.startNode(
+    final process = await TerminalNodeLauncher.instance.startNode(
       arguments: [_hostJsPath!, entryPoint],
       environment: {
         'PANDA_EXT_ID': id,
