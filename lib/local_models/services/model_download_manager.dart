@@ -176,6 +176,17 @@ class ModelDownloadManager {
           throw Exception('HTTP ${response.statusCode}');
         }
 
+        // Some mirrors ignore Range and return the entire file with 200.
+        // Appending that response to the partial file would corrupt the GGUF.
+        // Restart from zero in that case; keep append mode only for 206.
+        final resumeAccepted = startByte > 0 && response.statusCode == 206;
+        if (startByte > 0 && !resumeAccepted) {
+          startByte = 0;
+          task.bytesDownloaded = 0;
+          task.progress = 0;
+          await tempFile.delete().catchError((_) {});
+        }
+
         // Taille totale depuis Content-Range ou Content-Length
         final contentLength = response.contentLength;
         if (contentLength != null && contentLength > 0) {
@@ -183,7 +194,7 @@ class ModelDownloadManager {
         }
 
         final sink = tempFile.openWrite(
-            mode: startByte > 0 ? FileMode.append : FileMode.write);
+            mode: resumeAccepted ? FileMode.append : FileMode.write);
 
         final stopwatch = Stopwatch()..start();
         int bytesThisWindow = 0;

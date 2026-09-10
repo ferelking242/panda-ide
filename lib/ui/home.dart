@@ -1892,6 +1892,7 @@ class _SelectTypeState extends State<SelectType>
       _RailItem(icon: Broken.play_circle, label: 'Exécuter / Debug', idx: 4),
       _RailItem(icon: Broken.routing_2, label: 'Tunnel', idx: 5),
       _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
+      _RailItem(icon: Broken.cpu_setting, label: 'Modèles locaux', idx: 11),
       _RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
 
       _RailItem(icon: Icons.preview_outlined, label: 'Preview', idx: 15),

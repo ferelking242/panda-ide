@@ -4,7 +4,11 @@
 /// Phase 3 : bouton "Utiliser dans Panda AI" + config d'inférence auto.
 library;
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../models/ai_model_entry.dart';
 import '../models/device_profile.dart';
 import '../services/model_download_manager.dart';
@@ -693,6 +697,28 @@ class _LocalModelDetailPageState extends State<LocalModelDetailPage> {
         profile:      widget.profile!,
         setAsDefault: false,
       );
+      // ModelActivationService persists the provider, but the running
+      // AIBloc (and therefore Panda Agent's model picker) also needs the
+      // updated values in memory. Refresh both parts of that state here so
+      // the model is usable without restarting the app.
+      final prefs = await SharedPreferences.getInstance();
+      final rawConfig = prefs.getString('aiConfig');
+      final rawSelected = prefs.getString('modelSelected');
+      if (mounted && rawConfig != null) {
+        final aiBloc = context.read<AIBloc>();
+        aiBloc.add(
+          AIConfigEvent(
+            Map<String, dynamic>.from(jsonDecode(rawConfig) as Map),
+          ),
+        );
+        if (rawSelected != null) {
+          aiBloc.add(
+            ModelSelectEvent(
+              Map<String, dynamic>.from(jsonDecode(rawSelected) as Map),
+            ),
+          );
+        }
+      }
       if (!mounted) return;
       setState(() {
         _activating = false;

@@ -42,6 +42,10 @@ class ExtensionMarketplaceClient {
         'filters': [
           {
             'criteria': [
+              // The Gallery returns no results for an empty criteria list.
+              // This identifies the VS Code-compatible product while still
+              // allowing the query to be omitted for the featured view.
+              {'filterType': 8, 'value': 'Microsoft.VisualStudio.Code'},
               if (query.trim().isNotEmpty)
                 {'filterType': 10, 'value': query.trim()},
               if (category != null)
@@ -69,7 +73,10 @@ class ExtensionMarketplaceClient {
           .timeout(_timeout);
       _assertOk(response);
       final parsed =
-          _parseSearch(jsonDecode(response.body) as Map<String, dynamic>);
+          _parseSearch(
+            jsonDecode(response.body) as Map<String, dynamic>,
+            requestedOffset: offset,
+          );
       return parsed;
     } catch (error) {
       throw StateError('Marketplace Microsoft indisponible : $error');
@@ -186,7 +193,10 @@ class ExtensionMarketplaceClient {
     return Map<String, dynamic>.from(extensions.first as Map);
   }
 
-  MarketplaceSearchResult _parseSearch(Map<String, dynamic> data) {
+  MarketplaceSearchResult _parseSearch(
+    Map<String, dynamic> data, {
+    required int requestedOffset,
+  }) {
     final results = data['results'] as List? ?? const [];
     final first = results.isNotEmpty && results.first is Map
         ? Map<String, dynamic>.from(results.first as Map)
@@ -195,16 +205,38 @@ class ExtensionMarketplaceClient {
         .whereType<Map>()
         .map(_toMarketplaceExtension)
         .toList();
-    final metadata = first['resultMetadata'] as Map?;
-    final count = (metadata?['resultCount'] as num?)?.toInt() ??
-        extensions.length;
-    final page = (first['paging'] as Map?)?['pageNumber'];
-    final pageOffset = page is num ? (page.toInt() - 1) * extensions.length : 0;
+    final count = _resultCount(first['resultMetadata']) ?? extensions.length;
     return MarketplaceSearchResult(
       extensions: extensions,
-      offset: pageOffset,
+      offset: requestedOffset,
       totalSize: count,
     );
+  }
+
+  /// `resultMetadata` is an array in the current Gallery API response:
+  /// [{metadataType: "ResultCount", metadataItems: [{name: "TotalCount",
+  /// count: 123}]}]. Older responses used a map, so accept both shapes.
+  int? _resultCount(dynamic rawMetadata) {
+    if (rawMetadata is Map) {
+      final value = rawMetadata['resultCount'];
+      return value is num ? value.toInt() : int.tryParse('$value');
+    }
+    if (rawMetadata is! List) return null;
+
+    for (final metadata in rawMetadata) {
+      if (metadata is! Map) continue;
+      final items = metadata['metadataItems'];
+      if (items is! List) continue;
+      for (final item in items) {
+        if (item is! Map) continue;
+        final name = item['name']?.toString().toLowerCase();
+        if (name == 'totalcount' || name == 'resultcount') {
+          final value = item['count'];
+          return value is num ? value.toInt() : int.tryParse('$value');
+        }
+      }
+    }
+    return null;
   }
 
   MarketplaceExtension _toMarketplaceExtension(Map value) {
