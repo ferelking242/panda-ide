@@ -12,6 +12,7 @@ import 'ipc_bridge.dart';
 import 'command_registry.dart';
 import 'models/extension_manifest.dart';
 import 'models/extension_message.dart';
+import 'node_runtime.dart';
 
 
 
@@ -44,7 +45,7 @@ class ExtensionHostManager {
 
   final Map<String, ActiveExtensionHost> _hosts = {};
 
-  /// Chemin vers le binaire node (installé via node_feature).
+  /// Guest or host path for Node, depending on the active platform.
   String? _nodeBinPath;
 
   /// Chemin vers host.js (extrait de assets/ au premier lancement).
@@ -114,21 +115,16 @@ class ExtensionHostManager {
       throw StateError('Cannot resolve entry point for $id');
     }
 
-    // Spawn Node.js
-    final nodeDirectory = p.dirname(_nodeBinPath!);
-    final runtimeLibraryDirectory = p.dirname(nodeDirectory);
-    final process = await Process.start(
-      _nodeBinPath!,
-      [_hostJsPath!, entryPoint],
+    // Android's terminal Node binary is a Linux guest executable. It must be
+    // started through the same PRoot wrapper as the terminal, never with a
+    // direct Process.start() from the Android host.
+    final process = await NodeRuntimeManager.instance.startNode(
+      arguments: [_hostJsPath!, entryPoint],
       environment: {
-        ...Platform.environment,
         'PANDA_EXT_ID': id,
         'PANDA_EXT_PATH': ext.installPath,
         'PANDA_EXT_VERSION': ext.manifest.version,
-        'PATH': '$nodeDirectory:${Platform.environment['PATH'] ?? ''}',
-        'LD_LIBRARY_PATH':
-            '$runtimeLibraryDirectory:${Platform.environment['LD_LIBRARY_PATH'] ?? ''}',
-        'HOME': Platform.environment['HOME'] ?? ext.installPath,
+        'HOME': ext.installPath,
         // Désactive les couleurs ANSI dans les logs Node.js
         'NO_COLOR': '1',
         'FORCE_COLOR': '0',

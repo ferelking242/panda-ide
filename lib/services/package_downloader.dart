@@ -4,7 +4,7 @@
 /// Features:
 ///   • HTTP Range-header resume: picks up where it left off on failure.
 ///   • Global active-index registry: no duplicate concurrent downloads.
-///   • Direct HTTP downloads kept alive in a global map (not tied to widget).
+///   • HTTP archives are extracted into the terminal-managed directories.
 ///   • Snackbar feedback is best-effort (silently skipped if context gone).
 library;
 import 'dart:async';
@@ -62,16 +62,17 @@ class PackageDownloader {
     _globalActiveIndexes.add(index);
 
     try {
+      // Runtime and extension packages use the terminal/HTTP source only.
       if (url.isEmpty) {
         downloadBloc.clearProgress(index);
-        _showSnack(context, 'No direct download source is available for this package.');
+        _showSnack(context, 'No download source is available for this package.');
         return;
       }
       await _httpDownload(
         context: context,
-        index: index,
         downloadBloc: downloadBloc,
         catalogCubit: catalogCubit,
+        index: index,
         url: url,
         archivePath: '$tempDir/$archiveName',
         archiveName: archiveName,

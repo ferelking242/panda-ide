@@ -319,11 +319,8 @@ class _DownloadManagerState extends State<DownloadManager> {
       loadingIndexes.add(index);
     });
 
-    final archivePath = "$tempDir/$archiveName";
-    final extractDir = isExtension
-      ? extensionDir
-      : runtimesDir;
-
+    // Every package uses its catalog URL. Runtime installation itself happens
+    // inside the terminal with `panda update`.
     if (url.isNotEmpty) {
       await _httpDownloadWithProgress(
         context: context,
@@ -338,6 +335,11 @@ class _DownloadManagerState extends State<DownloadManager> {
         isExtension: isExtension,
       );
     } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No download source is available for this package.')),
+        );
+      }
       downloadBloc.clearProgress(index);
     }
     if (mounted) {
@@ -346,146 +348,7 @@ class _DownloadManagerState extends State<DownloadManager> {
     return;
   }
 
-  Future<bool> _finalizeModuleOnlyInstall({
-    required BuildContext context,
-    required int index,
-    required DownloadManagerBloc downloadBloc,
-    required dynamic config,
-    required String? packageParentName,
-    required Extension? extensionMetadata,
-    required bool isExtension,
-  }) async {
-    final normalizedParent = packageParentName?.toLowerCase();
-    if (!isExtension || normalizedParent == null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${config.displayName} is configured as module-only but not mapped as an extension.',
-            ),
-          ),
-        );
-      }
-      return false;
-    }
-
-    try {
-      final Extension metadata = extensionMetadata ?? extensions.firstWhere(
-        (item) => item.parentName.toLowerCase() == normalizedParent);
-
-      if (normalizedParent == 'ty') {
-        await _createTyExecutableSymlink();
-      } else if (normalizedParent == 'rust-analyzer') {
-        await _createRustAnalyzerExecutableSymlink();
-      } else if (normalizedParent == 'gopls') {
-        await _createGoplsExecutableSymlink();
-      } else if (normalizedParent == 'emmyluals') {
-        await _createEmmyLuaExecutableSymlink();
-      } else if(normalizedParent == 'kmp-lsp') {
-        await _createKmpLspExecutableSymlink();
-      } else {
-        throw Exception(
-          'Unsupported module-only extension: ${config.displayName}',
-        );
-      }
-
-      await _writeInstalledExtensionMetadata(metadata);
-
-      downloadBloc.updateProgress(index, 100.0);
-      downloadBloc.markFullyCompleted(index);
-      if (!context.mounted) return true;
-      await context.read<PackageCatalogCubit>().refreshInstalledStatusOnly();
-      return true;
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to install ${config.displayName.toLowerCase()}: $e',
-            ),
-          ),
-        );
-      }
-      return false;
-    }
-  }
-
-  Future<void> _createTyExecutableSymlink() async {
-    await _createModuleExecutableSymlink(
-      executableName: 'ty',
-      libraryFileName: 'libty.so',
-    );
-  }
-  
-  Future<void> _createKmpLspExecutableSymlink() async {
-    await _createModuleExecutableSymlink(
-      executableName: 'kmp-lsp',
-      libraryFileName: 'libkmplsp.so',
-    );
-  }
-
-  Future<void> _createRustAnalyzerExecutableSymlink() async {
-    await _createModuleExecutableSymlink(
-      executableName: 'rust-analyzer',
-      libraryFileName: 'librust-analyzer.so',
-    );
-  }
-
-  Future<void> _createGoplsExecutableSymlink() async {
-    await _createModuleExecutableSymlink(
-      executableName: 'gopls',
-      libraryFileName: 'libgopls.so',
-    );
-  }
-
-  Future<void> _createEmmyLuaExecutableSymlink() async {
-    await _createModuleExecutableSymlink(
-      executableName: 'emmyluals',
-      libraryFileName: 'libemmy.so',
-    );
-  }
-
-  Future<void> _createModuleExecutableSymlink({
-    required String executableName,
-    required String libraryFileName,
-  }) async {
-    final sharedPath = await NativeChannel.getLibraryPath();
-    final libraryPath = '$sharedPath/$libraryFileName';
-    if (!await File(libraryPath).exists()) {
-      throw Exception('$libraryFileName not found at $libraryPath');
-    }
-
-    final launcherBinDir = Directory(binDir);
-    if (!await launcherBinDir.exists()) {
-      await launcherBinDir.create(recursive: true);
-    }
-
-    await _ensureSymlink(
-      linkPath: '$binDir/$executableName',
-      targetPath: libraryPath,
-    );
-  }
-
-  Future<void> _writeInstalledExtensionMetadata(Extension extension) async {
-    final installDir = Directory('$extensionDir/${extension.parentName}');
-    if (!await installDir.exists()) {
-      await installDir.create(recursive: true);
-    }
-
-    final packageFile = File('${installDir.path}/rsx-package.json');
-    await packageFile.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(extension.toJson()),
-      flush: true,
-    );
-  }
-
-  double _mergeProgress(double basePercent, double secondStagePercent) {
-    final clamped = secondStagePercent.clamp(0.0, 100.0);
-    return basePercent + (clamped * ((100.0 - basePercent) / 100.0));
-  }
-
-  /// Direct HTTP download with real byte-level progress — used as fallback when
-  /// Play Feature Delivery is unavailable (sideloaded builds).
+  /// Direct HTTP download with real byte-level progress.
   Future<void> _httpDownloadWithProgress({
     required BuildContext context,
     required int index,
@@ -1226,7 +1089,7 @@ class _DownloadManagerState extends State<DownloadManager> {
                               
                               final isExtracting = downloadState.isExtracting(index);
                               final extractionPercent = downloadState.extractionProgress[index] ?? 0;
-                              final displayExtractionPercent = extractionPercent;
+                             final displayExtractionPercent = extractionPercent;
                               
                               
                               if (isExtracting) {
@@ -1508,7 +1371,7 @@ class _DownloadManagerState extends State<DownloadManager> {
                               final Directory parentDir = Directory("$extensionDir/${extensionItems[index].parentName}");
                               final isExtracting = downloadState.isExtracting(extensionIndex);
                               final extractionPercent = downloadState.extractionProgress[extensionIndex] ?? 0;
-                              final displayExtractionPercent = extractionPercent;
+                             final displayExtractionPercent = extractionPercent;
                               
                               if (isExtracting) {
                                 if (displayExtractionPercent > 0.0 && displayExtractionPercent < 100.0) {

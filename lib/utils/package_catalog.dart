@@ -26,7 +26,7 @@ class PackageCatalogSyncResult {
 }
 
 class PackageCatalogService {
-  // Runtimes and extensions are installed from their direct download sources.
+  // Runtimes are installed by panda update inside the terminal rootfs.
   static final List<RunTime> _catalogRuntimes = [];
 
   static final List<Extension> _catalogExtensions = [

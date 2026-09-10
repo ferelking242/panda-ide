@@ -1,14 +1,13 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/services.dart';
 import '../utils/constants.dart';
+import '../utils/debian_setup.dart';
 
 /// Manages the Node.js runtime binary for the extension host.
 ///
-/// The node binary is required for running VS Code extensions (Node.js).
-/// It can be:
-///   1. Bundled in assets/ (for small builds)
-///   2. Downloaded via HTTP from GitHub releases
+/// Android never executes a Linux guest binary directly. Node is installed by
+/// `panda update` inside the terminal rootfs and is launched through the same
+/// PRoot environment as the interactive terminal.
 class NodeRuntimeManager {
   static final NodeRuntimeManager instance = NodeRuntimeManager._();
   NodeRuntimeManager._();
@@ -18,6 +17,8 @@ class NodeRuntimeManager {
 
   String? _nodePath;
   String? get nodePath => _nodePath;
+  bool _usesGuestRootfs = false;
+  bool get usesGuestRootfs => _usesGuestRootfs;
 
   /// Version of the installed node binary.
   String? _version;
@@ -25,138 +26,100 @@ class NodeRuntimeManager {
 
   // ── Initialization ──────────────────────────────────────────────────────
 
-  /// Initialize the Node.js runtime.
-  /// Checks if node is already installed, if not, tries to extract from assets.
+  /// Initialize the Node.js runtime from the terminal environment.
   Future<bool> init() async {
-    // 1. Check if node binary already exists at the expected path
-    final expectedPath = '$binDir/node';
-    final existingPaths = <String>[
-      expectedPath,
-      '$runtimesDir/node/bin/node',
-      '$runtimesDir/node',
-      '$appDir/node/bin/node',
-      '$appDir/terminals/ubuntu/usr/bin/node',
-      '$appDir/terminals/debian/usr/bin/node',
-      '$appDir/terminals/alpine/usr/bin/node',
-    ];
-    for (final candidate in existingPaths) {
-      if (!File(candidate).existsSync()) continue;
-      _nodePath = candidate;
-      _version = await _getVersion();
-      if (_version != null) {
-        _installed = true;
-        return true;
-      }
-      // A stale/incompatible candidate must not hide a later working one.
-      _nodePath = null;
-      _version = null;
-    }
+    _installed = false;
+    _nodePath = null;
+    _version = null;
+    _usesGuestRootfs = false;
 
-    // 2. Check alternative paths
-    final altPaths = [
-      '$runtimesDir/node/bin/node',
-      '$runtimesDir/node',
-      '/data/data/com.termux.app/files/usr/bin/node',
-      '$appDir/node/bin/node',
-    ];
-
-    for (final path in altPaths) {
-      if (File(path).existsSync()) {
-        _nodePath = path;
+    if (Platform.isAndroid) {
+      final rootfs = DebianSetup.debianDir;
+      for (final guestPath in const ['/usr/bin/node', '/usr/local/bin/node']) {
+        if (!File('$rootfs$guestPath').existsSync()) continue;
+        _nodePath = guestPath;
+        _usesGuestRootfs = true;
         _version = await _getVersion();
-        if (_version == null) {
-          _nodePath = null;
-          continue;
+        if (_version != null) {
+          _installed = true;
+          return true;
         }
-        _installed = true;
-        // Copy to expected location for consistency
-        await _copyToExpectedPath(path);
-        return true;
       }
+      _nodePath = null;
+      _usesGuestRootfs = false;
+      return false;
     }
 
-    // 3. Try to extract from bundled assets
-    final extracted = await _extractFromAssets();
-    if (extracted) {
-      _nodePath = expectedPath;
-      _installed = true;
-      _version = await _getVersion();
-      return true;
+    for (final candidate in const ['node', '/usr/local/bin/node', '/usr/bin/node']) {
+      try {
+        final result = await Process.run(candidate, ['--version'])
+            .timeout(const Duration(seconds: 10));
+        if (result.exitCode == 0 && result.stdout.toString().trim().isNotEmpty) {
+          _nodePath = candidate;
+          _version = result.stdout.toString().trim();
+          _installed = true;
+          return true;
+        }
+      } catch (_) {}
     }
-
     return false;
   }
 
-  // ── Asset extraction ──────────────────────────────────────────────────
-
-  /// Try to extract node binary from Flutter assets.
-  Future<bool> _extractFromAssets() async {
-    try {
-      final data = await rootBundle.load('assets/bin/node');
-      if (data.lengthInBytes == 0) return false;
-
-      final dir = Directory(binDir);
-      if (!dir.existsSync()) await dir.create(recursive: true);
-
-      final file = File('$binDir/node');
-      await file.writeAsBytes(
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        flush: true,
-      );
-
-      // Make executable (chmod +x)
-      await Process.run('chmod', ['755', file.path]);
-
-      return file.existsSync();
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // ── HTTP download ─────────────────────────────────────────────────────
-
-  /// Download node binary from a URL (GitHub releases, custom server, etc.).
-  Future<bool> downloadFromUrl(String url, {
-    void Function(double progress)? onProgress,
+  /// Starts Node in the terminal rootfs on Android, or directly on desktop.
+  Future<Process> startNode({
+    required List<String> arguments,
+    required String workingDirectory,
+    Map<String, String> environment = const {},
   }) async {
-    try {
-      final client = HttpClient();
-      final request = await client.getUrl(Uri.parse(url));
-      final response = await request.close();
-
-      if (response.statusCode != 200) return false;
-
-      final totalBytes = response.contentLength ?? 0;
-      int receivedBytes = 0;
-
-      final dir = Directory(binDir);
-      if (!dir.existsSync()) await dir.create(recursive: true);
-
-      final file = File('$binDir/node');
-      final sink = file.openWrite();
-
-      await for (final chunk in response) {
-        sink.add(chunk);
-        receivedBytes += chunk.length;
-        if (totalBytes > 0) {
-          onProgress?.call(receivedBytes / totalBytes);
-        }
-      }
-
-      await sink.flush();
-      await sink.close();
-
-      // Make executable
-      await Process.run('chmod', ['755', file.path]);
-
-      _nodePath = file.path;
-      _installed = true;
-      _version = await _getVersion();
-
-      return true;
-    } catch (e) {
-      return false;
+    final node = _nodePath;
+    if (node == null) {
+      throw StateError('Node.js is not installed in the terminal. Run `panda update` first.');
     }
+
+    if (!_usesGuestRootfs) {
+      return Process.start(
+        node,
+        arguments,
+        workingDirectory: workingDirectory,
+        environment: environment,
+      );
+    }
+
+    final rootfs = DebianSetup.debianDir;
+    final proot = await DebianSetup.locateProotBinary(rootfs);
+    if (proot == null) {
+      throw StateError('PRoot is unavailable; restart the terminal and run `panda doctor`.');
+    }
+
+    final prootArgs = await DebianSetup.prootArguments(
+      rootfsPath: rootfs,
+      extraBinds: [
+        if (Directory(appDir).existsSync()) '$appDir:$appDir',
+        if (Directory(runtimesDir).existsSync()) '$runtimesDir:$runtimesDir',
+        if (Directory(workingDirectory).existsSync())
+          '$workingDirectory:$workingDirectory',
+      ],
+    );
+    final guestEnvironment = await DebianSetup.prootSessionEnvironment(
+      rootfsPath: rootfs,
+      extra: {
+        ...environment,
+        'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      },
+    );
+
+    return Process.start(
+      proot,
+      [
+        ...prootArgs,
+        '-w',
+        workingDirectory.startsWith('/') ? workingDirectory : '/root',
+        node,
+        ...arguments,
+      ],
+      workingDirectory: appDir,
+      environment: guestEnvironment,
+    );
   }
 
   // ── Installation status ───────────────────────────────────────────────
@@ -187,6 +150,32 @@ class NodeRuntimeManager {
   Future<String?> _getVersion() async {
     if (_nodePath == null) return null;
     try {
+      if (_usesGuestRootfs) {
+        final rootfs = DebianSetup.debianDir;
+        final proot = await DebianSetup.locateProotBinary(rootfs);
+        if (proot == null) return null;
+        final prootArgs = await DebianSetup.prootArguments(
+          rootfsPath: rootfs,
+          extraBinds: [
+            if (Directory(appDir).existsSync()) '$appDir:$appDir',
+          ],
+        );
+        final env = await DebianSetup.prootSessionEnvironment(
+          rootfsPath: rootfs,
+          extra: const {
+            'PATH': '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+          },
+        );
+        final result = await Process.run(
+          proot,
+          [...prootArgs, '-w', '/root', _nodePath!, '--version'],
+          workingDirectory: appDir,
+          environment: env,
+        ).timeout(const Duration(seconds: 10));
+        if (result.exitCode == 0) return result.stdout.toString().trim();
+        return null;
+      }
+
       final nodeDirectory = Directory(_nodePath!).parent.path;
       final runtimeLibraryDirectory = Directory(nodeDirectory).parent.path;
       final environment = <String, String>{
@@ -215,7 +204,11 @@ class NodeRuntimeManager {
   Future<int> _getBinarySize() async {
     if (_nodePath == null) return 0;
     try {
-      final file = File(_nodePath!);
+      final file = File(
+        _usesGuestRootfs
+            ? '${DebianSetup.debianDir}$_nodePath'
+            : _nodePath!,
+      );
       if (await file.exists()) {
         return await file.length();
       }
@@ -223,25 +216,12 @@ class NodeRuntimeManager {
     return 0;
   }
 
-  Future<void> _copyToExpectedPath(String sourcePath) async {
-    try {
-      final source = File(sourcePath);
-      if (!await source.exists()) return;
-
-      final dir = Directory(binDir);
-      if (!dir.existsSync()) await dir.create(recursive: true);
-
-      final dest = File('$binDir/node');
-      await source.copy(dest.path);
-      await Process.run('chmod', ['755', dest.path]);
-    } catch (_) {}
-  }
-
   /// Dispose resources.
   void dispose() {
     _installed = false;
     _nodePath = null;
     _version = null;
+    _usesGuestRootfs = false;
   }
 }
 

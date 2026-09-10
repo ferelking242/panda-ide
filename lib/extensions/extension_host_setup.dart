@@ -44,8 +44,8 @@ class ExtensionHostSetup {
   /// Chemin vers host.js sur le filesystem.
   static String get hostJsPath => '$hostDir/host.js';
 
-  /// Chemin vers le binaire node (installé via node_feature / runtimes).
-  static String get nodeBinPath => '$binDir/node';
+  /// Guest path used when Node is installed by `panda update`.
+  static String get nodeBinPath => NodeRuntimeManager.instance.nodePath ?? '/usr/bin/node';
 
   // ── Point d'entrée principal ───────────────────────────────────────────
 
@@ -90,10 +90,10 @@ class ExtensionHostSetup {
 
     // 3. Configurer le manager avec les chemins corrects.
     final effectiveNodePath = NodeRuntimeManager.instance.nodePath;
-    if (nodeReady &&
-        effectiveNodePath != null &&
-        File(effectiveNodePath).existsSync() &&
-        File(hostJsPath).existsSync()) {
+    final nodeAvailable = effectiveNodePath != null &&
+        (NodeRuntimeManager.instance.usesGuestRootfs ||
+            File(effectiveNodePath).existsSync());
+    if (nodeReady && nodeAvailable && File(hostJsPath).existsSync()) {
       ExtensionHostManager.instance.configure(
         nodeBinPath: effectiveNodePath,
         hostJsPath: hostJsPath,
