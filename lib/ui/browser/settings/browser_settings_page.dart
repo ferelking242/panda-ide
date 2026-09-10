@@ -5,13 +5,14 @@ import '../models/browser_profile.dart';
 import '../state/browser_controller.dart';
 import '../state/profile_store.dart';
 import '../widgets/profile_badge.dart';
+import '../widgets/browser_runtime_card.dart';
 
 // Couleurs VSCode
-const _kBg    = Color(0xff1e1e1e);
-const _kBgL   = Color(0xfffafafa);
-const _kHdr   = Color(0xff252526);
-const _kHdrL  = Color(0xffececec);
-const _kAccent= Color(0xff5090c8);
+const _kBg = Color(0xff1e1e1e);
+const _kBgL = Color(0xfffafafa);
+const _kHdr = Color(0xff252526);
+const _kHdrL = Color(0xffececec);
+const _kAccent = Color(0xff5090c8);
 
 /// Page de paramètres du navigateur.
 /// Peut être affichée de façon autonome (depuis Settings) ou comme
@@ -29,11 +30,11 @@ class BrowserSettingsPage extends StatefulWidget {
 class _BrowserSettingsPageState extends State<BrowserSettingsPage> {
   // Utilisé uniquement si controller est null (depuis Settings global)
   String _searchEngine = 'https://www.google.com/search?q=%s';
-  String _homeUrl      = 'https://www.google.com';
-  int    _maxProfiles  = 3;
+  String _homeUrl = 'https://www.google.com';
+  int _maxProfiles = 3;
 
   final _homeUrlCtrl = TextEditingController();
-  bool _loadedPrefs  = false;
+  bool _loadedPrefs = false;
 
   @override
   void initState() {
@@ -43,8 +44,8 @@ class _BrowserSettingsPageState extends State<BrowserSettingsPage> {
 
   Future<void> _loadPrefs() async {
     _searchEngine = await ProfileStore.loadSearchEngine();
-    _homeUrl      = await ProfileStore.loadHomeUrl();
-    _maxProfiles  = await ProfileStore.loadMaxProfiles();
+    _homeUrl = await ProfileStore.loadHomeUrl();
+    _maxProfiles = await ProfileStore.loadMaxProfiles();
     _homeUrlCtrl.text = _homeUrl;
     if (mounted) setState(() => _loadedPrefs = true);
   }
@@ -57,17 +58,15 @@ class _BrowserSettingsPageState extends State<BrowserSettingsPage> {
 
   BrowserController? get _ctrl =>
       widget.controller ??
-      (context.mounted
-          ? context.read<BrowserController?>()
-          : null);
+      (context.mounted ? context.read<BrowserController?>() : null);
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg     = isDark ? _kBg    : _kBgL;
-    final hdr    = isDark ? _kHdr   : _kHdrL;
-    final fg     = isDark ? Colors.grey[200]! : Colors.grey[850]!;
-    final sub    = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    final bg = isDark ? _kBg : _kBgL;
+    final hdr = isDark ? _kHdr : _kHdrL;
+    final fg = isDark ? Colors.grey[200]! : Colors.grey[850]!;
+    final sub = isDark ? Colors.grey[500]! : Colors.grey[600]!;
 
     return Scaffold(
       backgroundColor: bg,
@@ -97,6 +96,10 @@ class _BrowserSettingsPageState extends State<BrowserSettingsPage> {
                 ),
                 const SizedBox(height: 20),
 
+                _Section(title: 'MOTEUR DU NAVIGATEUR', fg: sub),
+                const BrowserRuntimeCard(),
+                const SizedBox(height: 20),
+
                 _Section(title: 'PAGE D\'ACCUEIL', fg: sub),
                 _HomeUrlField(
                   ctrl: _homeUrlCtrl,
@@ -110,11 +113,7 @@ class _BrowserSettingsPageState extends State<BrowserSettingsPage> {
                 const SizedBox(height: 20),
 
                 _Section(title: 'PROFILS', fg: sub),
-                _ProfileList(
-                  maxProfiles: _maxProfiles,
-                  fg: fg,
-                  sub: sub,
-                ),
+                _ProfileList(maxProfiles: _maxProfiles, fg: fg, sub: sub),
                 const SizedBox(height: 20),
 
                 _Section(title: 'NOMBRE MAX DE PROFILS', fg: sub),
@@ -148,17 +147,17 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(
-          title,
-          style: TextStyle(
-            fontSize: 10.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.0,
-            color: fg,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      title,
+      style: TextStyle(
+        fontSize: 10.5,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.0,
+        color: fg,
+      ),
+    ),
+  );
 }
 
 // ── Moteur de recherche ───────────────────────────────────────────────────────
@@ -189,8 +188,8 @@ class _SearchEngineSelector extends StatelessWidget {
       ),
       child: Column(
         children: kSearchEngines.entries.map((entry) {
-          final label   = entry.key;
-          final url     = entry.value;
+          final label = entry.key;
+          final url = entry.value;
           final selected = url == current;
           return RadioListTile<String>(
             dense: true,
@@ -203,7 +202,9 @@ class _SearchEngineSelector extends StatelessWidget {
             value: url,
             groupValue: current,
             activeColor: _kAccent,
-            onChanged: (v) { if (v != null) onChanged(v); },
+            onChanged: (v) {
+              if (v != null) onChanged(v);
+            },
           );
         }).toList(),
       ),
@@ -240,7 +241,10 @@ class _HomeUrlField extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: _kAccent, width: 1.5),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 10,
+          vertical: 10,
+        ),
         filled: true,
         fillColor: isDark ? const Color(0xff2d2d2d) : Colors.white,
       ),
@@ -281,9 +285,9 @@ class _ProfileListState extends State<_ProfileList> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark  = Theme.of(context).brightness == Brightness.dark;
-    final tileBg  = isDark ? const Color(0xff2d2d2d) : Colors.white;
-    final border  = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final tileBg = isDark ? const Color(0xff2d2d2d) : Colors.white;
+    final border = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
 
     return Container(
       decoration: BoxDecoration(
@@ -293,25 +297,27 @@ class _ProfileListState extends State<_ProfileList> {
       ),
       child: Column(
         children: [
-          ..._profiles.map((p) => _ProfileRow(
-            profile: p,
-            fg: widget.fg,
-            sub: widget.sub,
-            canDelete: _profiles.length > 1,
-            onDelete: () async {
-              await ProfileStore.saveProfiles(
-                _profiles..removeWhere((x) => x.id == p.id),
-              );
-              _load();
-            },
-            onRename: (name) async {
-              final idx = _profiles.indexWhere((x) => x.id == p.id);
-              if (idx < 0) return;
-              _profiles[idx] = p.copyWith(name: name);
-              await ProfileStore.saveProfiles(_profiles);
-              _load();
-            },
-          )),
+          ..._profiles.map(
+            (p) => _ProfileRow(
+              profile: p,
+              fg: widget.fg,
+              sub: widget.sub,
+              canDelete: _profiles.length > 1,
+              onDelete: () async {
+                await ProfileStore.saveProfiles(
+                  _profiles..removeWhere((x) => x.id == p.id),
+                );
+                _load();
+              },
+              onRename: (name) async {
+                final idx = _profiles.indexWhere((x) => x.id == p.id);
+                if (idx < 0) return;
+                _profiles[idx] = p.copyWith(name: name);
+                await ProfileStore.saveProfiles(_profiles);
+                _load();
+              },
+            ),
+          ),
           if (_profiles.length < widget.maxProfiles)
             ListTile(
               dense: true,
@@ -349,22 +355,31 @@ class _ProfileListState extends State<_ProfileList> {
               const SizedBox(height: 12),
               Wrap(
                 spacing: 8,
-                children: kProfileColors.map((c) => GestureDetector(
-                  onTap: () => ss(() => color = c),
-                  child: Container(
-                    width: 28, height: 28,
-                    decoration: BoxDecoration(
-                      color: c,
-                      shape: BoxShape.circle,
-                      border: c == color
-                          ? Border.all(color: Colors.white, width: 2.5)
-                          : null,
-                    ),
-                    child: c == color
-                        ? const Icon(Icons.check, size: 14, color: Colors.white)
-                        : null,
-                  ),
-                )).toList(),
+                children: kProfileColors
+                    .map(
+                      (c) => GestureDetector(
+                        onTap: () => ss(() => color = c),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: c,
+                            shape: BoxShape.circle,
+                            border: c == color
+                                ? Border.all(color: Colors.white, width: 2.5)
+                                : null,
+                          ),
+                          child: c == color
+                              ? const Icon(
+                                  Icons.check,
+                                  size: 14,
+                                  color: Colors.white,
+                                )
+                              : null,
+                        ),
+                      ),
+                    )
+                    .toList(),
               ),
             ],
           ),
@@ -377,11 +392,13 @@ class _ProfileListState extends State<_ProfileList> {
               onPressed: () async {
                 final name = nameCtrl.text.trim();
                 if (name.isEmpty) return;
-                _profiles.add(BrowserProfile(
-                  id:    ProfileStore.generateId(),
-                  name:  name,
-                  color: color,
-                ));
+                _profiles.add(
+                  BrowserProfile(
+                    id: ProfileStore.generateId(),
+                    name: name,
+                    color: color,
+                  ),
+                );
                 await ProfileStore.saveProfiles(_profiles);
                 if (ctx.mounted) Navigator.pop(ctx);
                 _load();
@@ -428,7 +445,11 @@ class _ProfileRow extends StatelessWidget {
           ),
           if (canDelete)
             IconButton(
-              icon: Icon(Icons.delete_outline, size: 16, color: Colors.redAccent[200]),
+              icon: Icon(
+                Icons.delete_outline,
+                size: 16,
+                color: Colors.redAccent[200],
+              ),
               tooltip: 'Supprimer',
               onPressed: onDelete,
             ),
@@ -449,7 +470,10 @@ class _ProfileRow extends StatelessWidget {
           decoration: const InputDecoration(border: OutlineInputBorder()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
           TextButton(
             onPressed: () {
               final name = ctrl.text.trim();
@@ -531,36 +555,53 @@ class _DataSection extends StatelessWidget {
         children: [
           ListTile(
             dense: true,
-            leading: Icon(Icons.cleaning_services_outlined, size: 18, color: sub),
-            title: Text('Vider les cookies', style: TextStyle(fontSize: 13, color: fg)),
+            leading: Icon(
+              Icons.cleaning_services_outlined,
+              size: 18,
+              color: sub,
+            ),
+            title: Text(
+              'Vider les cookies',
+              style: TextStyle(fontSize: 13, color: fg),
+            ),
             onTap: () async {
-              await _confirm(context,
-                  'Vider les cookies de tous les profils ?', () async {
-                final CookieManager cm = CookieManager.instance();
-                await cm.deleteAllCookies();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Cookies supprimés')),
-                  );
-                }
-              });
+              await _confirm(
+                context,
+                'Vider les cookies de tous les profils ?',
+                () async {
+                  final CookieManager cm = CookieManager.instance();
+                  await cm.deleteAllCookies();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Cookies supprimés')),
+                    );
+                  }
+                },
+              );
             },
           ),
           Divider(height: 1, color: border),
           ListTile(
             dense: true,
             leading: Icon(Icons.storage_outlined, size: 18, color: sub),
-            title: Text('Vider tout le cache', style: TextStyle(fontSize: 13, color: fg)),
+            title: Text(
+              'Vider tout le cache',
+              style: TextStyle(fontSize: 13, color: fg),
+            ),
             onTap: () async {
-              await _confirm(context, 'Vider tout le cache navigateur ?', () async {
-                final CookieManager cm = CookieManager.instance();
-                await cm.deleteAllCookies();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Cache vidé')),
-                  );
-                }
-              });
+              await _confirm(
+                context,
+                'Vider tout le cache navigateur ?',
+                () async {
+                  final CookieManager cm = CookieManager.instance();
+                  await cm.deleteAllCookies();
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('Cache vidé')));
+                  }
+                },
+              );
             },
           ),
         ],
@@ -578,12 +619,17 @@ class _DataSection extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         content: Text(message),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true),  child: const Text('Confirmer')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirmer'),
+          ),
         ],
       ),
     );
     if (ok == true) await action();
   }
 }
-
