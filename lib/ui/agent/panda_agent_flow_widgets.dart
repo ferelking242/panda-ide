@@ -805,6 +805,13 @@ class PandaAgentFlowToolCard extends StatelessWidget {
           child: CircularProgressIndicator(strokeWidth: 1.5),
         );
       }
+      if (shell && result?.trim().isNotEmpty == true) {
+        return Icon(
+          _failed ? Icons.close_rounded : Icons.check_rounded,
+          size: 13,
+          color: _failed ? Colors.redAccent : Colors.green,
+        );
+      }
       if (onOpen != null) {
         return IconButton(
           tooltip: 'Ouvrir dans un onglet',
@@ -821,40 +828,59 @@ class PandaAgentFlowToolCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Material(
-          color: Colors.transparent,
+            color: dark
+                ? const Color(0xff2b2b2f)
+                : const Color(0xffe5e5e8),
+            borderRadius: BorderRadius.circular(9),
           child: InkWell(
             onTap: hasDetails ? onToggle : null,
             borderRadius: BorderRadius.circular(10),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               child: Row(
                 children: [
                   iconTile(),
                   const SizedBox(width: 7),
                   Expanded(
-                    child: Text(
-                      approval
-                          ? 'Approbation requise · $toolName'
-                          : toolName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: muted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'monospace',
-                      ),
-                    ),
+                    child: shell && !approval && _command.isNotEmpty
+                        ? _PandaCommandLine(
+                            command: _command,
+                            color: dark
+                                ? const Color(0xffd0d0d4)
+                                : const Color(0xff5d5d64),
+                              background: dark
+                                  ? const Color(0xff2b2b2f)
+                                  : const Color(0xffe5e5e8),
+                          )
+                        : Text(
+                            approval
+                                ? 'Approbation requise · $toolName'
+                                : toolName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: dark
+                                  ? const Color(0xffd0d0d4)
+                                  : const Color(0xff5d5d64),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
                   ),
+                  const SizedBox(width: 6),
                   statusWidget(),
-                  const SizedBox(width: 2),
+                  const SizedBox(width: 4),
                   if (hasDetails)
-                    Icon(
-                      collapsed
-                          ? Icons.chevron_right_rounded
-                          : Icons.expand_more_rounded,
-                      size: 17,
-                      color: muted,
+                    SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CustomPaint(
+                        painter: _PandaChevronPainter(
+                          expanded: !collapsed,
+                          color: muted,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -962,20 +988,15 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                         child: _PandaCommandLine(
                           command: _command.isEmpty ? toolName : _command,
                           color: foreground.withValues(alpha: 0.66),
+                          background: dark
+                              ? const Color(0xff202024)
+                              : const Color(0xfff3f3f5),
                         ),
                       ),
                       if (running)
                         const SizedBox.square(
                           dimension: 12,
                           child: CircularProgressIndicator(strokeWidth: 1.3),
-                        )
-                      else if (shell && result?.trim().isNotEmpty == true)
-                        Icon(
-                          _failed
-                              ? Icons.close_rounded
-                              : Broken.tick_circle,
-                          size: 12,
-                          color: _failed ? Colors.redAccent : Colors.green,
                         ),
                     ],
                   ),
@@ -1025,6 +1046,45 @@ class PandaAgentFlowToolCard extends StatelessWidget {
   }
 }
 
+/// A deliberately plain chevron. Using a custom path avoids the circled arrow
+/// glyphs supplied by some icon fonts and keeps the two states unambiguous.
+class _PandaChevronPainter extends CustomPainter {
+  const _PandaChevronPainter({
+    required this.expanded,
+    required this.color,
+  });
+
+  final bool expanded;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    final path = Path();
+    if (expanded) {
+      path
+        ..moveTo(size.width * 0.22, size.height * 0.35)
+        ..lineTo(size.width * 0.5, size.height * 0.66)
+        ..lineTo(size.width * 0.78, size.height * 0.35);
+    } else {
+      path
+        ..moveTo(size.width * 0.36, size.height * 0.22)
+        ..lineTo(size.width * 0.66, size.height * 0.5)
+        ..lineTo(size.width * 0.36, size.height * 0.78);
+    }
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_PandaChevronPainter oldDelegate) =>
+      oldDelegate.expanded != expanded || oldDelegate.color != color;
+}
+
 /// A compact command strip: the right-side status icon stays fixed while a
 /// long command can be swiped horizontally instead of wrapping the card.
 /// The initial position keeps a small ellipsis visible before that icon.
@@ -1032,10 +1092,12 @@ class _PandaCommandLine extends StatefulWidget {
   const _PandaCommandLine({
     required this.command,
     required this.color,
+    this.background,
   });
 
   final String command;
   final Color color;
+  final Color? background;
 
   @override
   State<_PandaCommandLine> createState() => _PandaCommandLineState();
@@ -1117,14 +1179,15 @@ class _PandaCommandLineState extends State<_PandaCommandLine> {
                   child: Container(
                     width: 24,
                     alignment: Alignment.centerRight,
+                     color: widget.background,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Theme.of(context)
-                              .colorScheme
-                              .surface
-                              .withValues(alpha: 0),
-                          Theme.of(context).colorScheme.surface,
+                           (widget.background ??
+                                   Theme.of(context).colorScheme.surface)
+                               .withValues(alpha: 0),
+                           widget.background ??
+                               Theme.of(context).colorScheme.surface,
                         ],
                       ),
                     ),
