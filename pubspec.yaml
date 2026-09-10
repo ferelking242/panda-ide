@@ -68,7 +68,6 @@ flutter:
   assets:
     - assets/icons/
     - assets/material_icons/
-    - assets/webview/
     - assets/runtimes/
     - assets/fonts/
     - assets/certificates/

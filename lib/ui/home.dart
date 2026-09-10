@@ -57,9 +57,9 @@ import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import '../services/android_update_service.dart';
 import '../extensions/ui/marketplace_page.dart';
-import '../extensions/ui/extensions_panel.dart';
 import '../extensions/ui/extension_contributions_panel.dart';
 import '../extensions/extension_host.dart';
+import '../extensions/extension_registry.dart';
 import '../extensions/terminal_node.dart';
 import '../extensions/ui/command_palette.dart';
 import '../services/ide_tab_opener.dart';
@@ -173,6 +173,7 @@ class _SelectTypeState extends State<SelectType>
 
   // Active activity-bar item (0 = none/welcome)
   int _activeRail = 0;
+  bool _clineInstalled = false;
   // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
   int _sidebarState = 1;
   bool _rightPanelOpen = false;
@@ -456,8 +457,25 @@ class _SelectTypeState extends State<SelectType>
       context.read<ChatSessionBloc>().add(LoadChatSessions());
       checkAndRequestMissingPermissions(context);
       _bootstrapExtensionHost();
+      _refreshClineSidebar();
       _registerTabOpener();
     });
+  }
+
+  Future<void> _refreshClineSidebar() async {
+    try {
+      await ExtensionRegistry.instance.load();
+      final installed = ExtensionRegistry.instance.all.any(
+        (extension) =>
+            extension.manifest.id == 'saoudrizwan.claude-dev' ||
+            extension.manifest.displayName.toLowerCase() == 'cline',
+      );
+      if (mounted && installed != _clineInstalled) {
+        setState(() => _clineInstalled = installed);
+      }
+    } catch (error) {
+      PandaLog.w('Extensions', 'Unable to discover Cline: $error');
+    }
   }
 
   /// Enregistre le service global d'ouverture d'onglets IDE.
@@ -1673,6 +1691,28 @@ class _SelectTypeState extends State<SelectType>
     });
   }
 
+  /// Opens the file manager inside the IDE tab strip instead of navigating to
+  /// a separate full-screen route.
+  void _openFileManagerTab() {
+    setState(() {
+      final existing = _openTabs.indexWhere((tab) => tab.id == 'file-manager');
+      if (existing == -1) {
+        _openTabs.add(
+          const _TabDef(
+            id: 'file-manager',
+            title: 'Gestionnaire de fichiers',
+            icon: Broken.folder_2,
+          ),
+        );
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = existing;
+      }
+      _sidebarState = 1;
+      _activeRail = 0;
+    });
+  }
+
   void _openLogsTab() {
     setState(() {
       final existing = _openTabs.indexWhere((t) => t.id == 'logs');
@@ -1844,8 +1884,7 @@ class _SelectTypeState extends State<SelectType>
     final selColor = isDark ? _kActivitySelDark : _kActivitySelLight;
 
     // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent,
-    // WebView, Preview, Copilot
-    // ensuite les panneaux classiques de l'éditeur.
+    // Preview et Copilot. Outline/Timeline restent dans Explorer comme dans VS Code.
     final topItems = <_RailItem>[
       _RailItem(icon: Broken.element_3, label: 'Explorateur', idx: 1),
       _RailItem(icon: Broken.search_normal, label: 'Rechercher', idx: 2),
@@ -1855,16 +1894,18 @@ class _SelectTypeState extends State<SelectType>
       _RailItem(icon: Broken.shop, label: 'Marketplace', idx: 6),
       _RailItem(icon: Broken.cpu_setting, label: 'Panda Agent', idx: 10),
 
-      _RailItem(icon: Broken.global, label: 'WebView / Navigateur', idx: 8),
       _RailItem(icon: Icons.preview_outlined, label: 'Preview', idx: 15),
+      if (_clineInstalled)
+        _RailItem(
+          icon: Broken.message_programming,
+          label: 'Cline',
+          idx: 16,
+        ),
       _RailItem(
         icon: Broken.message_programming,
         label: 'GitHub Copilot',
         idx: 9,
       ),
-      _RailItem(icon: Broken.task_square, label: 'Outline', idx: 12),
-      _RailItem(icon: Broken.clock, label: 'Timeline', idx: 13),
-       _RailItem(icon: Broken.element_3, label: 'Extensions', idx: 14),
     ];
 
     return Container(
@@ -1902,29 +1943,6 @@ class _SelectTypeState extends State<SelectType>
                             } else {
                               _activeTabIdx = _openTabs.indexWhere(
                                 (t) => t.id == 'marketplace',
-                              );
-                            }
-                            _sidebarState = 1;
-                            _activeRail = 0;
-                          });
-                          return;
-                        }
-                        // WebView (idx:8) opens as an editor tab so Chromium
-                        // receives the full available width.
-                        if (item.idx == 8) {
-                          setState(() {
-                            if (!_openTabs.any((t) => t.id == 'browser')) {
-                              _openTabs.add(
-                                const _TabDef(
-                                  id: 'browser',
-                                  title: 'Navigateur',
-                                  icon: Broken.global,
-                                ),
-                              );
-                              _activeTabIdx = _openTabs.length - 1;
-                            } else {
-                              _activeTabIdx = _openTabs.indexWhere(
-                                (t) => t.id == 'browser',
                               );
                             }
                             _sidebarState = 1;
@@ -2270,14 +2288,11 @@ class _SelectTypeState extends State<SelectType>
       4: 'EXÉCUTER / DEBUG',
       5: 'TUNNEL / SSH',
       6: 'MARKETPLACE',
-      8: 'WEBVIEW / NAVIGATEUR',
       9: 'GITHUB COPILOT',
       10: 'PANDA AGENT',
       11: 'MODÈLES LOCAUX',
-      12: 'OUTLINE',
-      13: 'TIMELINE',
-       14: 'EXTENSIONS',
       15: 'PREVIEW',
+      16: 'CLINE',
     };
 
     Widget panelBody;
@@ -2300,17 +2315,11 @@ class _SelectTypeState extends State<SelectType>
       case 6: // Marketplace
         panelBody = _sidebarMarketplace(context, appTheme, isDark);
         break;
-      case 12: // Outline
-        panelBody = _sidebarOutline(context, appTheme, isDark);
-        break;
-      case 13: // Timeline
-        panelBody = _sidebarTimeline(context, appTheme, isDark);
-        break;
-       case 14: // Extension contribution points
-         panelBody = const ExtensionContributionsPanel();
-         break;
       case 9: // GitHub Copilot
         panelBody = _sidebarCopilot(context, appTheme, isDark);
+        break;
+      case 16: // Cline contributed views
+        panelBody = const ExtensionContributionsPanel();
         break;
       default:
         panelBody = const SizedBox.shrink();
@@ -2376,39 +2385,64 @@ class _SelectTypeState extends State<SelectType>
 
     if (activeProjPath != null) {
       // Active project → show full file tree
-      return DirectoryTreeViewerCustom(
-        rootPath: activeProjPath,
-        appTheme: t,
-        isUnfoldedFirst: true,
-        enableCreateFileOption: true,
-        enableCreateFolderOption: true,
-        enableDeleteFileOption: true,
-        enableDeleteFolderOption: true,
-        enableRenameFileOption: true,
-        enableRenameFolderOption: true,
-        enableGitFeatures: true,
-        fileIconBuilder: (extension) => _buildExplorerFileIcon(extension, t),
-        onFileTap: (file) {
-          final lang = languages.firstWhere(
-            (l) => l.extension.contains(
-              path.extension(file.path).replaceFirst('.', ''),
+      return Column(
+        children: [
+          Expanded(
+            child: DirectoryTreeViewerCustom(
+              rootPath: activeProjPath,
+              appTheme: t,
+              isUnfoldedFirst: true,
+              enableCreateFileOption: true,
+              enableCreateFolderOption: true,
+              enableDeleteFileOption: true,
+              enableDeleteFolderOption: true,
+              enableRenameFileOption: true,
+              enableRenameFolderOption: true,
+              enableGitFeatures: true,
+              fileIconBuilder: (extension) => _buildExplorerFileIcon(extension, t),
+              onFileTap: (file) {
+                final lang = languages.firstWhere(
+                  (l) => l.extension.contains(
+                    path.extension(file.path).replaceFirst('.', ''),
+                  ),
+                  orElse: () => languages[0],
+                );
+                _openEditorTab(
+                  file: file,
+                  rootDir: activeProjPath,
+                  languageDetails: lang,
+                  isProject: false,
+                );
+              },
             ),
-            orElse: () => languages[0],
-          );
-          _openEditorTab(
-            file: file,
-            rootDir: activeProjPath,
-            languageDetails: lang,
-            isProject: false,
-          );
-        },
+          ),
+          _buildExplorerBottomSection(
+            title: 'OUTLINE',
+            icon: Broken.task_square,
+            child: _sidebarOutline(context, t, isDark),
+          ),
+          _buildExplorerBottomSection(
+            title: 'TIMELINE',
+            icon: Broken.clock,
+            child: _sidebarTimeline(context, t, isDark),
+          ),
+          _buildExplorerBottomSection(
+            title: 'VUES EXTENSIONS',
+            icon: Broken.element_3,
+            height: 190,
+            child: const ExtensionContributionsPanel(),
+          ),
+        ],
       );
     }
 
     // No active project → show open/clone actions + recent projects
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+    return Column(
       children: [
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            children: [
         _panelItem(
           ctx,
           t,
@@ -2442,16 +2476,7 @@ class _SelectTypeState extends State<SelectType>
           t,
           Broken.folder_2,
           'Gestionnaire de fichiers',
-          () => _push(
-            ctx,
-            FileManagerPage(
-              rootDir: _activeProjectDir() ?? projectDir,
-              onFileOpen: (file) => _openFileFromWorkspace(
-                file,
-                _activeProjectDir() ?? projectDir,
-              ),
-            ),
-          ),
+          _openFileManagerTab,
         ),
         const Divider(indent: 12, endIndent: 12),
         Padding(
@@ -2512,8 +2537,66 @@ class _SelectTypeState extends State<SelectType>
             );
           },
         ),
-        const Divider(indent: 12, endIndent: 12),
+              const Divider(indent: 12, endIndent: 12),
+            ],
+          ),
+        ),
+        _buildExplorerBottomSection(
+          title: 'OUTLINE',
+          icon: Broken.task_square,
+          child: _sidebarOutline(context, t, isDark),
+        ),
+        _buildExplorerBottomSection(
+          title: 'TIMELINE',
+          icon: Broken.clock,
+          child: _sidebarTimeline(context, t, isDark),
+        ),
+        _buildExplorerBottomSection(
+          title: 'VUES EXTENSIONS',
+          icon: Broken.element_3,
+          height: 190,
+          child: const ExtensionContributionsPanel(),
+        ),
       ],
+    );
+  }
+
+  Widget _buildExplorerBottomSection({
+    required String title,
+    required IconData icon,
+    required Widget child,
+    double height = 178,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SizedBox(
+      height: height,
+      child: Column(
+        children: [
+          Container(
+            height: 32,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xff2d2d2d) : const Color(0xffe9e9e9),
+              border: Border(
+                top: BorderSide(
+                  color: isDark ? const Color(0xff3c3c3c) : const Color(0xffd4d4d4),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  title,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 
@@ -3483,45 +3566,6 @@ class _SelectTypeState extends State<SelectType>
           ),
           const SizedBox(height: 4),
         ],
-
-        // ── Section Extensions VSCode ─────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-          child: Text(
-            'EXTENSIONS VSCODE',
-            style: _kSectionTitle.copyWith(
-              color: dark ? Colors.grey[500] : Colors.grey[500],
-            ),
-          ),
-        ),
-        _panelItem(ctx, t, Broken.shop, 'Parcourir les extensions', () {
-          setState(() {
-            if (!_openTabs.any((tab) => tab.id == 'marketplace')) {
-              _openTabs.add(
-                const _TabDef(
-                  id: 'marketplace',
-                  title: 'Extensions',
-                  icon: Broken.shop,
-                ),
-              );
-              _activeTabIdx = _openTabs.length - 1;
-            } else {
-              _activeTabIdx = _openTabs.indexWhere(
-                (tab) => tab.id == 'marketplace',
-              );
-            }
-            _sidebarState = 1;
-            _activeRail = 0;
-          });
-        }),
-        _panelItem(
-          ctx,
-          t,
-          Broken.element_3,
-          'Extensions installées',
-          () => _push(ctx, const ExtensionsPanel()),
-        ),
-        const Divider(indent: 12, endIndent: 12),
 
         // ── Section Modèles & runtimes ────────────────────────────────
         Padding(
@@ -5539,11 +5583,15 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
     }
-    if (tab.id == 'browser') {
-      return const BrowserPanel();
-    }
     if (tab.id == 'preview') {
       return const PreviewPanel();
+    }
+    if (tab.id == 'file-manager') {
+      final root = _activeProjectDir() ?? _currentWorkspaceDir ?? projectDir;
+      return FileManagerPage(
+        rootDir: root,
+        onFileOpen: (file) => _openFileFromWorkspace(file, root),
+      );
     }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);
@@ -5649,11 +5697,15 @@ class _SelectTypeState extends State<SelectType>
     if (tab.id == 'marketplace') {
       return const MarketplacePage(embedded: true);
     }
-    if (tab.id == 'browser') {
-      return const BrowserPanel();
-    }
     if (tab.id == 'preview') {
       return const PreviewPanel();
+    }
+    if (tab.id == 'file-manager') {
+      final root = _activeProjectDir() ?? _currentWorkspaceDir ?? projectDir;
+      return FileManagerPage(
+        rootDir: root,
+        onFileOpen: (file) => _openFileFromWorkspace(file, root),
+      );
     }
     if (tab.id == 'github') {
       return GithubPage(embedded: true);

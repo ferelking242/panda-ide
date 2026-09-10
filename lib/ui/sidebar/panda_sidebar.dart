@@ -30,7 +30,6 @@ class PandaSidebarPanel extends StatelessWidget {
     4: 'EXÉCUTER / DEBUG',
     5: 'TUNNEL / SSH',
     6: 'MARKETPLACE',
-    8: 'WEBVIEW / NAVIGATEUR',
     9: 'GITHUB COPILOT',
     10: 'PANDA AGENT',
     11: 'MODÈLES LOCAUX',

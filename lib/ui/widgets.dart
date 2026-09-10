@@ -86,10 +86,6 @@ export 'agent/flow_ui/widgets/flow_streaming_text.dart';
 export 'agent/flow_ui/theme/flow_theme.dart';
 export 'agent/flow_ui/theme/flow_colors.dart';
 
-// ── Browser ──
-export 'browser/browser_panel.dart';
-export 'browser/settings/browser_settings_page.dart';
-
 // ── Activity bar / Sidebar / Titlebar ──
 export 'activitybar/panda_activity_bar.dart';
 export 'sidebar/panda_sidebar.dart';

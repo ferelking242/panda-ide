@@ -9,7 +9,12 @@ import 'package:http/http.dart' as http;
 /// - DevTools: discover pages exposed by Chrome's remote debugging endpoint
 ///   and open a selected target in the same WebView.
 class PreviewPanel extends StatefulWidget {
-  const PreviewPanel({super.key});
+  final String initialUrl;
+
+  const PreviewPanel({
+    super.key,
+    this.initialUrl = 'http://127.0.0.1:5000',
+  });
 
   @override
   State<PreviewPanel> createState() => _PreviewPanelState();
@@ -22,19 +27,24 @@ class _PreviewPanelState extends State<PreviewPanel> {
   static const _borderDark = Color(0xff2a3145);
   static const _borderLight = Color(0xffe2e6ef);
 
-  final _urlController = TextEditingController(
-    text: 'http://127.0.0.1:5000',
-  );
+  late final TextEditingController _urlController;
   final _cdpController = TextEditingController(
     text: 'http://127.0.0.1:9222',
   );
 
   InAppWebViewController? _webController;
   _PreviewMode _mode = _PreviewMode.webView;
-  String _currentUrl = 'http://127.0.0.1:5000';
+  late String _currentUrl;
   List<Map<String, dynamic>> _targets = const [];
   bool _discovering = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUrl = widget.initialUrl;
+    _urlController = TextEditingController(text: widget.initialUrl);
+  }
 
   @override
   void dispose() {

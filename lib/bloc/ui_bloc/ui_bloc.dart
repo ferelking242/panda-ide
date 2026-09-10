@@ -78,13 +78,6 @@ class FindWordBloc extends Bloc<FindWord, FindWordState>{
   }
 }
 
-class WebViewBloc extends Bloc<UiEvent, WebViewState>{
-  WebViewBloc():super(const WebViewState(isMobile: true,isConsole: true)){
-    on<SetViewPort>((event, emit)=>emit(state.copyWith(isMobile: event.isMobile)));
-    on<EnableConsole>((event, emit)=>emit(state.copyWith(isConsole: event.isConsole)));
-  }
-}
-
 class ApiBloc extends Bloc<RestEvent, ApiState>{
   ApiBloc():super(const ApiState(method: "GET",data: null, url: null, params: {}, headers: {}, body: {})){
     on<ApiEvent>((event, emit)=>emit(state.copyWith(method: event.method)));

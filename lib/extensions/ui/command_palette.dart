@@ -137,7 +137,14 @@ class __CommandPaletteSheetState extends State<_CommandPaletteSheet> {
       } else {
         await ExtensionContributionIndex.launchCommand(cmd);
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        // Keep a visible confirmation after the sheet closes. Extension
+        // commands often succeed without producing their own UI feedback.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${cmd.displayLabel} exécutée')),
+        );
+        Navigator.of(context).pop();
+      }
     } catch (error) {
       if (!mounted) return;
       setState(() {

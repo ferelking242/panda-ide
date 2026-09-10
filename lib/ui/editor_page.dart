@@ -12,7 +12,6 @@ import 'package:path/path.dart' as path;
 import 'package:vector_math/vector_math_64.dart' hide Colors;
 import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
 import 'package:panda/utils/constants.dart';
-import 'webview.dart';
 import '../bloc/ui_bloc/ui_bloc.dart';
 import '../extensions/extension_host.dart';
 import '../extensions/terminal_node.dart';
@@ -20,6 +19,7 @@ import '../utils/languages.dart';
 import '../utils/functions.dart';
 import '../utils/themes.dart';
 import 'editor/status_bar.dart';
+import 'preview_panel.dart';
 import 'widgets.dart';
 
 class DiagnosticsTickBloc extends Cubit<int> {
@@ -316,7 +316,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
       Navigator.of(context).push(
         PageRouteBuilder(
           pageBuilder: (context, animation, scondaryAnimation) =>
-              WebViewScreen(streamUrl: url),
+              PreviewPanel(initialUrl: url),
           transitionsBuilder: (
             context,
             animation,

@@ -44,15 +44,6 @@ class FindWordState {
   });
 }
 
-class WebViewState{
-  final bool isMobile;
-  final bool isConsole;
-  const WebViewState({required this.isMobile,required this.isConsole});
-  WebViewState copyWith({bool? isMobile,bool? isConsole}){
-    return WebViewState(isMobile: isMobile ?? this.isMobile, isConsole: isConsole ?? this.isConsole);
-  } 
-}
-
 class ApiState{
   final String method;
   final String? url;

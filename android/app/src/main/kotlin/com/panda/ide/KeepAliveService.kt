@@ -10,6 +10,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.net.wifi.WifiManager
 import androidx.core.app.NotificationCompat
 
 /**
@@ -84,6 +85,7 @@ class KeepAliveService : Service() {
     private val activeTasks = linkedSetOf<String>()
     private val taskLabels = linkedMapOf<String, String>()
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -105,6 +107,7 @@ class KeepAliveService : Service() {
                 taskLabels[id] = label
                 persistTasks()
                 acquireWakeLock()
+                acquireWifiLock()
                 promoteToForeground()
             }
             ACTION_UPDATE -> {
@@ -123,6 +126,7 @@ class KeepAliveService : Service() {
                 persistTasks()
                 if (activeTasks.isEmpty()) {
                     releaseWakeLock()
+                    releaseWifiLock()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelfResult(startId)
                 } else {
@@ -134,15 +138,18 @@ class KeepAliveService : Service() {
                 taskLabels.clear()
                 persistTasks()
                 releaseWakeLock()
+                releaseWifiLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelfResult(startId)
             }
             else -> {
                 if (activeTasks.isNotEmpty()) {
                     acquireWakeLock()
+                    acquireWifiLock()
                     promoteToForeground()
                 } else {
                     releaseWakeLock()
+                    releaseWifiLock()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelfResult(startId)
                 }
@@ -203,6 +210,30 @@ class KeepAliveService : Service() {
             if (it.isHeld) it.release()
         }
         wakeLock = null
+    }
+
+    /**
+     * A partial CPU wakelock does not prevent Wi-Fi from being suspended by
+     * Doze. Keep the network transport awake while a terminal/build/agent
+     * task is explicitly active.
+     */
+    private fun acquireWifiLock() {
+        if (wifiLock?.isHeld == true) return
+        val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wifiLock = wifi.createWifiLock(
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+            "PandaIDE:network",
+        ).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseWifiLock() {
+        wifiLock?.let {
+            if (it.isHeld) it.release()
+        }
+        wifiLock = null
     }
 
     private fun promoteToForeground() {
@@ -279,6 +310,7 @@ class KeepAliveService : Service() {
 
     override fun onDestroy() {
         releaseWakeLock()
+        releaseWifiLock()
         super.onDestroy()
     }
 }

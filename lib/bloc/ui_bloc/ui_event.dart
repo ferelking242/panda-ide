@@ -40,17 +40,6 @@ class FindWord extends UiEvent {
   });
 }
 
-class SetViewPort extends UiEvent{
-  final bool isMobile;
-  SetViewPort({required this.isMobile});
-}
-
-class EnableConsole extends UiEvent{
-  final bool isConsole;
-  EnableConsole({required this.isConsole});
-}
-
-
 class ApiEvent extends RestEvent{
   final String method;
   ApiEvent({required this.method});
