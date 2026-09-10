@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import '../utils/panda_log.dart';
 import '../utils/extractors.dart';
 import '../utils/debian_setup.dart';
+import '../utils/constants.dart';
 
 /// Supported language → server mapping.
 class LspServerInfo {

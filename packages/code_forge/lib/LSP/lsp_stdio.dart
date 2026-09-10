@@ -52,13 +52,6 @@ part of 'lsp.dart';
 ///      ),
 ///    );
 ///  }
-typedef LspProcessStarter = Future<Process> Function(
-  String executable,
-  List<String> args,
-  String workingDirectory,
-  Map<String, String>? environment,
-);
-
 class LspStdioConfig extends LspConfig {
   /// location of the LSP executable, such as `pyright-langserver`, `rust-analyzer`, etc.
   ///
@@ -77,7 +70,6 @@ class LspStdioConfig extends LspConfig {
 
   /// Optional environement variables for the executable.
   final Map<String, String>? environment;
-  final LspProcessStarter? processStarter;
 
   late Process _process;
   final _buffer = <int>[];
@@ -89,7 +81,6 @@ class LspStdioConfig extends LspConfig {
     required super.languageId,
     this.args,
     this.environment,
-    this.processStarter,
     super.capabilities,
     super.initializationOptions,
     super.workspaceConfiguration,
@@ -106,7 +97,6 @@ class LspStdioConfig extends LspConfig {
     Map<String, dynamic> workspaceConfiguration = const {},
     List<String>? args,
     Map<String, String>? environment,
-    LspProcessStarter? processStarter,
     bool disableWarning = false,
     bool disableError = false,
   }) async {
@@ -121,7 +111,6 @@ class LspStdioConfig extends LspConfig {
       workspacePath: workspacePath,
       args: args,
       environment: environment,
-      processStarter: processStarter,
       disableWarning: disableWarning,
       disableError: disableError,
       capabilities: capabilities,
@@ -182,20 +171,12 @@ class LspStdioConfig extends LspConfig {
   }
 
   Future<void> _startProcess() async {
-    final starter = processStarter;
-    _process = starter == null
-        ? await Process.start(
-            executable,
-            args ?? [],
-            environment: environment,
-            workingDirectory: workspacePath,
-          )
-        : await starter(
-            executable,
-            args ?? [],
-            workspacePath,
-            environment,
-          );
+    _process = await Process.start(
+      executable,
+      args ?? [],
+      environment: environment,
+      workingDirectory: workspacePath,
+    );
     _process.stdout.listen(_handleStdoutData);
     _process.stderr.listen((data) => debugPrint(utf8.decode(data)));
   }

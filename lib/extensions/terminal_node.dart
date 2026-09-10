@@ -53,6 +53,26 @@ class TerminalNodeLauncher {
     required String workingDirectory,
     Map<String, String> environment = const {},
   }) async {
+    final command = await prepareNodeCommand(
+      arguments: arguments,
+      workingDirectory: workingDirectory,
+      environment: environment,
+      hostWorkingDirectory: appDir,
+    );
+    return Process.start(
+      command.executable,
+      command.arguments,
+      workingDirectory: command.hostWorkingDirectory,
+      environment: command.environment,
+    );
+  }
+
+  Future<TerminalNodeCommand> prepareNodeCommand({
+    required List<String> arguments,
+    required String workingDirectory,
+    Map<String, String> environment = const {},
+    String? hostWorkingDirectory,
+  }) async {
     if (!_available && !await init()) {
       throw StateError(
         'Node.js is unavailable in the terminal. '
@@ -61,11 +81,14 @@ class TerminalNodeLauncher {
     }
 
     if (!Platform.isAndroid) {
-      return Process.start(
-        'node',
-        arguments,
-        workingDirectory: workingDirectory,
-        environment: environment,
+      return TerminalNodeCommand(
+        executable: 'node',
+        arguments: arguments,
+        hostWorkingDirectory: hostWorkingDirectory ?? workingDirectory,
+        environment: {
+          ...Platform.environment,
+          ...environment,
+        },
       );
     }
 
@@ -96,18 +119,18 @@ class TerminalNodeLauncher {
       },
     );
     final guestWorkingDirectory =
-        workingDirectory.startsWith(appDir) ? workingDirectory : '/root';
+        Directory(workingDirectory).existsSync() ? workingDirectory : '/root';
 
-    return Process.start(
-      proot,
-      [
+    return TerminalNodeCommand(
+      executable: proot,
+      arguments: [
         ...prootArgs,
         '-w',
         guestWorkingDirectory,
         'node',
         ...arguments,
       ],
-      workingDirectory: appDir,
+      hostWorkingDirectory: hostWorkingDirectory ?? appDir,
       environment: guestEnvironment,
     );
   }
@@ -129,6 +152,20 @@ class TerminalNodeLauncher {
       environment: environment,
     ).timeout(const Duration(seconds: 10));
   }
+}
+
+class TerminalNodeCommand {
+  final String executable;
+  final List<String> arguments;
+  final String hostWorkingDirectory;
+  final Map<String, String> environment;
+
+  const TerminalNodeCommand({
+    required this.executable,
+    required this.arguments,
+    required this.hostWorkingDirectory,
+    required this.environment,
+  });
 }
 
 class TerminalNodeStatus {

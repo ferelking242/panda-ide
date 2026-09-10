@@ -347,22 +347,26 @@ Future<LspConfig?> startLspServer({
       if (normalizedExt == 'dart') 'DART_ROOT': dartRuntimeDir,
       'JAVA_HOME': '$runtimeDir/java-21-openjdk',
     };
+    final nodeCommand = resolvedExecutable == 'node'
+        ? await TerminalNodeLauncher.instance.prepareNodeCommand(
+            arguments: resolvedArgs,
+            workingDirectory: workspacePath,
+            hostWorkingDirectory: workspacePath,
+            environment: resolvedEnvironment,
+          )
+        : null;
+    final launchExecutable = nodeCommand?.executable ?? resolvedExecutable;
+    final launchArgs = nodeCommand?.arguments ?? resolvedArgs;
+    final launchEnvironment =
+        nodeCommand?.environment ?? resolvedEnvironment;
 
     if (normalizedExt == 'dart') {
       try {
         final config = await LspStdioConfig.start(
-          executable: resolvedExecutable,
+          executable: launchExecutable,
           capabilities: capabilities ?? const LspClientCapabilities(),
-          args: resolvedArgs,
-          environment: resolvedEnvironment,
-          processStarter: resolvedExecutable == 'node'
-              ? (executable, args, workingDirectory, environment) =>
-                  TerminalNodeLauncher.instance.startNode(
-                    arguments: args,
-                    workingDirectory: workingDirectory,
-                    environment: environment ?? const {},
-                  )
-              : null,
+          args: launchArgs,
+          environment: launchEnvironment,
           workspacePath: workspacePath,
           languageId: langId.toLowerCase(),
         );
@@ -391,18 +395,10 @@ Future<LspConfig?> startLspServer({
     }
 
     final config = await LspStdioConfig.start(
-      executable: resolvedExecutable,
+      executable: launchExecutable,
       capabilities: capabilities ?? const LspClientCapabilities(),
-      args: resolvedArgs,
-      environment: resolvedEnvironment,
-      processStarter: resolvedExecutable == 'node'
-          ? (executable, args, workingDirectory, environment) =>
-              TerminalNodeLauncher.instance.startNode(
-                arguments: args,
-                workingDirectory: workingDirectory,
-                environment: environment ?? const {},
-              )
-          : null,
+      args: launchArgs,
+      environment: launchEnvironment,
       workspacePath: workspacePath,
       languageId: langId.toLowerCase(),
     );
