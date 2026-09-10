@@ -86,23 +86,6 @@ class PandaAgentFlowChat extends StatelessWidget {
             .map((block) => Map<String, dynamic>.from(block))
             .toList() ??
         <Map<String, dynamic>>[];
-    // Keep one lightweight activity line in the message stream. It replaces
-    // both FlowThread's pending indicator and the old sticky footer activity:
-    // the line is inserted after the user message and content grows below it.
-    final showThinkingLine =
-        source['showThinkingLine'] == true ||
-        sourcePhase == 'streaming' ||
-        blocks.any((block) => block['type'] == 'thinkingLine');
-    if (showThinkingLine) {
-      parts.add(
-        FlowCustomPart(
-          type: 'thinkingLine',
-          data: {
-            'active': isGeneratingMessage(source),
-          },
-        ),
-      );
-    }
     if (blocks.isNotEmpty) {
       for (final block in blocks) {
         final type = block['type']?.toString() ?? '';
@@ -165,6 +148,23 @@ class PandaAgentFlowChat extends StatelessWidget {
       for (final call in calls) {
         parts.add(FlowCustomPart(type: 'tool', data: call));
       }
+    }
+    // Keep the live activity line after every text/tool part. The thread
+    // reverses messages, but the parts inside one assistant turn stay in
+    // normal top-to-bottom order, so new agent content appears above it.
+    final showThinkingLine =
+        source['showThinkingLine'] == true ||
+        sourcePhase == 'streaming' ||
+        blocks.any((block) => block['type'] == 'thinkingLine');
+    if (showThinkingLine) {
+      parts.add(
+        FlowCustomPart(
+          type: 'thinkingLine',
+          data: {
+            'active': isGeneratingMessage(source),
+          },
+        ),
+      );
     }
     final effectiveStatus = parts.isEmpty && status == FlowMessageStatus.streaming
         ? FlowMessageStatus.pending
@@ -776,7 +776,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: foreground,
+                        color: muted,
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         fontFamily: 'monospace',
@@ -787,7 +787,9 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                   const SizedBox(width: 2),
                   if (hasDetails)
                     Icon(
-                      collapsed ? Broken.arrow_right_2 : Broken.arrow_down_2,
+                      collapsed
+                          ? Icons.chevron_right_rounded
+                          : Icons.expand_more_rounded,
                       size: 17,
                       color: muted,
                     ),
@@ -894,16 +896,9 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                         ),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(
-                          _command.isEmpty ? toolName : _command,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: foreground.withValues(alpha: 0.82),
-                            fontSize: 10.5,
-                            height: 1.25,
-                            fontFamily: 'monospace',
-                          ),
+                        child: _PandaCommandLine(
+                          command: _command.isEmpty ? toolName : _command,
+                          color: foreground.withValues(alpha: 0.66),
                         ),
                       ),
                       if (running)
@@ -913,8 +908,10 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                         )
                       else if (shell && result?.trim().isNotEmpty == true)
                         Icon(
-                          _failed ? Broken.close_circle : Broken.tick_circle,
-                          size: 14,
+                          _failed
+                              ? Icons.close_rounded
+                              : Broken.tick_circle,
+                          size: 12,
                           color: _failed ? Colors.redAccent : Colors.green,
                         ),
                     ],
@@ -961,6 +958,123 @@ class PandaAgentFlowToolCard extends StatelessWidget {
         minimumSize: const Size(0, 32),
         padding: const EdgeInsets.symmetric(horizontal: 10),
       ),
+    );
+  }
+}
+
+/// A compact command strip: the right-side status icon stays fixed while a
+/// long command can be swiped horizontally instead of wrapping the card.
+/// The initial position keeps a small ellipsis visible before that icon.
+class _PandaCommandLine extends StatefulWidget {
+  const _PandaCommandLine({
+    required this.command,
+    required this.color,
+  });
+
+  final String command;
+  final Color color;
+
+  @override
+  State<_PandaCommandLine> createState() => _PandaCommandLineState();
+}
+
+class _PandaCommandLineState extends State<_PandaCommandLine> {
+  late final ScrollController _scrollController;
+  bool _hasOverflow = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController()..addListener(_handleScroll);
+  }
+
+  @override
+  void didUpdateWidget(_PandaCommandLine oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.command != widget.command && _scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      color: widget.color,
+      fontSize: 10.5,
+      height: 1.25,
+      fontFamily: 'monospace',
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final painter = TextPainter(
+          text: TextSpan(text: widget.command, style: style),
+          maxLines: 1,
+          textDirection: Directionality.of(context),
+        )..layout();
+        final overflow = painter.width > constraints.maxWidth;
+        if (_hasOverflow != overflow) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _hasOverflow = overflow);
+          });
+        }
+
+        final atStart =
+            !_scrollController.hasClients || _scrollController.offset <= 1;
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            SingleChildScrollView(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              child: Padding(
+                padding: EdgeInsets.only(right: overflow ? 18 : 0),
+                child: Text(widget.command, style: style, maxLines: 1),
+              ),
+            ),
+            if (overflow && atStart)
+              Positioned(
+                top: 0,
+                right: 0,
+                bottom: 0,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 24,
+                    alignment: Alignment.centerRight,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context)
+                              .colorScheme
+                              .surface
+                              .withValues(alpha: 0),
+                          Theme.of(context).colorScheme.surface,
+                        ],
+                      ),
+                    ),
+                    child: Text(
+                      '…',
+                      style: style.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
