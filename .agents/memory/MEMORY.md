@@ -1,3 +1,4 @@
+- [Node terminal policy](terminal-node-policy.md) — Node must come only from `panda update` in the active terminal environment.
 - [Flutter validation](flutter-toolchain.md) — the repository is Flutter-based, but this workspace does not provide the Flutter SDK for local analyze/build checks.
 - [Terminal runtime profiles](terminal-runtime.md) — install command markers in each generated login profile; environment-only hooks can be overwritten by Bash startup.
 - [GitHub AI providers](github-ai-providers.md) — GitHub Models and GitHub Copilot are separate services; verify their current availability before adding a provider.
