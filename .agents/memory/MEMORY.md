@@ -15,3 +15,4 @@
 - [VS Code extension module loading](vscode-extension-module-loading.md) — bare `require('vscode')` needs a Module._load shim, not only a require.cache entry.
 - [CEF runtime boundary](cef-runtime-boundary.md) — only report CEF ready after validating its manifest and required files; never fake a runtime download.
 - [Terminal shortcuts](terminal-shortcuts.md) — preserve PTY control bytes for Gboard and hardware shortcuts; Ctrl+C must always interrupt instead of copying.
+- [Dart Process export collision](dart-process-export-collision.md) — legacy Git facades named Process must stay hidden from shared barrel exports.
