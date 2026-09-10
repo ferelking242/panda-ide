@@ -1422,6 +1422,11 @@ class _SetupTerminalState extends State<SetupTerminal>
       final char = data[i];
       if (char == '\r' || char == '\n') {
         runtime.lastCommand = runtime.commandInput.trim();
+        if (runtime.commandInput.trim().isNotEmpty) {
+          unawaited(
+            DebianSetup.persistTerminalPathCommand(runtime.commandInput.trim()),
+          );
+        }
         runtime.commandInput = '';
       } else if (char == '\x7f' || char == '\b') {
         if (runtime.commandInput.isNotEmpty) {

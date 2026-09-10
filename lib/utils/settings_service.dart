@@ -137,6 +137,13 @@ class SettingsService {
   String get terminalShell => _prefs.getString('terminal.shell') ?? 'bash';
   set terminalShell(String v) => _prefs.setString('terminal.shell', v);
 
+  /// Additional PATH entries configured from the integrated terminal.
+  ///
+  /// This is kept separately from the generated Linux profile so refreshing
+  /// the rootfs/profile cannot erase a user's Flutter, Android or custom tools.
+  String get terminalPath => _prefs.getString('terminal.path') ?? '';
+  set terminalPath(String v) => _prefs.setString('terminal.path', v);
+
   int get terminalFontSize => _prefs.getInt('terminal.fontSize') ?? 14;
   set terminalFontSize(int v) => _prefs.setInt('terminal.fontSize', v);
 
