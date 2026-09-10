@@ -16,3 +16,4 @@
 - [CEF runtime boundary](cef-runtime-boundary.md) — only report CEF ready after validating its manifest and required files; never fake a runtime download.
 - [Terminal shortcuts](terminal-shortcuts.md) — preserve PTY control bytes for Gboard and hardware shortcuts; Ctrl+C must always interrupt instead of copying.
 - [Dart Process export collision](dart-process-export-collision.md) — legacy Git facades named Process must stay hidden from shared barrel exports.
+- [Official Marketplace assets](official-marketplace-assets.md) — use Microsoft Gallery as the single source and allow its publisher CDN hosts for VSIX downloads.
