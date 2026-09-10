@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../bloc/ui_bloc/ui_bloc.dart';
+import '../../utils/ai.dart';
 import '../models/ai_model_entry.dart';
 import '../models/device_profile.dart';
 import '../services/model_download_manager.dart';

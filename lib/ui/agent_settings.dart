@@ -25,7 +25,7 @@ import 'package:markdown_widget/widget/all.dart';
 import 'package:markdown_widget/config/configs.dart';
 import 'package:path_provider/path_provider.dart';
 import '../utils/ai_provider_logos.dart';
-import '../local_models/models/ai_model_entry.dart';
+import '../local_models/models/ai_model_entry.dart' as local_models;
 import '../local_models/services/model_download_manager.dart';
 import 'widgets.dart';
 
@@ -133,7 +133,7 @@ class _AgentSettingsState extends State<AgentSettings>
   bool? _testKeyResult;
   String _testKeyMessage    = '';
   List<Map<String, dynamic>> _availableModels = const [];
-  List<InstalledModel> _installedLocalModels = const [];
+  List<local_models.InstalledModel> _installedLocalModels = const [];
 
   // Memory settings
   final _memoryNotesCtrl   = TextEditingController();
@@ -1320,25 +1320,6 @@ class _AgentSettingsState extends State<AgentSettings>
     selected['chat'] = modelId;
     aiBloc.add(ModelSelectEvent(selected));
     await prefs.setString('modelSelected', jsonEncode(selected));
-    context.read<LocalLlamaBloc>().add(LocalLlamaLoadModel(LocalLlama(
-      modelPath: path,
-      displayName: fileName,
-      threads: _localInt(_localThreadsCtrl, 4, min: 1),
-      contextSize: _localInt(_localContextCtrl, 4096, min: 128),
-      gpuLayers: _localInt(_localGpuLayersCtrl, 0),
-      temperature: _localDouble(_localTemperatureCtrl, 0.7, max: 2),
-      topP: _localDouble(_localTopPCtrl, 0.9, max: 1),
-      topK: _localInt(_localTopKCtrl, 40),
-      repeatPenalty: _localDouble(_localRepeatPenaltyCtrl, 1.1, min: 0.1, max: 3),
-      frequencyPenalty: _localDouble(_localFrequencyPenaltyCtrl, 0),
-      presencePenalty: _localDouble(_localPresencePenaltyCtrl, 0),
-      repeatLastN: _localInt(_localRepeatLastNCtrl, 64),
-      seed: _localInt(_localSeedCtrl, 42),
-      maxTokens: _localInt(_localMaxTokensCtrl, 512, min: 1),
-      mirostat: _localInt(_localMirostatCtrl, 0),
-      mirostatTau: _localDouble(_localMirostatTauCtrl, 5),
-      mirostatEta: _localDouble(_localMirostatEtaCtrl, 0.1),
-    )));
   }
 
   int _localInt(TextEditingController c, int fallback, {int min = 0}) =>
@@ -1393,6 +1374,25 @@ class _AgentSettingsState extends State<AgentSettings>
     selected['chat'] = modelId;
     aiBloc.add(ModelSelectEvent(selected));
     await prefs.setString('modelSelected', jsonEncode(selected));
+    context.read<LocalLlamaBloc>().add(LocalLlamaLoadModel(LocalLlama(
+      modelPath: path,
+      displayName: fileName,
+      threads: (localCfg['threads'] as num?)?.toInt() ?? 4,
+      contextSize: (localCfg['contextSize'] as num?)?.toInt() ?? 4096,
+      gpuLayers: (localCfg['gpuLayers'] as num?)?.toInt() ?? 0,
+      temperature: (localCfg['temperature'] as num?)?.toDouble() ?? 0.7,
+      topP: (localCfg['topP'] as num?)?.toDouble() ?? 0.9,
+      topK: (localCfg['topK'] as num?)?.toInt() ?? 40,
+      repeatPenalty: (localCfg['repeatPenalty'] as num?)?.toDouble() ?? 1.1,
+      frequencyPenalty: (localCfg['frequencyPenalty'] as num?)?.toDouble() ?? 0,
+      presencePenalty: (localCfg['presencePenalty'] as num?)?.toDouble() ?? 0,
+      repeatLastN: (localCfg['repeatLastN'] as num?)?.toInt() ?? 64,
+      seed: (localCfg['seed'] as num?)?.toInt() ?? 42,
+      maxTokens: (localCfg['maxTokens'] as num?)?.toInt() ?? 512,
+      mirostat: (localCfg['mirostat'] as num?)?.toInt() ?? 0,
+      mirostatTau: (localCfg['mirostatTau'] as num?)?.toDouble() ?? 5,
+      mirostatEta: (localCfg['mirostatEta'] as num?)?.toDouble() ?? 0.1,
+    )));
   }
 
   Widget _localSettingsGrid({
@@ -3090,7 +3090,7 @@ class _AgentSettingsState extends State<AgentSettings>
                   ?.toString()
                   .toLowerCase() ==
               'localllama') {
-        return sel;
+        return sel ?? '';
       }
       for (final k in st.config.keys) {
         if (k.startsWith('agent_')) return k;
