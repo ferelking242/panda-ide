@@ -224,7 +224,7 @@ class _FlowOrbPainter extends CustomPainter {
   }
 
   void _working(Canvas canvas, double side, Paint p) {
-    final center = Offset.square(side / 2);
+    final center = Offset(side / 2, side / 2);
     final radius = side * 0.33;
     for (var orbit = 0; orbit < 3; orbit++) {
       final tilt = 0.34 + orbit * 0.36;
@@ -243,7 +243,7 @@ class _FlowOrbPainter extends CustomPainter {
   }
 
   void _searching(Canvas canvas, double side, Paint p) {
-    final center = Offset.square(side / 2);
+    final center = Offset(side / 2, side / 2);
     final radius = side * 0.36;
     final yaw = _time * 0.45;
     for (var lat = -4; lat <= 4; lat++) {
@@ -279,9 +279,9 @@ class _FlowOrbPainter extends CustomPainter {
   }
 
   void _solving(Canvas canvas, double side, Paint p) {
-    final center = Offset.square(side / 2);
-    final phase = (_time / (math.pi * 2) * 3) % 1;
-    final quarter = phase < 0.58 ? phase / 0.58 : 1;
+    final center = Offset(side / 2, side / 2);
+    final phase = (_time / (math.pi * 2) * 3 % 1).toDouble();
+    final double quarter = phase < 0.58 ? phase / 0.58 : 1.0;
     final turn = (math.pi / 2) * _ease(quarter);
     for (var row = 0; row < 4; row++) {
       for (var col = 0; col < 4; col++) {
@@ -299,7 +299,7 @@ class _FlowOrbPainter extends CustomPainter {
   }
 
   void _listening(Canvas canvas, double side, Paint p) {
-    final center = Offset.square(side / 2);
+    final center = Offset(side / 2, side / 2);
     for (var ring = 0; ring < 5; ring++) {
       final radius = side * (0.13 + ring * 0.065);
       for (var i = 0; i < 18; i++) {
@@ -320,7 +320,7 @@ class _FlowOrbPainter extends CustomPainter {
   }
 
   void _composing(Canvas canvas, double side, Paint p) {
-    final center = Offset.square(side / 2);
+    final center = Offset(side / 2, side / 2);
     for (var lane = 0; lane < 5; lane++) {
       for (var i = 0; i < 18; i++) {
         final x = side * 0.12 + i / 17 * side * 0.76;
@@ -339,8 +339,8 @@ class _FlowOrbPainter extends CustomPainter {
   }
 
   void _shaping(Canvas canvas, double side, Paint p) {
-    final center = Offset.square(side / 2);
-    final cycle = (_time / (math.pi * 2) * 0.75) % 3;
+    final center = Offset(side / 2, side / 2);
+    final cycle = (_time / (math.pi * 2) * 0.75 % 3).toDouble();
     final from = cycle.floor();
     final amount = _ease(cycle - from);
     for (var i = 0; i < 28; i++) {

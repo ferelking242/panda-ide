@@ -2419,12 +2419,12 @@ class _SelectTypeState extends State<SelectType>
           _buildExplorerBottomSection(
             title: 'OUTLINE',
             icon: Broken.task_square,
-            child: _sidebarOutline(context, t, isDark),
+            child: _sidebarOutline(context, t, dark),
           ),
           _buildExplorerBottomSection(
             title: 'TIMELINE',
             icon: Broken.clock,
-            child: _sidebarTimeline(context, t, isDark),
+            child: _sidebarTimeline(context, t, dark),
           ),
           _buildExplorerBottomSection(
             title: 'VUES EXTENSIONS',
@@ -2544,12 +2544,12 @@ class _SelectTypeState extends State<SelectType>
         _buildExplorerBottomSection(
           title: 'OUTLINE',
           icon: Broken.task_square,
-          child: _sidebarOutline(context, t, isDark),
+          child: _sidebarOutline(context, t, dark),
         ),
         _buildExplorerBottomSection(
           title: 'TIMELINE',
           icon: Broken.clock,
-          child: _sidebarTimeline(context, t, isDark),
+          child: _sidebarTimeline(context, t, dark),
         ),
         _buildExplorerBottomSection(
           title: 'VUES EXTENSIONS',
