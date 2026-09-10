@@ -8,8 +8,7 @@ import '../utils/constants.dart';
 /// The node binary is required for running VS Code extensions (Node.js).
 /// It can be:
 ///   1. Bundled in assets/ (for small builds)
-///   2. Downloaded via Play Feature Delivery (PFD)
-///   3. Downloaded via HTTP from GitHub releases
+///   2. Downloaded via HTTP from GitHub releases
 class NodeRuntimeManager {
   static final NodeRuntimeManager instance = NodeRuntimeManager._();
   NodeRuntimeManager._();
@@ -156,31 +155,6 @@ class NodeRuntimeManager {
 
       return true;
     } catch (e) {
-      return false;
-    }
-  }
-
-  // ── PFD download ──────────────────────────────────────────────────────
-
-  /// Download via Play Feature Delivery (PFD).
-  /// This is the recommended method for Android — the node binary is
-  /// delivered as a feature module (~80MB compressed).
-  Future<bool> downloadViaPFD({
-    void Function(double progress)? onProgress,
-  }) async {
-    try {
-      // The PFD download is handled by PackageDownloader
-      // This method just checks if the result landed in the right place
-      final pfdPath = '$runtimesDir/node/bin/node';
-      if (File(pfdPath).existsSync()) {
-        await _copyToExpectedPath(pfdPath);
-        _nodePath = '$binDir/node';
-        _installed = true;
-        _version = await _getVersion();
-        return true;
-      }
-      return false;
-    } catch (_) {
       return false;
     }
   }

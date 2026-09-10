@@ -210,6 +210,10 @@ class KeyRotationBrain extends ChangeNotifier {
     final existing = brain.profiles.where((p) => p.key.trim() == key.trim()).toList();
     if (existing.isNotEmpty) {
       existing.first.label = label.trim().isEmpty ? existing.first.label : label.trim();
+      // Saving a key from Providers is an explicit selection. Do not let the
+      // default LRU rotation immediately switch back to an older key.
+      brain.activeKeyId = existing.first.id;
+      brain.autoRotate = false;
       await _persist();
       notifyListeners();
       return existing.first;
@@ -220,7 +224,8 @@ class KeyRotationBrain extends ChangeNotifier {
       key: key.trim(),
     );
     brain.profiles.add(profile);
-    if (brain.activeKeyId.isEmpty) brain.activeKeyId = profile.id;
+    brain.activeKeyId = profile.id;
+    brain.autoRotate = false;
     await _persist();
     notifyListeners();
     return profile;

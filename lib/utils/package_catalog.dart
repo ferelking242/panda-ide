@@ -26,10 +26,10 @@ class PackageCatalogSyncResult {
 }
 
 class PackageCatalogService {
-  // Runtimes are now installed via Debian Linux (glibc).
-static final List<RunTime> _pfdRuntimes = [];
+  // Runtimes and extensions are installed from their direct download sources.
+  static final List<RunTime> _catalogRuntimes = [];
 
-  static final List<Extension> _pfdExtensions = [
+  static final List<Extension> _catalogExtensions = [
     Extension(
       name: 'Github Copilot',
       details: 'Enable github copilot in the editor.\nNote: Nodejs runtime is required',
@@ -143,11 +143,11 @@ static final List<RunTime> _pfdRuntimes = [];
     final installed = await _loadInstalledCatalog();
 
     final effectiveRuntimes = _mergeCatalogWithInstalled(
-      catalogRuntimes: _pfdRuntimes,
+      catalogRuntimes: _catalogRuntimes,
       installedRuntimes: installed.runtimes,
     );
     final effectiveExtensions = _mergeExtensionCatalogWithInstalled(
-      catalogExtensions: _pfdExtensions,
+      catalogExtensions: _catalogExtensions,
       installedExtensions: installed.extensions,
     );
 
@@ -157,8 +157,8 @@ static final List<RunTime> _pfdRuntimes = [];
     );
 
     final updates = _buildUpdateSets(
-      catalogRuntimes: _pfdRuntimes,
-      catalogExtensions: _pfdExtensions,
+      catalogRuntimes: _catalogRuntimes,
+      catalogExtensions: _catalogExtensions,
       installedRuntimes: installed.runtimes,
       installedExtensions: installed.extensions,
     );
@@ -180,11 +180,11 @@ static final List<RunTime> _pfdRuntimes = [];
     final installed = await _loadInstalledCatalog();
 
     final effectiveRuntimes = _mergeCatalogWithInstalled(
-      catalogRuntimes: _pfdRuntimes,
+      catalogRuntimes: _catalogRuntimes,
       installedRuntimes: installed.runtimes,
     );
     final effectiveExtensions = _mergeExtensionCatalogWithInstalled(
-      catalogExtensions: _pfdExtensions,
+      catalogExtensions: _catalogExtensions,
       installedExtensions: installed.extensions,
     );
 
@@ -194,8 +194,8 @@ static final List<RunTime> _pfdRuntimes = [];
     );
 
     final updates = _buildUpdateSets(
-      catalogRuntimes: _pfdRuntimes,
-      catalogExtensions: _pfdExtensions,
+      catalogRuntimes: _catalogRuntimes,
+      catalogExtensions: _catalogExtensions,
       installedRuntimes: installed.runtimes,
       installedExtensions: installed.extensions,
     );

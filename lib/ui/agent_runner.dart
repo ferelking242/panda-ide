@@ -635,7 +635,7 @@ $toolLines
       if (resp.statusCode >= 400) {
         ctrl.add(AgentChunk(
           phase: AgentPhase.error,
-          text: _friendlyHttpError(resp.statusCode, resp.body),
+          text: _friendlyHttpError(resp.statusCode, resp.body, provider: 'Gemini'),
         ));
         return;
       }
@@ -942,7 +942,11 @@ $toolLines
       if (resp.statusCode >= 400) {
         ctrl.add(AgentChunk(
           phase: AgentPhase.error,
-          text: _friendlyHttpError(resp.statusCode, resp.body),
+          text: _friendlyHttpError(
+            resp.statusCode,
+            resp.body,
+            provider: model is DeepSeek ? 'DeepSeek' : model.runtimeType.toString(),
+          ),
         ));
         return;
       }
@@ -1279,7 +1283,11 @@ $toolLines
   }
 
   /// Converts an HTTP error code + body into a user-friendly error message.
-  static String _friendlyHttpError(int statusCode, String body) {
+  static String _friendlyHttpError(
+    int statusCode,
+    String body, {
+    String? provider,
+  }) {
     // Try to extract message from JSON body
     String? extracted;
     try {
@@ -1291,7 +1299,12 @@ $toolLines
 
     switch (statusCode) {
       case 400:
-        return 'Requête invalide (400). ${extracted ?? body}';
+        final detail = extracted ?? body;
+        final deepSeekHint = provider == 'DeepSeek'
+            ? '\n\nDeepSeek attend un payload Chat Completions valide : '
+                'modèle disponible, messages non vides et arguments d’outils en JSON.'
+            : '';
+        return 'Requête invalide (400). $detail$deepSeekHint';
       case 401:
         return 'Clé API invalide ou expirée (401).\n\n'
             '• Vérifiez votre clé dans les Paramètres Agent (onglet Providers).\n'
@@ -1299,9 +1312,14 @@ $toolLines
             '• Pour DeepSeek/OpenAI : recopiez-la depuis le tableau de bord du provider.';
       case 402:
         final detail = extracted ?? 'Insufficient Balance';
+        if (provider == 'Gemini') {
+          return 'Quota Gemini indisponible (402) — $detail\n\n'
+              'La clé est peut-être rattachée au mauvais projet ou ce projet '
+              'n’a plus de quota. Vérifiez le projet associé à la clé dans Google AI Studio.';
+        }
         return 'Solde insuffisant (402) — $detail\n\n'
-            'Votre compte n\'a plus de crédits. Rechargez votre solde sur '
-            'la plateforme du provider (ex : platform.deepseek.com, aistudio.google.com…).';
+            'Votre compte n\'a plus de crédits. Rechargez le solde sur '
+            'la plateforme du provider.';
       case 403:
         return 'Accès refusé (403). ${extracted ?? 'Votre clé n\'a pas les permissions nécessaires.'}';
       case 404:

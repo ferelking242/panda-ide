@@ -399,8 +399,21 @@ class PandaAgentController extends ChangeNotifier {
 
   Future<void> selectModel(BuildContext context, String modelId) async {
     final bloc = context.read<AIBloc>();
+    final separator = modelId.indexOf('::');
+    final profileId = separator > 0 ? modelId.substring(0, separator) : modelId;
+    final selectedModel = separator > 0
+        ? modelId.substring(separator + 2).trim()
+        : null;
+    final config = Map<String, dynamic>.from(bloc.state.config);
+    if (selectedModel != null && selectedModel.isNotEmpty && config[profileId] is Map) {
+      final profile = Map<String, dynamic>.from(config[profileId] as Map)
+        ..['modelName'] = selectedModel
+        ..['model'] = selectedModel;
+      config[profileId] = profile;
+      bloc.add(AIConfigEvent(config));
+    }
     final selected = Map<String, dynamic>.from(bloc.state.modelSelected)
-      ..['chat'] = modelId;
+      ..['chat'] = profileId;
     bloc.add(ModelSelectEvent(selected));
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('modelSelected', jsonEncode(selected));

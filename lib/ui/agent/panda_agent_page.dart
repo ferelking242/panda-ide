@@ -40,23 +40,50 @@ class PandaAgentPage extends StatelessWidget {
             ? Map<String, dynamic>.from(profile!.value as Map)
             : null;
         final model = controller.modelName(config);
-        final modelOptions = aiState.config.entries
-            .where((entry) => entry.value is Map)
-            .map(
-              (entry) {
-                final value = Map<String, dynamic>.from(entry.value as Map);
-                final name = controller.modelName(value);
-                final providerName = controller.providerName(value);
-                return PandaAgentModelOption(
-                  id: entry.key,
-                  label: name.isEmpty ? entry.key : name,
-                  providerId: providerName.isEmpty ? 'custom' : providerName,
-                  providerLabel: controller.providerLabel(providerName),
-                );
-              },
-            )
-            .where((option) => option.providerId.isNotEmpty)
-            .toList();
+        final modelOptions = <PandaAgentModelOption>[];
+        for (final entry in aiState.config.entries) {
+          if (entry.value is! Map) continue;
+          final value = Map<String, dynamic>.from(entry.value as Map);
+          final providerName = controller.providerName(value);
+          final providerId = providerName.isEmpty ? 'custom' : providerName;
+          if (providerId.isEmpty) continue;
+
+          final available = (value['availableModels'] as List?)
+                  ?.whereType<Map>()
+                  .map((item) => Map<String, dynamic>.from(item))
+                  .map((item) => (
+                        id: (item['id'] ?? item['name'] ?? '').toString().trim(),
+                        label: (item['displayName'] ?? item['name'] ?? item['id'] ?? '')
+                            .toString()
+                            .trim(),
+                      ))
+                  .where((item) => item.id.isNotEmpty)
+                  .toList() ??
+              const <({String id, String label})>[];
+
+          final models = available.isEmpty
+              ? <({String id, String label})>[
+                  (id: controller.modelName(value), label: controller.modelName(value)),
+                ]
+              : available;
+
+          for (final item in models) {
+            final optionId = '${entry.key}::${item.id}';
+            modelOptions.add(
+              PandaAgentModelOption(
+                id: optionId,
+                label: item.label.isEmpty ? item.id : item.label,
+                providerId: providerId,
+                providerLabel: controller.providerLabel(providerName),
+              ),
+            );
+          }
+        }
+        final selectedProfileId = profile?.key;
+        final selectedModelId = model.isEmpty ? '' : model;
+        final selectedOptionId = selectedProfileId == null
+            ? aiState.modelSelected['chat']?.toString()
+            : '$selectedProfileId::$selectedModelId';
         final pendingRevision = controller.messages.isEmpty
             ? 0
             : ((controller.messages.last['blocks'] as List?)?.length ?? 0);
@@ -153,7 +180,7 @@ class PandaAgentPage extends StatelessWidget {
               if (modelOptions.isNotEmpty)
                 PandaAgentModelSelector(
                   models: modelOptions,
-                  selectedId: aiState.modelSelected['chat']?.toString(),
+                   selectedId: selectedOptionId,
                   onSelected: (id) => controller.selectModel(context, id),
                   onAddProvider: onOpenProviders,
                 ),

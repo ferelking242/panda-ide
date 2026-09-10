@@ -19,7 +19,6 @@ import androidx.core.content.FileProvider
 import io.endigo.plugins.pdfviewflutter.PDFViewFlutterPlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -37,23 +36,18 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
-import com.google.android.play.core.splitcompat.SplitCompat
 
 class MainActivity : FlutterActivity() {
     private val TAG = "MainActivity"
     private val CORE_CHANNEL = "com.panda.ide"
     private val UPDATE_CHANNEL = "panda/update"
     private val SAF_CHANNEL = "panda/saf"
-    private val PFD_CHANNEL = "panda/pfd"
-    private val PFD_EVENTS_CHANNEL = "panda/pfd_events"
     private val PICK_DIR_REQUEST = 9001
 
     private var pendingSafResult: MethodChannel.Result? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
     private val PERMISSION_REQUEST_CODE = 4711
-    private var pfdEventSink: EventChannel.EventSink? = null
     private val pendingOpenFiles = Collections.synchronizedList(mutableListOf<String>())
-    private lateinit var splitInstallService: SplitInstallService
 
     private data class ProgressDialogHandle(
         val dialog: AlertDialog,
@@ -62,14 +56,8 @@ class MainActivity : FlutterActivity() {
         val percentView: TextView,
     )
 
-    override fun attachBaseContext(newBase: Context) {
-        super.attachBaseContext(newBase)
-        SplitCompat.installActivity(this)
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        splitInstallService = SplitInstallService(applicationContext)
         handleIncomingIntent(intent)
     }
 
@@ -248,83 +236,6 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("SYNC_FAILED", e.message, null)
-                    }
-                }
-
-                else -> result.notImplemented()
-            }
-        }
-
-        EventChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            PFD_EVENTS_CHANNEL,
-        ).setStreamHandler(object : EventChannel.StreamHandler {
-            override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-                pfdEventSink = events
-            }
-
-            override fun onCancel(arguments: Any?) {
-                pfdEventSink = null
-            }
-        })
-
-        MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            PFD_CHANNEL,
-        ).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "isModuleInstalled" -> {
-                    val moduleName = call.argument<String>("moduleName")
-                    if (moduleName.isNullOrBlank()) {
-                        result.error("BAD_ARGS", "moduleName is required", null)
-                        return@setMethodCallHandler
-                    }
-                    result.success(splitInstallService.isModuleInstalled(moduleName))
-                }
-
-                "installModule" -> {
-                    val moduleName = call.argument<String>("moduleName")
-                    if (moduleName.isNullOrBlank()) {
-                        result.error("BAD_ARGS", "moduleName is required", null)
-                        return@setMethodCallHandler
-                    }
-
-                    splitInstallService.installModule(moduleName) { state ->
-                        runOnUiThread {
-                            pfdEventSink?.success(state)
-                        }
-                    }
-
-                    result.success(true)
-                }
-
-                "uninstallModule" -> {
-                    val moduleName = call.argument<String>("moduleName")
-                    if (moduleName.isNullOrBlank()) {
-                        result.error("BAD_ARGS", "moduleName is required", null)
-                        return@setMethodCallHandler
-                    }
-                    splitInstallService.uninstallModule(moduleName)
-                    result.success(true)
-                }
-
-                "copyModuleAssetToPath" -> {
-                    val moduleName = call.argument<String>("moduleName")
-                    val assetName = call.argument<String>("assetName")
-                    val targetPath = call.argument<String>("targetPath")
-                    if (moduleName.isNullOrBlank() || assetName.isNullOrBlank() || targetPath.isNullOrBlank()) {
-                        result.error("BAD_ARGS", "moduleName, assetName and targetPath are required", null)
-                        return@setMethodCallHandler
-                    }
-                    try {
-                        val copied = copyModuleAssetToPath(moduleName, assetName, targetPath)
-                        if (!copied) {
-                            result.error("ASSET_NOT_FOUND", "Could not find $assetName in module $moduleName assets", null)
-                            return@setMethodCallHandler
-                        }
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("COPY_FAILED", e.message, null)
                     }
                 }
 
@@ -607,8 +518,6 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         ShizukuBridge.unregister()
-        splitInstallService.unregisterListener()
-        pfdEventSink = null
         super.onDestroy()
     }
 
@@ -783,32 +692,6 @@ class MainActivity : FlutterActivity() {
                 input.copyTo(output)
             }
         } ?: throw IllegalStateException("Unable to open SAF output stream for $name")
-    }
-
-    private fun copyModuleAssetToPath(moduleName: String, assetName: String, targetPath: String): Boolean {
-        splitInstallService.refreshSplitCompat()
-        SplitCompat.installActivity(this)
-
-        val candidates = listOf(
-            "assets/$assetName",
-            assetName,
-            "$moduleName/$assetName",
-        )
-
-        val inputStream = candidates.firstNotNullOfOrNull { candidate ->
-            runCatching { assets.open(candidate) }.getOrNull()
-        } ?: throw Exception("Asset '$assetName' not found in any candidate path: ${candidates.joinToString()}")
-
-        val outputFile = File(targetPath)
-        outputFile.parentFile?.mkdirs()
-
-        inputStream.use { input ->
-            FileOutputStream(outputFile).use { output ->
-                input.copyTo(output)
-            }
-        }
-
-        return true
     }
 
     private fun handleIncomingIntent(intent: Intent?) {

@@ -89,28 +89,6 @@ android {
         }
     }
 
-    dynamicFeatures.addAll(
-        setOf(
-            ":app:rust_feature",
-            ":app:go_feature",
-            ":app:ruby_feature",
-            ":app:lua_feature",
-            ":app:node_feature",
-            ":app:python_feature",
-            ":app:java_feature",
-            ":app:kotlin_feature",
-            ":app:clang_feature",
-            ":app:dart_feature",
-            ":app:ty_feature",
-            ":app:rust_analyzer_feature",
-            ":app:gopls_feature",
-            ":app:emmylua_feature",
-            ":app:bash_language_server_feature",
-            ":app:copilot_language_server_feature",
-            ":app:kmp_lsp_feature",
-            ":app:vscode_langservers_extracted_feature",
-        )
-    )
 }
 
 kotlin {
@@ -124,7 +102,6 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.core:core-ktx:1.15.0")
-    implementation("com.google.android.play:feature-delivery:2.1.0")
     // Shizuku — ADB-level shell access without root (flutter run on-device)
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")

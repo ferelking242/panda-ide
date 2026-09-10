@@ -4,7 +4,7 @@
 /// Features:
 ///   • HTTP Range-header resume: picks up where it left off on failure.
 ///   • Global active-index registry: no duplicate concurrent downloads.
-///   • PFD subscriptions kept alive in a global map (not tied to widget).
+///   • Direct HTTP downloads kept alive in a global map (not tied to widget).
 ///   • Snackbar feedback is best-effort (silently skipped if context gone).
 library;
 import 'dart:async';
@@ -21,51 +21,10 @@ import '../utils/languages.dart';
 
 
 
-// ─── Play Feature Delivery config ────────────────────────────────────────────
-
-class PfdRuntimeConfig {
-  final String moduleName;
-  final String? assetArchiveName;
-  final bool requiresExtraction;
-  final double weight;
-  final String displayName;
-
-  const PfdRuntimeConfig({
-    required this.moduleName,
-    this.assetArchiveName,
-    this.requiresExtraction = true,
-    required this.weight,
-    required this.displayName,
-  });
-}
-
-// ─── Pfd maps (mirrors _DownloadManagerState) ────────────────────────────────
-
-// Runtimes are now installed via Alpine Linux (apk add nodejs npm, etc.)
-// See Settings → Downloads → Runtimes tab for available runtimes.
-const Map<String, PfdRuntimeConfig> kPfdRuntimes = {};
-
-const Map<String, PfdRuntimeConfig> kPfdExtensions = {
-  'ty': PfdRuntimeConfig(moduleName: 'ty_feature', requiresExtraction: false, weight: 80, displayName: 'Ty'),
-  'rust-analyzer': PfdRuntimeConfig(moduleName: 'rust_analyzer_feature', requiresExtraction: false, weight: 80, displayName: 'rust-analyzer'),
-  'gopls': PfdRuntimeConfig(moduleName: 'gopls_feature', requiresExtraction: false, weight: 80, displayName: 'gopls'),
-  'emmyluals': PfdRuntimeConfig(moduleName: 'emmylua_feature', requiresExtraction: false, weight: 80, displayName: 'EmmyLuaLs'),
-  'bash-language-server': PfdRuntimeConfig(moduleName: 'bash_language_server_feature', assetArchiveName: 'bash-language-server.zip', weight: 80, displayName: 'bash-language-server'),
-  'copilot-language-server': PfdRuntimeConfig(moduleName: 'copilot_language_server_feature', assetArchiveName: 'copilot-language-server.zip', weight: 80, displayName: 'Github Copilot'),
-  'kmp-lsp': PfdRuntimeConfig(moduleName: 'kmp_lsp_feature', requiresExtraction: false, weight: 80, displayName: 'Kmp LSP'),
-  'vscode-langservers-extracted': PfdRuntimeConfig(moduleName: 'vscode_langservers_extracted_feature', assetArchiveName: 'vscode-langservers-extracted.zip', weight: 80, displayName: 'VSCode Extracted LSP Servers'),
-};
-
 // ─── Global state (survives widget disposal) ─────────────────────────────────
 
 /// Set of indexes currently being downloaded (globally).
 final Set<int> _globalActiveIndexes = {};
-
-/// Active PFD subscriptions keyed by index (kept alive globally).
-final Map<int, StreamSubscription<Map<String, dynamic>>> _globalPfdSubs = {};
-
-/// Broadcast stream of PFD install events (initialized once).
-Stream<Map<String, dynamic>>? _pfdEventStream;
 
 // ─── PackageDownloader ───────────────────────────────────────────────────────
 
@@ -100,187 +59,29 @@ class PackageDownloader {
     final downloadBloc  = context.read<DownloadManagerBloc>();
     final catalogCubit  = context.read<PackageCatalogCubit>();
 
-    final pfdConfig = _pfdConfig(packageParentName, isExtension: isExtension);
-
     _globalActiveIndexes.add(index);
 
     try {
-      // Only packages explicitly mapped to a Play Feature use PFD. Every
-      // other catalog item must continue through its regular HTTP source,
-      // including on Android/sideloaded builds.
-      if (pfdConfig == null) {
-        if (url.isEmpty) {
-          downloadBloc.clearProgress(index);
-          _showSnack(context, 'No download source is available for this package.');
-          return;
-        }
-        await _httpDownload(
-          context: context,
-          index: index,
-          downloadBloc: downloadBloc,
-          catalogCubit: catalogCubit,
-          url: url,
-          archivePath: '$tempDir/$archiveName',
-          archiveName: archiveName,
-          extractDir: isExtension ? extensionDir : runtimesDir,
-          runtimeParentName: packageParentName,
-          extensionMetadata: extensionMetadata,
-          isExtension: isExtension,
-        );
+      if (url.isEmpty) {
+        downloadBloc.clearProgress(index);
+        _showSnack(context, 'No direct download source is available for this package.');
         return;
       }
-
-      final pfdOk = await _ensurePfdInstalled(
+      await _httpDownload(
         context: context,
         index: index,
         downloadBloc: downloadBloc,
-        config: pfdConfig,
-      );
-
-      if (!pfdOk) {
-        // Fallback to direct HTTP if URL available
-        if (url.isNotEmpty) {
-          final archivePath = '$tempDir/$archiveName';
-          await _httpDownload(
-            context: context,
-            index: index,
-            downloadBloc: downloadBloc,
-            catalogCubit: catalogCubit,
-            url: url,
-            archivePath: archivePath,
-            archiveName: archiveName,
-            extractDir: isExtension ? extensionDir : runtimesDir,
-            runtimeParentName: packageParentName,
-            extensionMetadata: extensionMetadata,
-            isExtension: isExtension,
-          );
-        } else {
-          downloadBloc.clearProgress(index);
-        }
-        return;
-      }
-
-      if (!pfdConfig.requiresExtraction) {
-        final ok = await _finalizeModuleOnly(
-          context: context,
-          index: index,
-          downloadBloc: downloadBloc,
-          catalogCubit: catalogCubit,
-          config: pfdConfig,
-          packageParentName: packageParentName,
-          extensionMetadata: extensionMetadata,
-          isExtension: isExtension,
-        );
-        if (!ok) downloadBloc.clearProgress(index);
-        return;
-      }
-
-      // Has archive: stage from PFD then extract
-      final stagedName = pfdConfig.assetArchiveName;
-      if (stagedName == null || stagedName.isEmpty) {
-        _showSnack(context, '${pfdConfig.displayName} is missing archive config.');
-        downloadBloc.clearProgress(index);
-        return;
-      }
-      final archivePath = '$tempDir/$stagedName';
-      final staged = await _stagePfdArchive(context: context, config: pfdConfig, archivePath: archivePath);
-      if (!staged) {
-        downloadBloc.clearProgress(index);
-        return;
-      }
-      await _extractArchive(
-        downloadBloc: downloadBloc,
         catalogCubit: catalogCubit,
-        index: index,
-        archivePath: archivePath,
+        url: url,
+        archivePath: '$tempDir/$archiveName',
+        archiveName: archiveName,
         extractDir: isExtension ? extensionDir : runtimesDir,
-        archiveName: stagedName,
         runtimeParentName: packageParentName,
+        extensionMetadata: extensionMetadata,
+        isExtension: isExtension,
       );
     } finally {
       _globalActiveIndexes.remove(index);
-    }
-  }
-
-  // ── PFD install ────────────────────────────────────────────────────────────
-
-  static Future<bool> _ensurePfdInstalled({
-    required BuildContext context,
-    required int index,
-    required DownloadManagerBloc downloadBloc,
-    required PfdRuntimeConfig config,
-  }) async {
-    final alreadyInstalled = await NativeChannel.isModuleInstalled(config.moduleName);
-    if (alreadyInstalled) {
-      downloadBloc.updateProgress(index, config.weight);
-      return true;
-    }
-
-    _pfdEventStream ??=
-        NativeChannel.moduleInstallEvents().asBroadcastStream();
-
-    final completer = Completer<bool>();
-
-    final sub = _pfdEventStream!.listen((event) {
-      final moduleName = event['moduleName']?.toString();
-      if (moduleName != config.moduleName) return;
-
-      final status  = event['status']?.toString().toLowerCase() ?? 'unknown';
-      final dynamic progressValue = event['progress'];
-      final double pfdPct = progressValue is num ? progressValue.toDouble() : 0;
-      downloadBloc.updateProgress(index, pfdPct * (config.weight / 100.0));
-
-      if (status == 'installed') {
-        downloadBloc.updateProgress(index, config.weight);
-        if (!completer.isCompleted) completer.complete(true);
-      } else if (status == 'failed' || status == 'canceled') {
-        if (!completer.isCompleted) completer.complete(false);
-      }
-    }, onError: (_) {
-      if (!completer.isCompleted) completer.complete(false);
-    });
-
-    _globalPfdSubs[index] = sub;
-
-    try {
-      await NativeChannel.installModule(config.moduleName);
-      final ok = await completer.future.timeout(
-        const Duration(seconds: 30),
-        onTimeout: () => false,
-      );
-      if (!ok) {
-        _showSnack(context,
-            'Play Feature Delivery unavailable for ${config.displayName} — switching to direct download.');
-      }
-      return ok;
-    } catch (e) {
-      _showSnack(context, '${config.displayName} feature install error: $e');
-      return false;
-    } finally {
-      await sub.cancel();
-      _globalPfdSubs.remove(index);
-    }
-  }
-
-  // ── Stage PFD archive ──────────────────────────────────────────────────────
-
-  static Future<bool> _stagePfdArchive({
-    required BuildContext context,
-    required PfdRuntimeConfig config,
-    required String archivePath,
-  }) async {
-    final assetName = config.assetArchiveName;
-    if (assetName == null || assetName.isEmpty) return false;
-    try {
-      await NativeChannel.copyModuleAssetToPath(
-        moduleName: config.moduleName,
-        assetName: assetName,
-        targetPath: archivePath,
-      );
-      return true;
-    } catch (e) {
-      _showSnack(context, 'Failed to stage ${config.displayName}: $e');
-      return false;
     }
   }
 
@@ -375,51 +176,6 @@ class PackageDownloader {
       downloadBloc.clearProgress(index);
     } finally {
       client.close();
-    }
-  }
-
-  // ── Module-only finalization (no archive) ──────────────────────────────────
-
-  static Future<bool> _finalizeModuleOnly({
-    required BuildContext context,
-    required int index,
-    required DownloadManagerBloc downloadBloc,
-    required PackageCatalogCubit catalogCubit,
-    required PfdRuntimeConfig config,
-    required String? packageParentName,
-    required Extension? extensionMetadata,
-    required bool isExtension,
-  }) async {
-    final normalizedParent = packageParentName?.toLowerCase();
-    if (!isExtension || normalizedParent == null) {
-      _showSnack(context, '${config.displayName} module-only is not mapped as an extension.');
-      return false;
-    }
-
-    try {
-      if (extensionMetadata == null) {
-        _showSnack(context, '${config.displayName}: missing metadata.');
-        return false;
-      }
-
-      switch (normalizedParent) {
-        case 'ty':           await _symlinkExec(execName: 'ty',           libName: 'libty.so');
-        case 'rust-analyzer': await _symlinkExec(execName: 'rust-analyzer', libName: 'librust-analyzer.so');
-        case 'gopls':        await _symlinkExec(execName: 'gopls',        libName: 'libgopls.so');
-        case 'emmyluals':    await _symlinkExec(execName: 'emmyluals',    libName: 'libemmy.so');
-        case 'kmp-lsp':      await _symlinkExec(execName: 'kmp-lsp',      libName: 'libkmplsp.so');
-        default:
-          throw Exception('Unsupported module-only extension: ${config.displayName}');
-      }
-
-      await _writeExtensionMetadata(extensionMetadata);
-      downloadBloc.updateProgress(index, 100.0);
-      downloadBloc.markFullyCompleted(index);
-      await catalogCubit.refreshInstalledStatusOnly();
-      return true;
-    } catch (e) {
-      _showSnack(context, 'Failed to install ${config.displayName}: $e');
-      return false;
     }
   }
 
@@ -697,12 +453,6 @@ class PackageDownloader {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-
-  static PfdRuntimeConfig? _pfdConfig(String? parentName, {required bool isExtension}) {
-    if (!Platform.isAndroid || parentName == null) return null;
-    final key = parentName.toLowerCase();
-    return isExtension ? kPfdExtensions[key] : kPfdRuntimes[key];
-  }
 
   static bool _isClangInstalled() => Directory('$runtimesDir/clang').existsSync();
 

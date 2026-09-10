@@ -31,9 +31,6 @@ class DownloadManager extends StatefulWidget {
 class _DownloadManagerState extends State<DownloadManager> {
   final Set<int> loadingIndexes = {};
   late final AppThemeState appThemeState;
-  late final Stream<Map<String, dynamic>> _pfdInstallEvents;
-  Future<void> _pfdInstallChain = Future<void>.value();
-  final Set<StreamSubscription<Map<String, dynamic>>> _activePfdSubscriptions = {};
 
   // Runtimes are now installed via Debian Linux (glibc).
   // Extensions are downloaded from Open VSX marketplace.
@@ -189,7 +186,6 @@ class _DownloadManagerState extends State<DownloadManager> {
   @override
   void initState() {
     appThemeState = context.read<AppThemeBloc>().state;
-    _pfdInstallEvents = NativeChannel.moduleInstallEvents().asBroadcastStream();
     super.initState();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -208,10 +204,6 @@ class _DownloadManagerState extends State<DownloadManager> {
 
   @override
   void dispose() {
-    for (final subscription in _activePfdSubscriptions.toList()) {
-      subscription.cancel();
-    }
-    _activePfdSubscriptions.clear();
     super.dispose();
   }
 
@@ -288,14 +280,6 @@ class _DownloadManagerState extends State<DownloadManager> {
     return aliases[parentName] ?? parentName;
   }
 
-  // PFD runtimes removed — Debian Linux is now the only installation method.
-  dynamic _runtimePfdConfig(
-    String? packageParentName, {
-    required bool isExtension,
-  }) {
-    return null;
-  }
-
   bool _isClangRuntimeInstalled() {
     final clangDir = Directory('$runtimesDir/clang');
     return clangDir.existsSync();
@@ -335,141 +319,11 @@ class _DownloadManagerState extends State<DownloadManager> {
       loadingIndexes.add(index);
     });
 
-    final pfdConfig = _runtimePfdConfig(
-      packageParentName,
-      isExtension: isExtension,
-    );
-
-    if (pfdConfig != null) {
-      final pfdOk = await _ensurePfdFeatureInstalled(
-        context,
-        index,
-        downloadBloc,
-        config: pfdConfig,
-      );
-      if (!pfdOk) {
-        // PFD failed (sideloaded build) — fall back to direct HTTP download if URL is available
-        if (url.isNotEmpty) {
-          final archivePath = '$tempDir/$archiveName';
-          await _httpDownloadWithProgress(
-            context: context,
-            index: index,
-            downloadBloc: downloadBloc,
-            url: url,
-            archivePath: archivePath,
-            archiveName: archiveName,
-            extractDir: isExtension ? extensionDir : runtimesDir,
-            runtimeParentName: packageParentName,
-            extensionMetadata: extensionMetadata,
-            isExtension: isExtension,
-          );
-        }
-        if (mounted) {
-          setState(() {
-            loadingIndexes.remove(index);
-          });
-        }
-        if (url.isEmpty) downloadBloc.clearProgress(index);
-        return;
-      }
-
-      if (!pfdConfig.requiresExtraction) {
-        if (!context.mounted) {
-          if (mounted) {
-            setState(() {
-              loadingIndexes.remove(index);
-            });
-          }
-          downloadBloc.clearProgress(index);
-          return;
-        }
-
-        final completed = await _finalizeModuleOnlyInstall(
-          context: context,
-          index: index,
-          downloadBloc: downloadBloc,
-          config: pfdConfig,
-          packageParentName: packageParentName,
-          extensionMetadata: extensionMetadata,
-          isExtension: isExtension,
-        );
-
-        if (!completed) {
-          downloadBloc.clearProgress(index);
-        }
-
-        if (mounted) {
-          setState(() {
-            loadingIndexes.remove(index);
-          });
-        }
-        return;
-      }
-    }
-
-    final stagedArchiveName = pfdConfig?.assetArchiveName;
-    if (pfdConfig != null &&
-        (stagedArchiveName == null || stagedArchiveName.isEmpty)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${pfdConfig.displayName} feature is missing an install archive configuration.',
-            ),
-          ),
-        );
-      }
-      if (mounted) {
-        setState(() {
-          loadingIndexes.remove(index);
-        });
-      }
-      downloadBloc.clearProgress(index);
-      return;
-    }
-
-    final archivePath = pfdConfig != null
-      ? "$tempDir/$stagedArchiveName"
-      : "$targetDir/$archiveName";
+    final archivePath = "$tempDir/$archiveName";
     final extractDir = isExtension
       ? extensionDir
       : runtimesDir;
 
-    if (pfdConfig != null && context.mounted) {
-      final staged = await _stagePackageArchiveFromPfd(
-        context: context,
-        config: pfdConfig,
-        archivePath: archivePath,
-      );
-      if (!staged) {
-        if (mounted) {
-          setState(() {
-            loadingIndexes.remove(index);
-          });
-        }
-        downloadBloc.clearProgress(index);
-        return;
-      }
-
-      await _startExtraction(
-        downloadBloc,
-        index,
-        archivePath,
-        extractDir,
-        archiveName,
-        runtimeParentName: packageParentName,
-      );
-      
-      if (mounted) {
-        setState(() {
-          loadingIndexes.remove(index);
-        });
-      }
-      return;
-    }
-
-    // Packages without a Play Feature Delivery mapping use their catalog URL.
-    // This is also the Android fallback for sideloaded builds.
     if (url.isNotEmpty) {
       await _httpDownloadWithProgress(
         context: context,
@@ -625,38 +479,6 @@ class _DownloadManagerState extends State<DownloadManager> {
     );
   }
 
-  Future<bool> _stagePackageArchiveFromPfd({
-    required BuildContext context,
-    required dynamic config,
-    required String archivePath,
-  }) async {
-    final assetName = config.assetArchiveName;
-    if (assetName == null || assetName.isEmpty) {
-      return false;
-    }
-
-    try {
-      await NativeChannel.copyModuleAssetToPath(
-        moduleName: config.moduleName,
-        assetName: assetName,
-        targetPath: archivePath,
-      );
-      return true;
-
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to stage ${config.displayName.toLowerCase()} feature bundle: $e',
-            ),
-          ),
-        );
-      }
-      return false;
-    }
-  }
-
   double _mergeProgress(double basePercent, double secondStagePercent) {
     final clamped = secondStagePercent.clamp(0.0, 100.0);
     return basePercent + (clamped * ((100.0 - basePercent) / 100.0));
@@ -749,107 +571,6 @@ class _DownloadManagerState extends State<DownloadManager> {
 
   bool _requiresExtraction(String archiveName) {
     return archiveName.endsWith('.zip') || archiveName.endsWith('.tar.gz');
-  }
-
-  Future<T> _runPfdInstallSerial<T>(Future<T> Function() action) {
-    final previous = _pfdInstallChain;
-    final gate = Completer<void>();
-    _pfdInstallChain = gate.future;
-
-    return previous.catchError((_) {}).then((_) async {
-      try {
-        return await action();
-      } finally {
-        if (!gate.isCompleted) {
-          gate.complete();
-        }
-      }
-    });
-  }
-
-  Future<bool> _ensurePfdFeatureInstalled(
-    BuildContext context,
-    int index,
-    DownloadManagerBloc downloadBloc,
-    {
-    required dynamic config,
-    }
-  ) async {
-    return _runPfdInstallSerial(() async {
-      final alreadyInstalled = await NativeChannel.isModuleInstalled(config.moduleName);
-      if (alreadyInstalled) {
-        downloadBloc.updateProgress(index, config.weight);
-        return true;
-      }
-
-      final completer = Completer<bool>();
-      final subscription = _pfdInstallEvents.listen(
-        (event) {
-          final moduleName = event['moduleName']?.toString();
-          if (moduleName != config.moduleName) return;
-
-          final status = event['status']?.toString().toLowerCase() ?? 'unknown';
-          final dynamic progressValue = event['progress'];
-          final double pfdProgress = progressValue is num ? progressValue.toDouble() : 0.0;
-          downloadBloc.updateProgress(
-            index,
-            _mergeProgress(0.0, pfdProgress) * (config.weight / 100.0),
-          );
-
-          if (status == 'installed') {
-            downloadBloc.updateProgress(index, config.weight);
-            if (!completer.isCompleted) {
-              completer.complete(true);
-            }
-            return;
-          }
-
-          if (status == 'failed' || status == 'canceled') {
-            if (!completer.isCompleted) {
-              completer.complete(false);
-            }
-          }
-        },
-        onError: (_) {
-          if (!completer.isCompleted) {
-            completer.complete(false);
-          }
-        },
-      );
-      _activePfdSubscriptions.add(subscription);
-
-      try {
-        await NativeChannel.installModule(config.moduleName);
-        final ok = await completer.future.timeout(
-          const Duration(seconds: 30),
-          onTimeout: () => false,
-        );
-        if (!ok && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Play Feature Delivery unavailable for ${config.displayName.toLowerCase()} — switching to direct download.',
-              ),
-            ),
-          );
-        }
-        return ok;
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${config.displayName} feature install error: $e',
-              ),
-            ),
-          );
-        }
-        return false;
-      } finally {
-        await subscription.cancel();
-        _activePfdSubscriptions.remove(subscription);
-      }
-    });
   }
 
   Future<void> _startExtraction(
@@ -1505,13 +1226,7 @@ class _DownloadManagerState extends State<DownloadManager> {
                               
                               final isExtracting = downloadState.isExtracting(index);
                               final extractionPercent = downloadState.extractionProgress[index] ?? 0;
-                              final runtimePfdConfig = _runtimePfdConfig(
-                                runtime.parentName,
-                                isExtension: false,
-                              );
-                              final displayExtractionPercent = runtimePfdConfig != null
-                                  ? _mergeProgress(runtimePfdConfig.weight, extractionPercent)
-                                  : extractionPercent;
+                              final displayExtractionPercent = extractionPercent;
                               
                               
                               if (isExtracting) {
@@ -1627,11 +1342,6 @@ class _DownloadManagerState extends State<DownloadManager> {
                                               }
                                               if (runtime.parentName.toLowerCase() == 'ruby') {
                                                 _deletePathIfExistsSync('$libDir/libruby.so.3.4');
-                                              }
-                                              if (runtimePfdConfig != null) {
-                                                NativeChannel.uninstallModule(
-                                                  runtimePfdConfig.moduleName,
-                                                );
                                               }
                                               context.read<DownloadManagerBloc>().removeDownload(index);
                                               setState(() {
@@ -1796,16 +1506,9 @@ class _DownloadManagerState extends State<DownloadManager> {
                               final percent = downloadState.downloadProgress[extensionIndex] ?? 0;
                               final File archiveFile = File("$extensionDir/${extensionItems[index].archiveName}");
                               final Directory parentDir = Directory("$extensionDir/${extensionItems[index].parentName}");
-                              final extensionPfdConfig = _runtimePfdConfig(
-                                exten.parentName,
-                                isExtension: true,
-                              );
-                              
                               final isExtracting = downloadState.isExtracting(extensionIndex);
                               final extractionPercent = downloadState.extractionProgress[extensionIndex] ?? 0;
-                              final displayExtractionPercent = extensionPfdConfig != null
-                                  ? _mergeProgress(extensionPfdConfig.weight, extractionPercent)
-                                  : extractionPercent;
+                              final displayExtractionPercent = extractionPercent;
                               
                               if (isExtracting) {
                                 if (displayExtractionPercent > 0.0 && displayExtractionPercent < 100.0) {
@@ -1911,11 +1614,6 @@ class _DownloadManagerState extends State<DownloadManager> {
                                               }
                                               if (exten.parentName.toLowerCase() == 'ty') {
                                                 _deletePathIfExistsSync('$binDir/ty');
-                                              }
-                                              if (extensionPfdConfig != null) {
-                                                NativeChannel.uninstallModule(
-                                                  extensionPfdConfig.moduleName,
-                                                );
                                               }
                                               context.read<DownloadManagerBloc>().removeDownload(extensionIndex);
                                               setState(() {

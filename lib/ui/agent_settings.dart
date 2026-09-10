@@ -1079,7 +1079,7 @@ class _AgentSettingsState extends State<AgentSettings>
     return _normalizeModelCatalog(jsonDecode(resp.body) as Map<String, dynamic>);
   }
 
-  List<Map<String, dynamic>> _normalizeModelCatalog(Map<String, dynamic> raw, {bool showAll = false}) {
+  List<Map<String, dynamic>> _normalizeModelCatalog(Map<String, dynamic> raw, {bool showAll = true}) {
     final data   = raw['data'] ?? raw['models'] ?? raw;
     final models = <Map<String, dynamic>>[];
     if (data is List) {
@@ -1196,7 +1196,9 @@ class _AgentSettingsState extends State<AgentSettings>
     String activeKeyId = existingMap['activeKeyId']?.toString() ?? '';
 
     if (apiKey.isNotEmpty) {
-      final existingIndex = apiKeys.indexWhere((k) => (k['key'] ?? k['apiKey']) == apiKey);
+      final existingIndex = apiKeys.indexWhere(
+        (k) => (k['key'] ?? k['apiKey'])?.toString().trim() == apiKey.trim(),
+      );
       if (existingIndex >= 0) {
         activeKeyId = apiKeys[existingIndex]['id']?.toString() ?? 'k_$existingIndex';
       } else {

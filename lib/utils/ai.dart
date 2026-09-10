@@ -124,9 +124,63 @@ sealed class Models {
           if (model != null) 'model': model,
           'messages': messages,
           'stream': stream,
-          if (tools.isNotEmpty) 'tools': tools,
+          if (tools.isNotEmpty) 'tools': _sanitizeOpenAiTools(tools),
         };
     }
+  }
+
+  static List<Map<String, dynamic>> _sanitizeOpenAiTools(
+    List<Map<String, dynamic>> tools,
+  ) {
+    Map<String, dynamic> sanitizeSchema(dynamic value) {
+      if (value is! Map) return <String, dynamic>{'type': 'object'};
+      final source = Map<String, dynamic>.from(value);
+      final result = <String, dynamic>{};
+      for (final entry in source.entries) {
+        final key = entry.key.toString();
+        final item = entry.value;
+        if (key == r'$schema' ||
+            key == 'additionalProperties' ||
+            key == 'default' ||
+            key == 'examples' ||
+            key == 'format' ||
+            key == 'minItems' ||
+            key == 'maxItems' ||
+            key == 'minLength' ||
+            key == 'maxLength' ||
+            key == 'pattern' ||
+            key == 'nullable') {
+          continue;
+        }
+        if (key == 'properties' && item is Map) {
+          result[key] = Map<String, dynamic>.from(item).map(
+            (name, schema) => MapEntry(name, sanitizeSchema(schema)),
+          );
+        } else if (key == 'items' && item is Map) {
+          result[key] = sanitizeSchema(item);
+        } else {
+          result[key] = item;
+        }
+      }
+      result['type'] ??= 'object';
+      return result;
+    }
+
+    return tools
+        .map((tool) {
+          final copy = Map<String, dynamic>.from(tool);
+          final function = copy['function'];
+          if (function is Map) {
+            final normalized = Map<String, dynamic>.from(function);
+            normalized['name'] = normalized['name']?.toString() ?? 'tool';
+            normalized['description'] = normalized['description']?.toString() ?? '';
+            normalized['parameters'] = sanitizeSchema(normalized['parameters']);
+            copy['function'] = normalized;
+          }
+          copy['type'] = 'function';
+          return copy;
+        })
+        .toList(growable: false);
   }
 
   String parseChatMessage(dynamic response) {
@@ -1146,6 +1200,88 @@ class DeepSeek extends OpenAiCompatible {
   final String apiKey, model;
   DeepSeek({required this.apiKey, String model = 'deepseek-chat'})
       : model = model.trim().isEmpty ? 'deepseek-chat' : model.trim();
+
+  @override
+  Map<String, dynamic> buildToolCallingRequest({
+    required List<Map<String, dynamic>> messages,
+    required List<Map<String, dynamic>> tools,
+    bool stream = false,
+  }) {
+    final normalizedMessages = <Map<String, dynamic>>[];
+    for (final message in messages) {
+      final role = message['role']?.toString();
+      if (!{'system', 'user', 'assistant', 'tool'}.contains(role)) continue;
+
+      final content = message['content'];
+      final normalized = <String, dynamic>{
+        'role': role,
+        'content': content is String
+            ? content
+            : content == null
+                ? ''
+                : jsonEncode(content),
+      };
+
+      if (role == 'tool') {
+        final toolCallId = message['tool_call_id']?.toString().trim() ?? '';
+        if (toolCallId.isEmpty) continue;
+        normalized['tool_call_id'] = toolCallId;
+      }
+
+      final rawCalls = message['tool_calls'];
+      if (role == 'assistant' && rawCalls is List) {
+        final calls = <Map<String, dynamic>>[];
+        for (final rawCall in rawCalls) {
+          if (rawCall is! Map) continue;
+          final call = Map<String, dynamic>.from(rawCall);
+          final id = call['id']?.toString().trim() ?? '';
+          final function = call['function'];
+          if (id.isEmpty || function is! Map) continue;
+          final functionMap = Map<String, dynamic>.from(function);
+          final name = functionMap['name']?.toString().trim() ?? '';
+          if (name.isEmpty) continue;
+
+          dynamic decodedArguments;
+          final rawArguments = functionMap['arguments'];
+          if (rawArguments is String && rawArguments.trim().isNotEmpty) {
+            try {
+              decodedArguments = jsonDecode(rawArguments);
+            } catch (_) {
+              decodedArguments = <String, dynamic>{};
+            }
+          } else if (rawArguments is Map) {
+            decodedArguments = rawArguments;
+          } else {
+            decodedArguments = <String, dynamic>{};
+          }
+          if (decodedArguments is! Map) {
+            decodedArguments = <String, dynamic>{};
+          }
+
+          calls.add({
+            'id': id,
+            'type': 'function',
+            'function': {
+              'name': name,
+              'arguments': jsonEncode(Map<String, dynamic>.from(decodedArguments)),
+            },
+          });
+        }
+        if (calls.isNotEmpty) normalized['tool_calls'] = calls;
+      }
+      normalizedMessages.add(normalized);
+    }
+
+    final request = super.buildToolCallingRequest(
+      messages: normalizedMessages,
+      tools: tools,
+      stream: false,
+    );
+    // DeepSeek tool calls are non-streaming in the agent loop. Keeping this
+    // explicit avoids the API rejecting a mixed stream/tool request.
+    request['stream'] = false;
+    return request;
+  }
 }
 
 class Mistral extends OpenAiCompatible {

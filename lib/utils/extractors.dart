@@ -100,11 +100,7 @@ class Extractor {
 }
 
 class NativeChannel {
-  // Keep these names aligned with the active MainActivity in
-  // android/app/src/main/kotlin/com/panda/ide/MainActivity.kt.
   static const MethodChannel _channel = MethodChannel('com.panda.ide');
-  static const MethodChannel _pfdMethodChannel = MethodChannel('panda/pfd');
-  static const EventChannel _pfdEventChannel = EventChannel('panda/pfd_events');
 
   static Future<String> getLibraryPath() async {
     try {
@@ -137,48 +133,6 @@ class NativeChannel {
     }
   }
 
-  static Future<bool> isModuleInstalled(String moduleName) async {
-    try {
-      final bool? installed = await _pfdMethodChannel.invokeMethod<bool>(
-        'isModuleInstalled',
-        {'moduleName': moduleName},
-      );
-      return installed ?? false;
-    } on PlatformException catch (e) {
-      debugPrint('Failed to check module install state: ${e.message}');
-      return false;
-    }
-  }
-
-  static Future<void> installModule(String moduleName) async {
-    await _pfdMethodChannel.invokeMethod(
-      'installModule',
-      {'moduleName': moduleName},
-    );
-  }
-
-  static Future<void> uninstallModule(String moduleName) async {
-    await _pfdMethodChannel.invokeMethod(
-      'uninstallModule',
-      {'moduleName': moduleName},
-    );
-  }
-
-  static Future<void> copyModuleAssetToPath({
-    required String moduleName,
-    required String assetName,
-    required String targetPath,
-  }) async {
-    await _pfdMethodChannel.invokeMethod(
-      'copyModuleAssetToPath',
-      {
-        'moduleName': moduleName,
-        'assetName': assetName,
-        'targetPath': targetPath,
-      },
-    );
-  }
-
   static Future<bool> syncImportedItem({
     required String sourceUri,
     required String localPath,
@@ -200,13 +154,5 @@ class NativeChannel {
     }
   }
 
-  static Stream<Map<String, dynamic>> moduleInstallEvents() {
-    return _pfdEventChannel.receiveBroadcastStream().map((event) {
-      if (event is Map) {
-        return Map<String, dynamic>.from(event);
-      }
-      return <String, dynamic>{};
-    }).where((event) => event.isNotEmpty);
-  }
 }
 
