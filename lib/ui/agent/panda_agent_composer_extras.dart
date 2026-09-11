@@ -448,11 +448,25 @@ class PandaAgentQueueBar extends StatelessWidget {
     required this.items,
     required this.onRemove,
     required this.onEdit,
+    required this.onMoveUp,
+    required this.onMoveDown,
+    required this.onSendNow,
+    required this.onClear,
+    required this.paused,
+    required this.onPause,
+    required this.onResume,
   });
 
   final List<QueuedAgentPrompt> items;
   final ValueChanged<int> onRemove;
   final void Function(int index, String text) onEdit;
+  final ValueChanged<int> onMoveUp;
+  final ValueChanged<int> onMoveDown;
+  final ValueChanged<int> onSendNow;
+  final VoidCallback onClear;
+  final bool paused;
+  final VoidCallback onPause;
+  final VoidCallback onResume;
 
   Future<void> _edit(BuildContext context, int index, QueuedAgentPrompt item) async {
     final editor = TextEditingController(text: item.text);
@@ -511,18 +525,98 @@ class PandaAgentQueueBar extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              const Spacer(),
+              if (paused)
+                TextButton.icon(
+                  onPressed: onResume,
+                  icon: const Icon(Broken.play, size: 14),
+                  label: const Text('Reprendre'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 7),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                )
+              else
+                TextButton.icon(
+                  onPressed: onPause,
+                  icon: const Icon(Broken.pause, size: 14),
+                  label: const Text('Pause'),
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(0, 30),
+                    padding: const EdgeInsets.symmetric(horizontal: 7),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              TextButton(
+                onPressed: onClear,
+                child: const Text('Vider'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 30),
+                  padding: const EdgeInsets.symmetric(horizontal: 7),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
             ],
           ),
           for (var index = 0; index < items.length; index++)
             Row(
               children: [
-                Expanded(
+                SizedBox(
+                  width: 20,
                   child: Text(
-                    items[index].text,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+                    '${index + 1}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: colors.primary,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        items[index].text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                      if (items[index].pendingAfterRestart)
+                        Text(
+                          'En attente après redémarrage',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: colors.error,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Envoyer ensuite',
+                  onPressed: () => onSendNow(index),
+                  icon: const Icon(Broken.send_2, size: 15),
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  tooltip: 'Monter',
+                  onPressed: index == 0 ? null : () => onMoveUp(index),
+                  icon: const Icon(Broken.arrow_up_2, size: 15),
+                  visualDensity: VisualDensity.compact,
+                ),
+                IconButton(
+                  tooltip: 'Descendre',
+                  onPressed: index == items.length - 1
+                      ? null
+                      : () => onMoveDown(index),
+                  icon: const Icon(Broken.arrow_down_2, size: 15),
+                  visualDensity: VisualDensity.compact,
                 ),
                 IconButton(
                   tooltip: 'Modifier',

@@ -10,15 +10,69 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../bloc/ui_bloc/ui_bloc.dart';
 import '../../utils/ai.dart';
+import '../../utils/agent_export_service.dart';
+import '../../utils/agent_history_service.dart';
 import '../../utils/panda_log.dart';
 import '../agent_runner.dart';
 import 'flow_ui/models/flow_attachment.dart';
 
 class QueuedAgentPrompt {
-  QueuedAgentPrompt(this.text, this.attachments);
+  QueuedAgentPrompt(
+    this.text,
+    this.attachments, {
+    String? id,
+    DateTime? createdAt,
+    this.status = 'queued',
+    this.pendingAfterRestart = false,
+  })  : id = id ?? 'queued-${DateTime.now().microsecondsSinceEpoch}',
+        createdAt = createdAt ?? DateTime.now();
 
+  final String id;
   String text;
   final List<FlowAttachment> attachments;
+  final DateTime createdAt;
+  String status;
+  bool pendingAfterRestart;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'text': text,
+        'createdAt': createdAt.toIso8601String(),
+        'status': status,
+        'pendingAfterRestart': pendingAfterRestart,
+        'attachments': attachments
+            .map((attachment) => {
+                  'id': attachment.id,
+                  'label': attachment.label,
+                  'kind': attachment.kind,
+                  'mimeType': attachment.mimeType,
+                })
+            .toList(),
+      };
+
+  factory QueuedAgentPrompt.fromJson(Map<String, dynamic> json) {
+    final attachments = (json['attachments'] as List?)
+            ?.whereType<Map>()
+            .map(
+              (item) => FlowAttachment(
+                id: (item['id'] ?? '').toString(),
+                label: item['label']?.toString(),
+                kind: item['kind']?.toString(),
+                mimeType: item['mimeType']?.toString(),
+              ),
+            )
+            .where((attachment) => attachment.id.isNotEmpty)
+            .toList() ??
+        <FlowAttachment>[];
+    return QueuedAgentPrompt(
+      json['text']?.toString() ?? '',
+      attachments,
+      id: json['id']?.toString(),
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? ''),
+      status: json['status']?.toString() ?? 'queued',
+      pendingAfterRestart: json['pendingAfterRestart'] == true,
+    );
+  }
 }
 
 /// Owns Panda Agent state and transport.
@@ -31,6 +85,7 @@ class PandaAgentController extends ChangeNotifier {
   PandaAgentController() {
     inputController.addListener(notifyListeners);
     unawaited(_loadPreferences());
+    unawaited(_loadHistory());
   }
 
   final TextEditingController inputController = TextEditingController();
@@ -40,6 +95,7 @@ class PandaAgentController extends ChangeNotifier {
   final SpeechToText speech = SpeechToText();
   final List<FlowAttachment> pendingAttachments = <FlowAttachment>[];
   final List<QueuedAgentPrompt> queuedPrompts = <QueuedAgentPrompt>[];
+  final List<AgentSession> history = <AgentSession>[];
 
   StreamSubscription<AgentChunk>? _subscription;
   Completer<bool>? _approval;
@@ -52,6 +108,8 @@ class PandaAgentController extends ChangeNotifier {
   AgentPhase phase = AgentPhase.idle;
   bool isGenerating = false;
   bool isListening = false;
+  bool queuePaused = false;
+  bool historyLoading = true;
   String chatMode = 'ask';
   String approvalMode = 'default';
   String conversationTitle = 'Nouvelle conversation';
@@ -62,9 +120,108 @@ class PandaAgentController extends ChangeNotifier {
   BuildContext? _lastContext;
   String _lastWorkspacePath = '';
   bool _disposed = false;
+  String _sessionId = 'agent-${DateTime.now().microsecondsSinceEpoch}';
+  bool _voiceStopRequested = false;
+  bool _voiceRestarting = false;
+  String _voiceBaseText = '';
 
   bool get hasPendingApproval => _approval != null;
   String get currentTool => _currentTool;
+  String get sessionId => _sessionId;
+  bool get hasPendingRestartQueue =>
+      queuedPrompts.any((item) => item.pendingAfterRestart);
+
+  Future<void> _loadHistory() async {
+    final sessions = await AgentHistoryService.loadSessions();
+    if (_disposed) return;
+    history
+      ..clear()
+      ..addAll(sessions);
+    if (sessions.isNotEmpty && messages.isEmpty) {
+      _restoreSession(sessions.first);
+    }
+    historyLoading = false;
+    notifyListeners();
+  }
+
+  void _restoreSession(AgentSession session) {
+    _sessionId = session.id;
+    conversationTitle = session.title;
+    chatMode = session.agentMode;
+    messages
+      ..clear()
+      ..addAll(
+        session.messages.map((message) => Map<String, dynamic>.from(message)),
+      );
+    queuedPrompts
+      ..clear()
+      ..addAll(session.queuedPrompts.map(QueuedAgentPrompt.fromJson));
+    for (final item in queuedPrompts) {
+      item.pendingAfterRestart = true;
+      item.status = 'queued';
+    }
+    queuePaused = session.queuePaused || queuedPrompts.isNotEmpty;
+    lastError = null;
+  }
+
+  void selectHistorySession(AgentSession session) {
+    if (isGenerating) return;
+    _restoreSession(session);
+    notifyListeners();
+  }
+
+  void startNewConversation() {
+    if (isGenerating) stop();
+    _sessionId = 'agent-${DateTime.now().microsecondsSinceEpoch}';
+    conversationTitle = 'Nouvelle conversation';
+    messages.clear();
+    queuedPrompts.clear();
+    queuePaused = false;
+    lastError = null;
+    notifyListeners();
+  }
+
+  Future<void> deleteHistorySession(String id) async {
+    await AgentHistoryService.deleteSession(id);
+    history.removeWhere((session) => session.id == id);
+    if (_sessionId == id) startNewConversation();
+    notifyListeners();
+  }
+
+  void renameConversation(String title) {
+    final clean = title.trim();
+    if (clean.isEmpty) return;
+    conversationTitle = clean;
+    unawaited(_persistSession());
+    notifyListeners();
+  }
+
+  String exportMarkdown() =>
+      AgentExportService.exportToMarkdown(messages, modelName: '');
+
+  String exportJson() => AgentExportService.exportToJson(messages);
+
+  Future<void> _persistSession() async {
+    if (_disposed || (messages.isEmpty && queuedPrompts.isEmpty)) return;
+    final session = AgentSession(
+      id: _sessionId,
+      title: conversationTitle,
+      updatedAt: DateTime.now(),
+      messages:
+          messages.map((message) => Map<String, dynamic>.from(message)).toList(),
+      agentMode: chatMode,
+      queuedPrompts: queuedPrompts.map((item) => item.toJson()).toList(),
+      queuePaused: queuePaused,
+    );
+    await AgentHistoryService.saveSession(session);
+    if (_disposed) return;
+    final currentIndex = history.indexWhere((item) => item.id == session.id);
+    if (currentIndex >= 0) {
+      history[currentIndex] = session;
+    } else {
+      history.insert(0, session);
+    }
+  }
 
   Future<void> _loadPreferences() async {
     try {
@@ -132,6 +289,7 @@ class PandaAgentController extends ChangeNotifier {
 
   Future<void> toggleListening() async {
     if (isListening) {
+      _voiceStopRequested = true;
       await speech.stop();
       isListening = false;
       notifyListeners();
@@ -141,31 +299,66 @@ class PandaAgentController extends ChangeNotifier {
     final available = await speech.initialize(
       onStatus: (status) {
         if (status == 'notListening' || status == 'done') {
-          isListening = false;
-          notifyListeners();
+          if (_voiceStopRequested) {
+            isListening = false;
+            notifyListeners();
+          } else {
+            unawaited(_restartSpeechSegment());
+          }
         }
       },
-      onError: (_) {
-        isListening = false;
-        notifyListeners();
+      onError: (error) {
+        if (error.permanent) {
+          isListening = false;
+          lastError = 'La saisie vocale n’est pas disponible sur cet appareil.';
+          notifyListeners();
+        } else {
+          unawaited(_restartSpeechSegment());
+        }
       },
     );
     if (!available) return;
 
+    _voiceStopRequested = false;
+    _voiceBaseText = inputController.text.trim();
     isListening = true;
     notifyListeners();
+    await _startSpeechSegment();
+  }
+
+  Future<void> _startSpeechSegment() async {
+    if (!isListening || _voiceStopRequested) return;
     await speech.listen(
+      partialResults: true,
+      cancelOnError: false,
       onResult: (result) {
+        final heard = result.recognizedWords.trim();
+        if (heard.isEmpty) return;
+        final combined = <String>[
+          if (_voiceBaseText.isNotEmpty) _voiceBaseText,
+          heard,
+        ].join(' ');
         inputController.value = inputController.value.copyWith(
-          text: result.recognizedWords,
+          text: combined,
           selection: TextSelection.collapsed(
-            offset: result.recognizedWords.length,
+            offset: combined.length,
           ),
           composing: TextRange.empty,
         );
+        if (result.finalResult) _voiceBaseText = combined;
         notifyListeners();
       },
     );
+  }
+
+  Future<void> _restartSpeechSegment() async {
+    if (!isListening || _voiceStopRequested || _voiceRestarting) return;
+    _voiceRestarting = true;
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    if (isListening && !_voiceStopRequested) {
+      await _startSpeechSegment();
+    }
+    _voiceRestarting = false;
   }
 
   MapEntry<String, dynamic>? selectedProfile(AIState state) {
@@ -220,6 +413,7 @@ class PandaAgentController extends ChangeNotifier {
         inputController.clear();
         pendingAttachments.clear();
         lastError = null;
+        unawaited(_persistSession());
       }
       notifyListeners();
       return;
@@ -268,6 +462,7 @@ class PandaAgentController extends ChangeNotifier {
     _visibleStreamBuffer = '';
     _currentTool = '';
     _turnFinalized = false;
+    unawaited(_persistSession());
     // Create the assistant turn before resolving the model so the startup
     // orb is visible immediately, including while credentials are loading.
     notifyListeners();
@@ -358,6 +553,9 @@ class PandaAgentController extends ChangeNotifier {
     _approval = null;
     approval?.complete(false);
     isGenerating = false;
+    // Stop is an explicit park operation: queued prompts stay pending and
+    // never start until the user resumes them.
+    queuePaused = true;
     phase = AgentPhase.idle;
     _currentTool = '';
     if (messages.isNotEmpty && messages.last['role'] == 'agent') {
@@ -367,6 +565,7 @@ class PandaAgentController extends ChangeNotifier {
       messages.last['phase'] = 'error';
     }
     notifyListeners();
+    unawaited(_persistSession());
   }
 
   void resolveApproval(bool allowed) {
@@ -426,12 +625,68 @@ class PandaAgentController extends ChangeNotifier {
   void removeQueued(int index) {
     if (index < 0 || index >= queuedPrompts.length) return;
     queuedPrompts.removeAt(index);
+    unawaited(_persistSession());
     notifyListeners();
   }
 
   void editQueued(int index, String text) {
     if (index < 0 || index >= queuedPrompts.length || text.trim().isEmpty) return;
     queuedPrompts[index].text = text.trim();
+    unawaited(_persistSession());
+    notifyListeners();
+  }
+
+  void moveQueued(int index, int direction) {
+    final nextIndex = index + direction;
+    if (index < 0 ||
+        index >= queuedPrompts.length ||
+        nextIndex < 0 ||
+        nextIndex >= queuedPrompts.length) {
+      return;
+    }
+    final item = queuedPrompts.removeAt(index);
+    queuedPrompts.insert(nextIndex, item);
+    unawaited(_persistSession());
+    notifyListeners();
+  }
+
+  void clearQueue() {
+    if (queuedPrompts.isEmpty) return;
+    queuedPrompts.clear();
+    queuePaused = false;
+    unawaited(_persistSession());
+    notifyListeners();
+  }
+
+  void pauseQueue() {
+    if (queuePaused) return;
+    queuePaused = true;
+    unawaited(_persistSession());
+    notifyListeners();
+  }
+
+  /// Promotes an item without interrupting the active run. This is the safe
+  /// interpretation of "Send now" when the runner cannot steer mid-tool-call.
+  void sendQueuedNow(int index) {
+    if (index < 0 || index >= queuedPrompts.length) return;
+    final item = queuedPrompts.removeAt(index);
+    queuedPrompts.insert(0, item);
+    unawaited(_persistSession());
+    notifyListeners();
+  }
+
+  void resumeQueue({
+    required BuildContext context,
+    required AIState aiState,
+    required String workspacePath,
+  }) {
+    if (isGenerating || queuedPrompts.isEmpty) return;
+    queuePaused = false;
+    _startNextQueued(
+      context: context,
+      aiState: aiState,
+      workspacePath: workspacePath,
+    );
     notifyListeners();
   }
 
@@ -714,23 +969,49 @@ class PandaAgentController extends ChangeNotifier {
     }
     _currentTool = '';
     notifyListeners();
-    if (queuedPrompts.isNotEmpty) {
-      final next = queuedPrompts.removeAt(0);
+    unawaited(_persistSession());
+    if (!queuePaused) {
       final nextContext = _lastContext;
-      final nextWorkspace = _lastWorkspacePath;
-      if (nextContext != null && nextContext.mounted) {
-        unawaited(Future<void>.delayed(
-          Duration.zero,
-          () => send(
-            context: nextContext,
-            aiState: nextContext.read<AIBloc>().state,
-            workspacePath: nextWorkspace,
-            text: next.text,
-            attachmentsOverride: next.attachments,
-          ),
-        ));
-      }
+      final nextAiState = nextContext != null && nextContext.mounted
+          ? nextContext.read<AIBloc>().state
+          : null;
+      _startNextQueued(
+        context: nextContext,
+        aiState: nextAiState,
+        workspacePath: _lastWorkspacePath,
+      );
     }
+  }
+
+  void _startNextQueued({
+    required BuildContext? context,
+    required AIState? aiState,
+    required String workspacePath,
+  }) {
+    if (isGenerating ||
+        queuePaused ||
+        queuedPrompts.isEmpty ||
+        context == null ||
+        !context.mounted ||
+        aiState == null) {
+      return;
+    }
+    final next = queuedPrompts.removeAt(0);
+    next.status = 'running';
+    next.pendingAfterRestart = false;
+    unawaited(_persistSession());
+    unawaited(
+      Future<void>.delayed(
+        Duration.zero,
+        () => send(
+          context: context,
+          aiState: aiState,
+          workspacePath: workspacePath,
+          text: next.text,
+          attachmentsOverride: next.attachments,
+        ),
+      ),
+    );
   }
 
   List<Map<String, dynamic>> _blocks() {

@@ -131,6 +131,17 @@ class PandaAgentPage extends StatelessWidget {
                 items: controller.queuedPrompts,
                 onRemove: controller.removeQueued,
                 onEdit: controller.editQueued,
+                onMoveUp: (index) => controller.moveQueued(index, -1),
+                onMoveDown: (index) => controller.moveQueued(index, 1),
+                onSendNow: controller.sendQueuedNow,
+                onClear: controller.clearQueue,
+                paused: controller.queuePaused,
+                onPause: controller.pauseQueue,
+                onResume: () => controller.resumeQueue(
+                  context: context,
+                  aiState: aiState,
+                  workspacePath: workspacePath(),
+                ),
               ),
             ],
           ),
@@ -159,6 +170,12 @@ class PandaAgentPage extends StatelessWidget {
             attachmentOptions: FlowAttachmentOptions.any,
             attachTooltip: 'Ajouter un fichier ou une image',
             leadingActions: [
+              _PandaAgentMicButton(
+                isListening: controller.isListening,
+                onPressed: controller.toggleListening,
+              ),
+            ],
+            trailingActions: [
               FlowPill(
                 icon: Broken.magicpen,
                 label: controller.chatMode == 'agent'
@@ -180,7 +197,7 @@ class PandaAgentPage extends StatelessWidget {
               if (modelOptions.isNotEmpty)
                 PandaAgentModelSelector(
                   models: modelOptions,
-                   selectedId: selectedOptionId,
+                  selectedId: selectedOptionId,
                   onSelected: (id) => controller.selectModel(context, id),
                   onAddProvider: onOpenProviders,
                 ),
@@ -199,12 +216,6 @@ class PandaAgentPage extends StatelessWidget {
                   ),
                   onTap: onOpenProviders,
                 ),
-            ],
-            trailingActions: [
-              _PandaAgentMicButton(
-                isListening: controller.isListening,
-                onPressed: controller.toggleListening,
-              ),
             ],
           ),
           belowComposer: PandaAgentComposerFooter(

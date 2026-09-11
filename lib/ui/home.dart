@@ -5608,13 +5608,15 @@ class _SelectTypeState extends State<SelectType>
     // Watch AI state so chat input can access model info
     context.watch<AIBloc>();
 
-    return Container(
-      width: asPage ? double.infinity : 300,
-      decoration: BoxDecoration(
-        color: panelBg,
-        border: Border(left: BorderSide(color: borderC, width: 0.5)),
-      ),
-      child: Column(
+    return AnimatedBuilder(
+      animation: _pandaAgentController,
+      builder: (context, _) => Container(
+        width: asPage ? double.infinity : 300,
+        decoration: BoxDecoration(
+          color: panelBg,
+          border: Border(left: BorderSide(color: borderC, width: 0.5)),
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Sliding bubble tab bar ──────────────────────────────────────
@@ -5662,6 +5664,7 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -5780,7 +5783,7 @@ class _SelectTypeState extends State<SelectType>
                   if (tabIdx == 0) ...[
                     Flexible(
                       child: Text(
-                        _agentConversationTitle,
+                        _pandaAgentController.conversationTitle,
                         overflow: TextOverflow.ellipsis,
                         maxLines: 1,
                         style: TextStyle(
@@ -10171,7 +10174,15 @@ class _SelectTypeState extends State<SelectType>
   // ── Rename conversation ───────────────────────────────────────────────────
   void _renameConversation(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
-    final ctrl = TextEditingController(text: _agentConversationTitle);
+    final ctrl = TextEditingController(
+      text: _pandaAgentController.conversationTitle,
+    );
+    void applyTitle(String value) {
+      final clean = value.trim();
+      if (clean.isEmpty) return;
+      _pandaAgentController.renameConversation(clean);
+      if (mounted) setState(() => _agentConversationTitle = clean);
+    }
     showDialog<void>(
       context: context,
       barrierColor: Colors.black54,
@@ -10212,9 +10223,7 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
           onSubmitted: (v) {
-            if (v.trim().isNotEmpty) {
-              setState(() => _agentConversationTitle = v.trim());
-            }
+            applyTitle(v);
             Navigator.pop(ctx);
           },
         ),
@@ -10231,10 +10240,7 @@ class _SelectTypeState extends State<SelectType>
           ),
           TextButton(
             onPressed: () {
-              final v = ctrl.text.trim();
-              if (v.isNotEmpty) {
-                setState(() => _agentConversationTitle = v);
-              }
+              applyTitle(ctrl.text);
               Navigator.pop(ctx);
             },
             child: Text(
@@ -10303,7 +10309,7 @@ class _SelectTypeState extends State<SelectType>
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    _agentConversationTitle,
+                    _pandaAgentController.conversationTitle,
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -10334,7 +10340,7 @@ class _SelectTypeState extends State<SelectType>
             muted: muted,
             onTap: () {
               Navigator.pop(context);
-              _agentNewConversation();
+              _pandaAgentController.startNewConversation();
             },
           ),
           _menuItem(
@@ -10344,7 +10350,7 @@ class _SelectTypeState extends State<SelectType>
             muted: muted,
             onTap: () {
               Navigator.pop(context);
-              setState(() => _showHistoryPanel = !_showHistoryPanel);
+              _showPandaAgentHistory(context, appTheme);
             },
           ),
           _menuItem(
@@ -10388,15 +10394,15 @@ class _SelectTypeState extends State<SelectType>
               }
             },
           ),
-          if (_agentMessages.isNotEmpty)
+          if (_pandaAgentController.messages.isNotEmpty)
             _menuItem(
               icon: Broken.document_download,
-              label: 'Exporter Markdown',
+              label: 'Exporter la conversation',
               color: fg,
               muted: muted,
               onTap: () {
                 Navigator.pop(context);
-                _exportAgentMarkdown();
+                _showPandaAgentExportMenu(context, appTheme);
               },
             ),
           _menuItem(
@@ -10436,6 +10442,185 @@ class _SelectTypeState extends State<SelectType>
     title: Text(label, style: TextStyle(fontSize: 13, color: color)),
     onTap: onTap,
   );
+
+  Future<void> _showPandaAgentExportMenu(
+    BuildContext context,
+    AppTheme appTheme,
+  ) async {
+    final isDark = appTheme.isDark;
+    final format = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Broken.document_text),
+              title: const Text('Exporter en Markdown (.md)'),
+              subtitle: const Text('Copier et enregistrer une conversation lisible'),
+              onTap: () => Navigator.pop(sheetContext, 'md'),
+            ),
+            ListTile(
+              leading: const Icon(Broken.code),
+              title: const Text('Exporter en JSON (.json)'),
+              subtitle: const Text('Conserver les messages et les blocs'),
+              onTap: () => Navigator.pop(sheetContext, 'json'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!context.mounted || format == null) return;
+    final content = format == 'json'
+        ? _pandaAgentController.exportJson()
+        : _pandaAgentController.exportMarkdown();
+    await Clipboard.setData(ClipboardData(text: content));
+    String? savedPath;
+    try {
+      final root = await getApplicationDocumentsDirectory();
+      final exportDir = Directory('${root.path}/Panda IDE/Exports');
+      await exportDir.create(recursive: true);
+      final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+      final file = File('${exportDir.path}/panda-agent-$stamp.$format');
+      await file.writeAsString(content);
+      savedPath = file.path;
+    } catch (_) {
+      // Clipboard export still succeeds when the platform storage is read-only.
+    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          savedPath == null
+              ? 'Export copié dans le presse-papiers'
+              : 'Export .$format enregistré et copié',
+        ),
+        action: savedPath == null
+            ? null
+            : SnackBarAction(
+                label: 'Copier le chemin',
+                onPressed: () =>
+                    Clipboard.setData(ClipboardData(text: savedPath!)),
+              ),
+        backgroundColor:
+            isDark ? const Color(0xff2a2a38) : const Color(0xfff2f2f2),
+      ),
+    );
+  }
+
+  Future<void> _showPandaAgentHistory(
+    BuildContext context,
+    AppTheme appTheme,
+  ) async {
+    final isDark = appTheme.isDark;
+    final foreground = isDark ? Colors.grey[200]! : Colors.grey[900]!;
+    final muted = isDark ? Colors.grey[500]! : Colors.grey[600]!;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xff181824) : Colors.white,
+      builder: (sheetContext) => AnimatedBuilder(
+        animation: _pandaAgentController,
+        builder: (context, _) {
+          final sessions = _pandaAgentController.history;
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.72,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 10, 8),
+                    child: Row(
+                      children: [
+                        Icon(Broken.clock, size: 19, color: muted),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Historique des conversations',
+                            style: TextStyle(
+                              color: foreground,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Fermer',
+                          onPressed: () => Navigator.pop(sheetContext),
+                          icon: Icon(Broken.close_circle, color: muted),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  if (_pandaAgentController.historyLoading)
+                    const Expanded(
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (sessions.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'Aucune conversation enregistrée',
+                          style: TextStyle(color: muted),
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.separated(
+                        padding: const EdgeInsets.all(12),
+                        itemCount: sessions.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 6),
+                        itemBuilder: (context, index) {
+                          final session = sessions[index];
+                          final selected =
+                              session.id == _pandaAgentController.sessionId;
+                          return ListTile(
+                            selected: selected,
+                            selectedTileColor:
+                                Theme.of(context).colorScheme.primaryContainer,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            leading: Icon(
+                              Broken.message_2,
+                              color: selected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : muted,
+                            ),
+                            title: Text(
+                              session.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: foreground),
+                            ),
+                            subtitle: Text(
+                              '${session.messages.length} messages · ${_relativeTime(session.updatedAt)}',
+                              style: TextStyle(color: muted, fontSize: 11),
+                            ),
+                            trailing: IconButton(
+                              tooltip: 'Supprimer',
+                              icon: Icon(Broken.trash, size: 17, color: muted),
+                              onPressed: () => _pandaAgentController
+                                  .deleteHistorySession(session.id),
+                            ),
+                            onTap: () {
+                              _pandaAgentController.selectHistorySession(session);
+                              Navigator.pop(sheetContext);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
 
   // ── History panel ────────────────────────────────────────────────────────
   Widget _buildHistoryPanel(AppTheme appTheme) {

@@ -8,6 +8,8 @@ class AgentSession {
   final List<Map<String, dynamic>> messages;
   final String agentMode;
   final String modelName;
+  final List<Map<String, dynamic>> queuedPrompts;
+  final bool queuePaused;
 
   AgentSession({
     required this.id,
@@ -16,6 +18,8 @@ class AgentSession {
     required this.messages,
     this.agentMode = 'agent',
     this.modelName = '',
+    this.queuedPrompts = const [],
+    this.queuePaused = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -25,6 +29,8 @@ class AgentSession {
         'messages': messages,
         'agentMode': agentMode,
         'modelName': modelName,
+        'queuedPrompts': queuedPrompts,
+        'queuePaused': queuePaused,
       };
 
   factory AgentSession.fromJson(Map<String, dynamic> json) => AgentSession(
@@ -39,12 +45,19 @@ class AgentSession {
             [],
         agentMode: json['agentMode'] as String? ?? 'agent',
         modelName: json['modelName'] as String? ?? '',
+        queuedPrompts: (json['queuedPrompts'] as List?)
+                ?.whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList() ??
+            const [],
+        queuePaused: json['queuePaused'] as bool? ?? false,
       );
 }
 
 class AgentHistoryService {
   static const String _keyPrefix = 'panda_agent_sessions_v1';
   static const int _maxSessions = 50;
+  static Future<void> _writeQueue = Future<void>.value();
 
   static Future<List<AgentSession>> loadSessions() async {
     try {
@@ -62,34 +75,43 @@ class AgentHistoryService {
     }
   }
 
-  static Future<void> saveSession(AgentSession session) async {
-    try {
-      final sessions = await loadSessions();
-      final index = sessions.indexWhere((s) => s.id == session.id);
-      if (index >= 0) {
-        sessions[index] = session;
-      } else {
-        sessions.insert(0, session);
-      }
+  static Future<void> saveSession(AgentSession session) {
+    final operation = _writeQueue.then((_) async {
+      try {
+        final sessions = await loadSessions();
+        final index = sessions.indexWhere((s) => s.id == session.id);
+        if (index >= 0) {
+          sessions[index] = session;
+        } else {
+          sessions.insert(0, session);
+        }
 
-      if (sessions.length > _maxSessions) {
-        sessions.removeRange(_maxSessions, sessions.length);
-      }
+        sessions.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+        if (sessions.length > _maxSessions) {
+          sessions.removeRange(_maxSessions, sessions.length);
+        }
 
-      final prefs = await SharedPreferences.getInstance();
-      final raw = jsonEncode(sessions.map((s) => s.toJson()).toList());
-      await prefs.setString(_keyPrefix, raw);
-    } catch (_) {}
+        final prefs = await SharedPreferences.getInstance();
+        final raw = jsonEncode(sessions.map((s) => s.toJson()).toList());
+        await prefs.setString(_keyPrefix, raw);
+      } catch (_) {}
+    });
+    _writeQueue = operation;
+    return operation;
   }
 
-  static Future<void> deleteSession(String id) async {
-    try {
-      final sessions = await loadSessions();
-      sessions.removeWhere((s) => s.id == id);
-      final prefs = await SharedPreferences.getInstance();
-      final raw = jsonEncode(sessions.map((s) => s.toJson()).toList());
-      await prefs.setString(_keyPrefix, raw);
-    } catch (_) {}
+  static Future<void> deleteSession(String id) {
+    final operation = _writeQueue.then((_) async {
+      try {
+        final sessions = await loadSessions();
+        sessions.removeWhere((s) => s.id == id);
+        final prefs = await SharedPreferences.getInstance();
+        final raw = jsonEncode(sessions.map((s) => s.toJson()).toList());
+        await prefs.setString(_keyPrefix, raw);
+      } catch (_) {}
+    });
+    _writeQueue = operation;
+    return operation;
   }
 
   static Future<void> clearAll() async {
