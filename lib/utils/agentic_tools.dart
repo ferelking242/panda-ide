@@ -8,6 +8,7 @@ import 'package:diff_match_patch/diff_match_patch.dart';
 import 'package:flutter/material.dart';
 
 import 'debian_setup.dart';
+import 'rootfs_manager.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:html/dom.dart' as dom;
@@ -20,6 +21,7 @@ import 'package:panda/utils/constants.dart';
 import 'package:panda/utils/functions.dart';
 import 'package:panda/utils/agent_settings_service.dart';
 import 'package:panda/utils/git/terminal_git.dart';
+import 'package:panda/utils/panda_log.dart';
 
 typedef AgentConfirmCallback = Future<bool> Function({
   required String toolName,
@@ -1077,43 +1079,53 @@ class AgenticTools {
     String? workingDirectory,
     Map<String, String>? environment,
     required Duration timeout,
+    String? description,
   }) async {
     final proc = await Process.start(
       cmd,
       args,
       workingDirectory: workingDirectory,
       environment: environment,
-      mode: ProcessStartMode.inheritStdio,
+      // The agent must capture both streams and return them to the model.
+      // inheritStdio forwards them to the app process and makes stdout/stderr
+      // unavailable for reliable concurrent collection.
+      mode: ProcessStartMode.normal,
     );
     _activeProcess = proc;
 
-    // Read both streams concurrently — this is the key fix.
-    final stdoutF = proc.stdout
-        .fold<List<int>>([], (buf, chunk) => buf..addAll(chunk));
-    final stderrF = proc.stderr
-        .fold<List<int>>([], (buf, chunk) => buf..addAll(chunk));
+    try {
+      // Read both streams concurrently — otherwise a noisy stderr pipe can
+      // block a command before the agent ever receives its stdout.
+      final stdoutF = proc.stdout
+          .fold<List<int>>([], (buf, chunk) => buf..addAll(chunk));
+      final stderrF = proc.stderr
+          .fold<List<int>>([], (buf, chunk) => buf..addAll(chunk));
 
-    final results = await Future.wait<Object>([
-      proc.exitCode,
-      stdoutF,
-      stderrF,
-    ]).timeout(timeout, onTimeout: () {
-      proc.kill(ProcessSignal.sigkill);
-      throw TimeoutException('Command timed out after ${timeout.inSeconds}s');
-    });
+      final results = await Future.wait<Object>([
+        proc.exitCode,
+        stdoutF,
+        stderrF,
+      ]).timeout(timeout, onTimeout: () {
+        proc.kill(ProcessSignal.sigkill);
+        final label = description == null ? 'Command' : description;
+        throw TimeoutException(
+          '$label timed out after ${timeout.inSeconds}s',
+        );
+      });
 
-    final exitCode = results[0] as int;
-    final stdoutBytes = results[1] as List<int>;
-    final stderrBytes = results[2] as List<int>;
+      final exitCode = results[0] as int;
+      final stdoutBytes = results[1] as List<int>;
+      final stderrBytes = results[2] as List<int>;
 
-    final result = ProcessResult(
-      exitCode,
-      exitCode,
-      utf8.decode(stdoutBytes, allowMalformed: true),
-      utf8.decode(stderrBytes, allowMalformed: true),
-    );
-    if (identical(_activeProcess, proc)) _activeProcess = null;
-    return result;
+      return ProcessResult(
+        proc.pid,
+        exitCode,
+        utf8.decode(stdoutBytes, allowMalformed: true),
+        utf8.decode(stderrBytes, allowMalformed: true),
+      );
+    } finally {
+      if (identical(_activeProcess, proc)) _activeProcess = null;
+    }
   }
 
   /// Stops the currently running shell command, if one exists.
@@ -1126,7 +1138,7 @@ class AgenticTools {
     _activeProcess = null;
   }
 
-  /// Exécute [script] dans l'environnement Alpine de l'agent en utilisant
+  /// Exécute [script] dans le rootfs actif de l'agent en utilisant
   /// EXACTEMENT la même recette proot que le terminal interactif (binaire
   /// localisé via DebianSetup, loader embarqué, PROOT_TMP_DIR, binds
   /// conditionnels, kill-on-exit). C'était la cause des timeouts : l'agent
@@ -1137,11 +1149,24 @@ class AgenticTools {
     required Duration timeout,
     required String timeoutLabel,
   }) async {
-    final rootfsDir = DebianSetup.debianDir;
+    String? rootfsDir;
+    try {
+      final activeTerminal = await RootfsManager.getActiveTerminal();
+      // Bionic intentionally has no PRoot rootfs. In that mode the same
+      // command must run in Android's native shell as the interactive terminal.
+      if (activeTerminal != TerminalType.bionic &&
+          await RootfsManager.isInstalled(activeTerminal)) {
+        rootfsDir = (await RootfsManager.rootfsDir(activeTerminal)).path;
+      }
+    } catch (e) {
+      PandaLog.w('AgenticTools', 'Unable to resolve active terminal runtime: $e');
+    }
 
-    if (DebianSetup.isRootfsComplete()) {
+    if (rootfsDir != null) {
       try {
-        await DebianSetup.ensureDebianRuntimeFiles();
+        // Keep the Agent launcher on the exact runtime/profile used by the
+        // interactive terminal, including Ubuntu/Alpine selections.
+        await DebianSetup.ensureRuntimeFilesForRootfs(rootfsDir);
       } catch (_) {}
       final prootBin = await DebianSetup.locateProotBinary(rootfsDir);
       if (prootBin != null) {
@@ -1157,10 +1182,8 @@ class AgenticTools {
           } catch (_) {}
         }
 
-        addBind('/dev/pts');
         addBind('/dev/urandom');
         addBind('/dev/shm');
-        addBind('/proc/self/fd', '/dev/fd');
         addBind('/system');
         addBind('/apex');
         addBind('/linkerconfig');
@@ -1189,7 +1212,8 @@ class AgenticTools {
 
         // An installed guest Git must be used in full; do not override its
         // executable path with an Android-host binary.
-        if (File('$rootfsDir/usr/bin/git').existsSync()) {
+        if (File('$rootfsDir/usr/bin/git').existsSync() ||
+            File('$rootfsDir/bin/git').existsSync()) {
           env.remove('GIT_EXEC_PATH');
           // Le git apk utilise ses propres CA (/etc/ssl/certs du rootfs).
           env.remove('GIT_SSL_CAINFO');
@@ -1198,23 +1222,46 @@ class AgenticTools {
 
         return _runProcessSafe(
           prootBin,
-          [...prootArgs, '-w', '/root', '/bin/sh', '-c', 'cd "$guestCwd" 2>/dev/null; $script'],
+          [
+            ...prootArgs,
+            '-w',
+            '/root',
+            '/bin/sh',
+            '-c',
+            'cd ${_shellQuote(guestCwd)} 2>/dev/null || exit 1; $script',
+          ],
           environment: env,
           workingDirectory: appDir,
           timeout: timeout,
+          description: timeoutLabel,
         );
       }
     }
 
-    // Rootfs indisponible : repli sur le shell hôte Android.
+    // Rootfs indisponible (or Bionic selected): use the native shell. This
+    // also keeps desktop/web test harnesses from trying to execute Android's
+    // /system/bin/sh.
+    final fallbackShell = Platform.isAndroid ? '/system/bin/sh' : 'sh';
+    final fallbackWorkingDirectory =
+        workspacePath.trim().isNotEmpty &&
+                Directory(workspacePath).existsSync()
+            ? workspacePath
+            : (Directory(appDir).existsSync() ? appDir : null);
     return _runProcessSafe(
-      '/system/bin/sh',
+      fallbackShell,
       ['-c', script],
-      environment: envs,
-      workingDirectory: workspacePath.trim().isNotEmpty ? workspacePath : appDir,
+      environment: <String, String>{
+        ...Platform.environment,
+        ...envs,
+      },
+      workingDirectory: fallbackWorkingDirectory,
       timeout: timeout,
+      description: timeoutLabel,
     );
   }
+
+  String _shellQuote(String value) =>
+      "'${value.replaceAll("'", "'\\''")}'";
 
   Future<ProcessResult> _runGitCommand(List<String> args) async {
     return TerminalGit.run(
@@ -1731,9 +1778,19 @@ class AgenticTools {
     Map<String, String> envs = const {},
   ]) async {
     try {
-      final baseCmd = command.split('/').last.split(' ').first.toLowerCase();
-      final argsStr = args.isEmpty ? '' : ' ${args.join(' ')}';
-      final fullCmdStr = '$command$argsStr'.trim();
+      final trimmedCommand = command.trim();
+      if (trimmedCommand.isEmpty) {
+        return ToolResult.error('La commande ne peut pas être vide.');
+      }
+      final baseCmd = trimmedCommand
+          .split(RegExp(r'\s+'))
+          .first
+          .split('/')
+          .last
+          .toLowerCase();
+      final argsStr =
+          args.isEmpty ? '' : ' ${args.map(_shellQuote).join(' ')}';
+      final fullCmdStr = '$trimmedCommand$argsStr'.trim();
 
       if (_kDangerousCommands.contains(baseCmd)) {
         final confirmed = await _confirmDestructive(
@@ -1749,10 +1806,12 @@ class AgenticTools {
 
       final env = await _buildAgentShellEnvironment(workspacePath);
       env.addAll(envs);
-      final process = await _runGuestShell(fullCmdStr,
-          envs: env,
-          timeout: const Duration(seconds: 120),
-          timeoutLabel: 'runShellCommand "$command"');
+      final process = await _runGuestShell(
+        fullCmdStr,
+        envs: env,
+        timeout: const Duration(seconds: 120),
+        timeoutLabel: 'runShellCommand "$command"',
+      );
       return ToolResult.success({
         "pid": process.pid.toString(),
         "exitCode": process.exitCode.toString(),

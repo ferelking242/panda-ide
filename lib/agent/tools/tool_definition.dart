@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 /// Represents a single tool available to the agent.
 ///
@@ -91,6 +92,9 @@ class ToolResult {
     if (result is Map && result.containsKey('error')) {
       return ToolResult(success: false, error: result['error'].toString());
     }
+    if (result is Map || result is Iterable) {
+      return ToolResult.ok(jsonEncode(result));
+    }
     // Handle native AgenticTools ToolResult (duck-typed)
     try {
       final dynamic nativeResult = result;
@@ -102,6 +106,14 @@ class ToolResult {
       }
       if (data is String) {
         return ToolResult(success: true, data: data);
+      }
+      if (data is Map || data is Iterable) {
+        try {
+          return ToolResult.ok(jsonEncode(data));
+        } catch (_) {
+          // Some native result lists contain model objects that are not
+          // JSON-encodable. Preserve the old string fallback for those.
+        }
       }
       return ToolResult(success: true, data: data?.toString() ?? '');
     } catch (_) {
