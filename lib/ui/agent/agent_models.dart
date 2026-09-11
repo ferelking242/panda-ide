@@ -43,25 +43,37 @@ String toolHumanLabel(String toolName, Map<String, dynamic> args) {
   final n = toolName.toLowerCase();
   if (n.contains('shell') || n.contains('command') || n.contains('bash')) {
     final cmd = (args['command'] ?? args['cmd'] ?? '').toString();
-    if (cmd.contains('git clone')) return 'Cloning\u2026';
-    if (cmd.contains('git push')) return 'Push vers GitHub\u2026';
-    if (cmd.contains('git commit')) return 'Cr\u00e9ation du commit\u2026';
-    if (cmd.contains('git pull')) return 'Pull en cours\u2026';
-    if (cmd.contains('npm install') || cmd.contains('bun install') || cmd.contains('pip install')) {
+    final lowerCmd = cmd.toLowerCase();
+    if (lowerCmd.contains('git clone')) return 'Clonage du dépôt\u2026';
+    if (lowerCmd.contains('git push')) return 'Push vers GitHub\u2026';
+    if (lowerCmd.contains('git commit')) return 'Création du commit\u2026';
+    if (lowerCmd.contains('git pull')) return 'Pull en cours\u2026';
+    if (lowerCmd.contains('npm install') ||
+        lowerCmd.contains('bun install') ||
+        lowerCmd.contains('pip install')) {
       return 'Installation des d\u00e9pendances\u2026';
     }
-    if (cmd.contains('flutter build')) return 'Build en cours\u2026';
-    if (cmd.contains('flutter test') || cmd.contains('dart test')) return 'Tests en cours\u2026';
-    if (cmd.contains('flutter pub get') || cmd.contains('dart pub get')) {
+    if (lowerCmd.contains('flutter build')) return 'Build en cours\u2026';
+    if (lowerCmd.contains('flutter test') || lowerCmd.contains('dart test')) {
+      return 'Tests en cours\u2026';
+    }
+    if (lowerCmd.contains('flutter pub get') ||
+        lowerCmd.contains('dart pub get')) {
       return 'R\u00e9solution des d\u00e9pendances\u2026';
     }
-    if (cmd.contains('rm ') || cmd.contains('del ')) return 'Suppression\u2026';
-    if (cmd.contains('mkdir')) return 'Cr\u00e9ation de dossier\u2026';
-    if (cmd.contains('cp ') || cmd.contains('mv ')) return 'D\u00e9placement\u2026';
-    if (cmd.contains('curl') || cmd.contains('wget')) return 'T\u00e9l\u00e9chargement\u2026';
-    if (cmd.contains('git ')) return 'Commande Git\u2026';
+    if (lowerCmd.contains('rm ') || lowerCmd.contains('del ')) {
+      return 'Suppression\u2026';
+    }
+    if (lowerCmd.contains('mkdir')) return 'Création de dossier\u2026';
+    if (lowerCmd.contains('cp ') || lowerCmd.contains('mv ')) {
+      return 'Déplacement\u2026';
+    }
+    if (lowerCmd.contains('curl') || lowerCmd.contains('wget')) {
+      return 'Téléchargement\u2026';
+    }
+    if (lowerCmd.contains('git ')) return 'Commande Git\u2026';
     final preview = cmd.length > 35 ? '${cmd.substring(0, 35)}\u2026' : cmd;
-    return preview.isEmpty ? 'Ex\u00e9cution\u2026' : 'Ex\u00e9cution: $preview';
+    return preview.isEmpty ? 'Exécution\u2026' : 'Exécution : $preview';
   }
   if (n.contains('read') || n.contains('open') || n.contains('view')) return 'Lecture du fichier\u2026';
   if (n.contains('write') || n.contains('edit') || n.contains('save') || n.contains('multi')) {

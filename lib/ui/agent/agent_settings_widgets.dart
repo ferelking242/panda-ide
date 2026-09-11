@@ -931,8 +931,10 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
     return Broken.cpu_setting;
   }
 
-  // ── Label lisible (camelCase → "Camel case") ──────────────────────────────
-  String _labelFor(String name) {
+  // ── Label lisible, dérivé de la commande si disponible ────────────────────
+  String _labelFor(String name, Map<String, dynamic>? args) {
+    final humanLabel = toolHumanLabel(name, args ?? const <String, dynamic>{});
+    if (humanLabel != 'Action en cours…') return humanLabel;
     if (name.isEmpty) return name;
     final spaced = name.replaceAllMapped(
       RegExp(r'([A-Z])'),
@@ -944,7 +946,7 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
   // ── Résumé court des args ─────────────────────────────────────────────────
   String? _argsSummary(Map<String, dynamic>? args) {
     if (args == null || args.isEmpty) return null;
-    final first = args.values.first;
+    final first = args['command'] ?? args['cmd'] ?? args.values.first;
     if (first is String) {
       final trimmed = first.replaceAll('\n', ' ').trim();
       return trimmed.length > 55 ? '${trimmed.substring(0, 55)}…' : trimmed;
@@ -960,13 +962,13 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
     final cardBg = widget.isDark ? const Color(0xff1a1a2a) : const Color(0xfff4f4f8);
     final hasResult = (widget.result ?? '').isNotEmpty;
     final icon = _iconFor(widget.toolName);
-    final label = _labelFor(widget.toolName);
+    final label = _labelFor(widget.toolName, widget.args);
     final argHint = _argsSummary(widget.args);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 5),
       decoration: BoxDecoration(
-        color: isRunning ? runColor.withValues(alpha: 0.06) : cardBg,
+        color: isRunning ? runColor.withValues(alpha: 0.06) : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isRunning ? runColor.withValues(alpha: 0.4) : border,
@@ -1046,25 +1048,33 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(9),
                                 decoration: BoxDecoration(
-                                  color: widget.isDark
-                                      ? const Color(0xff0d1117)
-                                      : const Color(0xfff6f8fa),
+                                   color: cardBg,
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: SelectableText(
-                                  () {
-                                    final r = widget.result!;
-                                    const limit = 900;
-                                    if (r.length > limit) {
-                                      return '${r.substring(0, limit)}\n… [${r.length - limit} chars tronqués]';
-                                    }
-                                    return r;
-                                  }(),
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    color: widget.muted,
-                                    fontFamily: 'monospace',
-                                    height: 1.5,
+                                 child: Container(
+                                   width: double.infinity,
+                                   padding: const EdgeInsets.all(9),
+                                   decoration: BoxDecoration(
+                                     color: widget.isDark
+                                         ? const Color(0xff0d1117)
+                                         : const Color(0xfff6f8fa),
+                                     borderRadius: BorderRadius.circular(6),
+                                   ),
+                                   child: SelectableText(
+                                     () {
+                                       final r = widget.result!;
+                                       const limit = 900;
+                                       if (r.length > limit) {
+                                         return '${r.substring(0, limit)}\n… [${r.length - limit} chars tronqués]';
+                                       }
+                                       return r;
+                                     }(),
+                                     style: TextStyle(
+                                       fontSize: 10.5,
+                                       color: widget.muted,
+                                       fontFamily: 'monospace',
+                                       height: 1.5,
+                                     ),
                                   ),
                                 ),
                               ),

@@ -421,7 +421,9 @@ class _SelectTypeState extends State<SelectType>
   @override
   void initState() {
     super.initState();
-    _pandaAgentController = PandaAgentController();
+    _pandaAgentController = PandaAgentController(
+      onRepositoryCloned: _onRepositoryCloned,
+    );
     _activityCtrl.setOnUpdate(() {
       if (mounted) setState(() {});
     });
@@ -640,6 +642,15 @@ class _SelectTypeState extends State<SelectType>
   }
 
   // ── Clone ──────────────────────────────────────────────────────────────────
+  void _onRepositoryCloned(String workspacePath) {
+    if (!mounted || !Directory(workspacePath).existsSync()) return;
+    _openEditorTab(
+      rootDir: workspacePath,
+      isProject: true,
+      isCloned: true,
+    );
+  }
+
   Future<void> _performClone(
     String projectDir,
     String repoUrl,

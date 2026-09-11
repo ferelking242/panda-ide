@@ -27,6 +27,7 @@ import 'package:path_provider/path_provider.dart';
 import '../utils/ai_provider_logos.dart';
 import '../local_models/models/ai_model_entry.dart' as local_models;
 import '../local_models/services/model_download_manager.dart';
+import 'agent/agent_models.dart';
 import 'widgets.dart';
 
 part 'agent/agent_settings_widgets.dart';

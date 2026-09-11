@@ -105,68 +105,86 @@ class _ActiveActivityRow extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        children: [
-          // Thinking indicator or shimmer text based on type
-          if (event.type == AgentActivityType.thinking)
-            FlowThinkingIndicator(
-              active: true,
-              color: accentColor,
-              size: 14,
-            )
-          else if (event.type == AgentActivityType.tool ||
-              event.type == AgentActivityType.status)
-            SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final offset = Tween<Offset>(
+            begin: const Offset(0, 0.35),
+            end: Offset.zero,
+          ).animate(animation);
+          return ClipRect(
+            child: FadeTransition(
+              opacity: animation,
+              child: SlideTransition(position: offset, child: child),
+            ),
+          );
+        },
+        child: Row(
+          key: ValueKey('${event.id}:${event.label}:${event.status}'),
+          children: [
+            // Thinking indicator or shimmer text based on type
+            if (event.type == AgentActivityType.thinking)
+              FlowThinkingIndicator(
+                active: true,
                 color: accentColor,
-              ),
-            )
-          else
-            const SizedBox(width: 14),
+                size: 14,
+              )
+            else if (event.type == AgentActivityType.tool ||
+                event.type == AgentActivityType.status)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: accentColor,
+                ),
+              )
+            else
+              const SizedBox(width: 14),
 
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
 
-          // Label with shimmer for running states
-          Expanded(
-            child: event.status == AgentActivityStatus.running
-                ? FlowShimmerText(
-                    text: event.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: fg,
+            // Label with shimmer for running states
+            Expanded(
+              child: event.status == AgentActivityStatus.running
+                  ? FlowShimmerText(
+                      text: event.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: fg,
+                      ),
+                    )
+                  : Text(
+                      event.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: fg,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  )
-                : Text(
-                    event.label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: fg,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-          ),
+            ),
 
-          // Status indicator
-          if (event.status == AgentActivityStatus.running)
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: accentColor,
-              ),
-            )
-          else if (event.status == AgentActivityStatus.error)
-            Icon(Icons.error_outline, size: 14, color: Colors.redAccent)
-          else if (event.status == AgentActivityStatus.completed)
-            Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
-        ],
+            // Status indicator
+            if (event.status == AgentActivityStatus.running)
+              SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: accentColor,
+                ),
+              )
+            else if (event.status == AgentActivityStatus.error)
+              Icon(Icons.error_outline, size: 14, color: Colors.redAccent)
+            else if (event.status == AgentActivityStatus.completed)
+              Icon(Icons.check_circle_outline, size: 14, color: Colors.green),
+          ],
+        ),
       ),
     );
   }

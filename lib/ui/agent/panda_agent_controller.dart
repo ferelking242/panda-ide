@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:path/path.dart' as path;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
@@ -82,11 +83,16 @@ class QueuedAgentPrompt {
 /// panel can then be opened as a page, a side panel, or a floating surface
 /// without creating a second runner or a second history.
 class PandaAgentController extends ChangeNotifier {
-  PandaAgentController() {
+  PandaAgentController({this.onRepositoryCloned}) {
     inputController.addListener(notifyListeners);
     unawaited(_loadPreferences());
     unawaited(_loadHistory());
   }
+
+  /// Called after a successful `git clone` performed by the agent.
+  /// The callback receives the absolute path of the cloned repository so the
+  /// host shell can make it the active workspace.
+  final ValueChanged<String>? onRepositoryCloned;
 
   final TextEditingController inputController = TextEditingController();
   final ScrollController scrollController = ScrollController();
@@ -891,6 +897,14 @@ class PandaAgentController extends ChangeNotifier {
         if (index >= 0) {
           blocks[index]['result'] = chunk.toolResult ?? '';
           blocks[index]['status'] = 'done';
+          _notifyRepositoryCloned(
+            toolName: chunk.toolName ?? _currentTool,
+            args: Map<String, dynamic>.from(
+              (blocks[index]['args'] as Map?)?.cast<String, dynamic>() ??
+                  const <String, dynamic>{},
+            ),
+            result: chunk.toolResult ?? '',
+          );
         }
         _currentTool = '';
       case AgentPhase.streaming:
@@ -1077,6 +1091,109 @@ class PandaAgentController extends ChangeNotifier {
       return 'Analyse du projet…';
     }
     return 'Réflexion sur la demande…';
+  }
+
+  void _notifyRepositoryCloned({
+    required String toolName,
+    required Map<String, dynamic> args,
+    required String result,
+  }) {
+    final lowerTool = toolName.toLowerCase();
+    if (!lowerTool.contains('shell') &&
+        !lowerTool.contains('command') &&
+        !lowerTool.contains('bash')) {
+      return;
+    }
+
+    final command = (args['command'] ?? args['cmd'] ?? '').toString().trim();
+    if (!command.toLowerCase().contains('git clone')) return;
+
+    final exitCode = RegExp(r'''exitCode['"]?\s*[:=]\s*['"]?(\d+)''')
+        .firstMatch(result)
+        ?.group(1);
+    if (exitCode != null && exitCode != '0') return;
+
+    final outputPath = RegExp(r'''Cloning into ['"]([^'"]+)['"]''',
+            caseSensitive: false)
+        .firstMatch(result)
+        ?.group(1);
+    final cloneTarget = outputPath ?? _cloneTargetFromCommand(command);
+    if (cloneTarget == null || cloneTarget.trim().isEmpty) return;
+    if (_lastWorkspacePath.trim().isEmpty) return;
+
+    final absolutePath = path.isAbsolute(cloneTarget)
+        ? path.normalize(cloneTarget)
+        : path.normalize(path.join(_lastWorkspacePath, cloneTarget));
+    if (absolutePath == _lastWorkspacePath ||
+        !Directory(absolutePath).existsSync()) {
+      return;
+    }
+    onRepositoryCloned?.call(absolutePath);
+  }
+
+  String? _cloneTargetFromCommand(String command) {
+    final tokens = command
+        .replaceAll('&&', ' && ')
+        .replaceAll(';', ' ; ')
+        .split(RegExp(r'\s+'))
+        .map(_unquoteShellToken)
+        .where((token) => token.isNotEmpty)
+        .toList();
+    final cloneIndex = tokens.indexWhere(
+      (token) => token.toLowerCase() == 'clone',
+    );
+    if (cloneIndex < 0) return null;
+
+    final positional = <String>[];
+    const optionsWithValues = {
+      '--branch',
+      '-b',
+      '--depth',
+      '--origin',
+      '-o',
+      '--template',
+      '--config',
+      '--separate-git-dir',
+      '--reference',
+      '--dissociate',
+      '--upload-pack',
+    };
+    var skipNext = false;
+    for (var i = cloneIndex + 1; i < tokens.length; i++) {
+      final token = tokens[i];
+      if (token == '&&' || token == ';' || token == '|') break;
+      if (skipNext) {
+        skipNext = false;
+        continue;
+      }
+      if (token == '--') continue;
+      if (token.startsWith('-')) {
+        if (optionsWithValues.contains(token)) skipNext = true;
+        continue;
+      }
+      positional.add(token);
+      if (positional.length == 2) break;
+    }
+    if (positional.isEmpty) return null;
+    if (positional.length > 1) return positional[1];
+
+    final source = positional.first.split('?').first.split('#').first;
+    final sourceUri = Uri.tryParse(source);
+    final sourcePath = sourceUri != null && sourceUri.path.isNotEmpty
+        ? sourceUri.path
+        : source.replaceFirst(RegExp(r'^.+:'), '');
+    final name = path.basename(sourcePath);
+    if (name.isEmpty || name == '.') return null;
+    return name.endsWith('.git') ? name.substring(0, name.length - 4) : name;
+  }
+
+  String _unquoteShellToken(String token) {
+    if (token.length >= 2 &&
+        ((token.startsWith("'") && token.endsWith("'")) ||
+            (token.startsWith('"') && token.endsWith('"')))) {
+      return token.substring(1, token.length - 1);
+    }
+    return token;
   }
 
   String _activityLabelForTool(String toolName, Map<String, dynamic> args) {
