@@ -211,6 +211,15 @@ class Language {
   }) : customCodeSnippet = customCodeSnippet ?? _defaultSnippetsForExtensions(extension);
 }
 
+/// Matches file extensions without making file type detection depend on the
+/// casing used by the filesystem or by a user-provided filename.
+bool languageSupportsExtension(Language language, String extension) {
+  final normalized = extension.toLowerCase().replaceFirst('.', '');
+  return language.extension.any(
+    (candidate) => candidate.toLowerCase().replaceFirst('.', '') == normalized,
+  );
+}
+
 class RunTime with IconBuilder{
   @override
   final String name;

@@ -1096,8 +1096,9 @@ class _EditorPageState extends State<EditorArea> with AutomaticKeepAliveClientMi
                                       }
                             
                                       final lang = languages.firstWhere(
-                                        (language) => language.extension.contains(
-                                          path.extension(targetFile.path).replaceFirst(".", ""),
+                                        (language) => languageSupportsExtension(
+                                          language,
+                                          path.extension(targetFile.path),
                                         ),
                                         orElse: () => languages[0],
                                       );

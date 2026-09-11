@@ -408,9 +408,7 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
     }
 
     final lang = languages.firstWhere(
-      (language) => language.extension.contains(
-        path.extension(file.path).replaceFirst('.', '').toLowerCase(),
-      ),
+      (language) => languageSupportsExtension(language, path.extension(file.path)),
       orElse: () => languages[0],
     );
 
@@ -1889,9 +1887,10 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
                         return;
                       }
                       final lang = languages.firstWhere(
-                        (l) => l.extension.contains(
-                            path.extension(filePath.path)
-                                .replaceFirst('.', '').toLowerCase()),
+                        (l) => languageSupportsExtension(
+                          l,
+                          path.extension(filePath.path),
+                        ),
                         orElse: () => languages[0],
                       );
                       if (currentlyRuntimeID != null) {

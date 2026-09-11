@@ -74,6 +74,15 @@ bool isPreviewFilePath(String filePath) {
     isPdfFilePath(filePath);
 }
 
+/// Returns true for normal repositories and worktrees.
+///
+/// A worktree stores `.git` as a file containing a `gitdir:` pointer rather
+/// than as a directory, so checking only `Directory.existsSync()` misses it.
+bool isGitWorkspace(String workspacePath) {
+  final gitPath = path.join(workspacePath, '.git');
+  return Directory(gitPath).existsSync() || File(gitPath).existsSync();
+}
+
 const String _legacyProjectDir = '/data/data/com.panda.ide/Roxum/Projects';
 const String _legacyTemplateDir = '/data/data/com.panda.ide/Roxum/Templates';
 const String _legacyFilesDir = '/data/data/com.panda.ide/Roxum/Files';

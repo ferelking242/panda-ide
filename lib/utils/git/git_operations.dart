@@ -214,7 +214,10 @@ Future<File> setTempFile(String extension) async {
     await target.create(recursive: true);
     await target.writeAsString(
       languages.firstWhere(
-        (lang) => lang.extension.contains(path.extension(target.path).replaceFirst(".", "")),
+        (lang) => languageSupportsExtension(
+          lang,
+          path.extension(target.path),
+        ),
         orElse: () => languages[0],
       ).helloWorld,
     );
@@ -479,22 +482,24 @@ Future<ProcessResult> getRepoStatus(String workspacePath) async {
 
 Future<void> stageChange(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
-  await Process.run(
+  final result = await Process.run(
     "git",
     ["add", fileName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
+  _throwIfGitFailed(result, 'git add "$fileName"');
 }
 
 Future<void> stageAll(String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
-  await Process.run(
+  final result = await Process.run(
     "git",
     ["add", "--all"],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
+  _throwIfGitFailed(result, 'git add --all');
 }
 
 Future<void> unstageChange(String fileName, String workspacePath) async {
@@ -507,12 +512,13 @@ Future<void> unstageChange(String fileName, String workspacePath) async {
       ? ["restore", "--staged", fileName]
       : ["reset", fileName];
 
-  await Process.run(
+  final result = await Process.run(
     "git",
     args,
     workingDirectory: workspacePath,
     environment: env,
   );
+  _throwIfGitFailed(result, 'git ${args.join(' ')}');
 }
 
 Future<void> unstageAll(String workspacePath) async {
@@ -523,12 +529,13 @@ Future<void> unstageAll(String workspacePath) async {
 
   final args = hasHead ? ["restore", "--staged", "."] : ["reset", "."];
 
-  await Process.run(
+  final result = await Process.run(
     "git",
     args,
     workingDirectory: workspacePath,
     environment: env,
   );
+  _throwIfGitFailed(result, 'git ${args.join(' ')}');
 }
 
 Future<bool> _hasInitialCommit(
@@ -633,12 +640,13 @@ Future<List<CommitNode>> getGraph(String workspacePath) async {
 
 Future<void> gitRestoreFile(String fileName, String workspacePath) async {
   final sharedPath = await NativeChannel.getLibraryPath();
-  await Process.run(
+  final result = await Process.run(
     "git",
     ["restore", fileName],
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
+  _throwIfGitFailed(result, 'git restore "$fileName"');
 }
 
 // ── Git Stash ─────────────────────────────────────────────────────────────
@@ -738,5 +746,15 @@ Future<String> gitStashShow(String workspacePath, String stashRef) async {
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
-  return result.stdout as String;
+  _throwIfGitFailed(result, 'git stash show -p $stashRef');
+  return result.stdout.toString();
+}
+
+void _throwIfGitFailed(ProcessResult result, String operation) {
+  if (result.exitCode == 0) return;
+  final details = result.stderr.toString().trim();
+  throw Exception(
+    '$operation failed with exit code ${result.exitCode}'
+    '${details.isEmpty ? '' : ': $details'}',
+  );
 }

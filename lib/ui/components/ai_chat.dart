@@ -2949,8 +2949,9 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                                   height: 18,
                                                   width: 18,
                                                   child: languages.firstWhere(
-                                                    (item) => item.extension.contains(
-                                                      path.extension(widget.filePath).isNotEmpty ? path.extension(widget.filePath).substring(1) : '',
+                                                    (item) => languageSupportsExtension(
+                                                      item,
+                                                      path.extension(widget.filePath),
                                                     ),
                                                     orElse: () => languages.first,
                                                   ).icon,
@@ -3017,7 +3018,10 @@ class _AIChatState extends State<AIChat> with SingleTickerProviderStateMixin {
                                                       : fileExtension;
                                                     final previewLanguage = languages.singleWhere(
                                                       (item) => extensionWithoutDot.isNotEmpty &&
-                                                          item.extension.contains(extensionWithoutDot),
+                                                          languageSupportsExtension(
+                                                            item,
+                                                            extensionWithoutDot,
+                                                          ),
                                                       orElse: () => languages.first,
                                                     );
                                                     final config = isDark

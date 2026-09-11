@@ -113,8 +113,15 @@ Future<GitDiffResult> getGitDiff(String fileName, String workspacePath) async {
     workingDirectory: workspacePath,
     environment: gitEnvs(sharedPath),
   );
+  if (result.exitCode != 0) {
+    final details = result.stderr.toString().trim();
+    throw Exception(
+      'git diff failed with exit code ${result.exitCode}'
+      '${details.isEmpty ? '' : ': $details'}',
+    );
+  }
 
-  final diffTextOriginal = result.stdout as String;
+  final diffTextOriginal = result.stdout.toString();
   final addedRanges = <(int, int)>[];
   final removedRanges = <({int afterLine, String content})>[];
 

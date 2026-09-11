@@ -2589,8 +2589,18 @@ $diffText
                   onChanged: (val) async {
                     setDialogState(() => selectedStash = val);
                     if (val != null) {
-                      final content = await gitStashShow(widget.workSpace, val);
-                      setDialogState(() => stashContent = content);
+                      try {
+                        final content = await gitStashShow(widget.workSpace, val);
+                        if (dialogContext.mounted) {
+                          setDialogState(() => stashContent = content);
+                        }
+                      } catch (error) {
+                        if (dialogContext.mounted) {
+                          setDialogState(
+                            () => stashContent = 'Unable to load stash: $error',
+                          );
+                        }
+                      }
                     }
                   },
                 ),
@@ -4491,10 +4501,17 @@ $diffText
                                                         ),
                                                         child: (() {
                                                           try {
-                                                            return languages.singleWhere((lang) => 
-                                                              lang.extension.contains(
-                                                                path.extension(path.basename(fileName),).replaceAll('.','',)
-                                                              )).icon;
+                                                             return languages
+                                                                 .singleWhere(
+                                                                   (lang) =>
+                                                                       languageSupportsExtension(
+                                                                     lang,
+                                                                     path.extension(
+                                                                       path.basename(fileName),
+                                                                     ),
+                                                                   ),
+                                                                 )
+                                                                 .icon;
                                                           } catch (e) {
                                                             return Icon(
                                                               Icons .insert_drive_file,
@@ -4663,11 +4680,17 @@ $diffText
                                                         ),
                                                         child: (() {
                                                           try {
-                                                            return languages.singleWhere((lang)
-                                                              => lang.extension.contains(path.extension(
-                                                                  path.basename(fileName)).replaceAll('.', ''),
-                                                                  ),
-                                                                ).icon;
+                                                             return languages
+                                                                 .singleWhere(
+                                                                   (lang) =>
+                                                                       languageSupportsExtension(
+                                                                     lang,
+                                                                     path.extension(
+                                                                       path.basename(fileName),
+                                                                     ),
+                                                                   ),
+                                                                 )
+                                                                 .icon;
                                                           } catch (e) {
                                                             return Icon(
                                                               Icons.insert_drive_file,

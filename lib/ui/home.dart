@@ -583,8 +583,9 @@ class _SelectTypeState extends State<SelectType>
       final imported = File(pendingFiles.first);
       if (!imported.existsSync()) return;
       final language = languages.firstWhere(
-        (item) => item.extension.contains(
-          path.extension(imported.path).replaceFirst('.', ''),
+        (item) => languageSupportsExtension(
+          item,
+          path.extension(imported.path),
         ),
         orElse: () => languages[0],
       );
@@ -778,8 +779,9 @@ class _SelectTypeState extends State<SelectType>
                       if (file != null && context.mounted) {
                         Navigator.of(ctx).pop();
                         final lang = languages.firstWhere(
-                          (l) => l.extension.contains(
-                            path.extension(file.path).replaceFirst('.', ''),
+                          (l) => languageSupportsExtension(
+                            l,
+                            path.extension(file.path),
                           ),
                           orElse: () => languages[0],
                         );
@@ -810,8 +812,7 @@ class _SelectTypeState extends State<SelectType>
     final file = await pickFile();
     if (file == null || !context.mounted) return;
     final lang = languages.firstWhere(
-      (l) =>
-          l.extension.contains(path.extension(file.path).replaceFirst('.', '')),
+      (l) => languageSupportsExtension(l, path.extension(file.path)),
       orElse: () => languages[0],
     );
     _openEditorTab(
@@ -1804,8 +1805,7 @@ class _SelectTypeState extends State<SelectType>
   /// Le projet/workspace reste ouvert.
   void _openFileFromWorkspace(File file, String rootDir) {
     final lang = languages.firstWhere(
-      (l) =>
-          l.extension.contains(path.extension(file.path).replaceFirst('.', '')),
+      (l) => languageSupportsExtension(l, path.extension(file.path)),
       orElse: () => languages[0],
     );
     _openEditorTab(
@@ -2341,8 +2341,9 @@ class _SelectTypeState extends State<SelectType>
               fileIconBuilder: (extension) => _buildExplorerFileIcon(extension, t),
               onFileTap: (file) {
                 final lang = languages.firstWhere(
-                  (l) => l.extension.contains(
-                    path.extension(file.path).replaceFirst('.', ''),
+                  (l) => languageSupportsExtension(
+                    l,
+                    path.extension(file.path),
                   ),
                   orElse: () => languages[0],
                 );
@@ -2842,8 +2843,9 @@ class _SelectTypeState extends State<SelectType>
                       path.basename(file.path),
                       () {
                         final lang = languages.firstWhere(
-                          (l) => l.extension.contains(
-                            path.extension(file.path).replaceFirst('.', ''),
+                          (l) => languageSupportsExtension(
+                            l,
+                            path.extension(file.path),
                           ),
                           orElse: () => languages[0],
                         );
@@ -2874,7 +2876,7 @@ class _SelectTypeState extends State<SelectType>
 
     // Keep the complete source-control experience in the Panda sidebar:
     // staging, commit actions, sync, and the commit graph all live here.
-    final isGitRepo = Directory('$activeDir/.git').existsSync();
+    final isGitRepo = isGitWorkspace(activeDir);
     return Column(
       children: [
         Expanded(
@@ -11791,12 +11793,10 @@ class _SelectTypeState extends State<SelectType>
                           } else {
                             final matchingLang = languages
                                 .where(
-                                  (l) => l.extension.contains(
-                                    path
-                                        .extension(entryPath)
-                                        .toLowerCase()
-                                        .replaceFirst('.', ''),
-                                  ),
+                                   (l) => languageSupportsExtension(
+                                     l,
+                                     path.extension(entryPath),
+                                   ),
                                 )
                                 .toList();
                             leading = matchingLang.isNotEmpty
@@ -11839,12 +11839,10 @@ class _SelectTypeState extends State<SelectType>
                               }
                               final matchingLang = languages
                                   .where(
-                                    (l) => l.extension.contains(
-                                      path
-                                          .extension(entryPath)
-                                          .toLowerCase()
-                                          .replaceFirst('.', ''),
-                                    ),
+                                     (l) => languageSupportsExtension(
+                                       l,
+                                       path.extension(entryPath),
+                                     ),
                                   )
                                   .toList();
                               _openEditorTab(

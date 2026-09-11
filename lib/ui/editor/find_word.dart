@@ -748,7 +748,9 @@ class _FindWordWidgetState extends State<FindWordWidget> {
                           .extension(result.filePath)
                           .replaceAll('.', '');
                       return languages
-                          .singleWhere((lang) => lang.extension.contains(ext))
+                          .singleWhere(
+                            (lang) => languageSupportsExtension(lang, ext),
+                          )
                           .icon;
                     } catch (_) {
                       return langtxt.icon;

@@ -165,11 +165,14 @@ class PandaWelcomePage extends StatelessWidget {
                             leading = const Icon(Broken.folder_open,
                                 color: _kAccent, size: 18);
                           } else {
-                            final matchingLang = languages.where((l) =>
-                                l.extension.contains(p
-                                    .extension(entryPath)
-                                    .toLowerCase()
-                                    .replaceFirst('.', ''))).toList();
+                            final matchingLang = languages
+                                .where(
+                                  (l) => languageSupportsExtension(
+                                    l,
+                                    p.extension(entryPath),
+                                  ),
+                                )
+                                .toList();
                             leading = matchingLang.isNotEmpty
                                 ? matchingLang[0].icon ??
                                     const Icon(Broken.document, size: 18)
@@ -200,11 +203,12 @@ class PandaWelcomePage extends StatelessWidget {
                                 return;
                               }
                               final matchingLang = languages
-                                  .where((l) => l.extension.contains(
-                                      p
-                                          .extension(entryPath)
-                                          .toLowerCase()
-                                          .replaceFirst('.', '')))
+                                  .where(
+                                    (l) => languageSupportsExtension(
+                                      l,
+                                      p.extension(entryPath),
+                                    ),
+                                  )
                                   .toList();
                               onOpenFile(
                                 File(entryPath),
