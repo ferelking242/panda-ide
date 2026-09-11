@@ -562,11 +562,11 @@ __panda_ps
   /// It installs the common toolchain in the selected guest distribution,
   /// rather than pretending that the Android host has Node.js or Git.
   static String pandaUpdateScript() => r'''#!/bin/sh
-set -eu
+set -u
 
 usage() {
   echo "Usage: panda update | panda doctor"
-  echo "  update  Install or refresh Git, Node.js, npm, Python, FFmpeg and build tools"
+  echo "  update  Install or refresh Git, Node.js, npm, Python and build tools"
   echo "  doctor  Show the tools currently available in this terminal"
 }
 
@@ -577,11 +577,11 @@ case "${1:-}" in
       apt-get update
       apt-get install -y --no-install-recommends \
         ca-certificates curl wget git nodejs npm python3 python3-pip \
-        build-essential pkg-config ffmpeg
+        build-essential pkg-config
     elif command -v apk >/dev/null 2>&1; then
       apk update
       apk add --no-cache ca-certificates curl wget git nodejs npm \
-        python3 py3-pip build-base pkgconf ffmpeg
+        python3 py3-pip build-base pkgconf
     else
       echo "No supported package manager found. Select an Ubuntu, Debian or Alpine terminal."
       exit 1
@@ -590,13 +590,9 @@ case "${1:-}" in
     "$0" doctor
     ;;
   doctor)
-    for tool in git node npm python3 pip3 ffmpeg; do
+    for tool in git node npm python3 pip3; do
       if command -v "$tool" >/dev/null 2>&1; then
-        case "$tool" in
-          ffmpeg) version=$("$tool" -version 2>/dev/null | head -n 1) ;;
-          *) version=$("$tool" --version 2>/dev/null | head -n 1) ;;
-        esac
-        printf '%-8s %s\n' "$tool" "$version"
+        printf '%-8s %s\n' "$tool" "$("$tool" --version 2>/dev/null | head -n 1)"
       else
         printf '%-8s %s\n' "$tool" "not installed"
       fi
