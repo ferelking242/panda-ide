@@ -32,12 +32,13 @@ class AgentToolCallBlock extends StatelessWidget {
     final bg = isDark ? const Color(0xff1e1e22) : const Color(0xfff5f5f5);
     final isRunning = status == 'running' || status == 'pending';
     final cmd = _extractCommand(args);
+    final label = toolHumanLabel(toolName, args);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: bg,
+        color: isRunning ? bg.withValues(alpha: 0.18) : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isRunning
@@ -54,8 +55,8 @@ class AgentToolCallBlock extends StatelessWidget {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  toolName,
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, fontFamily: 'monospace', color: fg),
+                  label,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -75,11 +76,19 @@ class AgentToolCallBlock extends StatelessWidget {
           ),
           if (cmd.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(
-              cmd,
-              style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: fg.withValues(alpha: 0.7), height: 1.4),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                cmd,
+                style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: fg.withValues(alpha: 0.7), height: 1.4),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
         ],
@@ -119,6 +128,7 @@ class BeUIToolApproval extends StatelessWidget {
   Widget build(BuildContext context) {
     final bg = isDark ? const Color(0xff2a2220) : const Color(0xfffff8e1);
     final fg = isDark ? const Color(0xffe0e0e0) : const Color(0xff222222);
+    final label = toolHumanLabel(toolName, args);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -139,7 +149,7 @@ class BeUIToolApproval extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Text(toolName, style: TextStyle(fontSize: 11, fontFamily: 'monospace', color: fg.withValues(alpha: 0.8))),
+          Text(label, style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.8))),
           if (args.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(args.toString(), style: TextStyle(fontSize: 10, fontFamily: 'monospace', color: fg.withValues(alpha: 0.6), height: 1.3)),

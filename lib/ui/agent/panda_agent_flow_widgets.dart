@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../core/broken_icons.dart';
+import 'agent_models.dart';
 import 'flow_ui/models/flow_attachment.dart';
 import 'flow_ui/models/flow_message_data.dart';
 import 'flow_ui/models/flow_message_part.dart';
@@ -915,6 +916,8 @@ class PandaAgentFlowToolCard extends StatelessWidget {
     }
   }
 
+  String get _humanLabel => toolHumanLabel(toolName, args);
+
   bool get _isShellCommand {
     final value = toolName.toLowerCase();
     return value.contains('shell') ||
@@ -1010,10 +1013,8 @@ class PandaAgentFlowToolCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Material(
-            color: dark
-                ? const Color(0xff2b2b2f)
-                : const Color(0xffe5e5e8),
-            borderRadius: BorderRadius.circular(9),
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
           child: InkWell(
             onTap: hasDetails ? onToggle : null,
             borderRadius: BorderRadius.circular(10),
@@ -1024,31 +1025,20 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                   iconTile(),
                   const SizedBox(width: 7),
                   Expanded(
-                    child: shell && !approval && _command.isNotEmpty
-                        ? _PandaCommandLine(
-                            command: _command,
-                            color: dark
-                                ? const Color(0xffd0d0d4)
-                                : const Color(0xff5d5d64),
-                              background: dark
-                                  ? const Color(0xff2b2b2f)
-                                  : const Color(0xffe5e5e8),
-                          )
-                        : Text(
-                            approval
-                                ? 'Approbation requise · $toolName'
-                                : toolName,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: dark
-                                  ? const Color(0xffd0d0d4)
-                                  : const Color(0xff5d5d64),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
+                    child: Text(
+                      approval
+                          ? 'Approbation requise · $_humanLabel'
+                          : _humanLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: dark
+                            ? const Color(0xffd0d0d4)
+                            : const Color(0xff5d5d64),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 6),
                   statusWidget(),
@@ -1097,7 +1087,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.transparent,
+        color: dark ? const Color(0xff202024) : const Color(0xfff3f3f5),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: panelBorder),
       ),

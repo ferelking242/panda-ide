@@ -15,6 +15,7 @@ import '../../utils/agent_export_service.dart';
 import '../../utils/agent_history_service.dart';
 import '../../utils/panda_log.dart';
 import '../agent_runner.dart';
+import 'agent_models.dart';
 import 'flow_ui/models/flow_attachment.dart';
 
 class QueuedAgentPrompt {
@@ -1197,6 +1198,9 @@ class PandaAgentController extends ChangeNotifier {
   }
 
   String _activityLabelForTool(String toolName, Map<String, dynamic> args) {
+    final humanLabel = toolHumanLabel(toolName, args);
+    if (humanLabel != 'Action en cours…') return humanLabel;
+
     final name = toolName.toLowerCase();
     final command = (args['command'] ?? args['cmd'] ?? '').toString();
     if (command.contains('git clone')) return 'Clonage du dépôt…';
