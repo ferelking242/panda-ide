@@ -526,6 +526,7 @@ class CopilotChat {
       'currentlySelectedText',
       'getLspDiagnostics',
       'readFile',
+      'openFile',
       'listFiles',
       'readFilesBatch',
       'globSearchFiles',
@@ -898,6 +899,18 @@ class CopilotChat {
               result = res.success
                   ? (res.data ?? 'No content')
                   : (res.error ?? 'Error reading file');
+              break;
+            case 'openFile':
+              final res =
+                  await _agenticTools?.openFile(
+                    args['filePath'],
+                    args['startLine'],
+                    args['endLine'],
+                  ) ??
+                  ToolResult.error(errorMessage);
+              result = res.success
+                  ? (res.data ?? 'No content')
+                  : (res.error ?? 'Error opening file');
               break;
             case 'writeFile':
               String? previousContent;

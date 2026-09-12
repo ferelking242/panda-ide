@@ -2376,8 +2376,10 @@ class _AgentSettingsState extends State<AgentSettings>
             ...specItems.map((item) {
               final enabled = selections[item.spec.name] ?? true;
               return _buildToolRow(
-                icon: item.spec.requiresWriteAccess ? Broken.edit_2 : Broken.flash_circle,
-                color: item.spec.requiresWriteAccess ? const Color(0xffe05252).withValues(alpha: 0.8) : _kAccent,
+                 icon: agenticToolIcon(item.spec.name),
+                 color: item.spec.requiresWriteAccess
+                     ? const Color(0xffe05252).withValues(alpha: 0.8)
+                     : _kAccent,
                 name: item.spec.label,
                 desc: item.spec.description,
                 isDark: isDark,

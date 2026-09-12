@@ -44,7 +44,7 @@ class NativeToolBridge {
   }
 
   static ToolCategory _categoryFor(String name) {
-    if (['readFile', 'writeFile', 'editFile', 'deleteFile', 'rename',
+    if (['readFile', 'openFile', 'writeFile', 'editFile', 'deleteFile', 'rename',
          'renamePath', 'insertAtLine', 'replaceAllInFile', 'readFilesBatch',
          'getPendingEditsForFile', 'getFileInfo'].contains(name)) {
       return ToolCategory.file;
@@ -73,6 +73,12 @@ class NativeToolBridge {
     switch (name) {
       case 'readFile':
         return tools.readFile(
+          (args['filePath'] ?? '').toString(),
+          args['startLine'] as int?,
+          args['endLine'] as int?,
+        );
+      case 'openFile':
+        return tools.openFile(
           (args['filePath'] ?? '').toString(),
           args['startLine'] as int?,
           args['endLine'] as int?,
@@ -209,6 +215,7 @@ class NativeToolBridge {
   static Map<String, dynamic> _parametersFor(String name) {
     switch (name) {
       case 'readFile':
+      case 'openFile':
         return {
           'type': 'object',
           'properties': {

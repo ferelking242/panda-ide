@@ -193,6 +193,47 @@ class _ToolSpecItem {
   const _ToolSpecItem({required this.spec});
 }
 
+/// One consistent icon map is shared by the settings catalog and tool cards.
+/// The terminal stays visually distinct from file, search, web, and reasoning
+/// actions so a long activity list remains scannable.
+IconData agenticToolIcon(String name) {
+  if (name == 'runShellCommand' || name == 'getFullCommandLog') {
+    return Broken.code_1;
+  }
+  if (name == 'openFile' || name == 'readFile' || name == 'readFilesBatch') {
+    return Broken.book;
+  }
+  if (name == 'writeFile' ||
+      name == 'editFile' ||
+      name == 'insertAtLine' ||
+      name == 'replaceAllInFile') {
+    return Broken.edit;
+  }
+  if (name == 'deleteFile') return Broken.trash;
+  if (name == 'rename' || name == 'renamePath') return Broken.document_text;
+  if (name == 'listFiles' || name == 'globSearchFiles') return Broken.folder_open;
+  if (name == 'searchInFiles' ||
+      name == 'grepInFiles' ||
+      name == 'getFileInfo') {
+    return Broken.search_normal;
+  }
+  if (name == 'searchInWeb' || name == 'openLinks') {
+    return Broken.global_search;
+  }
+  if (name.startsWith('git')) return Broken.hierarchy_2;
+  if (name == 'getLspDiagnostics') return Broken.warning_2;
+  if (name == 'activeEditorFile' || name == 'currentlySelectedText') {
+    return Broken.code_circle;
+  }
+  if (name == 'getSecret' || name == 'listSecrets') return Broken.key;
+  if (name == 'generateRepoMap') return Broken.tree;
+  if (name == 'createCheckpoint') return Broken.archive;
+  if (name == 'updateProjectMemory') return Broken.note_2;
+  if (name == 'getAgentSkills' || name == 'useAgentSkill') return Broken.magicpen;
+  if (name == 'getPendingEditsForFile') return Broken.task;
+  return Broken.cpu_setting;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared sub-widgets
 // ─────────────────────────────────────────────────────────────────────────────
@@ -912,23 +953,7 @@ class _ChatToolCallBlockState extends State<_ChatToolCallBlock> {
 
   // ── Icône selon le nom de l'outil ─────────────────────────────────────────
   IconData _iconFor(String name) {
-    if (name == 'runShellCommand') return Broken.code_1;
-    if (name.startsWith('write') || name.startsWith('edit') ||
-        name.startsWith('replace') || name.startsWith('insert')) {
-      return Broken.edit;
-    }
-    if (name.startsWith('read')) return Broken.document_1;
-    if (name.startsWith('delete')) return Broken.trash;
-    if (name.startsWith('list') || name.startsWith('glob')) return Broken.folder_2;
-    if (name.startsWith('grep') || name.startsWith('search')) return Broken.search_normal;
-    if (name.startsWith('git')) return Broken.hierarchy_2;
-    if (name.startsWith('searchInWeb') || name.startsWith('openLinks')) return Broken.global_search;
-    if (name.startsWith('updateProject') || name.startsWith('memory')) return Broken.note_2;
-    if (name.startsWith('getLsp') || name.startsWith('diagnostic')) return Broken.warning_2;
-    if (name.startsWith('rename') || name.startsWith('move')) return Broken.document_text;
-    if (name.startsWith('getFile') || name.startsWith('info')) return Broken.info_circle;
-    if (name.startsWith('activeEditor') || name.startsWith('currentlySelected')) return Broken.code_circle;
-    return Broken.cpu_setting;
+    return agenticToolIcon(name);
   }
 
   // ── Label lisible, dérivé de la commande si disponible ────────────────────

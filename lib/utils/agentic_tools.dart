@@ -273,6 +273,16 @@ class AgenticTools {
     }
   }
 
+  /// Opens a workspace file for the agent context. The editor host can use the
+  /// returned path/content to focus the file while keeping the tool safe and
+  /// read-only when no editor callback is available.
+  Future<ToolResult<String>> openFile(
+    String filePath, [
+    int? startLine,
+    int? endLine,
+  ]) =>
+      readFile(filePath, startLine, endLine);
+
   Future<void> _trackPendingEditsForWrite(
     String canonicalPath,
     String oldContent,
@@ -2449,6 +2459,31 @@ class AgenticTools {
               "filePath": {
                 "type": "string",
                 "description": "The path to the file to read",
+              },
+              "startLine": {
+                "type": "integer",
+                "description": "Optional start line number (1-indexed)",
+              },
+              "endLine": {
+                "type": "integer",
+                "description": "Optional end line number (1-indexed)",
+              },
+            },
+            "required": ["filePath"],
+          },
+        },
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "openFile",
+          "description": "Opens a workspace file in the current editor context and reads its contents",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "filePath": {
+                "type": "string",
+                "description": "The workspace-relative path to open",
               },
               "startLine": {
                 "type": "integer",
