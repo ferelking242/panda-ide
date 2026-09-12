@@ -161,6 +161,9 @@ Widget drawerTile(VoidCallback onPressed, String title, dynamic icon) {
 
 class _SelectTypeState extends State<SelectType>
     with WidgetsBindingObserver, TickerProviderStateMixin {
+  static const _activeWorkspacePref = 'panda_active_workspace_path';
+  static const _workspaceClosedPref = 'panda_workspace_closed';
+
   // ── State ──────────────────────────────────────────────────────────────────
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final createFileController = TextEditingController();
@@ -176,6 +179,7 @@ class _SelectTypeState extends State<SelectType>
   int _activeRail = 0;
   // Sidebar state: 0=closed 1=icons-only(default) 2=extended panel
   int _sidebarState = 1;
+  int _explorerRefreshVersion = 0;
   final Map<String, bool> _explorerSectionExpanded = {
     'OUTLINE': false,
     'TIMELINE': false,
@@ -448,6 +452,9 @@ class _SelectTypeState extends State<SelectType>
     _sendAnimCtrl.stop();
     // Rebuild send button colour when text changes
     _agentInputCtrl.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_restoreWorkspace());
+    });
     // Workspace dropdown : reagit au focus de la recherche (blur iOS)
     _wsSearchFocus.addListener(() {
       _wsSearchFocused = _wsSearchFocus.hasFocus;
@@ -1655,6 +1662,36 @@ class _SelectTypeState extends State<SelectType>
     return (cfg != null && cfg.isProject) ? cfg.rootDir : null;
   }
 
+  /// Restore the last opened workspace, or the first existing recent project.
+  /// This keeps the explorer and Panda Agent connected after app restart.
+  Future<void> _restoreWorkspace() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted || prefs.getBool(_workspaceClosedPref) == true) return;
+
+    String? candidate = prefs.getString(_activeWorkspacePref);
+    if (candidate == null || candidate.trim().isEmpty) {
+      try {
+        for (final raw in context.read<RecentBloc>().state.recent) {
+          final entry = _normalizeRecentEntry(raw);
+          if (entry?['type'] != 'project') continue;
+          final recentPath =
+              entry?['rootDir']?.toString() ?? entry?['path']?.toString();
+          if (recentPath != null && Directory(recentPath).existsSync()) {
+            candidate = recentPath;
+            break;
+          }
+        }
+      } catch (_) {
+        // RecentBloc is not present in a few embedded preview contexts.
+      }
+    }
+
+    if (candidate == null || candidate.trim().isEmpty) return;
+    final dir = Directory(candidate);
+    if (!dir.existsSync() || _currentWorkspaceDir != null) return;
+    _openEditorTab(rootDir: dir.path, isProject: true);
+  }
+
   void _toggleFullScreen() {
     setState(() {
       if (_fullScreen) {
@@ -1690,6 +1727,65 @@ class _SelectTypeState extends State<SelectType>
       }
       _bottomPanelOpen = false;
     });
+  }
+
+  Future<String> _controlIdeFromAgent({
+    required String action,
+    String? targetPath,
+  }) async {
+    final target = targetPath?.trim() ?? '';
+    switch (action) {
+      case 'open_workspace':
+        final candidate = target.isEmpty
+            ? (_activeProjectDir() ?? _workspaceDirectories().firstOrNull)
+            : (path.isAbsolute(target)
+                ? target
+                : path.join(_activeProjectDir() ?? projectDir, target));
+        if (candidate == null || !Directory(candidate).existsSync()) {
+          return 'Workspace introuvable: ${target.isEmpty ? '<aucun>' : target}';
+        }
+        _openEditorTab(rootDir: candidate, isProject: true);
+        if (mounted) {
+          setState(() {
+            _activeRail = 1;
+            _sidebarState = 2;
+          });
+        }
+        return 'Workspace ouvert: ${path.basename(candidate)}';
+      case 'open_file':
+        if (target.isEmpty) return 'Chemin de fichier requis.';
+        final candidate = path.isAbsolute(target)
+            ? target
+            : path.join(_activeProjectDir() ?? projectDir, target);
+        final file = File(candidate);
+        if (!file.existsSync()) return 'Fichier introuvable: $target';
+        _openFileFromWorkspace(
+          file,
+          _activeProjectDir() ?? file.parent.path,
+        );
+        return 'Fichier ouvert: ${path.basename(candidate)}';
+      case 'show_explorer':
+        if (!mounted) return 'IDE non disponible.';
+        setState(() {
+          _activeRail = 1;
+          _sidebarState = 2;
+        });
+        return 'Explorateur affiché.';
+      case 'toggle_sidebar':
+        if (!mounted) return 'IDE non disponible.';
+        setState(() {
+          _sidebarState = _sidebarState == 0 ? 1 : 0;
+          if (_sidebarState == 0) _activeRail = 0;
+        });
+        return _sidebarState == 0
+            ? 'Sidebar fermée.'
+            : 'Sidebar ouverte.';
+      case 'open_terminal':
+        _openTerminalTab();
+        return 'Terminal ouvert.';
+      default:
+        return 'Action IDE inconnue: $action';
+    }
   }
 
   /// Opens the file manager inside the IDE tab strip instead of navigating to
@@ -1773,6 +1869,7 @@ class _SelectTypeState extends State<SelectType>
     bool isProject = false,
     bool isCloned = false,
   }) {
+    rootDir = path.normalize(rootDir);
     final tabId = isProject
         ? 'editor:dir:$rootDir'
         : 'editor:file:${file?.path ?? rootDir}';
@@ -1801,6 +1898,12 @@ class _SelectTypeState extends State<SelectType>
       if (isProject) {
         _currentWorkspaceDir = rootDir;
         _currentWorkspaceName = path.basename(rootDir);
+        unawaited(
+          SharedPreferences.getInstance().then((prefs) async {
+            await prefs.setString(_activeWorkspacePref, rootDir);
+            await prefs.setBool(_workspaceClosedPref, false);
+          }),
+        );
         // Activation paresseuse : workspaceContains:<pattern> façon VS Code.
         unawaited(ExtensionHost.instance.onWorkspaceOpened(rootDir));
         // Refresh the global RepoStatusBloc for the new workspace.
@@ -1847,6 +1950,17 @@ class _SelectTypeState extends State<SelectType>
     if (_currentWorkspaceDir != null && _currentWorkspaceDir!.isNotEmpty) {
       roots.add(path.normalize(_currentWorkspaceDir!));
     }
+    try {
+      for (final raw in context.read<RecentBloc>().state.recent) {
+        final entry = _normalizeRecentEntry(raw);
+        if (entry?['type'] != 'project') continue;
+        final recentPath =
+            entry?['rootDir']?.toString() ?? entry?['path']?.toString();
+        if (recentPath != null && Directory(recentPath).existsSync()) {
+          roots.add(path.normalize(recentPath));
+        }
+      }
+    } catch (_) {}
     final result = roots.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return result;
   }
@@ -1870,8 +1984,14 @@ class _SelectTypeState extends State<SelectType>
   /// ainsi que tous les onglets fichiers racinés dedans. C'est le SEUL moyen
   /// de fermer un projet — fermer des onglets ne ferme jamais le projet.
   void _closeWorkspace() {
+    final dir = _currentWorkspaceDir;
+    unawaited(
+      SharedPreferences.getInstance().then((prefs) async {
+        await prefs.remove(_activeWorkspacePref);
+        await prefs.setBool(_workspaceClosedPref, true);
+      }),
+    );
     setState(() {
-      final dir = _currentWorkspaceDir;
       _currentWorkspaceDir = null;
       _currentWorkspaceName = null;
       if (dir == null || dir.isEmpty) return;
@@ -2334,9 +2454,27 @@ class _SelectTypeState extends State<SelectType>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (_activeRail == 1 && _activeProjectDir() != null)
+                    InkWell(
+                      onTap: () {
+                        setState(() => _explorerRefreshVersion++);
+                        context.read<RepoStatusBloc>().add(
+                          LoadRepoStatus(_activeProjectDir()!),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.refresh_rounded,
+                          size: 14,
+                          color: titleColor,
+                        ),
+                      ),
+                    ),
                   InkWell(
                     onTap: () => setState(() {
-                      _sidebarState = 1;
+                      _sidebarState = 0;
                       _activeRail = 0;
                     }),
                     borderRadius: BorderRadius.circular(4),
@@ -2378,6 +2516,9 @@ class _SelectTypeState extends State<SelectType>
         children: [
           Expanded(
             child: DirectoryTreeViewerCustom(
+              key: ValueKey(
+                'explorer:$activeProjPath:$_explorerRefreshVersion',
+              ),
               rootPath: activeProjPath,
               appTheme: t,
               isUnfoldedFirst: true,
@@ -2472,20 +2613,8 @@ class _SelectTypeState extends State<SelectType>
             ),
           ),
         ),
-        FutureBuilder<List<Directory>>(
-          future: Future(() async {
-            final d = Directory(
-              projectDir,
-            ); // global constant from constants.dart
-            if (!d.existsSync()) return [];
-            final entities = await d.list().toList();
-            final dirs = entities.whereType<Directory>().toList()
-              ..sort(
-                (a, b) =>
-                    b.statSync().modified.compareTo(a.statSync().modified),
-              );
-            return dirs.take(8).toList();
-          }),
+        FutureBuilder<List<String>>(
+          future: Future.value(_workspaceDirectories()),
           builder: (_, snap) {
             if (!snap.hasData || snap.data!.isEmpty) {
               return Padding(
@@ -2503,15 +2632,14 @@ class _SelectTypeState extends State<SelectType>
               );
             }
             return Column(
-              children: snap.data!
-                  .map(
-                    (dir) => _panelItem(
+              children: snap.data!.take(8).map(
+                    (dirPath) => _panelItem(
                       ctx,
                       t,
                       Broken.folder_open,
-                      path.basename(dir.path),
+                      path.basename(dirPath),
                       () => _openEditorTab(
-                        rootDir: dir.path,
+                        rootDir: dirPath,
                         isProject: true,
                         isCloned: false,
                       ),
@@ -4084,12 +4212,12 @@ class _SelectTypeState extends State<SelectType>
           _hdrBtn(
             Broken.sidebar_left,
             _sidebarState == 2
-                ? 'Fermer le panneau gauche'
+                ? 'Fermer la sidebar'
                 : 'Ouvrir le panneau gauche',
             _sidebarState == 2 ? _kAccent : fg,
             () => setState(() {
               if (_sidebarState == 2) {
-                _sidebarState = 1;
+                _sidebarState = 0;
                 _activeRail = 0;
               } else {
                 _sidebarState = 2;
@@ -11210,6 +11338,7 @@ class _SelectTypeState extends State<SelectType>
           workspacePath: workspacePath,
           agentMode: _agentChatMode,
           approvalMode: _agentApprovalMode,
+           onIdeControl: _controlIdeFromAgent,
           onConfirmRequired: _handleAgentConfirmRequired,
           eventBus: _agentEventBus,
           systemPromptOverride: systemPromptParts.isEmpty

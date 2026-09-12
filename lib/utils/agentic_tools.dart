@@ -29,10 +29,16 @@ typedef AgentConfirmCallback = Future<bool> Function({
   required String details,
 });
 
+typedef AgentIdeControlCallback = Future<String> Function({
+  required String action,
+  String? targetPath,
+});
+
 class AgenticTools {
   final BuildContext context;
   final String workspacePath;
   final AgentConfirmCallback? onConfirmRequired;
+  final AgentIdeControlCallback? onIdeControl;
   final String approvalMode; // 'default' | 'every' | 'autonome' | 'autopilot'
   Process? _activeProcess;
   final Map<String, Process> _backgroundProcesses = {};
@@ -47,8 +53,29 @@ class AgenticTools {
     required this.workspacePath,
     required this.context,
     this.onConfirmRequired,
+    this.onIdeControl,
     this.approvalMode = 'default',
   }) : _activeEditor = _readActiveEditor(context);
+
+  Future<ToolResult<String>> controlIde(
+    String action, {
+    String? targetPath,
+  }) async {
+    if (onIdeControl == null) {
+      return ToolResult.error(
+        'Le contrôle de l’interface IDE n’est pas disponible dans ce contexte.',
+      );
+    }
+    try {
+      final result = await onIdeControl!(
+        action: action,
+        targetPath: targetPath,
+      );
+      return ToolResult.success(result);
+    } catch (error) {
+      return ToolResult.error('Impossible de contrôler l’IDE : $error');
+    }
+  }
 
   final ActiveEditor? _activeEditor;
 
@@ -2649,6 +2676,31 @@ class AgenticTools {
 
   List<Map<String, dynamic>> getTools({bool readAccessOnly = false}) {
     return _applyToolSelectionFilter([
+      {
+        "type": "function",
+        "function": {
+          "name": "controlIde",
+          "description":
+              "Controls the Panda IDE UI: open a workspace or file, show the explorer, toggle the sidebar, or open the terminal.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "open_workspace",
+                  "open_file",
+                  "show_explorer",
+                  "toggle_sidebar",
+                  "open_terminal",
+                ],
+              },
+              "targetPath": {"type": "string"},
+            },
+            "required": ["action"],
+          },
+        },
+      },
       {
         "type": "function",
         "function": {

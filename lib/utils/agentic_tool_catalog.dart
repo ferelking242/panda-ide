@@ -14,6 +14,13 @@ class AgenticToolSpec {
 
 const List<AgenticToolSpec> agenticToolSpecs = [
   AgenticToolSpec(
+    name: 'controlIde',
+    label: 'Control IDE',
+    description:
+        'Controls the Panda IDE UI: open a workspace or file, show the explorer, toggle the sidebar, or open the terminal.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
     name: 'activeEditorFile',
     label: 'Active editor file',
     description: 'Gets the path of the currently active editor file.',

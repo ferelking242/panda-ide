@@ -15,12 +15,14 @@ class NativeToolBridge {
     required BuildContext context,
     required String workspacePath,
     AgentConfirmCallback? onConfirmRequired,
+    AgentIdeControlCallback? onIdeControl,
     String approvalMode = 'default',
   }) {
     final tools = AgenticTools(
       context: context,
       workspacePath: workspacePath,
       onConfirmRequired: onConfirmRequired,
+      onIdeControl: onIdeControl,
       approvalMode: approvalMode,
     );
 
@@ -86,6 +88,11 @@ class NativeToolBridge {
     Map<String, dynamic> args,
   ) async {
     switch (name) {
+      case 'controlIde':
+        return tools.controlIde(
+          (args['action'] ?? '').toString(),
+          targetPath: args['targetPath']?.toString(),
+        );
       case 'readFile':
         return tools.readFile(
           (args['filePath'] ?? '').toString(),
@@ -256,6 +263,24 @@ class NativeToolBridge {
 
   static Map<String, dynamic> _parametersFor(String name) {
     switch (name) {
+      case 'controlIde':
+        return {
+          'type': 'object',
+          'properties': {
+            'action': {
+              'type': 'string',
+              'enum': [
+                'open_workspace',
+                'open_file',
+                'show_explorer',
+                'toggle_sidebar',
+                'open_terminal',
+              ],
+            },
+            'targetPath': {'type': 'string'},
+          },
+          'required': ['action'],
+        };
       case 'readFile':
       case 'openFile':
         return {

@@ -151,6 +151,7 @@ class AgentRunner {
     String? systemPromptOverride,
     AgentConfirmCallback? onConfirmRequired,
     String approvalMode = 'default',
+    AgentIdeControlCallback? onIdeControl,
     AgentEventBus? eventBus,
   }) {
     final ctrl = StreamController<AgentChunk>();
@@ -164,6 +165,7 @@ class AgentRunner {
       agentMode: agentMode,
       onConfirmRequired: onConfirmRequired,
       approvalMode: approvalMode,
+      onIdeControl: onIdeControl,
       eventBus: eventBus,
     );
     return ctrl.stream;
@@ -432,6 +434,7 @@ $toolLines
     String agentMode = 'agent',
     AgentConfirmCallback? onConfirmRequired,
     String approvalMode = 'default',
+    AgentIdeControlCallback? onIdeControl,
     AgentEventBus? eventBus,
   }) async {
     _client = http.Client();
@@ -447,6 +450,7 @@ $toolLines
               workspacePath: workspacePath,
               context: context,
               onConfirmRequired: onConfirmRequired,
+              onIdeControl: onIdeControl,
               approvalMode: approvalMode,
             )
           : null;
@@ -463,6 +467,7 @@ $toolLines
           context: context,
           workspacePath: workspacePath,
           onConfirmRequired: onConfirmRequired,
+          onIdeControl: onIdeControl,
           approvalMode: approvalMode,
         );
       }
@@ -1209,6 +1214,12 @@ $toolLines
         case 'activeEditorFile':
           final res = await tools.activeEditorFile();
           return res.success ? (res.data ?? 'No active file') : (res.error ?? 'Error');
+        case 'controlIde':
+          final res = await tools.controlIde(
+            args['action']?.toString() ?? '',
+            targetPath: args['targetPath']?.toString(),
+          );
+          return res.success ? (res.data ?? 'IDE contrôlé') : (res.error ?? 'Error');
         case 'currentlySelectedText':
           final res = await tools.currentlySelectedText();
           return res.success

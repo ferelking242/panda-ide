@@ -77,6 +77,32 @@ class _DirectoryTreeViewerState extends State<DirectoryTreeViewerCustom> {
   final TextEditingController _renameController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _ensureRootExpanded(widget.rootPath);
+  }
+
+  @override
+  void didUpdateWidget(covariant DirectoryTreeViewerCustom oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rootPath != widget.rootPath) {
+      newEntryPath = null;
+      renamingPath = null;
+      _ensureRootExpanded(widget.rootPath);
+    }
+  }
+
+  void _ensureRootExpanded(String rootPath) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.isUnfoldedFirst) return;
+      final folders = context.read<FolderBloc>();
+      if (!(folders.state.folderStates[rootPath] ?? false)) {
+        folders.toggleFolder(rootPath);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     _renameController.dispose();
