@@ -52,8 +52,23 @@ class NativeToolBridge {
     if (['searchInFiles', 'grepInFiles', 'globSearchFiles', 'listFiles'].contains(name)) {
       return ToolCategory.search;
     }
-    if (['runShellCommand', 'getTerminalOutput'].contains(name)) {
+    if ([
+      'runShellCommand',
+      'getTerminalOutput',
+      'startBackgroundProcess',
+      'getProcessLogs',
+      'stopBackgroundProcess',
+    ].contains(name)) {
       return ToolCategory.terminal;
+    }
+    if ([
+      'getLspDiagnostics',
+      'getDefinition',
+      'findReferences',
+      'getFileOutline',
+      'formatCode',
+    ].contains(name)) {
+      return ToolCategory.other;
     }
     if (['gitStatus', 'gitDiff', 'gitLog'].contains(name)) {
       return ToolCategory.git;
@@ -150,6 +165,22 @@ class NativeToolBridge {
         return tools.getLspDiagnostics(
           args['filePath']?.toString(),
         );
+      case 'getDefinition':
+        return tools.getDefinition(
+          (args['filePath'] ?? '').toString(),
+          args['line'] as int? ?? 1,
+          args['character'] as int? ?? 1,
+        );
+      case 'findReferences':
+        return tools.findReferences(
+          (args['filePath'] ?? '').toString(),
+          args['line'] as int? ?? 1,
+          args['character'] as int? ?? 1,
+        );
+      case 'getFileOutline':
+        return tools.getFileOutline((args['filePath'] ?? '').toString());
+      case 'formatCode':
+        return tools.formatCode((args['filePath'] ?? '').toString());
       case 'getPendingEditsForFile':
         return tools.getPendingEditsForFile(
           (args['filePath'] ?? '').toString(),
@@ -177,6 +208,17 @@ class NativeToolBridge {
           (args['command'] ?? '').toString(),
           cmdArgs,
           envs,
+        );
+      case 'startBackgroundProcess':
+        return tools.startBackgroundProcess(
+          (args['command'] ?? '').toString(),
+          processId: args['processId']?.toString(),
+        );
+      case 'getProcessLogs':
+        return tools.getProcessLogs(args['processId']?.toString());
+      case 'stopBackgroundProcess':
+        return tools.stopBackgroundProcess(
+          (args['processId'] ?? '').toString(),
         );
       case 'getSecret':
         return tools.getSecret(
@@ -253,6 +295,50 @@ class NativeToolBridge {
             'envs': {'type': 'object'},
           },
           'required': ['command'],
+        };
+      case 'getDefinition':
+      case 'findReferences':
+        return {
+          'type': 'object',
+          'properties': {
+            'filePath': {'type': 'string'},
+            'line': {'type': 'integer'},
+            'character': {'type': 'integer'},
+          },
+          'required': ['filePath', 'line', 'character'],
+        };
+      case 'getFileOutline':
+      case 'formatCode':
+        return {
+          'type': 'object',
+          'properties': {
+            'filePath': {'type': 'string'},
+          },
+          'required': ['filePath'],
+        };
+      case 'startBackgroundProcess':
+        return {
+          'type': 'object',
+          'properties': {
+            'command': {'type': 'string'},
+            'processId': {'type': 'string'},
+          },
+          'required': ['command'],
+        };
+      case 'getProcessLogs':
+        return {
+          'type': 'object',
+          'properties': {
+            'processId': {'type': 'string'},
+          },
+        };
+      case 'stopBackgroundProcess':
+        return {
+          'type': 'object',
+          'properties': {
+            'processId': {'type': 'string'},
+          },
+          'required': ['processId'],
         };
       case 'searchInFiles':
       case 'grepInFiles':

@@ -105,10 +105,16 @@ class PandaAgentFlowChat extends StatelessWidget {
             .toList() ??
         <Map<String, dynamic>>[];
     if (blocks.isNotEmpty) {
+      final emittedToolIds = <String>{};
       for (final block in blocks) {
         final type = block['type']?.toString() ?? '';
-        if (type == 'toolCall') {
+        if (type == 'toolCall' ||
+            type == 'tool' ||
+            type == 'tool_use' ||
+            type == 'tool-call') {
           parts.add(FlowCustomPart(type: 'tool', data: block));
+          final id = block['id']?.toString();
+          if (id != null && id.isNotEmpty) emittedToolIds.add(id);
         } else if (type == 'thinking') {
           final thinking = block['thinking']?.toString().trim() ?? '';
           if (thinking.isNotEmpty) {
@@ -134,6 +140,23 @@ class PandaAgentFlowChat extends StatelessWidget {
             );
             if (after.isNotEmpty) parts.add(FlowTextPart(after));
           }
+        }
+      }
+      // Some providers expose tool calls both in the structured block list
+      // and in the legacy toolCalls field. Keep the structured card visible
+      // even when the message also contains streamed text blocks.
+      final calls = (source['toolCalls'] as List?)
+              ?.whereType<Map>()
+              .map((call) => <String, dynamic>{
+                    ...Map<String, dynamic>.from(call),
+                    'type': 'toolCall',
+                  }) ??
+          const <Map<String, dynamic>>[];
+      for (final call in calls) {
+        final id = call['id']?.toString();
+        if (id == null || id.isEmpty || !emittedToolIds.contains(id)) {
+          parts.add(FlowCustomPart(type: 'tool', data: call));
+          if (id != null && id.isNotEmpty) emittedToolIds.add(id);
         }
       }
     } else {

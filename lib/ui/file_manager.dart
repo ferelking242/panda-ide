@@ -31,36 +31,30 @@ class _QuickLocation {
   final String label;
   final String path;
   final IconData icon;
-  final Color color;
 
   const _QuickLocation({
     required this.label,
     required this.path,
     required this.icon,
-    required this.color,
   });
 }
 
 List<_QuickLocation> _quickLocations() => [
       // ── User Data ────────────────────────────────────────
-      _QuickLocation(label: 'Projects', path: projectDir, icon: Icons.workspaces_rounded, color: const Color(0xFF4CAF50)),
-      _QuickLocation(label: 'Files', path: filesDir, icon: Icons.description_rounded, color: const Color(0xFF2196F3)),
-      _QuickLocation(label: 'Templates', path: templateDir, icon: Icons.dashboard_customize_rounded, color: const Color(0xFF9C27B0)),
-      _QuickLocation(label: 'Logs', path: pandaLogsDir, icon: Icons.bug_report_rounded, color: const Color(0xFFFF9800)),
-      // ── System ───────────────────────────────────────────
-      _QuickLocation(label: 'Extensions', path: extensionDir, icon: Icons.extension_rounded, color: const Color(0xFFE91E63)),
-      _QuickLocation(label: 'Runtimes', path: runtimesDir, icon: Icons.dns_rounded, color: const Color(0xFF00BCD4)),
-      _QuickLocation(label: 'Binaries', path: binDir, icon: Icons.terminal, color: const Color(0xFF795548)),
-      _QuickLocation(label: 'Libraries', path: libDir, icon: Icons.memory, color: const Color(0xFF607D8B)),
-      _QuickLocation(label: 'Certificates', path: certDir, icon: Icons.security, color: const Color(0xFF455A64)),
-      _QuickLocation(label: 'Models', path: modelsDir, icon: Icons.smart_toy_rounded, color: const Color(0xFF009688)),
-      _QuickLocation(label: 'Cache', path: pandaTempCacheDir, icon: Icons.cleaning_services, color: const Color(0xFF795548)),
-      _QuickLocation(label: 'Temp', path: tempDir, icon: Icons.timer, color: const Color(0xFFFF5722)),
-      _QuickLocation(label: 'Home', path: homeDir, icon: Icons.home, color: const Color(0xFF8BC34A)),
+      _QuickLocation(label: 'Projects', path: projectDir, icon: Icons.workspaces_rounded),
+      _QuickLocation(label: 'Files', path: filesDir, icon: Icons.description_rounded),
+      _QuickLocation(label: 'Templates', path: templateDir, icon: Icons.dashboard_customize_rounded),
+      _QuickLocation(label: 'Logs', path: pandaLogsDir, icon: Icons.bug_report_rounded),
+      _QuickLocation(label: 'Libraries', path: libDir, icon: Icons.memory),
+      _QuickLocation(label: 'Certificates', path: certDir, icon: Icons.security),
+      _QuickLocation(label: 'Models', path: modelsDir, icon: Icons.smart_toy_rounded),
+      _QuickLocation(label: 'Cache', path: pandaTempCacheDir, icon: Icons.cleaning_services),
+      _QuickLocation(label: 'Temp', path: tempDir, icon: Icons.timer),
+      _QuickLocation(label: 'Home', path: homeDir, icon: Icons.home),
       // ── App Root ─────────────────────────────────────────
-      _QuickLocation(label: 'App Root', path: appDir, icon: Icons.storage_rounded, color: const Color(0xFF37474F)),
+      _QuickLocation(label: 'App Root', path: appDir, icon: Icons.storage_rounded),
       // ── Public ───────────────────────────────────────────
-      _QuickLocation(label: 'Public Storage', path: publicPandaRootDir, icon: Icons.folder_special_rounded, color: const Color(0xFFFF9800)),
+      _QuickLocation(label: 'Public Storage', path: publicPandaRootDir, icon: Icons.folder_special_rounded),
     ];
 
 // ═══════════════════════════════════════════════════════════════
@@ -82,9 +76,10 @@ class FileManagerPage extends StatefulWidget {
 }
 
 class _FileManagerPageState extends State<FileManagerPage> {
-  late final String _rootPath;
+  late String _rootPath;
   late Directory _currentDir;
   bool _loading = true;
+  bool _sidebarCollapsed = false;
   List<FileSystemEntity> _entries = [];
   List<FileSystemEntity> _filteredEntries = [];
   bool _isGridView = false;
@@ -102,6 +97,18 @@ class _FileManagerPageState extends State<FileManagerPage> {
     _rootPath = widget.rootDir.isNotEmpty ? widget.rootDir : projectDir;
     _currentDir = Directory(_rootPath);
     _initialize();
+  }
+
+  @override
+  void didUpdateWidget(covariant FileManagerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextRoot = widget.rootDir.isNotEmpty ? widget.rootDir : projectDir;
+    if (nextRoot == _rootPath) return;
+    _rootPath = nextRoot;
+    _currentDir = Directory(nextRoot);
+    _loading = true;
+    _searchCtrl.clear();
+    _loadEntries();
   }
 
   @override
@@ -123,26 +130,36 @@ class _FileManagerPageState extends State<FileManagerPage> {
   }
 
   Future<void> _loadEntries() async {
-    if (!await _currentDir.exists()) {
-      await _currentDir.create(recursive: true);
+    try {
+      if (!await _currentDir.exists()) {
+        await _currentDir.create(recursive: true);
+      }
+
+      final items = await _currentDir
+          .list(followLinks: false)
+          .where((entity) {
+            final name = p.basename(entity.path);
+            return !name.startsWith('.panda_') && !name.startsWith('.');
+          })
+          .toList();
+
+      _sortEntries(items);
+
+      if (!mounted) return;
+      setState(() {
+        _entries = items;
+        _filteredEntries = items;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _entries = [];
+        _filteredEntries = [];
+        _loading = false;
+      });
+      _showSnack('Unable to read folder: $error', isError: true);
     }
-
-    final items = await _currentDir
-        .list(followLinks: false)
-        .where((entity) {
-          final name = p.basename(entity.path);
-          return !name.startsWith('.panda_') && !name.startsWith('.');
-        })
-        .toList();
-
-    _sortEntries(items);
-
-    if (!mounted) return;
-    setState(() {
-      _entries = items;
-      _filteredEntries = items;
-      _loading = false;
-    });
   }
 
   void _sortEntries(List<FileSystemEntity> entries) {
@@ -479,7 +496,7 @@ class _FileManagerPageState extends State<FileManagerPage> {
   Widget _buildSidebar(AppTheme appTheme, ColorScheme cs) {
     final locations = _quickLocations();
     return Container(
-      width: 200,
+      width: _sidebarCollapsed ? 52 : 176,
       decoration: BoxDecoration(
         color: appTheme.isDark ? const Color(0xFF1E1E1E) : Colors.white,
         border: Border(
@@ -493,15 +510,35 @@ class _FileManagerPageState extends State<FileManagerPage> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Row(
               children: [
-                Icon(Icons.folder_copy_rounded, color: cs.primary, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  'Explorer',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: cs.onSurface,
+                Icon(Icons.folder_copy_rounded, color: cs.onSurfaceVariant, size: 19),
+                if (!_sidebarCollapsed) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Explorer',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        color: cs.onSurface,
+                      ),
+                    ),
                   ),
+                ] else
+                  const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    _sidebarCollapsed
+                        ? Icons.chevron_right
+                        : Icons.chevron_left,
+                    size: 18,
+                  ),
+                  tooltip: _sidebarCollapsed
+                      ? 'Expand explorer'
+                      : 'Collapse explorer',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  onPressed: () =>
+                      setState(() => _sidebarCollapsed = !_sidebarCollapsed),
                 ),
               ],
             ),
@@ -517,26 +554,37 @@ class _FileManagerPageState extends State<FileManagerPage> {
                 final isCurrent = p.equals(_currentDir.path, loc.path);
                 return ListTile(
                   dense: true,
-                  leading: Icon(loc.icon, size: 18, color: loc.color),
-                  title: Text(
-                    loc.label,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: isCurrent ? FontWeight.w700 : FontWeight.w500,
-                      color: isCurrent ? cs.primary : cs.onSurface,
+                   leading: Icon(
+                     loc.icon,
+                     size: 18,
+                     color: isCurrent ? cs.primary : cs.onSurfaceVariant,
                     ),
-                  ),
+                   title: _sidebarCollapsed
+                       ? null
+                       : Text(
+                           loc.label,
+                           style: TextStyle(
+                             fontSize: 13,
+                             fontWeight: isCurrent
+                                 ? FontWeight.w700
+                                 : FontWeight.w500,
+                             color: isCurrent ? cs.primary : cs.onSurface,
+                           ),
+                         ),
+                   tooltip: _sidebarCollapsed ? loc.label : null,
                   selected: isCurrent,
                   selectedTileColor: cs.primary.withValues(alpha: 0.1),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                   contentPadding: EdgeInsets.symmetric(
+                     horizontal: _sidebarCollapsed ? 16 : 12,
+                   ),
                   onTap: () => _navigateTo(loc.path),
                 );
               },
             ),
           ),
           // Clipboard indicator
-          if (_clipboard.isNotEmpty)
+           if (_clipboard.isNotEmpty && !_sidebarCollapsed)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(

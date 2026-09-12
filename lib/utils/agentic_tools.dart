@@ -35,6 +35,8 @@ class AgenticTools {
   final AgentConfirmCallback? onConfirmRequired;
   final String approvalMode; // 'default' | 'every' | 'autonome' | 'autopilot'
   Process? _activeProcess;
+  final Map<String, Process> _backgroundProcesses = {};
+  final Map<String, StringBuffer> _backgroundLogs = {};
 
   static bool allowAllCommandsThisSession = false;
   static Set<String> approvedCommandsWhitelist = {};
@@ -198,6 +200,152 @@ class AgenticTools {
       });
     } catch (e) {
       return ToolResult.error('Error getting LSP diagnostics: $e');
+    }
+  }
+
+  ActiveEditor? _lspEditorForFile(String filePath) {
+    final requested = _canonicalFilePath(filePath);
+    final editors = _readActiveEditors()
+        .where((editor) => editor.controller.lspConfig != null)
+        .toList();
+    for (final editor in editors) {
+      if (_canonicalFilePath(editor.file.path) == requested) return editor;
+    }
+    return filePath.trim().isEmpty && _activeEditor?.controller.lspConfig != null
+        ? _activeEditor
+        : null;
+  }
+
+  Future<ToolResult<Map<String, dynamic>>> getDefinition(
+    String filePath,
+    int line,
+    int character,
+  ) async {
+    try {
+      final editor = _lspEditorForFile(filePath);
+      if (editor == null) return ToolResult.error('No LSP-enabled editor is open for this file.');
+      final result = await editor.controller.lspConfig!.getDefinition(
+        editor.file.path,
+        math.max(0, line - 1).toInt(),
+        math.max(0, character - 1).toInt(),
+      );
+      return ToolResult.success(
+        result.isEmpty ? <String, dynamic>{} : Map<String, dynamic>.from(result),
+      );
+    } catch (e) {
+      return ToolResult.error('Error getting definition: $e');
+    }
+  }
+
+  Future<ToolResult<List<dynamic>>> findReferences(
+    String filePath,
+    int line,
+    int character,
+  ) async {
+    try {
+      final editor = _lspEditorForFile(filePath);
+      if (editor == null) return ToolResult.error('No LSP-enabled editor is open for this file.');
+      final result = await editor.controller.lspConfig!.getReferences(
+        editor.file.path,
+        math.max(0, line - 1).toInt(),
+        math.max(0, character - 1).toInt(),
+      );
+      return ToolResult.success(result);
+    } catch (e) {
+      return ToolResult.error('Error finding references: $e');
+    }
+  }
+
+  Future<ToolResult<List<dynamic>>> getFileOutline(String filePath) async {
+    try {
+      final editor = _lspEditorForFile(filePath);
+      if (editor == null) return ToolResult.error('No LSP-enabled editor is open for this file.');
+      return ToolResult.success(
+        await editor.controller.lspConfig!.getDocumentSymbols(editor.file.path),
+      );
+    } catch (e) {
+      return ToolResult.error('Error getting file outline: $e');
+    }
+  }
+
+  int _offsetForLspPosition(String text, dynamic position) {
+    final map = position is Map ? Map<String, dynamic>.from(position) : const {};
+    final targetLine =
+        math.max(0, (map['line'] as num?)?.toInt() ?? 0).toInt();
+    final targetCharacter =
+        math.max(0, (map['character'] as num?)?.toInt() ?? 0).toInt();
+    final lines = text.split('\n');
+    final line = math.min(targetLine, lines.length - 1).toInt();
+    var offset = 0;
+    for (var i = 0; i < line; i++) {
+      offset += lines[i].length + 1;
+    }
+    return math
+        .min(offset + targetCharacter, offset + lines[line].length)
+        .toInt();
+  }
+
+  String _applyLspTextEdits(String text, List<dynamic> edits) {
+    final replacements = <Map<String, dynamic>>[];
+    for (final raw in edits) {
+      if (raw is! Map) continue;
+      final edit = Map<String, dynamic>.from(raw);
+      final range = edit['range'];
+      if (range is! Map || edit['newText'] == null) continue;
+      final rangeMap = Map<String, dynamic>.from(range);
+      final start = _offsetForLspPosition(text, rangeMap['start']);
+      final end = _offsetForLspPosition(text, rangeMap['end']);
+      replacements.add({
+        'start': math.min(start, end).toInt(),
+        'end': math.max(start, end).toInt(),
+        'text': edit['newText'].toString(),
+      });
+    }
+    replacements.sort(
+      (a, b) => (b['start'] as int).compareTo(a['start'] as int),
+    );
+    var result = text;
+    for (final replacement in replacements) {
+      final start = replacement['start'] as int;
+      final end = replacement['end'] as int;
+      result = result.replaceRange(start, end, replacement['text'] as String);
+    }
+    return result;
+  }
+
+  Future<ToolResult<Map<String, dynamic>>> formatCode(String filePath) async {
+    try {
+      final editor = _lspEditorForFile(filePath);
+      if (editor == null) {
+        return ToolResult.error(
+          'Open the file in an LSP-enabled editor before formatting it.',
+        );
+      }
+      final edits = await editor.controller.lspConfig!.formatDocument(
+        editor.file.path,
+      );
+      if (edits.isEmpty) {
+        return ToolResult.success({'changed': false, 'filePath': filePath});
+      }
+      final canonical = _canonicalFilePath(editor.file.path);
+      final file = File(canonical);
+      final original = await file.readAsString();
+      final formatted = _applyLspTextEdits(original, edits);
+      final writeResult = await writeFile(
+        canonical,
+        formatted,
+        trackPendingEdits: false,
+      );
+      if (!writeResult.success) {
+        return ToolResult.error(writeResult.error ?? 'Unable to write formatted file.');
+      }
+      return ToolResult.success({
+        'changed': original != formatted,
+        'filePath': path.relative(canonical, from: workspacePath),
+        'editCount': edits.length,
+      });
+    } catch (e) {
+      return ToolResult.error('Error formatting code: $e');
     }
   }
 
@@ -1146,6 +1294,96 @@ class AgenticTools {
       process.kill(ProcessSignal.sigkill);
     } catch (_) {}
     _activeProcess = null;
+  }
+
+  Future<ToolResult<Map<String, dynamic>>> startBackgroundProcess(
+    String command, {
+    String? processId,
+  }) async {
+    try {
+      if (command.trim().isEmpty) return ToolResult.error('Command cannot be empty.');
+      final id = processId?.trim().isNotEmpty == true
+          ? processId!.trim()
+          : 'process-${DateTime.now().microsecondsSinceEpoch}';
+      if (_backgroundProcesses.containsKey(id)) {
+        return ToolResult.error('A background process with id "$id" is already running.');
+      }
+      final shell = Platform.isWindows
+          ? 'cmd'
+          : (Platform.isAndroid ? '/system/bin/sh' : 'sh');
+      final args = Platform.isWindows
+          ? <String>['/c', command]
+          : <String>['-c', command];
+      final process = await Process.start(
+        shell,
+        args,
+        workingDirectory: Directory(workspacePath).existsSync()
+            ? workspacePath
+            : null,
+        environment: {
+          ...Platform.environment,
+          ...await _buildAgentShellEnvironment(workspacePath),
+        },
+        runInShell: false,
+      );
+      final log = StringBuffer();
+      _backgroundProcesses[id] = process;
+      _backgroundLogs[id] = log;
+
+      void append(String value) {
+        log.write(value);
+        if (log.length > 100000) {
+          final trimmed = log.toString();
+          log
+            ..clear()
+            ..write(trimmed.substring(trimmed.length - 100000));
+        }
+      }
+
+      process.stdout.transform(utf8.decoder).listen(append);
+      process.stderr.transform(utf8.decoder).listen(append);
+      unawaited(process.exitCode.whenComplete(() {
+        _backgroundProcesses.remove(id);
+      }));
+
+      return ToolResult.success({'processId': id, 'pid': process.pid});
+    } catch (e) {
+      return ToolResult.error('Error starting background process: $e');
+    }
+  }
+
+  Future<ToolResult<Map<String, dynamic>>> getProcessLogs([
+    String? processId,
+  ]) async {
+    final id = processId?.trim();
+    if (id == null || id.isEmpty) {
+      return ToolResult.success({
+        'processes': _backgroundProcesses.keys.toList(),
+        'logs': {
+          for (final entry in _backgroundLogs.entries) entry.key: entry.value.toString(),
+        },
+      });
+    }
+    final log = _backgroundLogs[id];
+    if (log == null) return ToolResult.error('Unknown background process: $id');
+    return ToolResult.success({
+      'processId': id,
+      'running': _backgroundProcesses.containsKey(id),
+      'log': log.toString(),
+    });
+  }
+
+  Future<ToolResult<String>> stopBackgroundProcess(String processId) async {
+    final id = processId.trim();
+    final process = _backgroundProcesses.remove(id);
+    if (process == null) return ToolResult.error('Unknown background process: $id');
+    try {
+      process.kill(ProcessSignal.sigterm);
+      _backgroundLogs[id]?.writeln('\n[process stopped by agent]');
+      return ToolResult.success('Background process "$id" stopped.');
+    } catch (e) {
+      return ToolResult.error('Error stopping background process: $e');
+    }
   }
 
   /// Exécute [script] dans le rootfs actif de l'agent en utilisant
@@ -2448,6 +2686,64 @@ class AgenticTools {
             },
           },
         },
+      if (_hasLspDiagnosticsAvailability())
+        for (final lspTool in [
+          {
+            "name": "getDefinition",
+            "description": "Gets the definition location at a 1-indexed file position.",
+            "properties": {
+              "filePath": {"type": "string"},
+              "line": {"type": "integer"},
+              "character": {"type": "integer"},
+            },
+            "required": ["filePath", "line", "character"],
+          },
+          {
+            "name": "findReferences",
+            "description": "Finds symbol references at a 1-indexed file position.",
+            "properties": {
+              "filePath": {"type": "string"},
+              "line": {"type": "integer"},
+              "character": {"type": "integer"},
+            },
+            "required": ["filePath", "line", "character"],
+          },
+          {
+            "name": "getFileOutline",
+            "description": "Gets document symbols for an open file.",
+            "properties": {
+              "filePath": {"type": "string"},
+            },
+            "required": ["filePath"],
+          },
+        ])
+          {
+            "type": "function",
+            "function": {
+              "name": lspTool["name"],
+              "description": lspTool["description"],
+              "parameters": {
+                "type": "object",
+                "properties": lspTool["properties"],
+                "required": lspTool["required"],
+              },
+            },
+          },
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
+            "name": "formatCode",
+            "description": "Formats an open file using its project language server.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "filePath": {"type": "string"},
+              },
+              "required": ["filePath"],
+            },
+          },
+        },
       {
         "type": "function",
         "function": {
@@ -3078,6 +3374,53 @@ class AgenticTools {
                 },
               },
               "required": ["command"],
+            },
+          },
+        },
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
+            "name": "startBackgroundProcess",
+            "description": "Starts a long-running workspace command and returns its process id.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {"type": "string"},
+                "processId": {
+                  "type": "string",
+                  "description": "Optional stable id for later log/stop calls.",
+                },
+              },
+              "required": ["command"],
+            },
+          },
+        },
+      {
+        "type": "function",
+        "function": {
+          "name": "getProcessLogs",
+          "description": "Gets logs for one background process, or all agent processes.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "processId": {"type": "string"},
+            },
+          },
+        },
+      },
+      if (!readAccessOnly)
+        {
+          "type": "function",
+          "function": {
+            "name": "stopBackgroundProcess",
+            "description": "Stops a background process started by the agent.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "processId": {"type": "string"},
+              },
+              "required": ["processId"],
             },
           },
         },

@@ -32,6 +32,30 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     requiresWriteAccess: false,
   ),
   AgenticToolSpec(
+    name: 'getDefinition',
+    label: 'Go to definition',
+    description: 'Resolves the symbol definition at a file position through LSP.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'findReferences',
+    label: 'Find references',
+    description: 'Finds all references to a symbol at a file position through LSP.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'getFileOutline',
+    label: 'File outline',
+    description: 'Returns document symbols and the outline of an open file.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'formatCode',
+    label: 'Format code',
+    description: 'Formats an open file using the project language server.',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
     name: 'readFile',
     label: 'Read file',
     description: 'Reads the contents of a file.',
@@ -161,6 +185,24 @@ const List<AgenticToolSpec> agenticToolSpecs = [
     name: 'runShellCommand',
     label: 'Run terminal command',
     description: 'Runs a command in the project terminal and returns its output.',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'startBackgroundProcess',
+    label: 'Start background process',
+    description: 'Starts a long-running process and returns its process id.',
+    requiresWriteAccess: true,
+  ),
+  AgenticToolSpec(
+    name: 'getProcessLogs',
+    label: 'Background process logs',
+    description: 'Reads logs and running state for an agent background process.',
+    requiresWriteAccess: false,
+  ),
+  AgenticToolSpec(
+    name: 'stopBackgroundProcess',
+    label: 'Stop background process',
+    description: 'Stops a background process started by the agent.',
     requiresWriteAccess: true,
   ),
   AgenticToolSpec(

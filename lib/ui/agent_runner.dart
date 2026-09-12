@@ -1197,6 +1197,9 @@ $toolLines
         'replaceAllInFile',
         'editFile',
         'runShellCommand',
+        'formatCode',
+        'startBackgroundProcess',
+        'stopBackgroundProcess',
         'updateProjectMemory',
       };
       if (!allowWrites && mutatingTools.contains(functionName)) {
@@ -1216,6 +1219,23 @@ $toolLines
           return TerminalBridge.instance.getRecentOutput(lines);
         case 'getLspDiagnostics':
           final res = await tools.getLspDiagnostics(args['filePath']);
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
+        case 'getDefinition':
+          final res = await tools.getDefinition(
+            args['filePath'],
+            args['line'] ?? 1,
+            args['character'] ?? 1,
+          );
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
+        case 'findReferences':
+          final res = await tools.findReferences(
+            args['filePath'],
+            args['line'] ?? 1,
+            args['character'] ?? 1,
+          );
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
+        case 'getFileOutline':
+          final res = await tools.getFileOutline(args['filePath']);
           return res.success ? jsonEncode(res.data) : (res.error ?? 'Error');
         case 'readFile':
           final res = await tools.readFile(args['filePath'], args['startLine'], args['endLine']);
@@ -1316,6 +1336,21 @@ $toolLines
           final parsedEnvs = (args['envs'] as Map?)?.map((k, v) => MapEntry(k.toString(), v.toString())) ?? <String, String>{};
           final res = await tools.runShellCommand(args['command'], parsedArgs, parsedEnvs);
           return res.success ? jsonEncode(res.data) : (res.error ?? 'Error running command');
+        case 'formatCode':
+          final res = await tools.formatCode(args['filePath']);
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error formatting code');
+        case 'startBackgroundProcess':
+          final res = await tools.startBackgroundProcess(
+            args['command'],
+            processId: args['processId']?.toString(),
+          );
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error starting process');
+        case 'getProcessLogs':
+          final res = await tools.getProcessLogs(args['processId']?.toString());
+          return res.success ? jsonEncode(res.data) : (res.error ?? 'Error getting process logs');
+        case 'stopBackgroundProcess':
+          final res = await tools.stopBackgroundProcess(args['processId']?.toString() ?? '');
+          return res.success ? (res.data ?? '') : (res.error ?? 'Error stopping process');
         case 'gitStatus':
           final res = await tools.gitStatus();
           return res.success ? jsonEncode(res.data?.toJson()) : (res.error ?? 'Error');

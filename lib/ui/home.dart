@@ -1829,6 +1829,43 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
+  List<String> _workspaceDirectories() {
+    final roots = <String>{};
+    try {
+      final base = Directory(projectDir);
+      if (base.existsSync()) {
+        for (final entity in base.listSync(followLinks: false)) {
+          if (entity is Directory && !path.basename(entity.path).startsWith('.')) {
+            roots.add(path.normalize(entity.path));
+          }
+        }
+      }
+    } catch (_) {
+      // A missing or temporarily inaccessible projects directory should not
+      // make the top bar unusable.
+    }
+    if (_currentWorkspaceDir != null && _currentWorkspaceDir!.isNotEmpty) {
+      roots.add(path.normalize(_currentWorkspaceDir!));
+    }
+    final result = roots.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return result;
+  }
+
+  void _switchWorkspace(int direction) {
+    final workspaces = _workspaceDirectories();
+    if (workspaces.length < 2) return;
+    final current = _currentWorkspaceDir == null
+        ? -1
+        : workspaces.indexOf(path.normalize(_currentWorkspaceDir!));
+    final next = current < 0
+        ? 0
+        : (current + direction + workspaces.length) % workspaces.length;
+    _openEditorTab(
+      rootDir: workspaces[next],
+      isProject: true,
+    );
+  }
+
   /// Ferme le workspace actif : nettoie l'état et supprime l'onglet projet
   /// ainsi que tous les onglets fichiers racinés dedans. C'est le SEUL moyen
   /// de fermer un projet — fermer des onglets ne ferme jamais le projet.
@@ -3957,6 +3994,13 @@ class _SelectTypeState extends State<SelectType>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _workspaceStepButton(
+                    icon: Icons.chevron_left,
+                    tooltip: 'Espace précédent',
+                    enabled: _workspaceDirectories().length > 1,
+                    color: fg,
+                    onPressed: () => _switchWorkspace(-1),
+                  ),
                   Builder(
                     builder: (ctx) => GestureDetector(
                       onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
@@ -4023,6 +4067,13 @@ class _SelectTypeState extends State<SelectType>
                       ),
                     ),
                   ),
+                  _workspaceStepButton(
+                    icon: Icons.chevron_right,
+                    tooltip: 'Espace suivant',
+                    enabled: _workspaceDirectories().length > 1,
+                    color: fg,
+                    onPressed: () => _switchWorkspace(1),
+                  ),
                 ],
               ),
             ),
@@ -4083,6 +4134,23 @@ class _SelectTypeState extends State<SelectType>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _workspaceStepButton({
+    required IconData icon,
+    required String tooltip,
+    required bool enabled,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return IconButton(
+      icon: Icon(icon, size: 18),
+      tooltip: tooltip,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 24, minHeight: 28),
+      color: enabled ? color : color.withValues(alpha: 0.25),
+      onPressed: enabled ? onPressed : null,
     );
   }
 
