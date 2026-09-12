@@ -115,6 +115,7 @@ class FlowComposer extends StatefulWidget {
     this.errorDismissTooltip,
     this.leadingActions = const [],
     this.trailingActions = const [],
+    this.topContent,
     this.padding,
     this.borderRadius,
     this.style,
@@ -315,6 +316,12 @@ class FlowComposer extends StatefulWidget {
 
   /// Bottom-right slot before the send button, e.g. a `FlowModelSelector`.
   final List<Widget> trailingActions;
+
+  /// Optional content rendered at the top of the same composer card.
+  ///
+  /// Hosts use this for inline suggestions, pending edits, or queued prompts.
+  /// It avoids stacking separate rounded cards immediately above the input.
+  final Widget? topContent;
 
   /// Inside the card, around the field and action bar. Defaults to the
   /// design's 16 at the start and 8 elsewhere.
@@ -942,6 +949,14 @@ class _FlowComposerState extends State<FlowComposer> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (widget.topContent != null) ...[
+                      widget.topContent!,
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: colors.outlineVariant.withValues(alpha: 0.7),
+                      ),
+                    ],
                     if (widget.attachments.isNotEmpty) ...[
                       // The inset rides inside the strip's scroll view rather
                       // than around it: at rest nothing moves, but once the

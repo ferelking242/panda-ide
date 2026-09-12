@@ -41,9 +41,6 @@ class _WorkflowTask {
 }
 
 class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
-  final _inputController = TextEditingController();
-  final _inputFocusNode = FocusNode();
-  var _mode = 'Auto';
   var _expanded = true;
   late List<_WorkflowTask> _tasks;
 
@@ -72,21 +69,11 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
 
   @override
   void dispose() {
-    _inputController.dispose();
-    _inputFocusNode.dispose();
     super.dispose();
   }
 
   int get _progress =>
       _tasks.where((task) => task.status != _WorkflowTaskStatus.pending).length;
-
-  void _submit() {
-    final text = _inputController.text.trim();
-    if (text.isEmpty) return;
-    widget.onSubmit?.call(text);
-    _inputController.clear();
-    _inputFocusNode.requestFocus();
-  }
 
   void _toggleTask(int index) {
     setState(() {
@@ -98,18 +85,12 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
     });
   }
 
-  void _cycleMode() {
-    setState(() => _mode = _mode == 'Auto' ? 'Ask' : 'Auto');
-    widget.onModeTap?.call();
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final surface = dark ? const Color(0xff0d1016) : colors.surface;
     final card = dark ? const Color(0xff11141c) : colors.surfaceContainerLow;
-    final input = dark ? const Color(0xff090b10) : colors.surface;
     final foreground = dark ? const Color(0xffe7eaf2) : colors.onSurface;
     final muted = dark ? const Color(0xff89909f) : colors.onSurfaceVariant;
     final line = dark ? const Color(0xff303540) : colors.outlineVariant;
@@ -142,19 +123,10 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
                         muted: muted,
                         line: line,
                       ),
-                      _buildComposer(
-                        foreground: foreground,
-                        muted: muted,
-                        line: line,
-                        input: input,
-                      ),
-                      _buildFooter(foreground: foreground, muted: muted),
                     ],
                   ],
                 ),
               ),
-              if (_expanded)
-                _buildEnvironmentFooter(foreground: foreground, muted: muted),
             ],
           ),
         ),
@@ -337,174 +309,6 @@ class _AgentWorkflowChecklistState extends State<AgentWorkflowChecklist> {
     );
   }
 
-  Widget _buildComposer({
-    required Color foreground,
-    required Color muted,
-    required Color line,
-    required Color input,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: input,
-          border: Border.all(color: line.withValues(alpha: 0.85)),
-          borderRadius: BorderRadius.circular(9),
-        ),
-        child: TextField(
-          controller: _inputController,
-          focusNode: _inputFocusNode,
-          minLines: 2,
-          maxLines: 4,
-          onSubmitted: (_) => _submit(),
-          textInputAction: TextInputAction.newline,
-          style: TextStyle(color: foreground, fontSize: 15),
-          decoration: InputDecoration(
-            hintText: 'Describe what to build',
-            hintStyle: TextStyle(color: muted, fontSize: 15),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFooter({required Color foreground, required Color muted}) {
-    final accent = const Color(0xffaeb6c8);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-      child: Row(
-        children: [
-          _roundIconButton(
-            icon: Broken.add,
-            color: muted,
-            tooltip: 'Ajouter',
-            onTap: widget.onAddAttachment,
-          ),
-          const SizedBox(width: 8),
-          _footerPill(
-            icon: Broken.cpu,
-            label: 'Agent',
-            color: foreground,
-            onTap: () {},
-          ),
-          const SizedBox(width: 8),
-          _footerPill(
-            icon: Broken.arrow_down_2,
-            label: _mode,
-            color: foreground,
-            onTap: _cycleMode,
-          ),
-          const Spacer(),
-          _roundIconButton(
-            icon: Broken.slider_horizontal,
-            color: accent,
-            tooltip: 'Options',
-            onTap: () {},
-          ),
-          const SizedBox(width: 8),
-          _roundIconButton(
-            icon: Broken.stop_circle,
-            color: const Color(0xff8791a5),
-            tooltip: 'Arrêter',
-            onTap: widget.onStop,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _footerPill({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _roundIconButton({
-    required IconData icon,
-    required Color color,
-    required String tooltip,
-    required VoidCallback? onTap,
-  }) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: SizedBox(
-          width: 30,
-          height: 30,
-          child: Center(child: Icon(icon, size: 19, color: color)),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEnvironmentFooter({
-    required Color foreground,
-    required Color muted,
-  }) {
-    return SizedBox(
-      height: 42,
-      child: Row(
-        children: [
-          Icon(Broken.monitor, size: 17, color: muted),
-          const SizedBox(width: 8),
-          Text(
-            'Local',
-            style: TextStyle(
-              color: muted,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 22),
-          Icon(Broken.magicpen, size: 17, color: const Color(0xffe1bd36)),
-          const SizedBox(width: 7),
-          Text(
-            'Autopilot (Preview)',
-            style: TextStyle(
-              color: const Color(0xffe1bd36),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const Spacer(),
-          Icon(Broken.record_circle, size: 25, color: muted),
-        ],
-      ),
-    );
-  }
 }
 
 class _DashedRoundedRectPainter extends CustomPainter {

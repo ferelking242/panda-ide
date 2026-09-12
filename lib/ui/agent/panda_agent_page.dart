@@ -103,48 +103,12 @@ class PandaAgentPage extends StatelessWidget {
           empty: controller.messages.isEmpty,
           thread: thread,
           threadController: controller.scrollController,
+           padding: const EdgeInsetsDirectional.fromSTEB(4, 0, 4, 8),
           greeting: const FlowGreeting(
              icon: Broken.magicpen,
             text: 'Comment puis-je vous aider ?',
           ),
           suggestions: null,
-          aboveComposer: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (controller.messages.isEmpty)
-                _PandaAgentSuggestions(
-                  onSend: (text) => controller.send(
-                    context: context,
-                    aiState: aiState,
-                    workspacePath: workspacePath(),
-                    text: text,
-                  ),
-                ),
-              PandaAgentPendingChangesBar(
-                key: ValueKey(
-                  'pending-$pendingRevision-${controller.phase.name}-${controller.messages.length}',
-                ),
-                workspacePath: workspacePath(),
-                revision: pendingRevision,
-              ),
-              PandaAgentQueueBar(
-                items: controller.queuedPrompts,
-                onRemove: controller.removeQueued,
-                onEdit: controller.editQueued,
-                onMoveUp: (index) => controller.moveQueued(index, -1),
-                onMoveDown: (index) => controller.moveQueued(index, 1),
-                onSendNow: controller.sendQueuedNow,
-                onClear: controller.clearQueue,
-                paused: controller.queuePaused,
-                onPause: controller.pauseQueue,
-                onResume: () => controller.resumeQueue(
-                  context: context,
-                  aiState: aiState,
-                  workspacePath: workspacePath(),
-                ),
-              ),
-            ],
-          ),
           composer: FlowComposer(
             controller: controller.inputController,
             isStreaming: controller.isGenerating,
@@ -163,6 +127,43 @@ class PandaAgentPage extends StatelessWidget {
             maxLines: 2,
             padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
             attachments: controller.pendingAttachments,
+             topContent: Column(
+               mainAxisSize: MainAxisSize.min,
+               children: [
+                 if (controller.messages.isEmpty)
+                   _PandaAgentSuggestions(
+                     onSend: (text) => controller.send(
+                       context: context,
+                       aiState: aiState,
+                       workspacePath: workspacePath(),
+                       text: text,
+                     ),
+                   ),
+                 PandaAgentPendingChangesBar(
+                   key: ValueKey(
+                     'pending-$pendingRevision-${controller.phase.name}-${controller.messages.length}',
+                   ),
+                   workspacePath: workspacePath(),
+                   revision: pendingRevision,
+                 ),
+                 PandaAgentQueueBar(
+                   items: controller.queuedPrompts,
+                   onRemove: controller.removeQueued,
+                   onEdit: controller.editQueued,
+                   onMoveUp: (index) => controller.moveQueued(index, -1),
+                   onMoveDown: (index) => controller.moveQueued(index, 1),
+                   onSendNow: controller.sendQueuedNow,
+                   onClear: controller.clearQueue,
+                   paused: controller.queuePaused,
+                   onPause: controller.pauseQueue,
+                   onResume: () => controller.resumeQueue(
+                     context: context,
+                     aiState: aiState,
+                     workspacePath: workspacePath(),
+                   ),
+                 ),
+               ],
+             ),
             onAttach: () => _showAddMenu(context, controller),
             onAttachmentsPasted: controller.addAttachments,
             onAttachmentsDropped: controller.addAttachments,
@@ -355,12 +356,7 @@ class _PandaAgentSuggestions extends StatelessWidget {
     return Container(
       width: double.infinity,
       margin: EdgeInsets.zero,
-      padding: const EdgeInsets.fromLTRB(9, 7, 0, 8),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withValues(alpha: 0.22),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.7)),
-      ),
+       padding: const EdgeInsets.fromLTRB(9, 7, 0, 7),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -415,11 +411,11 @@ class _PandaSuggestionCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: 218,
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.32),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.72)),
-      ),
+       decoration: BoxDecoration(
+         color: colors.surfaceContainerHighest.withValues(alpha: 0.32),
+         borderRadius: BorderRadius.circular(7),
+         border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.55)),
+       ),
       child: Row(
         children: [
           const SizedBox(width: 9),
@@ -440,12 +436,12 @@ class _PandaSuggestionCard extends StatelessWidget {
           TextButton(
             onPressed: onStart,
             style: TextButton.styleFrom(
-              minimumSize: const Size(0, 34),
+             minimumSize: const Size(0, 30),
               padding: const EdgeInsets.symmetric(horizontal: 8),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               foregroundColor: colors.primary,
               textStyle: const TextStyle(
-                fontSize: 11,
+               fontSize: 10.5,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -480,7 +476,7 @@ class _PandaAgentMicButton extends StatelessWidget {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(7),
         ),
-        child: AnimatedScale(
+         child: AnimatedScale(
           duration: const Duration(milliseconds: 220),
           scale: isListening ? 1.08 : 1,
           child: IconButton(
@@ -496,7 +492,9 @@ class _PandaAgentMicButton extends StatelessWidget {
                 color: isListening ? colors.primary : colors.onSurfaceVariant,
               ),
             ),
-            visualDensity: VisualDensity.compact,
+             visualDensity: VisualDensity.compact,
+             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+             padding: EdgeInsets.zero,
           ),
         ),
       ),
