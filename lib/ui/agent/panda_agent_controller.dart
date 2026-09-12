@@ -195,6 +195,28 @@ class PandaAgentController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> archiveHistorySession(AgentSession session) async {
+    final updated = session.copyWith(
+      archived: !session.archived,
+      updatedAt: DateTime.now(),
+    );
+    await AgentHistoryService.saveSession(updated);
+    final index = history.indexWhere((item) => item.id == session.id);
+    if (index >= 0) history[index] = updated;
+    notifyListeners();
+  }
+
+  Future<void> renameHistorySession(AgentSession session, String title) async {
+    final clean = title.trim();
+    if (clean.isEmpty) return;
+    final updated = session.copyWith(title: clean, updatedAt: DateTime.now());
+    await AgentHistoryService.saveSession(updated);
+    final index = history.indexWhere((item) => item.id == session.id);
+    if (index >= 0) history[index] = updated;
+    if (_sessionId == session.id) conversationTitle = clean;
+    notifyListeners();
+  }
+
   void renameConversation(String title) {
     final clean = title.trim();
     if (clean.isEmpty) return;

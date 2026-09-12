@@ -76,6 +76,7 @@ import 'widgets/panda_theme_switch.dart';
 import 'agent/agent_models.dart';
 import 'agent/panda_activity_dock.dart';
 import 'agent/agent_workflow_checklist.dart';
+import 'agent/panda_agent_history_page.dart';
 import 'agent/flow_ui/widgets/flow_composer.dart';
 import 'agent/flow_ui/widgets/flow_thread.dart';
 import 'agent/flow_ui/widgets/flow_message.dart';
@@ -93,6 +94,7 @@ import 'agent/agent_widgets.dart';
 import '../agent/agent_v3.dart';
 import 'agent/panda_agent_controller.dart';
 import 'agent/panda_agent_page.dart';
+import 'agent/panda_agent_history_page.dart';
 import 'agent/panda_agent_workspace_tools.dart';
 
 Map<String, String> _extractThinkingFromText(
@@ -5672,6 +5674,21 @@ class _SelectTypeState extends State<SelectType>
                     ? const PandaAgentSkillsPage()
                     : _agentPanelTab == 7
                     ? const PandaSecretsPage()
+                     : _agentPanelTab == 8
+                     ? PandaAgentHistoryPage(
+                         controller: _pandaAgentController,
+                         onBack: () => setState(() {
+                           _agentPanelPrevTab = _agentPanelTab;
+                           _agentPanelTab = 0;
+                         }),
+                         onNewConversation: () {
+                           _pandaAgentController.startNewConversation();
+                           setState(() {
+                             _agentPanelPrevTab = _agentPanelTab;
+                             _agentPanelTab = 0;
+                           });
+                         },
+                       )
                     : _buildChatTabContent(context, appTheme, asPage),
               ),
             ),
@@ -5705,6 +5722,8 @@ class _SelectTypeState extends State<SelectType>
                   ? 'Agent Skills'
                   : _agentPanelTab == 7
                       ? 'Secrets'
+                      : _agentPanelTab == 8
+                          ? 'Historique'
                       : 'User Settings';
       return Container(
         height: 50,
@@ -5723,7 +5742,7 @@ class _SelectTypeState extends State<SelectType>
             GestureDetector(
               onTap: () => setState(() {
                 _agentPanelPrevTab = _agentPanelTab;
-                _agentPanelTab = 1;
+                _agentPanelTab = _agentPanelTab == 8 ? 0 : 1;
               }),
               child: SizedBox(
                 width: 32,
@@ -10363,7 +10382,10 @@ class _SelectTypeState extends State<SelectType>
             muted: muted,
             onTap: () {
               Navigator.pop(context);
-              _showPandaAgentHistory(context, appTheme);
+              setState(() {
+                _agentPanelPrevTab = _agentPanelTab;
+                _agentPanelTab = 8;
+              });
             },
           ),
           _menuItem(

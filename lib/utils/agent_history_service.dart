@@ -10,6 +10,7 @@ class AgentSession {
   final String modelName;
   final List<Map<String, dynamic>> queuedPrompts;
   final bool queuePaused;
+  final bool archived;
 
   AgentSession({
     required this.id,
@@ -20,6 +21,7 @@ class AgentSession {
     this.modelName = '',
     this.queuedPrompts = const [],
     this.queuePaused = false,
+    this.archived = false,
   });
 
   Map<String, dynamic> toJson() => {
@@ -31,6 +33,7 @@ class AgentSession {
         'modelName': modelName,
         'queuedPrompts': queuedPrompts,
         'queuePaused': queuePaused,
+        'archived': archived,
       };
 
   factory AgentSession.fromJson(Map<String, dynamic> json) => AgentSession(
@@ -51,6 +54,29 @@ class AgentSession {
                 .toList() ??
             const [],
         queuePaused: json['queuePaused'] as bool? ?? false,
+        archived: json['archived'] as bool? ?? false,
+      );
+
+  AgentSession copyWith({
+    String? title,
+    DateTime? updatedAt,
+    List<Map<String, dynamic>>? messages,
+    String? agentMode,
+    String? modelName,
+    List<Map<String, dynamic>>? queuedPrompts,
+    bool? queuePaused,
+    bool? archived,
+  }) =>
+      AgentSession(
+        id: id,
+        title: title ?? this.title,
+        updatedAt: updatedAt ?? this.updatedAt,
+        messages: messages ?? this.messages,
+        agentMode: agentMode ?? this.agentMode,
+        modelName: modelName ?? this.modelName,
+        queuedPrompts: queuedPrompts ?? this.queuedPrompts,
+        queuePaused: queuePaused ?? this.queuePaused,
+        archived: archived ?? this.archived,
       );
 }
 
