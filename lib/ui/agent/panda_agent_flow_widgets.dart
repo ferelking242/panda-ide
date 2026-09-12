@@ -698,12 +698,40 @@ class PandaAgentFlowThinkingLine extends StatelessWidget {
       padding: const EdgeInsets.only(top: 2, bottom: 4),
       child: Row(
         children: [
-          FlowThinkingIndicator(
-            label: label,
-            active: active,
-            size: 12,
-            color: colors.primary,
-            orbState: state,
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: colors.primary.withValues(alpha: 0.12),
+              ),
+            ),
+            child: FlowThinkingIndicator(
+              active: active,
+              size: 14,
+              color: colors.primary,
+              orbState: state,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 160),
+              child: Text(
+                label,
+                key: ValueKey(label),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.onSurfaceVariant,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -769,6 +797,19 @@ class _PandaAgentThinkingCardState extends State<PandaAgentThinkingCard> {
     final colors = Theme.of(context).colorScheme;
     final text = widget.text.trim();
     if (text.isEmpty) return const SizedBox.shrink();
+    Widget iconTile(Widget child) {
+      return Container(
+        width: 24,
+        height: 24,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: colors.primary.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(7),
+          border: Border.all(color: colors.primary.withValues(alpha: 0.12)),
+        ),
+        child: child,
+      );
+    }
 
     return Container(
       width: double.infinity,
@@ -787,18 +828,22 @@ class _PandaAgentThinkingCardState extends State<PandaAgentThinkingCard> {
               padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
               child: Row(
                 children: [
-                  Icon(
-                    _expanded
-                        ? Icons.keyboard_arrow_down_rounded
-                        : Icons.keyboard_arrow_right_rounded,
-                    size: 18,
-                    color: colors.onSurfaceVariant,
+                  iconTile(
+                    Icon(
+                      _expanded
+                          ? Icons.keyboard_arrow_down_rounded
+                          : Icons.keyboard_arrow_right_rounded,
+                      size: 15,
+                      color: colors.onSurfaceVariant,
+                    ),
                   ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    Icons.psychology_outlined,
-                    size: 18,
-                    color: colors.primary,
+                  const SizedBox(width: 8),
+                  iconTile(
+                    Icon(
+                      Icons.psychology_outlined,
+                      size: 15,
+                      color: colors.primary,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -814,10 +859,12 @@ class _PandaAgentThinkingCardState extends State<PandaAgentThinkingCard> {
                     ),
                   ),
                   if (widget.active)
-                    FlowThinkingIndicator(
-                      active: true,
-                      size: 11,
-                      color: colors.primary,
+                    iconTile(
+                      FlowThinkingIndicator(
+                        active: true,
+                        size: 14,
+                        color: colors.primary,
+                      ),
                     ),
                 ],
               ),
@@ -1009,9 +1056,22 @@ class PandaAgentFlowToolCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
+    final cardBorder = foreground.withValues(alpha: dark ? 0.16 : 0.12);
+    final cardBackground = dark
+        ? Colors.white.withValues(alpha: 0.025)
+        : Colors.black.withValues(alpha: 0.015);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: cardBackground,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: cardBorder, width: 0.8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
         Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(9),
@@ -1045,8 +1105,8 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   if (hasDetails)
                     SizedBox(
-                      width: 18,
-                      height: 18,
+                      width: 15,
+                      height: 15,
                       child: CustomPaint(
                         painter: _PandaChevronPainter(
                           expanded: !collapsed,
@@ -1059,7 +1119,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
             ),
           ),
         ),
-        if (hasDetails)
+          if (hasDetails)
           AnimatedSize(
             duration: const Duration(milliseconds: 160),
             curve: Curves.easeOut,
@@ -1067,13 +1127,14 @@ class PandaAgentFlowToolCard extends StatelessWidget {
             child: collapsed
                 ? const SizedBox.shrink()
                 : Padding(
-                    padding: const EdgeInsets.only(top: 2, bottom: 2),
+                    padding: const EdgeInsets.only(top: 2, bottom: 3),
                     child: _buildDetails(
                       approval: approval,
                     ),
                   ),
           ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -1087,9 +1148,13 @@ class PandaAgentFlowToolCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: dark ? const Color(0xff202024) : const Color(0xfff3f3f5),
+        color: dark
+            ? Colors.white.withValues(alpha: 0.065)
+            : Colors.black.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: panelBorder),
+        border: Border(
+          top: BorderSide(color: panelBorder, width: 0.8),
+        ),
       ),
       child: approval
           ? Column(

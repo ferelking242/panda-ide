@@ -48,6 +48,23 @@ String toolHumanLabel(String toolName, Map<String, dynamic> args) {
     if (lowerCmd.contains('git push')) return 'Push vers GitHub\u2026';
     if (lowerCmd.contains('git commit')) return 'Création du commit\u2026';
     if (lowerCmd.contains('git pull')) return 'Pull en cours\u2026';
+    if (lowerCmd.contains('git diff')) return 'Lecture des changements\u2026';
+    if (lowerCmd.contains('git status')) return 'Vérification du dépôt\u2026';
+    if (RegExp(r'(^|[;&|]\s*)(ls|dir|tree)(\s|$)')
+        .hasMatch(lowerCmd)) {
+      return 'Exploration du dossier\u2026';
+    }
+    if (RegExp(r'(^|[;&|]\s*)(pwd)(\s|$)').hasMatch(lowerCmd)) {
+      return 'Localisation du projet\u2026';
+    }
+    if (RegExp(r'(^|[;&|]\s*)(cat|head|tail|sed)(\s|$)')
+        .hasMatch(lowerCmd)) {
+      return 'Lecture du fichier\u2026';
+    }
+    if (RegExp(r'(^|[;&|]\s*)(rg|grep|find)(\s|$)')
+        .hasMatch(lowerCmd)) {
+      return 'Recherche dans le projet\u2026';
+    }
     if (lowerCmd.contains('npm install') ||
         lowerCmd.contains('bun install') ||
         lowerCmd.contains('pip install')) {
@@ -72,8 +89,7 @@ String toolHumanLabel(String toolName, Map<String, dynamic> args) {
       return 'Téléchargement\u2026';
     }
     if (lowerCmd.contains('git ')) return 'Commande Git\u2026';
-    final preview = cmd.length > 35 ? '${cmd.substring(0, 35)}\u2026' : cmd;
-    return preview.isEmpty ? 'Exécution\u2026' : 'Exécution : $preview';
+    return 'Commande terminal\u2026';
   }
   if (n.contains('read') || n.contains('open') || n.contains('view')) return 'Lecture du fichier\u2026';
   if (n.contains('write') || n.contains('edit') || n.contains('save') || n.contains('multi')) {

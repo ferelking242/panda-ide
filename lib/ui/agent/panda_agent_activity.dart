@@ -36,16 +36,31 @@ class PandaAgentActivity extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (!isError)
-            SizedBox.square(
-              dimension: 13,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.6,
-                color: indicatorColor,
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: indicatorColor.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(
+                color: indicatorColor.withValues(alpha: 0.12),
               ),
-            )
-          else
-            Icon(Icons.error_outline, size: 15, color: indicatorColor),
+            ),
+            child: !isError
+                ? SizedBox.square(
+                    dimension: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: indicatorColor,
+                    ),
+                  )
+                : Icon(
+                    Icons.error_outline,
+                    size: 15,
+                    color: indicatorColor,
+                  ),
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: AnimatedSwitcher(
