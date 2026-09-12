@@ -552,39 +552,38 @@ class _FileManagerPageState extends State<FileManagerPage> {
               itemBuilder: (ctx, i) {
                 final loc = locations[i];
                 final isCurrent = p.equals(_currentDir.path, loc.path);
-                return Tooltip(
-                  message: loc.label,
-                  enabled: _sidebarCollapsed,
-                  child: ListTile(
-                    dense: true,
-                    leading: Icon(
-                      loc.icon,
-                      size: 18,
-                      color: isCurrent ? cs.primary : cs.onSurfaceVariant,
-                    ),
-                    title: _sidebarCollapsed
-                        ? null
-                        : Text(
-                            loc.label,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: isCurrent
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                              color: isCurrent ? cs.primary : cs.onSurface,
-                            ),
-                          ),
-                    selected: isCurrent,
-                    selectedTileColor: cs.primary.withValues(alpha: 0.1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: _sidebarCollapsed ? 16 : 12,
-                    ),
-                    onTap: () => _navigateTo(loc.path),
+                final tile = ListTile(
+                  dense: true,
+                  leading: Icon(
+                    loc.icon,
+                    size: 18,
+                    color: isCurrent ? cs.primary : cs.onSurfaceVariant,
                   ),
+                  title: _sidebarCollapsed
+                      ? null
+                      : Text(
+                          loc.label,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: isCurrent
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isCurrent ? cs.primary : cs.onSurface,
+                          ),
+                        ),
+                  selected: isCurrent,
+                  selectedTileColor: cs.primary.withValues(alpha: 0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: _sidebarCollapsed ? 16 : 12,
+                  ),
+                  onTap: () => _navigateTo(loc.path),
                 );
+                return _sidebarCollapsed
+                    ? Tooltip(message: loc.label, child: tile)
+                    : tile;
               },
             ),
           ),
