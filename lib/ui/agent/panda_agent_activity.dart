@@ -19,6 +19,9 @@ class PandaAgentActivity extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (phase == AgentPhase.idle || phase == AgentPhase.done) {
+      return const SizedBox.shrink();
+    }
     final colors = Theme.of(context).colorScheme;
     final isError = phase == AgentPhase.error;
     final indicatorColor = isError ? colors.error : colors.primary;

@@ -173,15 +173,22 @@ class PandaAgentFlowChat extends StatelessWidget {
     // reverses messages, but the parts inside one assistant turn stay in
     // normal top-to-bottom order, so new agent content appears above it.
     final showThinkingLine =
-        source['showThinkingLine'] == true ||
-        sourcePhase == 'streaming' ||
-        blocks.any((block) => block['type'] == 'thinkingLine');
+        (isGeneratingMessage(source) ||
+            blocks.any(
+              (block) =>
+                  block['type'] == 'toolCall' &&
+                  (block['status'] == 'running' ||
+                      block['status'] == 'pending'),
+            )) &&
+        (source['showThinkingLine'] == true ||
+            sourcePhase == 'streaming' ||
+            blocks.any((block) => block['type'] == 'thinkingLine'));
     if (showThinkingLine) {
       parts.add(
         FlowCustomPart(
           type: 'thinkingLine',
           data: {
-            'active': isGeneratingMessage(source),
+            'active': true,
             'label': _activityLabelFor(source, sourcePhase, blocks),
             'state': (source['activityState']?.toString().isNotEmpty == true
                     ? source['activityState'].toString()
@@ -696,44 +703,52 @@ class PandaAgentFlowThinkingLine extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(top: 2, bottom: 4),
-      child: Row(
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.07),
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(
-                color: colors.primary.withValues(alpha: 0.12),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            Container(
+              width: 24,
+              height: 24,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: colors.primary.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(7),
+                border: Border.all(
+                  color: colors.primary.withValues(alpha: 0.12),
+                ),
+              ),
+              child: FlowThinkingIndicator(
+                active: active,
+                size: 14,
+                color: colors.primary,
+                orbState: state,
               ),
             ),
-            child: FlowThinkingIndicator(
-              active: active,
-              size: 14,
-              color: colors.primary,
-              orbState: state,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 160),
-              child: Text(
-                label,
-                key: ValueKey(label),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colors.onSurfaceVariant,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+            const SizedBox(width: 8),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  child: Text(
+                    label,
+                    key: ValueKey(label),
+                    textAlign: TextAlign.left,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: colors.onSurfaceVariant,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1056,22 +1071,9 @@ class PandaAgentFlowToolCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final cardBorder = foreground.withValues(alpha: dark ? 0.16 : 0.12);
-    final cardBackground = dark
-        ? Colors.white.withValues(alpha: 0.025)
-        : Colors.black.withValues(alpha: 0.015);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 3),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: cardBackground,
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: cardBorder, width: 0.8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(9),
@@ -1133,8 +1135,7 @@ class PandaAgentFlowToolCard extends StatelessWidget {
                     ),
                   ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -1202,45 +1203,57 @@ class PandaAgentFlowToolCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (_command.isNotEmpty || shell)
-                  Row(
-                    children: [
-                      if (shell)
-                        Text(
-                          '>_',
-                          style: TextStyle(
-                            color: foreground.withValues(alpha: 0.72),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            fontFamily: 'monospace',
+                  Container(
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: foreground.withValues(alpha: dark ? 0.055 : 0.035),
+                      borderRadius: BorderRadius.circular(5),
+                    ),
+                    child: Row(
+                      children: [
+                        if (shell)
+                          Text(
+                            '>_',
+                            style: TextStyle(
+                              color: foreground.withValues(alpha: 0.72),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              fontFamily: 'monospace',
+                            ),
                           ),
-                        )
-                      else
-                        Icon(
-                          pandaAgentToolIcon(toolName),
-                          size: 13,
-                          color: muted,
+                        if (!shell)
+                          Icon(
+                            pandaAgentToolIcon(toolName),
+                            size: 13,
+                            color: muted,
+                          ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: _PandaCommandLine(
+                            command: _command.isEmpty ? toolName : _command,
+                            color: foreground.withValues(alpha: 0.66),
+                            background: dark
+                                ? const Color(0xff202024)
+                                : const Color(0xfff3f3f5),
+                          ),
                         ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: _PandaCommandLine(
-                          command: _command.isEmpty ? toolName : _command,
-                          color: foreground.withValues(alpha: 0.66),
-                          background: dark
-                              ? const Color(0xff202024)
-                              : const Color(0xfff3f3f5),
-                        ),
-                      ),
-                      if (running)
-                        const SizedBox.square(
-                          dimension: 12,
-                          child: CircularProgressIndicator(strokeWidth: 1.3),
-                        ),
-                    ],
+                        if (running)
+                          const SizedBox.square(
+                            dimension: 12,
+                            child: CircularProgressIndicator(strokeWidth: 1.3),
+                          ),
+                      ],
+                    ),
                   ),
                 if ((_command.isNotEmpty || shell) &&
                     result != null &&
-                    result!.trim().isNotEmpty)
-                  const SizedBox(height: 6),
+                    result!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Divider(height: 1, color: panelBorder),
+                  const SizedBox(height: 7),
+                ],
                 if (result != null && result!.trim().isNotEmpty)
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 220),
