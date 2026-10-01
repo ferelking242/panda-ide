@@ -308,7 +308,8 @@ class PandaStatusBar extends StatelessWidget {
 
   /// État de l'éditeur : Ln/Col (priorité moyenne), indentation / encodage /
   /// fins de ligne (priorité basse — masquées les premières sur mobile).
-  List<Widget> _editorStateItems(bool dark, bool compact) {
+  List<Widget> _editorStateItems(bool dark, double width) {
+    final compact = WorkbenchResponsive.isCompact(width);
     final parts = <Widget>[];
     void add(String? label, String tooltip, String semantics, VoidCallback? onTap,
         {bool lowPriority = false}) {
@@ -325,8 +326,11 @@ class PandaStatusBar extends StatelessWidget {
     }
 
     if (cursorLine != null && cursorColumn != null) {
-      add('Ln ${cursorLine!}, Col ${cursorColumn!}', 'Go to Line/Column',
-          'Position curseur', onCursorTap);
+      // Étroit : forme abrégée « 42:17 » ; large : « Ln 42, Col 17 ».
+      final label = width < 420
+          ? '$cursorLine:$cursorColumn'
+          : 'Ln $cursorLine, Col $cursorColumn';
+      add(label, 'Go to Line/Column', 'Position curseur', onCursorTap);
     }
     add(language, 'Select Language Mode', 'Langage', onLanguageTap);
     add(indentation, 'Select Indentation', 'Indentation', onIndentationTap,
@@ -415,7 +419,6 @@ class PandaStatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final width = MediaQuery.sizeOf(context).width;
-    final compact = WorkbenchResponsive.isCompact(width);
     // Écran tactile → barre légèrement plus haute mais toujours compacte.
     final effectiveHeight =
         height ?? WorkbenchResponsive.statusBarHeight(width, false);
@@ -435,8 +438,29 @@ class PandaStatusBar extends StatelessWidget {
     // Workspace fallback when no git repo is detected.
     if (branchName == null) leftItems.add(_workspaceItem(dark));
 
+    // ── Extension / custom entries (StatusEntry API) ──
+    for (final entry in entries) {
+      leftItems.add(_StatusItemView(
+        dark: dark,
+        tooltip: entry.text.isEmpty ? entry.name : entry.text,
+        semanticLabel: entry.name,
+        onTap: entry.onTap,
+        compact: true,
+        child: entry.icon != null
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(entry.icon, size: 13, color: entry.foreground),
+                  const SizedBox(width: 3),
+                  Text(entry.text, style: TextStyle(color: entry.foreground)),
+                ],
+              )
+            : Text(entry.text, style: TextStyle(color: entry.foreground)),
+      ));
+    }
+
     // ── RIGHT ──
-    rightItems.addAll(_editorStateItems(dark, compact));
+    rightItems.addAll(_editorStateItems(dark, width));
     final ai = _aiItem(dark);
     if (ai != null) rightItems.insert(0, ai);
 
@@ -453,15 +477,22 @@ class PandaStatusBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // left-items: flex-grow 1 pushes right items to the far end.
+          // Région gauche : absorbe l'espace libre et DÉFILE au lieu de
+          // déborder quand la branche ou les entrées sont longues.
           Expanded(
-            child: Row(
-              children: [
-                const SizedBox(width: 2),
-                ...leftItems,
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const ClampingScrollPhysics(),
+              child: Row(
+                children: [
+                  const SizedBox(width: 2),
+                  ...leftItems,
+                ],
+              ),
             ),
           ),
+          // Essentiels : épinglés à droite, maintenus étroits par les règles
+          // de largeur (jamais de débordement sur mobile).
           Row(children: [...rightItems, const SizedBox(width: 2)]),
         ],
       ),

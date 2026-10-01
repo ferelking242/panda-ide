@@ -1506,10 +1506,6 @@ class _SelectTypeState extends State<SelectType>
                                             // ── Bottom panel — terminal only, opened
                                             // from the IDE header.
                                             _buildBottomPanel(),
-
-                                            // ── Status bar — fine bar attached to
-                                            // the workbench bottom (VS Code style).
-                                            _buildWorkbenchStatusBar(),
                                           ],
                                         ),
                                       ),
@@ -1517,6 +1513,9 @@ class _SelectTypeState extends State<SelectType>
                                   ],
                                 ),
                               ),
+                              // ── Status bar — VS Code : barre pleine largeur,
+                              // sous l'activity bar, la sidebar et l'éditeur.
+                              _buildWorkbenchStatusBar(),
                             ],
                           ),
                           // Agent chat is rendered only through PandaAgentPage in the
@@ -4878,6 +4877,8 @@ class _SelectTypeState extends State<SelectType>
       builder: (context, ts) {
         final isDark = ts.appTheme.isDark;
         if (!_bottomPanelOpen) return const SizedBox.shrink();
+        final narrowPanel = MediaQuery.sizeOf(context).width <
+            WorkbenchBreakpoints.phone;
         return AnimatedContainer(
           duration: WorkbenchTokens.panelAnim,
           curve: WorkbenchTokens.panelCurve,
@@ -4907,20 +4908,32 @@ class _SelectTypeState extends State<SelectType>
                   child: Row(
                     children: [
                       const SizedBox(width: 8),
-                      ..._panelTabLabels.entries.map((entry) {
-                        final idx = entry.key;
-                        final label = entry.value;
-                        final selected = _bottomPanelTab == idx;
-                        return _PanelToolbarBtn(
-                          label: label,
-                          tooltip: label,
-                          active: selected,
-                          fg: WorkbenchTokens.tabInactiveFg(isDark),
-                          activeFg: WorkbenchTokens.tabActiveFg(isDark),
-                          onTap: () => setState(() => _bottomPanelTab = idx),
-                        );
-                      }),
-                      const Spacer(),
+                      // Bandeau d'onglets : défile au lieu de déborder sur
+                      // écran étroit (VS Code : titre de panneau tronqué).
+                      Expanded(
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const ClampingScrollPhysics(),
+                          child: Row(
+                            children: _panelTabLabels.entries.map((entry) {
+                              final idx = entry.key;
+                              final label = narrowPanel
+                                  ? _panelTabLabelsCompact[idx]!
+                                  : entry.value;
+                              final selected = _bottomPanelTab == idx;
+                              return _PanelToolbarBtn(
+                                label: label,
+                                tooltip: entry.value,
+                                active: selected,
+                                fg: WorkbenchTokens.tabInactiveFg(isDark),
+                                activeFg: WorkbenchTokens.tabActiveFg(isDark),
+                                onTap: () =>
+                                    setState(() => _bottomPanelTab = idx),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ),
                       if (_bottomPanelTab == 0)
                         Tooltip(
                           message: 'Ouvrir le même terminal dans l’éditeur',
@@ -5026,6 +5039,15 @@ class _SelectTypeState extends State<SelectType>
     3: 'CONSOLE DE DÉBOGAGE',
   };
 
+  /// Libellés courts sur écran étroit : le bandeau défile de toute façon,
+  /// mais les quatre onglets restent visibles sans scroll.
+  static const Map<int, String> _panelTabLabelsCompact = {
+    0: 'TERMINAL',
+    1: 'PROBLÈMES',
+    2: 'SORTIE',
+    3: 'DEBUG',
+  };
+
   Widget _buildBottomPanelContent(
     BuildContext context,
     AppTheme appTheme,
@@ -5119,6 +5141,12 @@ class _SelectTypeState extends State<SelectType>
                         }),
                         child: Container(
                           height: WorkbenchTokens.tabBarHeight,
+                          // Tab max-width (multieditortabscontrol) : borne le
+                          // titre au lieu d'un Flexible sous largeur non bornée
+                          // (le bandeau d'onglets est un SingleChildScrollView).
+                          constraints: BoxConstraints(
+                            maxWidth: isCompact ? 180 : 240,
+                          ),
                           // Mobile : padding réduit mais jamais de clipping du texte.
                           padding: EdgeInsets.symmetric(
                             horizontal: isCompact ? 10 : 14,
@@ -5142,16 +5170,14 @@ class _SelectTypeState extends State<SelectType>
                                 isActive ? activeFg : inactiveFg,
                               ),
                               const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  tab.title,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: isActive ? activeFg : inactiveFg,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                              Text(
+                                tab.title,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isActive ? activeFg : inactiveFg,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(width: 8),
                               GestureDetector(
