@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import '../../core/workspace/panda_workspace.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SearchMatchResult {
   final String filePath;
@@ -42,7 +42,11 @@ class _GlobalSearchDialogState extends State<GlobalSearchDialog> {
       _results = [];
     });
 
-    final workspace = PandaWorkspaceManager().currentWorkspace;
+    // Espace de travail courant : dernier projet ouvert (persisté par
+    // home.dart). Le fichier panda_workspace.dart référencé n'existe plus.
+    final prefs = await SharedPreferences.getInstance();
+    final workspacePath = prefs.getString('project_dir') ??
+        prefs.getString('workspace_dir');
     final List<SearchMatchResult> matches = [];
 
     final excludes = _excludeController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
@@ -54,10 +58,8 @@ class _GlobalSearchDialogState extends State<GlobalSearchDialog> {
       } catch (_) {}
     }
 
-    if (workspace != null) {
-      for (var folder in workspace.folders) {
-        await _searchFolder(folder.uri.path, query, excludes, matches, regex);
-      }
+    if (workspacePath != null) {
+      await _searchFolder(workspacePath, query, excludes, matches, regex);
     }
 
     setState(() {

@@ -1158,6 +1158,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.12"
+  thinking_orbs_flutter:
+    dependency: "direct main"
+    description:
+      name: thinking_orbs_flutter
+      sha256: c69ae2d0770cf5698dae1da258b5a7d0dfd17d2802877bf96fd47f6daedbe683
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.3"
   timezone:
     dependency: transitive
     description:

@@ -1,83 +1,27 @@
-/// VS Code status bar — faithful Flutter port.
-///
-/// Ported from microsoft/vscode (MIT), analyzed locally under
-/// `reference/vscode/src/vs/workbench/browser/parts/statusbar/`:
-///   - statusbarPart.ts / statusbarModel.ts / statusbarItem.ts
-///   - media/statusbarpart.css (metrics: 22px bar, 12px font, item paddings)
-///   - common/theme.ts (colors)
-///   - contrib/markers/browser/markers.contribution.ts (Problems entry)
-///   - browser/parts/notifications/notificationsStatus.ts (bell entry)
-///
-/// VS Code behaviours replicated here:
-///   * Problems entry is ALWAYS visible on the left (priority 50):
-///     `✗ N ⚠ N` + `ⓘ N` only when infos > 0, white on the bar color,
-///     numbers packed (999+ → "1K", 10K+ → "10K+"),
-///     tooltip "Errors: x, Warnings: y" or "No Problems".
-///   * Notification bell is ALWAYS visible rightmost:
-///     bell → bell-dot when unread/in-progress → bell-slash in DND mode,
-///     with the same tooltip logic as notificationsStatus.ts and a beak
-///     while the notification center is open.
-///   * Items: hover = white @12%, pressed = white @18%, tabular numerals,
-///     first-left / last-right edge paddings, max-width 40vw truncation.
-///   * Entry kinds (error/warning/prominent/remote/offline) use the
-///     darkened backgrounds computed from theme.ts.
+// ═══════════════════════════════════════════════════════════════════════════
+// PandaStatusBar — barre d'état du Workbench, fidèle à VS Code.
+//
+// Rendu porté depuis microsoft/vscode (MIT) :
+//   * statusbarpart.css : barre fine 22px (26px tactile), police 12px,
+//     item max-width 40vw, hover = statusBarItem.hoverBackground,
+//     premier/dernier item padding 2px, tabular-nums.
+//   * notificationsStatus.ts : cloche à l'extrémité droite (bell →
+//     bell-dot si non-lus → bell-slash en DND), tooltip équivalent.
+//   * markers.contribution.ts : entrée Problems toujours visible à gauche,
+//     compteur compact `✗ N  ⚠ N` (+ infos si > 0), packNumber 999→1K.
+//
+// Les couleurs proviennent des WorkbenchTokens (dark + light). Les états
+// sont TOUS injectés par home.dart depuis les vraies sources (diagnostics,
+// RepoStatusBloc, CopilotBloc, PandaNotifications, EditorStatusHub).
+//
+// Responsive : priorité VS Code — les items secondaires (encodage,
+// indentation, fins de ligne) disparaissent avant tout overflow.
+// ═══════════════════════════════════════════════════════════════════════════
 library;
 import 'package:flutter/material.dart';
 import '../../extensions/language_feature_router.dart';
-import '../../extensions/ui/status_bar_manager.dart';
-
-
-
-
-
-// ═══════════════════════════════════════════════════════════════
-// Theme tokens — src/vs/workbench/common/theme.ts
-// ═══════════════════════════════════════════════════════════════
-
-abstract final class StatusBarColors {
-  /// statusBar.background (dark & light).
-  static const Color background = Color(0xff1e1e1e); // dark theme (no blue)
-
-  /// statusBar.noFolderBackground.
-  static const Color noFolderBackground = Color(0xFF68217A);
-
-  /// statusBar.foreground.
-  static const Color foreground = Color(0xFFFFFFFF);
-
-  /// statusBarItem.hoverBackground — white @ 12%.
-  static const Color hoverBackground = Color(0x1FFFFFFF);
-
-  /// statusBarItem.activeBackground — white @ 18%.
-  static const Color activeBackground = Color(0x2EFFFFFF);
-
-  // ── Entry kinds (dark values from theme.ts) ──
-
-  /// statusBarItem.errorBackground = darken(editorError.foreground #F14C4C, .4)
-  static const Color errorKindBackground = Color(0xFFB00D0D);
-
-  /// statusBarItem.warningBackground = darken(editorWarning.foreground #CCA700, .4)
-  static const Color warningKindBackground = Color(0xFF7F6700);
-
-  /// statusBarItem.prominentBackground = black @ 50%.
-  static const Color prominentKindBackground = Color(0x80000000);
-
-  /// statusBarItem.remoteBackground = activityBarBadge.background.
-  static const Color remoteKindBackground = Color(0xff2d2d2d);
-
-  /// statusBarItem.offlineBackground.
-  static const Color offlineKindBackground = Color(0xFF6C1717);
-}
-
-enum StatusBarEntryKind { normal, error, warning, prominent, remote, offline }
-
-Color? _kindBackground(StatusBarEntryKind kind) => switch (kind) {
-      StatusBarEntryKind.normal => null,
-      StatusBarEntryKind.error => StatusBarColors.errorKindBackground,
-      StatusBarEntryKind.warning => StatusBarColors.warningKindBackground,
-      StatusBarEntryKind.prominent => StatusBarColors.prominentKindBackground,
-      StatusBarEntryKind.remote => StatusBarColors.remoteKindBackground,
-      StatusBarEntryKind.offline => StatusBarColors.offlineKindBackground,
-    };
+import '../workbench/workbench_responsive.dart';
+import '../workbench/workbench_tokens.dart';
 
 // ═══════════════════════════════════════════════════════════════
 // Generic status entry (extensions / custom app entries)
@@ -93,15 +37,10 @@ class StatusEntry {
   final String text;
   final IconData? icon;
   final Color? foreground;
-  final StatusBarEntryKind kind;
   final VoidCallback? onTap;
 
   /// compact items use tighter paddings (statusbarpart.css `.compact-*`).
   final bool compact;
-
-  /// Draws the little triangle notch (`.has-beak`) — used while a popup
-  /// anchored to this entry is open.
-  final bool showBeak;
 
   /// Higher priority sorts further left within its side.
   final int priority;
@@ -112,10 +51,8 @@ class StatusEntry {
     this.text = '',
     this.icon,
     this.foreground,
-    this.kind = StatusBarEntryKind.normal,
     this.onTap,
     this.compact = false,
-    this.showBeak = false,
     this.priority = 0,
   });
 }
@@ -127,10 +64,9 @@ class StatusEntry {
 class PandaStatusBar extends StatelessWidget {
   const PandaStatusBar({
     super.key,
-    this.height = 22,
-    this.background = StatusBarColors.background,
+    this.height,
 
-    // ── Left: remote indicator (kind: remote) ──
+    // ── Left: remote indicator ──
     this.remoteName,
     this.onRemoteTap,
 
@@ -179,13 +115,10 @@ class PandaStatusBar extends StatelessWidget {
 
     // ── Generic entries merged with extension-provided ones ──
     this.entries = const <StatusEntry>[],
-
-    /// Invoked for extension entries that declare a command.
-    this.onExtensionCommand,
   });
 
-  final double height;
-  final Color background;
+  /// Null → auto : 22px desktop, 26px sur écran tactile (pointer_kind).
+  final double? height;
 
   final String? remoteName;
   final VoidCallback? onRemoteTap;
@@ -229,8 +162,6 @@ class PandaStatusBar extends StatelessWidget {
 
   final List<StatusEntry> entries;
 
-  final void Function(String command)? onExtensionCommand;
-
   // ── Problems entry text — markers.contribution.ts getMarkersText() ──
 
   /// `packNumber`: >9999 → "10K+", >999 → "1K", else plain number.
@@ -265,24 +196,25 @@ class PandaStatusBar extends StatelessWidget {
     return '$unread New Notifications ($progress in progress)';
   }
 
-  Widget _problemsItem() {
+  Widget _problemsItem(bool dark) {
     return _StatusItemView(
+      dark: dark,
       tooltip: problemsTooltip(errorCount, warningCount, infoCount),
+      semanticLabel: 'Problèmes : $errorCount erreurs, $warningCount avertissements',
       onTap: onProblemsTap,
-      background: background,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error, size: 13),
+          const Icon(Icons.error, size: 13, color: WorkbenchTokens.errorFg),
           const SizedBox(width: 3),
           Text(packNumber(errorCount)),
           const SizedBox(width: 8),
-          const Icon(Icons.warning, size: 13),
+          const Icon(Icons.warning, size: 13, color: WorkbenchTokens.warningFg),
           const SizedBox(width: 3),
           Text(packNumber(warningCount)),
           if (infoCount > 0) ...[
             const SizedBox(width: 8),
-            const Icon(Icons.info, size: 13),
+            const Icon(Icons.info, size: 13, color: WorkbenchTokens.infoFg),
             const SizedBox(width: 3),
             Text(packNumber(infoCount)),
           ],
@@ -291,31 +223,30 @@ class PandaStatusBar extends StatelessWidget {
     );
   }
 
-  Widget _branchItem() {
+  Widget _branchItem(bool dark) {
     return _StatusItemView(
+      dark: dark,
       tooltip: branchName!,
+      semanticLabel: 'Branche Git : $branchName',
       onTap: onBranchTap,
-      background: background,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(Icons.merge_type, size: 13),
           const SizedBox(width: 3),
-          Text(branchName!),
+          Flexible(child: Text(branchName!, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
   }
 
-  Widget? _syncItem() {
+  Widget? _syncItem(bool dark) {
     if (!hasUpstream || (unpushedCount == 0 && unpulledCount == 0)) return null;
     return _StatusItemView(
-      tooltip: [
-        if (unpushedCount > 0) '$unpushedCount↑',
-        if (unpulledCount > 0) '$unpulledCount↓',
-      ].join(' '),
+      dark: dark,
+      tooltip: '$unpushedCount↑ $unpulledCount↓',
+      semanticLabel: 'Synchroniser Git : $unpushedCount à pousser, $unpulledCount à tirer',
       onTap: onSyncTap,
-      background: background,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -333,12 +264,12 @@ class PandaStatusBar extends StatelessWidget {
     );
   }
 
-  Widget _remoteItem() {
+  Widget _remoteItem(bool dark) {
     return _StatusItemView(
+      dark: dark,
       tooltip: 'Remote: $remoteName',
+      semanticLabel: 'Distant : $remoteName',
       onTap: onRemoteTap,
-      background: background,
-      kindBackground: remoteName != null ? StatusBarColors.remoteKindBackground : null,
       compact: true,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -351,11 +282,12 @@ class PandaStatusBar extends StatelessWidget {
     );
   }
 
-  Widget _workspaceItem() {
+  Widget _workspaceItem(bool dark) {
     return _StatusItemView(
+      dark: dark,
       tooltip: workspaceName ?? 'Open Workspace',
+      semanticLabel: 'Espace de travail : ${workspaceName ?? "aucun"}',
       onTap: onWorkspaceTap,
-      background: background,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -367,52 +299,73 @@ class PandaStatusBar extends StatelessWidget {
           ),
           if (workspaceName != null) ...[
             const SizedBox(width: 3),
-            Text(workspaceName!),
+            Flexible(child: Text(workspaceName!, overflow: TextOverflow.ellipsis)),
           ],
         ],
       ),
     );
   }
 
-  Widget? _editorStateItems() {
+  /// État de l'éditeur : Ln/Col (priorité moyenne), indentation / encodage /
+  /// fins de ligne (priorité basse — masquées les premières sur mobile).
+  List<Widget> _editorStateItems(bool dark, bool compact) {
     final parts = <Widget>[];
-    void add(String? label, String tooltip, VoidCallback? onTap) {
+    void add(String? label, String tooltip, String semantics, VoidCallback? onTap,
+        {bool lowPriority = false}) {
       if (label == null) return;
+      // Priorité basse : masqué en mode compact pour éviter tout overflow.
+      if (lowPriority && compact) return;
       parts.add(_StatusItemView(
+        dark: dark,
         tooltip: tooltip,
+        semanticLabel: '$semantics : $label',
         onTap: onTap,
-        background: background,
         child: Text(label),
       ));
     }
 
     if (cursorLine != null && cursorColumn != null) {
-      add('Ln ${cursorLine!}, Col ${cursorColumn!}', 'Go to Line/Column', onCursorTap);
+      add('Ln ${cursorLine!}, Col ${cursorColumn!}', 'Go to Line/Column',
+          'Position curseur', onCursorTap);
     }
-    add(indentation, 'Select Indentation', onIndentationTap);
-    add(encoding, 'Select Encoding', onEncodingTap);
-    add(endOfLine, 'Select End of Line Sequence', onEndOfLineTap);
-    add(language, 'Select Language Mode', onLanguageTap);
-    if (parts.isEmpty) return null;
-    return Row(mainAxisSize: MainAxisSize.min, children: parts);
+    add(language, 'Select Language Mode', 'Langage', onLanguageTap);
+    add(indentation, 'Select Indentation', 'Indentation', onIndentationTap,
+        lowPriority: true);
+    add(encoding, 'Select Encoding', 'Encodage', onEncodingTap, lowPriority: true);
+    add(endOfLine, 'Select End of Line Sequence', 'Fins de ligne', onEndOfLineTap,
+        lowPriority: true);
+    return parts;
   }
 
-  Widget? _aiItem() {
+  Widget? _aiItem(bool dark) {
     final label = aiLabel;
     if (label == null) return null;
     return _StatusItemView(
-      tooltip: 'AI: $label${aiActive ? '' : ' (offline)'}',
+      dark: dark,
+      tooltip: aiActive
+          ? 'Panda AI : $label'
+          : 'Panda AI indisponible — $label',
+      semanticLabel: 'Assistant AI : $label',
       onTap: onAiTap,
-      background: background,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.auto_awesome,
-            size: 13,
-            color: aiActive ? const Color(0xFF4EC9B0) : Colors.white60,
-          ),
-          const SizedBox(width: 3),
+          if (aiActive) ...[
+            const SizedBox(
+              width: 9,
+              height: 9,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.6,
+                valueColor: AlwaysStoppedAnimation(WorkbenchTokens.aiActiveFg),
+              ),
+            ),
+          ] else
+            Icon(
+              Icons.auto_awesome,
+              size: 13,
+              color: dark ? Colors.white54 : Colors.black38,
+            ),
+          const SizedBox(width: 4),
           Text(label),
         ],
       ),
@@ -420,25 +373,21 @@ class PandaStatusBar extends StatelessWidget {
   }
 
   /// Bell entry — notificationsStatus.ts updateNotificationsCenterStatusItem().
-  Widget _bellItem() {
+  Widget _bellItem(bool dark) {
     final hasActivity =
         unreadNotifications > 0 || notificationsInProgress > 0;
     return _StatusItemView(
+      dark: dark,
       tooltip: _bellTooltip(),
+      semanticLabel: _bellTooltip(),
       onTap: onNotificationsTap,
-      background: background,
-      showBeak: notificationsCenterOpen,
+      compact: true,
       child: doNotDisturb
           ? Stack(
               clipBehavior: Clip.none,
               children: [
                 const Icon(Icons.notifications_off, size: 14),
-                if (hasActivity)
-                  Positioned(
-                    right: -2,
-                    top: -2,
-                    child: _bellDot(),
-                  ),
+                if (hasActivity) Positioned(right: -2, top: -2, child: _bellDot()),
               ],
             )
           : hasActivity
@@ -462,169 +411,184 @@ class PandaStatusBar extends StatelessWidget {
         ),
       );
 
-  // ── Extension entries via StatusBarManager (vscode.* API shim) ──
-
-  Widget _extensionEntries({required bool left}) {
-    return ListenableBuilder(
-      listenable: StatusBarManager.instance,
-      builder: (context, _) {
-        final items = left
-            ? StatusBarManager.instance.leftItems
-            : StatusBarManager.instance.rightItems;
-        if (items.isEmpty) return const SizedBox.shrink();
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final item in items)
-              _StatusItemView(
-                key: ValueKey('ext-${item.id}-${left ? 'l' : 'r'}'),
-                tooltip: item.tooltip ?? item.id,
-                onTap:
-                    item.command != null && onExtensionCommand != null
-                        ? () => onExtensionCommand!(item.command!)
-                        : null,
-                background: background,
-                kindBackground: item.colorHex != null
-                    ? item.color.withValues(alpha: 0.25)
-                    : null,
-                child: Builder(builder: (_) {
-                  final parsed = parseCodicon(item.text);
-                  final codicon = parsed.$1;
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (codicon != null) ...[
-                        Icon(codicon, size: 13),
-                        if (parsed.$2.isNotEmpty) const SizedBox(width: 3),
-                      ],
-                      if (parsed.$2.isNotEmpty) Text(parsed.$2),
-                    ],
-                  );
-                }),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final width = MediaQuery.sizeOf(context).width;
+    final compact = WorkbenchResponsive.isCompact(width);
+    // Écran tactile → barre légèrement plus haute mais toujours compacte.
+    final effectiveHeight =
+        height ?? WorkbenchResponsive.statusBarHeight(width, false);
+
     final leftItems = <Widget>[];
     final rightItems = <Widget>[];
 
     // ── LEFT (priority order like statusbarModel.ts sort()) ──
-    if (remoteName != null) leftItems.add(_remoteItem());
-    if (branchName != null) leftItems.add(_branchItem());
-    final sync = _syncItem();
+    if (remoteName != null) leftItems.add(_remoteItem(dark));
+    if (branchName != null) leftItems.add(_branchItem(dark));
+    final sync = _syncItem(dark);
     if (sync != null) leftItems.add(sync);
 
     // Problems entry — always visible (priority 50, medium).
-    leftItems.add(_problemsItem());
+    leftItems.add(_problemsItem(dark));
 
     // Workspace fallback when no git repo is detected.
-    if (branchName == null) leftItems.add(_workspaceItem());
-
-    leftItems.add(_extensionEntries(left: true));
+    if (branchName == null) leftItems.add(_workspaceItem(dark));
 
     // ── RIGHT ──
-    for (final entry in entries) {
-      rightItems.add(_genericEntry(entry));
-    }
-    final ai = _aiItem();
+    rightItems.addAll(_editorStateItems(dark, compact));
+    final ai = _aiItem(dark);
     if (ai != null) rightItems.insert(0, ai);
-    final editorState = _editorStateItems();
-    if (editorState != null) rightItems.insert(0, editorState);
 
     // The bell sits rightmost (priority -Infinity in VS Code).
-    rightItems.add(_bellItem());
-    rightItems.add(_extensionEntries(left: false));
+    rightItems.add(_bellItem(dark));
 
     return Container(
-      height: height,
-      decoration: BoxDecoration(color: background),
+      height: effectiveHeight,
+      decoration: BoxDecoration(
+        color: WorkbenchTokens.statusBarBg(dark),
+        border: Border(
+          top: BorderSide(color: WorkbenchTokens.panelBorderFg(dark), width: 1),
+        ),
+      ),
       child: Row(
         children: [
           // left-items: flex-grow 1 pushes right items to the far end.
           Expanded(
-            child: Row(children: [_edgePadding(left: true), ...leftItems]),
+            child: Row(
+              children: [
+                const SizedBox(width: 2),
+                ...leftItems,
+              ],
+            ),
           ),
-          Row(children: [...rightItems, _edgePadding(left: false)]),
+          Row(children: [...rightItems, const SizedBox(width: 2)]),
         ],
       ),
     );
   }
-
-  Widget _edgePadding({required bool left}) {
-    // statusbarpart.css: first-visible-item (left) gets padding-left 2px;
-    // last-visible-item (right) gets padding-right 2px. Both sides always
-    // contain at least one visible entry, so render a constant spacer.
-    return const SizedBox(width: 2);
-  }
-
-  Widget _genericEntry(StatusEntry entry) {
-    return _StatusItemView(
-      tooltip: entry.name,
-      onTap: entry.onTap,
-      background: background,
-      foreground: entry.foreground,
-      kindBackground: _kindBackground(entry.kind),
-      compact: entry.compact,
-      showBeak: entry.showBeak,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (entry.icon != null) ...[
-            Icon(entry.icon, size: 13),
-            if (entry.text.isNotEmpty) const SizedBox(width: 3),
-          ],
-          if (entry.text.isNotEmpty) Text(entry.text),
-        ],
-      ),
-    );
-  }
-}
-
-/// Maps a leading `$(codicon)` token to a Material icon, returning
-/// `(icon?, remainingText)` — mirrors how VS Code renders `$()` labels.
-(IconData?, String) parseCodicon(String raw) {
-  final match = RegExp(r'^\$\(([a-z-]+)\)\s*(.*)$').firstMatch(raw.trim());
-  if (match == null) return (null, raw);
-
-  const map = <String, IconData>{
-    'error': Icons.error,
-    'warning': Icons.warning,
-    'info': Icons.info,
-    'bell': Icons.notifications,
-    'sync': Icons.sync,
-    'check': Icons.check,
-    'pass': Icons.check_circle,
-    'circle-check': Icons.check_circle,
-    'cloud': Icons.cloud,
-    'cloud-upload': Icons.cloud_upload,
-    'cloud-download': Icons.cloud_download,
-    'remote': Icons.computer,
-    'terminal': Icons.terminal,
-    'git-branch': Icons.merge_type,
-    'account': Icons.account_circle,
-    'beaker': Icons.science,
-    'rocket': Icons.rocket_launch,
-    'zap': Icons.bolt,
-    'shield': Icons.shield,
-    'loading': Icons.refresh,
-    'debug-start': Icons.play_arrow,
-    'debug-stop': Icons.stop,
-    'play': Icons.play_arrow,
-    'server': Icons.dns,
-    'broadcast': Icons.podcasts,
-  };
-  final icon = map[match.group(1)];
-  return (icon, match.group(2) ?? '');
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Individual item — .statusbar-item / .statusbar-item-label
+// ═══════════════════════════════════════════════════════════════
+
+class _StatusItemView extends StatefulWidget {
+  const _StatusItemView({
+    required this.child,
+    required this.dark,
+    this.tooltip = '',
+    this.semanticLabel,
+    this.onTap,
+    this.compact = false,
+  });
+
+  final Widget child;
+  final bool dark;
+  final String tooltip;
+
+  /// Label Semantics pour l'accessibilité (tooltip suffit sur desktop).
+  final String? semanticLabel;
+  final VoidCallback? onTap;
+  final bool compact;
+
+  @override
+  State<_StatusItemView> createState() => _StatusItemViewState();
+}
+
+class _StatusItemViewState extends State<_StatusItemView> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  bool get _hasCommand => widget.onTap != null;
+
+  Color get _effectiveBackground {
+    if (_pressed && _hasCommand) {
+      return WorkbenchTokens.statusActive(widget.dark);
+    }
+    if (_hovered && _hasCommand) {
+      return WorkbenchTokens.statusHover(widget.dark);
+    }
+    return Colors.transparent;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+    final label = Container(
+      // .statusbar-item-label: margin 3px + padding 5px (compact: 3px).
+      margin: EdgeInsets.symmetric(horizontal: widget.compact ? 0 : 3),
+      padding: EdgeInsets.symmetric(horizontal: widget.compact ? 3 : 5),
+      height: double.infinity,
+      child: DefaultTextStyle(
+        style: WorkbenchTokens.statusText(widget.dark),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
+        child: IconTheme.merge(
+          data: IconThemeData(
+            size: 13,
+            color: WorkbenchTokens.statusBarFg(widget.dark),
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+
+    final item = MouseRegion(
+      cursor: _hasCommand ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: _hasCommand ? (_) => setState(() => _pressed = true) : null,
+        onTapCancel:
+            _hasCommand ? () => setState(() => _pressed = false) : null,
+        onTapUp: _hasCommand
+            ? (_) => setState(() {
+                  _pressed = false;
+                  widget.onTap?.call();
+                })
+            : null,
+        child: Container(
+          // .statusbar-item: max-width 40vw, full height.
+          constraints: BoxConstraints(maxWidth: screenWidth * 0.4),
+          height: double.infinity,
+          color: _effectiveBackground,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [label],
+          ),
+        ),
+      ),
+    );
+
+    // Tooltip sur desktop, Semantics sur mobile/accessibilité.
+    if (widget.semanticLabel != null) {
+      return Semantics(
+        button: _hasCommand,
+        label: widget.semanticLabel,
+        child: Tooltip(
+          message: widget.tooltip,
+          waitDuration: const Duration(milliseconds: 650),
+          triggerMode: TooltipTriggerMode.longPress,
+          child: item,
+        ),
+      );
+    }
+    return Tooltip(
+      message: widget.tooltip,
+      waitDuration: const Duration(milliseconds: 650),
+      triggerMode: TooltipTriggerMode.longPress,
+      child: item,
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // Workspace diagnostics bridge
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
 
 /// Rebuilds its child whenever workspace diagnostics change
 /// ([LanguageFeatureRouter.diagnosticsVersion] — the same source the
@@ -685,155 +649,6 @@ class _WorkspaceDiagnosticsListenerState
     });
     return widget.builder(context, errors, warnings, infos);
   }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Individual item — .statusbar-item / .statusbar-item-label
-// ═══════════════════════════════════════════════════════════════
-
-class _StatusItemView extends StatefulWidget {
-  const _StatusItemView({
-    super.key,
-    required this.child,
-    required this.background,
-    this.tooltip = '',
-    this.onTap,
-    this.foreground,
-    this.kindBackground,
-    this.compact = false,
-    this.showBeak = false,
-  });
-
-  final Widget child;
-  final String tooltip;
-  final VoidCallback? onTap;
-  final Color background;
-
-  /// Item-level foreground override (kind foreground / custom color).
-  final Color? foreground;
-
-  /// Full-item background for kinds (error/warning/prominent/remote/…).
-  final Color? kindBackground;
-  final bool compact;
-  final bool showBeak;
-
-  @override
-  State<_StatusItemView> createState() => _StatusItemViewState();
-}
-
-class _StatusItemViewState extends State<_StatusItemView> {
-  bool _hovered = false;
-  bool _pressed = false;
-
-  bool get _hasCommand => widget.onTap != null;
-
-  Color get _effectiveForeground =>
-      widget.foreground ?? ((widget.kindBackground != null) ? Colors.white : StatusBarColors.foreground);
-
-  Color get _effectiveBackground {
-    var base = widget.kindBackground ?? widget.background;
-    if (_pressed && _hasCommand) {
-      base = Color.alphaBlend(StatusBarColors.activeBackground, base);
-    } else if (_hovered && _hasCommand) {
-      base = Color.alphaBlend(StatusBarColors.hoverBackground, base);
-    }
-    return base;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-
-    final label = Container(
-      // .statusbar-item-label: margin 3px + padding 5px (compact: 3px/5px alt)
-      margin: EdgeInsets.symmetric(horizontal: widget.compact ? 0 : 3),
-      padding: EdgeInsets.symmetric(horizontal: widget.compact ? 3 : 5),
-      height: double.infinity,
-      child: DefaultTextStyle(
-        style: TextStyle(
-          // .part.statusbar: font-size 12px; tabular-nums for stable counts.
-          fontSize: 12,
-          height: 1.0,
-          color: _effectiveForeground,
-          fontFeatures: const [FontFeature.tabularFigures()],
-          overflow: TextOverflow.ellipsis,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        softWrap: false,
-        child: IconTheme.merge(
-          data: IconThemeData(size: 13, color: _effectiveForeground),
-          child: widget.child,
-        ),
-      ),
-    );
-
-    return Tooltip(
-      message: widget.tooltip,
-      waitDuration: const Duration(milliseconds: 650),
-      triggerMode: TooltipTriggerMode.longPress,
-      child: MouseRegion(
-        cursor: _hasCommand ? SystemMouseCursors.click : MouseCursor.defer,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: _hasCommand ? (_) => setState(() => _pressed = true) : null,
-          onTapCancel: _hasCommand ? () => setState(() => _pressed = false) : null,
-          onTapUp: _hasCommand
-              ? (_) => setState(() {
-                    _pressed = false;
-                    widget.onTap?.call();
-                  })
-              : null,
-          child: Container(
-            // .statusbar-item: max-width 40vw, full height.
-            constraints: BoxConstraints(maxWidth: screenWidth * 0.4),
-            height: double.infinity,
-            color: _effectiveBackground,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                label,
-                if (widget.showBeak)
-                  // .has-beak: 10x5 notch centered at the top edge.
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Center(
-                      child: CustomPaint(
-                        size: const Size(10, 4),
-                        painter: _BeakPainter(color: _effectiveBackground),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BeakPainter extends CustomPainter {
-  const _BeakPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path()
-      ..moveTo(0, size.height)
-      ..lineTo(size.width / 2, 0)
-      ..lineTo(size.width, size.height)
-      ..close();
-    canvas.drawPath(path, Paint()..color = color);
-  }
-
-  @override
-  bool shouldRepaint(_BeakPainter oldDelegate) => oldDelegate.color != color;
 }
 
 // ═══════════════════════════════════════════════════════════

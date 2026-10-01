@@ -6,6 +6,15 @@ class PandaNotifications {
   static final List<Map<String, dynamic>> inbox = [];
   static int unreadCount = 0;
 
+  /// Notifie la Status Bar des changements de compteur (source unique :
+  /// le système de notifications existant, aucun doublon).
+  static final ValueNotifier<int> unreadCountListenable =
+      ValueNotifier<int>(0);
+
+  static void _syncUnreadCount() {
+    unreadCountListenable.value = unreadCount;
+  }
+
   /// Sends a real Android notification. Unlike the in-app overlay this also
   /// works while Panda is backgrounded and the terminal is protected by the
   /// foreground service.
@@ -176,6 +185,7 @@ class PandaNotifications {
       'read': false,
     });
     unreadCount++;
+    _syncUnreadCount();
     // Keep max 100 notifications
     if (inbox.length > 100) {
       inbox.removeLast();

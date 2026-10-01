@@ -26,6 +26,8 @@ import 'package:panda/bloc/repo_bloc/repo_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/broken_icons.dart';
 import '../ui/panda_surface.dart';
+import 'workbench/workbench_tokens.dart';
+import 'workbench/workbench_panel_frame.dart';
 import 'about.dart';
 import 'donation_page.dart';
 import 'file_manager.dart';
@@ -60,6 +62,11 @@ import '../extensions/ui/command_palette.dart';
 import '../services/ide_tab_opener.dart';
 import '../extensions/language_feature_router.dart';
 import '../ui/gateway_panel.dart';
+import '../logging/panda_logger.dart';
+import '../logging/panda_log_level.dart';
+import '../logging/panda_log_event.dart';
+import 'debug/debug_console.dart';
+import 'editor/status_bar.dart';
 import 'agent_runner.dart';
 import 'agent_settings.dart';
 import '../local_models/ui/local_models_page.dart'
@@ -120,27 +127,18 @@ Map<String, String> _extractThinkingFromText(
   return {'text': cleanText, 'thinking': newThink};
 }
 
-// ── VSCode colour tokens ──────────────────────────────────────────────────────
-// activity-bar colours (dark / light)
-const _kActivityBgDark = Color(0xff333333);
-const _kActivityBgLight = Color(0xffe8e8e8);
-const _kActivityIconDark = Color(0xff858585);
-const _kActivityIconLight = Color(0xff616161);
-const _kActivitySelDark = Color(0xffffffff);
-const _kActivitySelLight = Color(0xff1a1a1a);
-const _kTabBarDark = Color(0xff252526);
-const _kTabBarLight = Color(0xffececec);
-const _kTabActiveDark = Color(0xff1e1e1e);
-const _kTabActiveLight = Color(0xffffffff);
-const _kAccent = Color(0xff6366f1);
-const _kSidebarBgDark = Color(0xff252526);
-const _kSidebarBgLight = Color(0xfff3f3f3);
-const _kSidebarWidth = 240.0;
-const _kSectionTitle = TextStyle(
-  fontSize: 11,
-  fontWeight: FontWeight.w700,
-  letterSpacing: 1.2,
-);
+// ── Workbench design tokens (source unique : lib/ui/workbench/) ─────────────
+// Les couleurs/métriques proviennent désormais de WorkbenchTokens ;
+// les constantes dispersées _kActivityBgDark…_kSidebarWidth ont été retirées.
+const Color _kAccent = WorkbenchTokens.accent;
+
+/// Largeur du sidebar selon breakpoints (desktop 280–320, tablette 260–300,
+/// téléphone 240–285 selon la largeur disponible).
+double _sidebarWidthFor(double screenWidth) =>
+    WorkbenchTokens.sidebarWidth(screenWidth);
+
+TextStyle _sectionTitleStyle(bool isDark) =>
+    WorkbenchTokens.panelTitle(isDark);
 
 // ─────────────────────────────────────────────────────────────────────────────
 class SelectType extends StatefulWidget {
@@ -219,8 +217,7 @@ class _SelectTypeState extends State<SelectType>
   // ── Resizable panels ──────────────────────────────────────
   double _bottomPanelHeight = 220;
 
-  // ── Resizable sidebar ─────────────────────────────────────
-  final double _sidebarWidth = _kSidebarWidth;
+  // ── Resizable sidebar (largeur calculée par breakpoints au build) ─────
 
   // ── Full screen mode
   // ── Agent AI state ────────────────────────────────────────────────
@@ -1356,95 +1353,78 @@ class _SelectTypeState extends State<SelectType>
                               // ── Top bar spans full width ──────────────────────────
                               _buildTopBar(context, appTheme, appThemestate),
 
-                              // ── Below top bar: activity bar (full-height) | editor + panel ─
+                              // ── Below top bar: activity bar | sidebar | editor + panel ─
                               Expanded(
-                                child: ColoredBox(
-                                  // Ensures the area revealed by ClipSmoothRect rounded
-                                  // corners (topLeft + bottomLeft) matches the activity-bar
-                                  // background — eliminating the colour artefact.
-                                  color: _sidebarState >= 1
-                                      ? (appTheme.isDark
-                                            ? _kActivityBgDark
-                                            : _kActivityBgLight)
-                                      : Colors.transparent,
-                                  child: Row(
-                                    children: [
-                                      // Activity bar — full height, spans editor AND terminal
-                                      if (_sidebarState >= 1)
-                                        _buildActivityBar(context, appTheme),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    // Activity bar — full height, spans editor AND terminal
+                                    if (_sidebarState >= 1)
+                                      _buildActivityBar(context, appTheme),
 
-                                      // ── Sidebar panel — pushes editor (VS Code style) ──
-                                      if (_sidebarState == 2)
-                                        SizedBox(
-                                          width: _sidebarWidth,
-                                          child: _buildSidebarPanel(
-                                            context,
-                                            appTheme,
-                                          ),
+                                    // ── Sidebar panel — animated VS Code-style reveal ──
+                                    AnimatedSize(
+                                      duration: WorkbenchTokens.panelAnim,
+                                      curve: WorkbenchTokens.panelCurve,
+                                      alignment: Alignment.centerLeft,
+                                      child: SizedBox(
+                                        width: _sidebarState == 2
+                                            ? _sidebarWidthFor(MediaQuery.sizeOf(context).width)
+                                            : 0,
+                                        child: OverflowBox(
+                                          alignment: Alignment.topLeft,
+                                          minWidth: 0,
+                                          maxWidth: double.infinity,
+                                          child: _sidebarState == 2
+                                              ? _buildSidebarPanel(context, appTheme)
+                                              : const SizedBox.shrink(),
                                         ),
+                                      ),
+                                    ),
 
-                                      // ── Right side: editor stacked above bottom panel ──
-                                      Expanded(
-                                        child: Stack(
+                                    // ── Right side: editor stacked above bottom panel ──
+                                    Expanded(
+                                      child: Padding(
+                                        // Espace de respiration autour du bloc éditeur
+                                        // (le panneau sidebar arrondi se détache dessus).
+                                        padding: EdgeInsets.fromLTRB(
+                                          _sidebarState == 2
+                                              ? WorkbenchTokens.spaceXS
+                                              : 0,
+                                          _sidebarState == 2
+                                              ? WorkbenchTokens.spaceXS
+                                              : 0,
+                                          0,
+                                          _bottomPanelOpen ? 0 : 0,
+                                        ),
+                                        child: Column(
                                           children: [
-                                            ClipSmoothRect(
-                                              radius: _sidebarState >= 1
-                                                  ? SmoothBorderRadius.only(
-                                                      topLeft: SmoothRadius(
-                                                        cornerRadius: 22,
-                                                        cornerSmoothing: 0.6,
-                                                      ),
-                                                      bottomLeft: SmoothRadius(
-                                                        cornerRadius: 22,
-                                                        cornerSmoothing: 0.6,
-                                                      ),
-                                                    )
-                                                  : SmoothBorderRadius.zero,
-                                              child: Column(
-                                                children: [
-                                                  // ── Editor area ──────────────────────────────
-                                                  Expanded(
-                                                    child: Container(
-                                                      color:
-                                                          appTheme.scaffoldBg,
-                                                      child: Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: _splitEditor
-                                                                ? MultiSplitView(
-                                                                    controller:
-                                                                        _splitViewController,
-                                                                    builder:
-                                                                        (
-                                                                          context,
-                                                                          area,
-                                                                        ) {
-                                                                          if (area.index ==
-                                                                              0) {
-                                                                            return Column(
-                                                                              children: [
-                                                                                _buildTabBar(
-                                                                                  appTheme,
-                                                                                  isPrimary: true,
-                                                                                ),
-                                                                                Expanded(
-                                                                                  child: _buildActiveTab(
-                                                                                    context,
-                                                                                    appTheme,
-                                                                                    appThemestate,
-                                                                                  ),
-                                                                                ),
-                                                                              ],
-                                                                            );
-                                                                          }
+                                            // ── Editor area ──────────────────────────────
+                                            Expanded(
+                                              child: Container(
+                                                color: WorkbenchTokens.editorBg(appTheme.isDark),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: _splitEditor
+                                                          ? MultiSplitView(
+                                                                  controller:
+                                                                      _splitViewController,
+                                                                  builder:
+                                                                      (
+                                                                        context,
+                                                                        area,
+                                                                      ) {
+                                                                        if (area.index ==
+                                                                            0) {
                                                                           return Column(
                                                                             children: [
                                                                               _buildTabBar(
                                                                                 appTheme,
-                                                                                isPrimary: false,
+                                                                                isPrimary: true,
                                                                               ),
                                                                               Expanded(
-                                                                                child: _buildSplitActiveTab(
+                                                                                child: _buildActiveTab(
                                                                                   context,
                                                                                   appTheme,
                                                                                   appThemestate,
@@ -1452,74 +1432,90 @@ class _SelectTypeState extends State<SelectType>
                                                                               ),
                                                                             ],
                                                                           );
-                                                                        },
-                                                                  )
-                                                                : Column(
-                                                                    children: [
-                                                                      _buildTabBar(
-                                                                        appTheme,
-                                                                        isPrimary:
-                                                                            true,
-                                                                      ),
-                                                                      Expanded(
-                                                                        child: AnimatedSwitcher(
-                                                                          duration: const Duration(
-                                                                            milliseconds:
-                                                                                150,
-                                                                          ),
-                                                                          child: KeyedSubtree(
-                                                                            key: ValueKey(
-                                                                              _activeTabIdx,
-                                                                            ),
-                                                                            child: _buildActiveTab(
-                                                                              context,
+                                                                        }
+                                                                        return Column(
+                                                                          children: [
+                                                                            _buildTabBar(
                                                                               appTheme,
-                                                                              appThemestate,
+                                                                              isPrimary: false,
                                                                             ),
+                                                                            Expanded(
+                                                                              child: _buildSplitActiveTab(
+                                                                                context,
+                                                                                appTheme,
+                                                                                appThemestate,
+                                                                              ),
+                                                                            ),
+                                                                          ],
+                                                                        );
+                                                                      },
+                                                                )
+                                                              : Column(
+                                                                  children: [
+                                                                    _buildTabBar(
+                                                                      appTheme,
+                                                                      isPrimary:
+                                                                          true,
+                                                                    ),
+                                                                    Expanded(
+                                                                      child: AnimatedSwitcher(
+                                                                        duration: const Duration(
+                                                                          milliseconds:
+                                                                              150,
+                                                                        ),
+                                                                        child: KeyedSubtree(
+                                                                          key: ValueKey(
+                                                                            _activeTabIdx,
+                                                                          ),
+                                                                          child: _buildActiveTab(
+                                                                            context,
+                                                                            appTheme,
+                                                                            appThemestate,
                                                                           ),
                                                                         ),
                                                                       ),
-                                                                    ],
-                                                                  ),
-                                                          ),
-                                                          // Panda Agent panel
-                                                          if (_rightPanelOpen &&
-                                                              MediaQuery.of(
-                                                                        context,
-                                                                      )
-                                                                      .size
-                                                                      .width >=
-                                                                  600)
-                                                            BlocProvider(
-                                                              create: (_) =>
-                                                                  AIChatUIBloc(),
-                                                              child: Builder(
-                                                                builder:
-                                                                    (
-                                                                      panelContext,
-                                                                    ) => _buildPandaAgentPanel(
-                                                                      panelContext,
-                                                                      appTheme,
                                                                     ),
-                                                              ),
-                                                            ),
-                                                        ],
-                                                      ),
+                                                                  ],
+                                                                ),
                                                     ),
-                                                  ),
-                                                  // ── Bottom panel — terminal only, opened
-                                                  // from the IDE header.
-                                                  _buildBottomPanel(),
-                                                ],
+                                                    // Panda Agent panel
+                                                    if (_rightPanelOpen &&
+                                                        MediaQuery.of(
+                                                                  context,
+                                                                )
+                                                                .size
+                                                                .width >=
+                                                            600)
+                                                      BlocProvider(
+                                                        create: (_) =>
+                                                            AIChatUIBloc(),
+                                                        child: Builder(
+                                                          builder:
+                                                              (
+                                                                panelContext,
+                                                              ) => _buildPandaAgentPanel(
+                                                                panelContext,
+                                                                appTheme,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
+                                            // ── Bottom panel — terminal only, opened
+                                            // from the IDE header.
+                                            _buildBottomPanel(),
 
+                                            // ── Status bar — fine bar attached to
+                                            // the workbench bottom (VS Code style).
+                                            _buildWorkbenchStatusBar(),
                                           ],
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                ), // ColoredBox
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -1533,6 +1529,112 @@ class _SelectTypeState extends State<SelectType>
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STATUS BAR — fine bar attached to the workbench bottom, VS Code parity.
+  // Tous les états proviennent des VRAIES sources Panda :
+  //   * Problems → LanguageFeatureRouter.diagnostics (WorkspaceDiagnosticsListener)
+  //   * Git branch/sync → RepoStatusBloc
+  //   * Copilot/AI → CopilotBloc (état réel, jamais de faux "online")
+  //   * Notifications → PandaNotifications (système existant, pas de doublon)
+  //   * Ln/Col + language → EditorStatusHub (alimenté par l'éditeur)
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWorkbenchStatusBar() {
+    return WorkspaceDiagnosticsListener(
+      builder: (context, errors, warnings, infos) {
+        return BlocBuilder<RepoStatusBloc, RepoStatusState>(
+          builder: (context, repoState) {
+            return BlocBuilder<CopilotBloc, CopilotState>(
+              builder: (context, copilot) {
+                return ValueListenableBuilder<int>(
+                  valueListenable: PandaNotifications.unreadCountListenable,
+                  builder: (context, unread, _) {
+                    return AnimatedBuilder(
+                      animation: EditorStatusHub.instance,
+                      builder: (context, _) {
+                        final appTheme = context.watch<AppThemeBloc>().state.appTheme;
+                        final loaded = repoState is RepoStatusLoaded;
+                        final branch = loaded ? repoState.currentBranch : null;
+
+                        // ── AI : label dérivé de l'état réel de CopilotBloc ──
+                        final (String? aiLabel, bool aiActive) = switch (
+                            copilot.status) {
+                          CopilotStatus.signedIn => ('Copilot', true),
+                          CopilotStatus.signingIn => ('Connexion…', true),
+                          CopilotStatus.initializing => ('Démarrage…', true),
+                          CopilotStatus.error => ('Copilot : erreur', false),
+                          CopilotStatus.notAuthorized =>
+                              ('Copilot : accès requis', false),
+                          CopilotStatus.notSignedIn =>
+                              ('Copilot : connexion requise', false),
+                          CopilotStatus.notInitialized =>
+                              ('Copilot : non configuré', false),
+                        };
+
+                        return PandaStatusBar(
+                          branchName: branch,
+                          hasUpstream: loaded && repoState.hasUpstream,
+                          unpushedCount: loaded ? repoState.unpushedCount : 0,
+                          unpulledCount: loaded ? repoState.unpulledCount : 0,
+                          onBranchTap: branch != null
+                              ? () => _push(context, GitPanel(
+                                      workspacePath: _currentWorkspaceDir ??
+                                          _activeProjectDir() ?? '/',
+                                    ))
+                              : null,
+                          onSyncTap: branch != null
+                              ? () => context.read<RepoStatusBloc>().add(
+                                    LoadRepoStatus(
+                                      _currentWorkspaceDir ??
+                                          _activeProjectDir() ?? '/',
+                                    ),
+                                  )
+                              : null,
+                          errorCount: errors,
+                          warningCount: warnings,
+                          infoCount: infos,
+                          onProblemsTap: () => setState(() {
+                            _bottomPanelOpen = true;
+                            _bottomPanelTab = 1; // Problems
+                          }),
+                          workspaceName: _currentWorkspaceName,
+                          onWorkspaceTap: () => setState(() {
+                            _activeRail = 1;
+                            _sidebarState = 2;
+                          }),
+                          cursorLine: EditorStatusHub.instance.cursorLine,
+                          cursorColumn: EditorStatusHub.instance.cursorColumn,
+                          onCursorTap: () => showDialog(
+                            context: context,
+                            builder: (_) => QuickOpen(
+                              workspaceRoot: _currentWorkspaceDir ??
+                                  _activeProjectDir() ?? '/',
+                              onOpen: (path) {},
+                            ),
+                          ),
+                          language: EditorStatusHub.instance.language,
+                          aiLabel: aiLabel,
+                          aiActive: aiActive,
+                          onAiTap: () => setState(() {
+                            _activeRail = 9;
+                            _sidebarState = 2;
+                            _ensureCopilotInitialized();
+                          }),
+                          unreadNotifications: unread,
+                          onNotificationsTap: () =>
+                              _showNotificationInbox(context),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -1838,9 +1940,9 @@ class _SelectTypeState extends State<SelectType>
   // ── Activity bar ──────────────────────────────────────────────────────────
   Widget _buildActivityBar(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
-    final railBg = isDark ? _kActivityBgDark : _kActivityBgLight;
-    final iconColor = isDark ? _kActivityIconDark : _kActivityIconLight;
-    final selColor = isDark ? _kActivitySelDark : _kActivitySelLight;
+    final railBg = WorkbenchTokens.activityBg(isDark);
+    final iconColor = WorkbenchTokens.activityFg(isDark);
+    final selColor = WorkbenchTokens.activitySelectedFg(isDark);
 
     // Ordre: Explorer, Search, Git, Debug, Tunnel, Marketplace, Agent, Gateway, Nav, Copilot
     // ensuite les panneaux classiques de l'éditeur.
@@ -1872,7 +1974,7 @@ class _SelectTypeState extends State<SelectType>
     ];
 
     return Container(
-      width: _fullScreen ? 0.0 : 48,
+      width: _fullScreen ? 0.0 : WorkbenchTokens.activityBarWidth,
       color: railBg,
       child: Column(
         children: [
@@ -2281,11 +2383,8 @@ class _SelectTypeState extends State<SelectType>
   // ── Sidebar panel content ─────────────────────────────────────────────────
   Widget _buildSidebarPanel(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
-    final bg = isDark ? _kSidebarBgDark : _kSidebarBgLight;
-    final titleColor = isDark ? Colors.grey[400]! : Colors.grey[700]!;
-    final borderColor = isDark
-        ? const Color(0xff3c3c3c)
-        : const Color(0xffdddddd);
+    final bg = WorkbenchTokens.sidebarBg(isDark);
+    final fg = WorkbenchTokens.sidebarHeaderFg(isDark);
 
     final titles = {
       1: 'EXPLORATEUR',
@@ -2346,55 +2445,23 @@ class _SelectTypeState extends State<SelectType>
         panelBody = const SizedBox.shrink();
     }
 
-    return Container(
+    // UNE seule structure visuelle : le WorkbenchPanelFrame porte header,
+    // fond, bordure et clipping. Aucun double arrondi, aucune carte interne.
+    return Material(
       color: bg,
-      child: SizedBox(
-        width: _kSidebarWidth,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Panel header
-            Container(
-              height: 35,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      titles[_activeRail] ?? '',
-                      style: _kSectionTitle.copyWith(color: titleColor),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  InkWell(
-                    onTap: () => setState(() {
-                      _sidebarState = 1;
-                      _activeRail = 0;
-                    }),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(
-                        Broken.close_circle,
-                        size: 14,
-                        color: titleColor,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: _SidebarCard(
-                  isFirst: true,
-                  isLast: true,
-                  child: panelBody,
-                ),
-              ),
-            ),
-          ],
+      borderRadius: BorderRadius.circular(WorkbenchTokens.sidebarRadius),
+      clipBehavior: Clip.antiAlias,
+      child: WorkbenchPanelFrame(
+        title: titles[_activeRail] ?? '',
+        isDark: isDark,
+        onClose: () => setState(() {
+          _sidebarState = 1;
+          _activeRail = 0;
+        }),
+        body: _SidebarCard(
+          isFirst: true,
+          isLast: true,
+          child: panelBody,
         ),
       ),
     );
@@ -2479,7 +2546,7 @@ class _SelectTypeState extends State<SelectType>
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Text(
             'PROJETS RÉCENTS',
-            style: _kSectionTitle.copyWith(
+            style: _sectionTitleStyle(dark).copyWith(
               color: dark ? Colors.grey[500] : Colors.grey[600],
             ),
           ),
@@ -3212,7 +3279,7 @@ class _SelectTypeState extends State<SelectType>
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
           child: Text(
             'EXTENSIONS VSCODE',
-            style: _kSectionTitle.copyWith(
+            style: _sectionTitleStyle(dark).copyWith(
               color: dark ? Colors.grey[500] : Colors.grey[500],
             ),
           ),
@@ -3251,7 +3318,7 @@ class _SelectTypeState extends State<SelectType>
           padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
           child: Text(
             'MODÈLES & RUNTIMES',
-            style: _kSectionTitle.copyWith(
+            style: _sectionTitleStyle(dark).copyWith(
               color: dark ? Colors.grey[500] : Colors.grey[500],
             ),
           ),
@@ -3744,20 +3811,24 @@ class _SelectTypeState extends State<SelectType>
   ) {
     final isDark = appTheme.isDark;
     final fg = isDark ? Colors.grey[400]! : Colors.grey[700]!;
-    final bg = isDark ? _kActivityBgDark : _kActivityBgLight;
+    final bg = WorkbenchTokens.titleBarBg(isDark);
     final boxBg = isDark ? const Color(0xff3a3a3a) : const Color(0xfff5f5f5);
     final boxBdr = isDark ? const Color(0xff666666) : const Color(0xffbbbbbb);
     final nameFg = isDark ? Colors.grey[200]! : Colors.grey[800]!;
 
     return Container(
-      height: 35,
+      height: WorkbenchTokens.titleBarHeight,
       color: bg,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
           // ── CENTER: ← [workspace box] → ──────────────────────────────
           // Workspace box - centered after activity bar + rounded corner
-          SizedBox(width: _sidebarState >= 1 ? 48.0 : 0.0),
+          SizedBox(
+            width: _sidebarState >= 1
+                ? WorkbenchTokens.activityBarWidth
+                : 0.0,
+          ),
           Expanded(
             child: Center(
               child: Row(
@@ -3835,6 +3906,8 @@ class _SelectTypeState extends State<SelectType>
           ),
 
           // ── RIGHT: layout and panel controls ──────────────────────────
+          // Sur mobile (< 600px), les actions secondaires (layout) sont
+          // regroupées dans un menu « plus » pour ne jamais sortir de l'écran.
           // 1 — ouvrir/fermer le panneau gauche
           _hdrBtn(
             Broken.sidebar_left,
@@ -3852,14 +3925,53 @@ class _SelectTypeState extends State<SelectType>
               }
             }),
           ),
-          // 2 — layout disposition menu
+          // 2 — layout disposition menu (regroupé sur mobile)
           Builder(
-            builder: (ctx) => _hdrBtn(
-              Broken.element_4,
-              'Personnaliser la disposition',
-              fg,
-              () => _showLayoutMenu(ctx, isDark),
-            ),
+            builder: (ctx) {
+              final isCompactScreen =
+                  MediaQuery.sizeOf(context).width < WorkbenchBreakpoints.phone;
+              if (!isCompactScreen) {
+                return _hdrBtn(
+                  Broken.element_4,
+                  'Personnaliser la disposition',
+                  fg,
+                  () => _showLayoutMenu(ctx, isDark),
+                );
+              }
+              // Mobile : menu « plus » regroupant les actions secondaires.
+              return PopupMenuButton<String>(
+                tooltip: 'Plus d’actions',
+                icon: Icon(Broken.more_circle, size: 16, color: fg),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+                color: isDark ? const Color(0xff252526) : Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                onSelected: (value) {
+                  if (value == 'layout') _showLayoutMenu(ctx, isDark);
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'layout',
+                    child: Row(
+                      children: [
+                        Icon(Broken.element_4,
+                            size: 15, color: isDark ? Colors.grey[300] : Colors.grey[700]),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Personnaliser la disposition',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey[200] : Colors.grey[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           // 3 — panneau bas (style « sidebar down » comme le panneau gauche)
           _hdrBtn(
@@ -3897,14 +4009,18 @@ class _SelectTypeState extends State<SelectType>
     String tooltip,
     Color color,
     VoidCallback onTap,
-  ) => Tooltip(
-    message: tooltip,
-    child: InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-        child: Icon(icon, size: 16, color: color),
+  ) => Semantics(
+    button: true,
+    label: tooltip,
+    child: Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
+          child: Icon(icon, size: 16, color: color),
+        ),
       ),
     ),
   );
@@ -3981,6 +4097,8 @@ class _SelectTypeState extends State<SelectType>
                             for (final n in _notificationsList) {
                               n['read'] = true;
                             }
+                            PandaNotifications.unreadCount = 0;
+                            PandaNotifications.unreadCountListenable.value = 0;
                           }),
                           child: Text(
                             'Tout marquer lu',
@@ -4751,173 +4869,189 @@ class _SelectTypeState extends State<SelectType>
     );
   }
 
-  // ── Bottom panel (terminal only) ───────────────────────────────────────────────────────────
+  // ── Bottom panel : PROBLEMS | OUTPUT | DEBUG CONSOLE | TERMINAL ──────────
+  // Cohérent avec les tokens Workbench (pas de bleu 007ACC codé en dur).
+  // L'onglet Problems partage la MÊME source de données que la Status Bar
+  // (LanguageFeatureRouter.diagnostics) — compteur ↔ panneau connectés.
   Widget _buildBottomPanel() {
     return BlocBuilder<AppThemeBloc, AppThemeState>(
       builder: (context, ts) {
         final isDark = ts.appTheme.isDark;
-        const panelRadius = 10.0;
         if (!_bottomPanelOpen) return const SizedBox.shrink();
-        return Padding(
-          padding: EdgeInsets.zero,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            height: _bottomPanelHeight,
-            clipBehavior: Clip.antiAlias,
-            decoration: const BoxDecoration(color: Colors.transparent),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(panelRadius),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  // The grip also acts as the terminal panel header. Keep the
-                  // handle centered while making the two panel actions easy
-                  // to reach without covering the terminal content.
-                  SizedBox(
-                    height: 34,
-                    child: Stack(
-                      children: [
-                        GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onVerticalDragUpdate: (details) {
-                            setState(() {
-                              _bottomPanelHeight = (_bottomPanelHeight -
-                                      (details.primaryDelta ?? 0))
-                                  .clamp(150.0, 520.0)
-                                  .toDouble();
-                            });
-                          },
-                          child: Center(
-                            child: Container(
-                              width: 34,
-                              height: 3,
-                              decoration: BoxDecoration(
+        return AnimatedContainer(
+          duration: WorkbenchTokens.panelAnim,
+          curve: WorkbenchTokens.panelCurve,
+          height: _bottomPanelHeight,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: WorkbenchTokens.panelBg(isDark),
+            border: Border(
+              top: BorderSide(color: WorkbenchTokens.panelBorderFg(isDark), width: 1),
+            ),
+          ),
+          child: Column(
+            children: [
+              // ── Header compact : drag-grip + tabs + actions ─────────────
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragUpdate: (details) {
+                  setState(() {
+                    _bottomPanelHeight = (_bottomPanelHeight -
+                            (details.primaryDelta ?? 0))
+                        .clamp(150.0, 520.0)
+                        .toDouble();
+                  });
+                },
+                child: SizedBox(
+                  height: WorkbenchTokens.panelHeaderHeight,
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 8),
+                      ..._panelTabLabels.entries.map((entry) {
+                        final idx = entry.key;
+                        final label = entry.value;
+                        final selected = _bottomPanelTab == idx;
+                        return _PanelToolbarBtn(
+                          label: label,
+                          tooltip: label,
+                          active: selected,
+                          fg: WorkbenchTokens.tabInactiveFg(isDark),
+                          activeFg: WorkbenchTokens.tabActiveFg(isDark),
+                          onTap: () => setState(() => _bottomPanelTab = idx),
+                        );
+                      }),
+                      const Spacer(),
+                      if (_bottomPanelTab == 0)
+                        Tooltip(
+                          message: 'Ouvrir le même terminal dans l’éditeur',
+                          child: IconButton(
+                            icon: const Icon(Icons.open_in_new_rounded),
+                            iconSize: 17,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                            color: isDark
+                                ? Colors.grey[400]
+                                : Colors.grey[700],
+                            onPressed: _openTerminalTab,
+                          ),
+                        ),
+                      PopupMenuButton<String>(
+                        tooltip: 'Options du panneau',
+                        icon: const Icon(Icons.more_horiz_rounded),
+                        iconSize: 19,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        color: isDark
+                            ? const Color(0xff2b2b2b)
+                            : Colors.white,
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'open_tab':
+                              _openTerminalTab();
+                            case 'maximize_panel':
+                              setState(() {
+                                _bottomPanelHeight = 520.0;
+                              });
+                            case 'close_panel':
+                              setState(() {
+                                _bottomPanelOpen = false;
+                              });
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'open_tab',
+                            child: Text(
+                              'Ouvrir dans l’éditeur',
+                              style: TextStyle(
                                 color: isDark
-                                    ? const Color(0xff62656a)
-                                    : const Color(0xffa6a8ac),
-                                borderRadius: BorderRadius.circular(2),
+                                    ? Colors.grey[200]
+                                    : Colors.grey[800],
                               ),
                             ),
                           ),
-                        ),
-                        Positioned(
-                          right: 4,
-                          top: 0,
-                          bottom: 0,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Tooltip(
-                                message: 'Ouvrir le même terminal dans l’éditeur',
-                                child: IconButton(
-                                  icon: const Icon(Icons.open_in_new_rounded),
-                                  iconSize: 17,
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(
-                                    minWidth: 32,
-                                    minHeight: 32,
-                                  ),
-                                  color: isDark
-                                      ? Colors.grey[400]
-                                      : Colors.grey[700],
-                                  onPressed: _openTerminalTab,
-                                ),
-                              ),
-                              PopupMenuButton<String>(
-                                tooltip: 'Options du terminal',
-                                icon: const Icon(Icons.more_horiz_rounded),
-                                iconSize: 19,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(
-                                  minWidth: 32,
-                                  minHeight: 32,
-                                ),
+                          PopupMenuItem(
+                            value: 'maximize_panel',
+                            child: Text(
+                              'Agrandir le panneau',
+                              style: TextStyle(
                                 color: isDark
-                                    ? const Color(0xff2b2b2b)
-                                    : Colors.white,
-                                onSelected: (value) {
-                                  switch (value) {
-                                    case 'open_tab':
-                                      _openTerminalTab();
-                                    case 'maximize_panel':
-                                      setState(() {
-                                        _bottomPanelHeight = 520.0;
-                                      });
-                                    case 'close_panel':
-                                      setState(() {
-                                        _bottomPanelOpen = false;
-                                      });
-                                  }
-                                },
-                                itemBuilder: (context) => [
-                                  PopupMenuItem(
-                                    value: 'open_tab',
-                                    child: Text(
-                                      'Ouvrir dans l’éditeur',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.grey[200]
-                                            : Colors.grey[800],
-                                      ),
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'maximize_panel',
-                                    child: Text(
-                                      'Agrandir le panneau',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.grey[200]
-                                            : Colors.grey[800],
-                                      ),
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: 'close_panel',
-                                    child: Text(
-                                      'Fermer le panneau',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.grey[200]
-                                            : Colors.grey[800],
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                    ? Colors.grey[200]
+                                    : Colors.grey[800],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                          PopupMenuItem(
+                            value: 'close_panel',
+                            child: Text(
+                              'Fermer le panneau',
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.grey[200]
+                                    : Colors.grey[800],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  Expanded(
-                    child: _buildBottomPanelContent(
-                      context,
-                      ts.appTheme,
-                      isDark,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
+              Expanded(
+                child: _buildBottomPanelContent(
+                  context,
+                  ts.appTheme,
+                  isDark,
+                ),
+              ),
+            ],
           ),
         );
       },
     );
   }
 
+  /// Onglets du panneau inférieur (0=Terminal 1=Problems 2=Output 3=Debug).
+  static const Map<int, String> _panelTabLabels = {
+    0: 'TERMINAL',
+    1: 'PROBLÈMES',
+    2: 'SORTIE',
+    3: 'CONSOLE DE DÉBOGAGE',
+  };
+
   Widget _buildBottomPanelContent(
     BuildContext context,
     AppTheme appTheme,
     bool isDark,
   ) {
-    return EmbeddedTerminal(
-      projectDir: _currentWorkspaceDir ?? '/',
-      showKeyboardMenu: true,
-      onOpenInTab: _openTerminalTab,
-    );
+    switch (_bottomPanelTab) {
+      case 1: // Problems — même source que le compteur de la Status Bar.
+        return _ProblemsPanel(
+          fg: WorkbenchTokens.tabActiveFg(isDark),
+          search: _problemsSearch,
+          filter: _problemsFilter,
+        );
+      case 2: // Output — flux réel de PandaLogger (aucun contenu fake).
+        return _OutputPanel(
+          fg: WorkbenchTokens.tabActiveFg(isDark),
+          muted: WorkbenchTokens.tabInactiveFg(isDark),
+        );
+      case 3: // Debug console (DAP réel via DebugBridge).
+        return const DebugConsole();
+      default:
+        return EmbeddedTerminal(
+          projectDir: _currentWorkspaceDir ?? '/',
+          showKeyboardMenu: true,
+          onOpenInTab: _openTerminalTab,
+        );
+    }
   }
 
   // ── Tab bar ───────────────────────────────────────────────────────────────
@@ -4942,11 +5076,14 @@ class _SelectTypeState extends State<SelectType>
 
   Widget _buildTabBar(AppTheme appTheme, {bool isPrimary = true}) {
     final isDark = appTheme.isDark;
-    final tabBg = isDark ? _kTabBarDark : _kTabBarLight;
-    final activeTabBg = isDark ? _kTabActiveDark : _kTabActiveLight;
-    final inactiveFg = isDark ? Colors.grey[500]! : Colors.grey[600]!;
-    final activeFg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
-    final sepColor = isDark ? const Color(0xff3a3a3a) : const Color(0xffdddddd);
+    // Tokens Workbench (multieditortabscontrol.css) : fond tab-bar distinct,
+    // onglet actif = fond éditeur, bordure 1px, accent haut sur l'onglet actif.
+    final tabBg = WorkbenchTokens.tabBarBg(isDark);
+    final activeTabBg = WorkbenchTokens.tabActiveBg(isDark);
+    final inactiveFg = WorkbenchTokens.tabInactiveFg(isDark);
+    final activeFg = WorkbenchTokens.tabActiveFg(isDark);
+    final tabBarBorder = WorkbenchTokens.tabBarBorder(isDark);
+    final isCompact = MediaQuery.sizeOf(context).width < WorkbenchBreakpoints.phone;
 
     final tabs = isPrimary ? _openTabs : _splitTabs;
     final activeIdx = isPrimary ? _activeTabIdx : _splitTabIdx;
@@ -4955,9 +5092,13 @@ class _SelectTypeState extends State<SelectType>
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          height: 35,
+          height: WorkbenchTokens.tabBarHeight,
           clipBehavior: Clip.hardEdge,
-          decoration: BoxDecoration(color: tabBg),
+          decoration: BoxDecoration(
+            color: tabBg,
+            // tabs-border-bottom : séparation claire tabs ↔ éditeur.
+            border: Border(bottom: BorderSide(color: tabBarBorder, width: 1)),
+          ),
           child: Row(
             children: [
               Expanded(
@@ -4968,6 +5109,7 @@ class _SelectTypeState extends State<SelectType>
                       final tab = tabs[i];
                       final isActive = i == activeIdx;
                       return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
                         onTap: () => setState(() {
                           if (isPrimary) {
                             _activeTabIdx = i;
@@ -4976,12 +5118,21 @@ class _SelectTypeState extends State<SelectType>
                           }
                         }),
                         child: Container(
-                          height: 35,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          height: WorkbenchTokens.tabBarHeight,
+                          // Mobile : padding réduit mais jamais de clipping du texte.
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isCompact ? 10 : 14,
+                          ),
                           decoration: BoxDecoration(
                             color: isActive ? activeTabBg : Colors.transparent,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(8),
+                            border: Border(
+                              top: BorderSide(
+                                // Tab.activeBorderTop — accent discret VS Code.
+                                color: isActive
+                                    ? WorkbenchTokens.accent
+                                    : Colors.transparent,
+                                width: 1,
+                              ),
                             ),
                           ),
                           child: Row(
@@ -4991,24 +5142,35 @@ class _SelectTypeState extends State<SelectType>
                                 isActive ? activeFg : inactiveFg,
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                tab.title,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isActive ? activeFg : inactiveFg,
+                              Flexible(
+                                child: Text(
+                                  tab.title,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isActive ? activeFg : inactiveFg,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               GestureDetector(
+                                behavior: HitTestBehavior.opaque,
                                 onTap: () => isPrimary
                                     ? _closeTab(i)
                                     : _closeSplitTab(i),
-                                child: Icon(
-                                  Broken.close_circle,
-                                  size: 12,
-                                  color: isActive
-                                      ? inactiveFg
-                                      : inactiveFg.withValues(alpha: 0.3),
+                                child: Tooltip(
+                                  message: 'Fermer (Ctrl+W)',
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(2),
+                                    child: Icon(
+                                      Broken.close_circle,
+                                      size: 12,
+                                      color: isActive
+                                          ? inactiveFg
+                                          : inactiveFg.withValues(alpha: 0.3),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
@@ -11579,7 +11741,7 @@ class _SelectTypeState extends State<SelectType>
 
   Widget _sectionHeader(String title, bool isDark) => Text(
     title.toUpperCase(),
-    style: _kSectionTitle.copyWith(
+    style: _sectionTitleStyle(isDark).copyWith(
       color: isDark ? Colors.grey[500] : Colors.grey[600],
     ),
   );
@@ -11601,7 +11763,11 @@ class _TabDef {
   final String id;
   final String title;
   final IconData icon;
-  const _TabDef({required this.id, required this.title, required this.icon});
+  const _TabDef({
+    required this.id,
+    required this.title,
+    required this.icon,
+  });
 }
 
 // ── _EditorTabConfig ──────────────────────────────────────────────────────────
@@ -11639,51 +11805,55 @@ class _ActivityBtnEx extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: item.label,
-      preferBelow: false,
-      child: InkWell(
-        onTap: onTap,
-        hoverColor: selColor.withValues(alpha: 0.06),
-        splashColor: selColor.withValues(alpha: 0.10),
-        child: SizedBox(
-          width: 48,
-          height: 44,
-          child: Stack(
-            children: [
-              // Indicateur de sélection (barre gauche arrondie)
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                left: 0,
-                top: selected ? 8 : 22,
-                bottom: selected ? 8 : 22,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 180),
-                  opacity: selected ? 1 : 0,
-                  child: Container(
-                    width: 2.5,
-                    decoration: BoxDecoration(
-                      color: selColor,
-                      borderRadius: const BorderRadius.horizontal(
-                        right: Radius.circular(2),
+    return Semantics(
+      button: true,
+      label: item.label,
+      child: Tooltip(
+        message: item.label,
+        preferBelow: false,
+        child: InkWell(
+          onTap: onTap,
+          hoverColor: selColor.withValues(alpha: 0.06),
+          splashColor: selColor.withValues(alpha: 0.10),
+          child: SizedBox(
+            width: WorkbenchTokens.activityBarWidth,
+            height: 44,
+            child: Stack(
+              children: [
+                // Indicateur de sélection (barre gauche arrondie)
+                AnimatedPositioned(
+                  duration: WorkbenchTokens.fastAnim,
+                  curve: WorkbenchTokens.panelCurve,
+                  left: 0,
+                  top: selected ? 8 : 22,
+                  bottom: selected ? 8 : 22,
+                  child: AnimatedOpacity(
+                    duration: WorkbenchTokens.fastAnim,
+                    opacity: selected ? 1 : 0,
+                    child: Container(
+                      width: 2.5,
+                      decoration: BoxDecoration(
+                        color: selColor,
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(2),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Center(
-                child: AnimatedScale(
-                  duration: const Duration(milliseconds: 160),
-                  scale: selected ? 1.06 : 1.0,
-                  child: Icon(
-                    item.icon,
-                    size: 21,
-                    color: selected ? selColor : iconColor,
+                Center(
+                  child: AnimatedScale(
+                    duration: WorkbenchTokens.fastAnim,
+                    scale: selected ? 1.06 : 1.0,
+                    child: Icon(
+                      item.icon,
+                      size: 21,
+                      color: selected ? selColor : iconColor,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -11819,11 +11989,12 @@ class _ActivityBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return _ActivityBtnEx(
       item: item,
       selected: selected,
-      iconColor: _kActivityIconDark,
-      selColor: _kActivitySelDark,
+      iconColor: WorkbenchTokens.activityFg(dark),
+      selColor: WorkbenchTokens.activitySelectedFg(dark),
       onTap: onTap,
     );
   }
@@ -11873,7 +12044,11 @@ class _GithubAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GithubAvatarEx(iconColor: _kActivityIconDark, onTap: onTap);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return _GithubAvatarEx(
+      iconColor: WorkbenchTokens.activityFg(dark),
+      onTap: onTap,
+    );
   }
 }
 
@@ -12325,14 +12500,16 @@ class _SidebarCard extends StatelessWidget {
 // ── Panel toolbar button (used in bottom panel tab headers) ─────────────────
 class _PanelToolbarBtn extends StatelessWidget {
   const _PanelToolbarBtn({
-    required this.icon,
+    this.icon,
+    this.label,
     required this.tooltip,
     required this.active,
     required this.fg,
     required this.activeFg,
     required this.onTap,
   });
-  final IconData icon;
+  final IconData? icon;
+  final String? label;
   final String tooltip;
   final bool active;
   final Color fg;
@@ -12348,10 +12525,115 @@ class _PanelToolbarBtn extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(3),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 4),
-          child: Icon(icon, size: 14, color: active ? activeFg : fg),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: label != null
+              ? Text(
+                  label!,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    letterSpacing: 0.8,
+                    color: active ? activeFg : fg,
+                  ),
+                )
+              : Icon(icon!, size: 14, color: active ? activeFg : fg),
         ),
       ),
+    );
+  }
+}
+
+// ── Output panel — flux réel de PandaLogger (aucun contenu fake) ──────────
+class _OutputPanel extends StatefulWidget {
+  const _OutputPanel({required this.fg, required this.muted});
+  final Color fg;
+  final Color muted;
+
+  @override
+  State<_OutputPanel> createState() => _OutputPanelState();
+}
+
+class _OutputPanelState extends State<_OutputPanel> {
+  final ScrollController _scrollCtrl = ScrollController();
+  StreamSubscription<PandaLogEvent>? _sub;
+  final List<PandaLogEvent> _events = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _events.addAll(PandaLogger.recentEvents.take(500).toList().reversed);
+    _sub = PandaLogger.liveStream.listen(_onEvent);
+  }
+
+  void _onEvent(PandaLogEvent event) {
+    if (!mounted) return;
+    setState(() {
+      _events.add(event);
+      if (_events.length > 500) _events.removeAt(0);
+    });
+    if (_scrollCtrl.hasClients &&
+        _scrollCtrl.position.maxScrollExtent - _scrollCtrl.offset < 60) {
+      _scrollCtrl.animateTo(
+        _scrollCtrl.position.maxScrollExtent,
+        duration: WorkbenchTokens.fastAnim,
+        curve: WorkbenchTokens.panelCurve,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
+  Color _levelColor(PandaLogLevel level) => switch (level) {
+        PandaLogLevel.error => WorkbenchTokens.errorFg,
+        PandaLogLevel.warning => WorkbenchTokens.warningFg,
+        _ => widget.fg,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    if (_events.isEmpty) {
+      return Center(
+        child: Text(
+          'Aucune sortie pour le moment.',
+          style: TextStyle(fontSize: 12, color: widget.muted),
+        ),
+      );
+    }
+    return ListView.builder(
+      controller: _scrollCtrl,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      itemCount: _events.length,
+      itemBuilder: (context, i) {
+        final e = _events[i];
+        final time =
+            '${e.timestamp.hour.toString().padLeft(2, '0')}:${e.timestamp.minute.toString().padLeft(2, '0')}:${e.timestamp.second.toString().padLeft(2, '0')}';
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 1.5),
+          child: Text.rich(
+            TextSpan(
+              style: TextStyle(
+                fontSize: 11.5,
+                fontFamily: 'monospace',
+                color: _levelColor(e.level),
+              ),
+              children: [
+                TextSpan(
+                  text: '$time ',
+                  style: TextStyle(color: widget.muted.withValues(alpha: 0.7)),
+                ),
+                TextSpan(text: e.message),
+              ],
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        );
+      },
     );
   }
 }
