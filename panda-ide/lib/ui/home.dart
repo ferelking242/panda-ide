@@ -1348,8 +1348,47 @@ class _SelectTypeState extends State<SelectType>
                     body: SafeArea(
                       child: Stack(
                         children: [
-                          Column(
-                            children: [
+                          // ══════════════════════════════════════════════════════
+                          // SILHOUETTE DU WORKBENCH — un seul shell arrondi :
+                          //   TITLE BAR
+                          //   ACTIVITY | SIDEBAR | EDITOR (+ BOTTOM PANEL)
+                          //   STATUS BAR
+                          // Seuls les coins extérieurs sont arrondis (§14) ; toutes
+                          // les séparations internes restent des droites.
+                          // ══════════════════════════════════════════════════════
+                          Padding(
+                            padding: const EdgeInsets.all(
+                              WorkbenchTokens.shellInset,
+                            ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: WorkbenchTokens.titleBarBg(
+                                  appTheme.isDark,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  WorkbenchTokens.shellRadius,
+                                ),
+                                border: Border.all(
+                                  color: WorkbenchTokens.shellBorder(
+                                    appTheme.isDark,
+                                  ),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: appTheme.isDark
+                                        ? Colors.black.withValues(alpha: 0.35)
+                                        : Colors.black.withValues(alpha: 0.07),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  WorkbenchTokens.shellRadius,
+                                ),
+                                child: Column(
+                                  children: [
                               // ── Top bar spans full width ──────────────────────────
                               _buildTopBar(context, appTheme, appThemestate),
 
@@ -1363,40 +1402,46 @@ class _SelectTypeState extends State<SelectType>
                                       _buildActivityBar(context, appTheme),
 
                                     // ── Sidebar panel — animated VS Code-style reveal ──
+                                    // Le panneau est TOUJOURS mis en page à sa largeur
+                                    // finale (OverflowBox borné + ClipRRect) : ni reflow
+                                    // pendant l'animation, ni largeur infinie qui ferait
+                                    // échouer le header (RenderFlex flex non borné).
                                     AnimatedSize(
                                       duration: WorkbenchTokens.panelAnim,
                                       curve: WorkbenchTokens.panelCurve,
                                       alignment: Alignment.centerLeft,
-                                      child: SizedBox(
-                                        width: _sidebarState == 2
-                                            ? _sidebarWidthFor(MediaQuery.sizeOf(context).width)
-                                            : 0,
-                                        child: OverflowBox(
-                                          alignment: Alignment.topLeft,
-                                          minWidth: 0,
-                                          maxWidth: double.infinity,
-                                          child: _sidebarState == 2
-                                              ? _buildSidebarPanel(context, appTheme)
-                                              : const SizedBox.shrink(),
-                                        ),
+                                      child: Builder(
+                                        builder: (context) {
+                                          final panelWidth = _sidebarWidthFor(
+                                            MediaQuery.sizeOf(context).width,
+                                          );
+                                          return SizedBox(
+                                            width: _sidebarState == 2
+                                                ? panelWidth
+                                                : 0,
+                                            child: ClipRect(
+                                              child: OverflowBox(
+                                                alignment: Alignment.topLeft,
+                                                minWidth: panelWidth,
+                                                maxWidth: panelWidth,
+                                                child: _sidebarState == 2
+                                                    ? _buildSidebarPanel(
+                                                        context,
+                                                        appTheme,
+                                                      )
+                                                    : const SizedBox.shrink(),
+                                              ),
+                                            ),
+                                          );
+                                        },
                                       ),
                                     ),
 
                                     // ── Right side: editor stacked above bottom panel ──
+                                    // AUCUN écart avec le sidebar : le côté gauche de
+                                    // l'éditeur est une séparation interne droite (§7),
+                                    // jamais deux surfaces qui se font face.
                                     Expanded(
-                                      child: Padding(
-                                        // Espace de respiration autour du bloc éditeur
-                                        // (le panneau sidebar arrondi se détache dessus).
-                                        padding: EdgeInsets.fromLTRB(
-                                          _sidebarState == 2
-                                              ? WorkbenchTokens.spaceXS
-                                              : 0,
-                                          _sidebarState == 2
-                                              ? WorkbenchTokens.spaceXS
-                                              : 0,
-                                          0,
-                                          _bottomPanelOpen ? 0 : 0,
-                                        ),
                                         child: Column(
                                           children: [
                                             // ── Editor area ──────────────────────────────
@@ -1508,15 +1553,19 @@ class _SelectTypeState extends State<SelectType>
                                             _buildBottomPanel(),
                                           ],
                                         ),
-                                      ),
                                     ),
                                   ],
                                 ),
                               ),
                               // ── Status bar — VS Code : barre pleine largeur,
                               // sous l'activity bar, la sidebar et l'éditeur.
+                              // Dernier élément vertical DU SHELL : elle termine la
+                              // silhouette (ses coins bas suivent le rayon du shell).
                               _buildWorkbenchStatusBar(),
-                            ],
+                                  ],
+                                ),
+                              ),
+                            ),
                           ),
                           // Agent chat is rendered only through PandaAgentPage in the
                           // panel above; the former floating legacy overlay is disabled.
@@ -2383,7 +2432,6 @@ class _SelectTypeState extends State<SelectType>
   Widget _buildSidebarPanel(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
     final bg = WorkbenchTokens.sidebarBg(isDark);
-    final fg = WorkbenchTokens.sidebarHeaderFg(isDark);
 
     final titles = {
       1: 'EXPLORATEUR',
@@ -2444,12 +2492,17 @@ class _SelectTypeState extends State<SelectType>
         panelBody = const SizedBox.shrink();
     }
 
-    // UNE seule structure visuelle : le WorkbenchPanelFrame porte header,
-    // fond, bordure et clipping. Aucun double arrondi, aucune carte interne.
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(WorkbenchTokens.sidebarRadius),
-      clipBehavior: Clip.antiAlias,
+    // UNE seule structure visuelle : WorkbenchPanelFrame porte le header ET le
+    // contenu dans la même surface. Aucune carte imbriquée, aucun arrondi local :
+    // les coins appartiennent à la silhouette du shell (ClipRRect dans build),
+    // et le côté droit du sidebar reste DROIT (séparation interne avec l'éditeur).
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border(
+          right: BorderSide(color: WorkbenchTokens.panelBorderFg(isDark)),
+        ),
+      ),
       child: WorkbenchPanelFrame(
         title: titles[_activeRail] ?? '',
         isDark: isDark,
@@ -2457,11 +2510,7 @@ class _SelectTypeState extends State<SelectType>
           _sidebarState = 1;
           _activeRail = 0;
         }),
-        body: _SidebarCard(
-          isFirst: true,
-          isLast: true,
-          child: panelBody,
-        ),
+        body: panelBody,
       ),
     );
   }
@@ -12477,50 +12526,10 @@ class _ThinkingBlockState extends State<_ThinkingBlock> {
 /// Une phase de raisonnement AUTONOME de l'agent.
 ///
 
-// ── _SidebarClipper ────────────────────────────────────────────────────────────
-// Rounds the top-right and bottom-right corners of the sidebar panel,
-// giving it the "floating card" look from Scolaris.
-class _SidebarClipper extends CustomClipper<Path> {
-  static const double _radius = 20.0;
-
-  @override
-  Path getClip(Size size) {
-    return Path()
-      ..moveTo(0, 0)
-      ..lineTo(size.width - _radius, 0)
-      ..quadraticBezierTo(size.width, 0, size.width, _radius)
-      ..lineTo(size.width, size.height - _radius)
-      ..quadraticBezierTo(
-        size.width,
-        size.height,
-        size.width - _radius,
-        size.height,
-      )
-      ..lineTo(0, size.height)
-      ..close();
-  }
-
-  @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
-}
-
-/// VS Code-style sidebar section card — rounded corners, subtle bg, spacing.
-class _SidebarCard extends StatelessWidget {
-  final Widget child;
-  final bool isFirst;
-  final bool isLast;
-
-  const _SidebarCard({
-    required this.child,
-    this.isFirst = false,
-    this.isLast = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return child;
-  }
-}
+/// (Legacy) `_SidebarClipper` arrondissait les coins DROITS du sidebar —
+/// exactement la forme « SIDEBAR ) » qui faisait face à l'éditeur. Supprimé :
+/// les coins appartiennent désormais à la silhouette du shell (ClipRRect dans
+/// build), les séparations internes restent droites.
 
 /// Minimal clickable item for the VSCode-style status bar.
 // ── Panel toolbar button (used in bottom panel tab headers) ─────────────────
@@ -12806,40 +12815,9 @@ class _ProblemsPanelState extends State<_ProblemsPanel> {
   }
 }
 
-class _StatusBarItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color fg;
-  final VoidCallback onTap;
-
-  const _StatusBarItem({
-    required this.icon,
-    required this.label,
-    required this.fg,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(3),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 13, color: fg),
-            if (label.isNotEmpty) ...[
-              const SizedBox(width: 3),
-              Text(label, style: TextStyle(fontSize: 11, color: fg, height: 1)),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
+// (Legacy) `_StatusBarItem` était une SECONDE implémentation d'élément de
+// status bar, morte dans home.dart. Supprimée : PandaStatusBar
+// (lib/ui/editor/status_bar.dart) est l'unique status bar du Workbench.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // _PlanApprovalCard — Carte interactive de validation du plan

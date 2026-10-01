@@ -47,10 +47,27 @@ abstract final class WorkbenchTokens {
   /// Hauteur d'entrée de la Status Bar côté tactile.
   static const double statusItemMinTap = 28;
 
-  // ── Rayons (subtils — « floating rounded workbench panel ») ─────────────
-  static const double panelRadius = 8;
-  static const double sidebarRadius = 8;
-  static const double editorRadius = 0;
+  // ── Rayons ──────────────────────────────────────────────────────────────
+  // Aucun rayon « par panneau » : arrondir le sidebar ET l'éditeur produit deux
+  // surfaces qui se font face (« SIDEBAR ) ( EDITOR »). Le seul rayon du
+  // Workbench est celui de la silhouette (shellRadius, ci-dessous).
+
+  // ── SILHOUETTE du Workbench (une seule forme extérieure) ────────────────
+  // Le Workbench entier (Title Bar + Activity | Sidebar | Editor + Status Bar)
+  // est découpé par UN SEUL ClipRRect : seuls les coins EXTERIEURS sont
+  // arrondis, toutes les séparations internes restent droites. Il ne doit donc
+  // JAMAIS y avoir d'arrondi propre au sidebar côté éditeur ni d'éditeur arrondi
+  // côté sidebar (pas de « SIDEBAR ) ( EDITOR »).
+  static const double shellRadius = 16;
+
+  /// Marge entre le bord de l'écran et le shell. Elle rend les coins arrondis
+  /// lisibles dans les deux thèmes (en dark les surfaces et le scaffold sont
+  /// proches : sans marge + filet, la silhouette serait invisible).
+  static const double shellInset = 8;
+
+  /// Filet 1px qui trace la silhouette (et ses coins) même en dark.
+  static Color shellBorder(bool dark) =>
+      dark ? const Color(0xff2f2f2f) : const Color(0xffdcdcdc);
 
   // ── Espacements ─────────────────────────────────────────────────────────
   static const double spaceXXS = 2;
@@ -113,8 +130,13 @@ abstract final class WorkbenchTokens {
   /// Tablette 600–1024px : 260–300px.
   static double sidebarWidthTablet(double width) => (width * 0.30).clamp(260.0, 300.0);
 
-  /// Téléphone <600px : 240–285px selon la largeur disponible.
-  static double sidebarWidthPhone(double width) => (width - activityBarWidth - 12).clamp(200.0, 285.0);
+  /// Téléphone <600px : on réserve d'abord le shell (marge), l'Activity Bar
+  /// et une largeur d'éditeur utilisable — le sidebar pousse l'éditeur, il ne
+  /// doit jamais lui laisser 10px de place.
+  static double sidebarWidthPhone(double width) {
+    final available = width - (shellInset * 2) - activityBarWidth;
+    return (available * 0.70).clamp(170.0, 285.0);
+  }
 
   static double sidebarWidth(double width) {
     if (WorkbenchBreakpoints.isTabletOrLarger(width)) return sidebarWidthDesktop(width);
