@@ -140,8 +140,14 @@ const _kTabBarLight = Color(0xffececec);
 const _kTabActiveDark = Color(0xff1e1e1e);
 const _kTabActiveLight = Color(0xffffffff);
 const _kAccent = Color(0xff6366f1);
-const _kSidebarBgDark = Color(0xff252526);
-const _kSidebarBgLight = Color(0xfff3f3f3);
+
+// ── Chrome unifié ────────────────────────────────────────────────────────────
+// Top Bar = Sidebar = Barre d'état = Activity Bar : UNE SEULE teinte, la même
+// dans TOUS les thèmes (sombre, clair, ambre…). C'est exactement le gris que
+// l'Activity Bar portait déjà ; tout le reste du Workbench s'aligne dessus au
+// lieu d'empiler trois gris différents.
+const _kChromeBgDark = _kActivityBgDark; // 0xff333333
+const _kChromeBgLight = _kActivityBgLight; // 0xffe8e8e8
 const _kSidebarWidth = 240.0;
 
 // ── Géométrie de la silhouette du Workbench ──────────────────────────────────
@@ -163,56 +169,69 @@ const Color _kWorkbenchBorderDark = Color(0xff2f2f2f);
 const Color _kWorkbenchBorderLight = Color(0xffdcdcdc);
 
 // ── Status Bar (VS Code `.part.statusbar { height: 22px; font-size: 12px }`) ──
-// La barre d'état partage EXACTEMENT la couleur de chrome du Top Bar et de la
-// Sidebar (_kSidebarBgDark / _kSidebarBgLight) : un seul ton pour les trois.
-// L'Activity Bar garde sa teinte propre (_kActivityBgDark / _kActivityBgLight)
-// pour que l'arc de raccord se lise.
+// Peinte avec la teinte de chrome commune (_kChromeBgDark / _kChromeBgLight) :
+// plus aucun « plan » d'une autre couleur sous les icônes.
 const double _kStatusBarHeight = 22; // VS Code statusbarpart.css
+
+/// Rayon du RACCORD entre la colonne Activity Bar et la barre d'état.
+///
+/// L'angle droit entre la colonne (verticale) et la barre (horizontale) est
+/// comblé par un quart de cercle tangent aux deux bords : le chrome « tourne »
+/// en douceur de la verticale vers l'horizontale au lieu de casser net. Un
+/// rayon généreux mais contenu — assez pour se lire, trop petit pour manger le
+/// contenu ou laisser un espace mort au début de la barre.
+const double _kWorkbenchJunctionRadius = 12;
 const _kSectionTitle = TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
   letterSpacing: 1.2,
 );
 
-/// Coin INTERNE du Workbench : là où la barre d'état rencontre l'Activity Bar,
-/// un arc de cercle remplace l'angle droit — la colonne descend jusqu'en bas et
-/// « s'ouvre » sur la barre d'état.
+/// Raccord en arc de cercle entre la colonne Activity Bar et la barre d'état.
 ///
-/// On creuse donc le coin haut-gauche de la barre d'état : l'arc, centré en
-/// (r, r), est tangent à la verticale en (0, r) et à l'horizontale en (r, 0).
-/// La cuvette laisse voir le fond du shell (la teinte de l'Activity Bar), donc
-/// les deux pièces se lisent comme une seule courbe continue.
-class _ConcaveCornerClipper extends CustomClipper<Path> {
-  const _ConcaveCornerClipper({required this.radius});
+/// Le coin BAS-GAUCHE de la zone de contenu (juste au-dessus du début de la
+/// barre) est comblé par un quart de cercle tangent au bord vertical (x = 0) et
+/// au bord horizontal (y = r) : la teinte de chrome de la colonne « tourne »
+/// donc en douceur vers la barre d'état au lieu de casser sur un angle droit.
+///
+/// Contrairement à une échancrure (creuser la barre d'état), ce raccord AJOUTE
+/// de la matière dans l'angle : aucun espace mort ne peut apparaître à gauche
+/// de la barre, et l'arc reste tangent aux deux bords.
+class _WorkbenchJunction extends StatelessWidget {
+  const _WorkbenchJunction({required this.radius, required this.color});
 
-  /// Rayon de l'arc — aligné sur le rayon des coins du shell pour rester
-  /// discret (VS Code « Modern UI » : `--vscode-cornerRadius-large` = 8px),
-  /// donc pas de grande échancrure à gauche.
   final double radius;
+  final Color color;
 
   @override
-  Path getClip(Size size) {
-    final r = radius;
-    return Path()
-      ..moveTo(0, r)
-      // 180° = bord gauche ; +90° (sens horaire à l'écran) = bord supérieur.
-      // L'arc passe par (r·(1−√2/2), r·(1−√2/2)) : il CREUSE le coin au lieu
-      // de l'arrondir.
-      ..arcTo(
-        Rect.fromCircle(center: Offset(r, r), radius: r),
-        math.pi,
-        math.pi / 2,
-        false,
-      )
-      ..lineTo(size.width, 0)
-      ..lineTo(size.width, size.height)
-      ..lineTo(0, size.height)
+  Widget build(BuildContext context) => SizedBox(
+        width: radius,
+        height: radius,
+        child: CustomPaint(painter: _WorkbenchJunctionPainter(color: color)),
+      );
+}
+
+class _WorkbenchJunctionPainter extends CustomPainter {
+  const _WorkbenchJunctionPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = size.width;
+    // Quart de cercle de (0, 0) vers (r, r) en passant au plus près du coin
+    // rentrant (0, r) : la courbe est tangente aux deux bords.
+    final path = Path()
+      ..moveTo(0, 0)
+      ..quadraticBezierTo(0, r, r, r)
+      ..lineTo(0, r)
       ..close();
+    canvas.drawPath(path, Paint()..color = color);
   }
 
   @override
-  bool shouldReclip(_ConcaveCornerClipper oldClipper) =>
-      oldClipper.radius != radius;
+  bool shouldRepaint(_WorkbenchJunctionPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1313,6 +1332,19 @@ class _SelectTypeState extends State<SelectType>
     return BlocBuilder<AppThemeBloc, AppThemeState>(
       builder: (context, appThemestate) {
         final appTheme = appThemestate.appTheme;
+
+        // ── Chrome unifié + Safe Area ──────────────────────────────────────
+        // Top Bar, Sidebar, Activity Bar et barre d'état partagent la même
+        // teinte, dans tous les thèmes.
+        final chromeBg = appTheme.isDark ? _kChromeBgDark : _kChromeBgLight;
+        final chromeBorder = appTheme.isDark
+            ? _kWorkbenchBorderDark
+            : _kWorkbenchBorderLight;
+        // Bande système (encoche / barre d'état Android) : le Top Bar doit
+        // DÉBORDER dedans au lieu de laisser une bande morte au-dessus.
+        final mediaTopInset = MediaQuery.paddingOf(context).top;
+        final chromeBleedsTop = mediaTopInset > 0;
+
         return Builder(
           builder: (context) => BlocListener<PackageCatalogCubit, PackageCatalogState>(
             listenWhen: (prev, cur) =>
@@ -1437,9 +1469,25 @@ class _SelectTypeState extends State<SelectType>
                     bottomNavigationBar: null,
 
                     // ── Body ─────────────────────────────────────────────────────
+                    // `top: false` : la bande système est gérée juste en dessous,
+                    // pour que le Top Bar se prolonge jusqu'au bord de l'écran.
                     body: SafeArea(
+                      top: false,
                       child: Stack(
                         children: [
+                          // ── Bande système peinte avec la teinte de chrome ──
+                          // Le Top Bar « dépasse » donc la Safe Area au lieu de
+                          // laisser une bande noire au-dessus de lui.
+                          if (chromeBleedsTop)
+                            Positioned(
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              // + la gouttière de la silhouette, pour que la
+                              // bande se fonde dans le Top Bar sans liseré.
+                              height: mediaTopInset + _kWorkbenchInset,
+                              child: ColoredBox(color: chromeBg),
+                            ),
                           // ══════════════════════════════════════════════════════
                           // SILHOUETTE DU WORKBENCH — un seul shell arrondi :
                           //   TITLE BAR
@@ -1448,20 +1496,33 @@ class _SelectTypeState extends State<SelectType>
                           // séparations internes restent des droites.
                           // ══════════════════════════════════════════════════════
                           Padding(
-                            padding: const EdgeInsets.all(_kWorkbenchInset),
+                            // La SafeArea du haut est remplacée par cette
+                            // gouttière : la bande système (teinte de chrome)
+                            // la précède, donc le Top Bar DÉBORDE dans la zone
+                            // système au lieu de laisser une bande morte.
+                            padding: EdgeInsets.only(
+                              top: _kWorkbenchInset + mediaTopInset,
+                              left: _kWorkbenchInset,
+                              right: _kWorkbenchInset,
+                              bottom: _kWorkbenchInset,
+                            ),
                             child: DecoratedBox(
                               decoration: BoxDecoration(
-                                color: appTheme.isDark
-                                    ? _kActivityBgDark
-                                    : _kActivityBgLight,
+                                // Une seule teinte de chrome pour tout le shell.
+                                color: chromeBg,
                                 borderRadius: BorderRadius.circular(
                                   _kWorkbenchRadius,
                                 ),
-                                border: Border.all(
-                                  color: appTheme.isDark
-                                      ? _kWorkbenchBorderDark
-                                      : _kWorkbenchBorderLight,
-                                ),
+                                // Quand la bande système prolonge le Top Bar,
+                                // aucun filet en haut : sinon une couture
+                                // apparaîtrait entre les deux.
+                                border: chromeBleedsTop
+                                    ? Border(
+                                        left: BorderSide(color: chromeBorder),
+                                        right: BorderSide(color: chromeBorder),
+                                        bottom: BorderSide(color: chromeBorder),
+                                      )
+                                    : Border.all(color: chromeBorder),
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(
@@ -1645,6 +1706,22 @@ class _SelectTypeState extends State<SelectType>
                               ),
                             ),
                           ),
+                          // ── Raccord Activity Bar ↔ barre d'état ────────────────
+                          // Quart de cercle qui comble l'angle rentrant entre la
+                          // colonne et la barre : le chrome « tourne » en douceur
+                          // de la verticale vers l'horizontale, sans espace mort
+                          // à gauche (voir _WorkbenchJunction).
+                          if (_sidebarState >= 1 && !_fullScreen)
+                            Positioned(
+                              // Bord droit de l'Activity Bar…
+                              left: _kWorkbenchInset + 48,
+                              // …sur la ligne du haut de la barre d'état.
+                              bottom: _kWorkbenchInset + _kStatusBarHeight,
+                              child: _WorkbenchJunction(
+                                radius: _kWorkbenchJunctionRadius,
+                                color: chromeBg,
+                              ),
+                            ),
                           // Agent chat is rendered only through PandaAgentPage in the
                           // panel above; the former floating legacy overlay is disabled.
                         ],
@@ -2501,7 +2578,7 @@ class _SelectTypeState extends State<SelectType>
   // ── Sidebar panel content ─────────────────────────────────────────────────
   Widget _buildSidebarPanel(BuildContext context, AppTheme appTheme) {
     final isDark = appTheme.isDark;
-    final bg = isDark ? _kSidebarBgDark : _kSidebarBgLight;
+    final bg = isDark ? _kChromeBgDark : _kChromeBgLight;
     final titleColor = isDark ? Colors.grey[400]! : Colors.grey[700]!;
     final borderColor = isDark
         ? const Color(0xff3c3c3c)
@@ -4215,8 +4292,8 @@ class _SelectTypeState extends State<SelectType>
   ) {
     final isDark = appTheme.isDark;
     final fg = isDark ? Colors.grey[400]! : Colors.grey[700]!;
-    // Unification : Top Bar = Sidebar = Status Bar (une seule couleur de chrome).
-    final bg = isDark ? _kSidebarBgDark : _kSidebarBgLight;
+    // Unification : Top Bar = Sidebar = Status Bar = Activity Bar.
+    final bg = isDark ? _kChromeBgDark : _kChromeBgLight;
     final boxBg = isDark ? const Color(0xff3a3a3a) : const Color(0xfff5f5f5);
     final boxBdr = isDark ? const Color(0xff666666) : const Color(0xffbbbbbb);
     final nameFg = isDark ? Colors.grey[200]! : Colors.grey[800]!;
@@ -4227,11 +4304,14 @@ class _SelectTypeState extends State<SelectType>
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
-          // ── CENTER: ← [workspace box] → ──────────────────────────────
-          // Workspace box - centered after activity bar + rounded corner
+          // ── GAUCHE : ‹ › COLLÉS puis la boîte « espace de travail » ───
+          // Le `>` ne part plus à l'autre bout : les deux chevrons forment une
+          // paire à gauche, la boîte suit immédiatement à leur droite (plus de
+          // boîte flottante décalée vers la droite).
           SizedBox(width: _sidebarState >= 1 ? 48.0 : 0.0),
           Expanded(
-            child: Center(
+            child: Align(
+              alignment: Alignment.centerLeft,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -4242,78 +4322,84 @@ class _SelectTypeState extends State<SelectType>
                     color: fg,
                     onPressed: () => _switchWorkspace(-1),
                   ),
-                  Builder(
-                    builder: (ctx) => GestureDetector(
-                      onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
-                      child: Container(
-                        key: _workspaceBoxKey,
-                        constraints: BoxConstraints(
-                          minWidth: 140,
-                          maxWidth: MediaQuery.of(ctx).size.width * 0.55,
-                        ),
-                        height: 26,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: boxBg,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: boxBdr, width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Broken.folder_open, size: 13, color: fg),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: Text(
-                                _currentWorkspaceName ?? 'Espace de travail',
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: _currentWorkspaceName != null
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                  color: isDark
-                                      ? Colors.grey[300]!
-                                      : Colors.grey[700]!,
-                                ),
-                              ),
-                            ),
-                            if (_currentWorkspaceName != null) ...[
-                              const SizedBox(width: 5),
-                              GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTap: _closeWorkspace,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(3),
-                                  child: Tooltip(
-                                    message: 'Fermer le projet',
-                                    child: Icon(
-                                      Broken.close_circle,
-                                      size: 15,
-                                      color: Colors.red[400],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                            const SizedBox(width: 3),
-                            Icon(
-                              Icons.keyboard_arrow_down,
-                              size: 14,
-                              color: fg,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                   _workspaceStepButton(
                     icon: Icons.chevron_right,
                     tooltip: 'Espace suivant',
                     enabled: _workspaceDirectories().length > 1,
                     color: fg,
                     onPressed: () => _switchWorkspace(1),
+                  ),
+                  const SizedBox(width: 6),
+                  // `Flexible` : sur un écran étroit la boîte se comprime (le nom
+                  // du projet s'ellipse) au lieu de déborder de la barre.
+                  Flexible(
+                    child: Builder(
+                      builder: (ctx) => GestureDetector(
+                        onTap: () => _showWorkspaceMenu(ctx, isDark, appTheme),
+                        child: Container(
+                          key: _workspaceBoxKey,
+                          constraints: BoxConstraints(
+                            minWidth: 140,
+                            maxWidth: MediaQuery.of(ctx).size.width * 0.55,
+                          ),
+                          height: 26,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: boxBg,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: boxBdr, width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Broken.folder_open, size: 13, color: fg),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  _currentWorkspaceName ??
+                                      'Espace de travail',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: _currentWorkspaceName != null
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                    color: isDark
+                                        ? Colors.grey[300]!
+                                        : Colors.grey[700]!,
+                                  ),
+                                ),
+                              ),
+                              if (_currentWorkspaceName != null) ...[
+                                const SizedBox(width: 5),
+                                GestureDetector(
+                                  behavior: HitTestBehavior.opaque,
+                                  onTap: _closeWorkspace,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(3),
+                                    child: Tooltip(
+                                      message: 'Fermer le projet',
+                                      child: Icon(
+                                        Broken.close_circle,
+                                        size: 15,
+                                        color: Colors.red[400],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(width: 3),
+                              Icon(
+                                Icons.keyboard_arrow_down,
+                                size: 14,
+                                color: fg,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -4412,92 +4498,113 @@ class _SelectTypeState extends State<SelectType>
     ),
   );
 
-  void _showNotificationInbox(BuildContext context) {
-    // Sync from PandaNotifications
-    _notificationsList.clear();
-    _notificationsList.addAll(PandaNotifications.inbox);
+  /// Ouvre la page Notifications DANS l'éditeur (un onglet), comme VS Code :
+  /// la cloche de la barre d'état n'ouvre plus une feuille modale — la page vit
+  /// dans la zone centrale et peut rester ouverte à côté du code.
+  void _openNotificationsTab() {
+    _syncNotifications();
+    setState(() {
+      final existing = _openTabs.indexWhere((t) => t.id == 'notifications');
+      if (existing == -1) {
+        _openTabs.add(
+          const _TabDef(
+            id: 'notifications',
+            title: 'Notifications',
+            icon: Broken.notification,
+          ),
+        );
+        _activeTabIdx = _openTabs.length - 1;
+      } else {
+        _activeTabIdx = existing;
+      }
+    });
+  }
+
+  /// Rapatrie l'inbox de PandaNotifications (la source de vérité) dans l'état
+  /// local de la page : à l'ouverture de l'onglet et via « Rafraîchir ».
+  void _syncNotifications() {
+    _notificationsList
+      ..clear()
+      ..addAll(PandaNotifications.inbox);
     _unreadNotifications = PandaNotifications.unreadCount;
+  }
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
-        final bg = isDark ? const Color(0xff1e1e1e) : Colors.white;
-        final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
-        final muted = isDark ? Colors.grey[600]! : Colors.grey[500]!;
+  /// Page Notifications (onglet éditeur) — même contenu que l'ancienne feuille,
+  /// mais dans la zone centrale : en-tête de page, compteur de non-lues,
+  /// « Tout marquer lu », rafraîchissement et liste.
+  Widget _buildNotificationsPage(AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final bg = isDark ? _kChromeBgDark : _kChromeBgLight;
+    final fg = isDark ? Colors.grey[300]! : Colors.grey[800]!;
+    final muted = isDark ? Colors.grey[600]! : Colors.grey[500]!;
+    final border = isDark ? const Color(0xff3c3c3c) : const Color(0xffdddddd);
 
-        return DraggableScrollableSheet(
-          initialChildSize: 0.7,
-          maxChildSize: 0.9,
-          minChildSize: 0.3,
-          builder: (ctx, scrollCtrl) => Container(
+    return Container(
+      color: bg,
+      child: Column(
+        children: [
+          // ── En-tête de page ──
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: bg,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(16),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black26,
-                  blurRadius: 20,
-                  offset: Offset(0, -4),
+              border: Border(bottom: BorderSide(color: border)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Broken.notification, size: 16, color: _kAccent),
+                const SizedBox(width: 8),
+                Text(
+                  'Notifications',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: fg,
+                  ),
+                ),
+                if (_unreadNotifications > 0) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _kAccent.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$_unreadNotifications',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _kAccent,
+                      ),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                if (_unreadNotifications > 0)
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _unreadNotifications = 0;
+                      for (final n in _notificationsList) {
+                        n['read'] = true;
+                      }
+                    }),
+                    child: const Text(
+                      'Tout marquer lu',
+                      style: TextStyle(fontSize: 12, color: _kAccent),
+                    ),
+                  ),
+                IconButton(
+                  icon: Icon(Broken.refresh, size: 15, color: muted),
+                  tooltip: 'Rafraîchir',
+                  onPressed: () => setState(_syncNotifications),
                 ),
               ],
             ),
-            child: Column(
-              children: [
-                // Drag handle
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: muted,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                // Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.notifications, size: 18, color: _kAccent),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Notifications',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: fg,
-                        ),
-                      ),
-                      const Spacer(),
-                      if (_unreadNotifications > 0)
-                        TextButton(
-                          onPressed: () => setState(() {
-                            _unreadNotifications = 0;
-                            for (final n in _notificationsList) {
-                              n['read'] = true;
-                            }
-                          }),
-                          child: Text(
-                            'Tout marquer lu',
-                            style: TextStyle(fontSize: 12, color: _kAccent),
-                          ),
-                        ),
-                      IconButton(
-                        icon: Icon(Icons.close, size: 18, color: muted),
-                        onPressed: () => Navigator.pop(ctx),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(height: 1, color: muted.withValues(alpha: 0.2)),
+          ),
+          Divider(height: 1, color: muted.withValues(alpha: 0.2)),
                 // Notification list
                 Expanded(
                   child: _notificationsList.isEmpty
@@ -4506,7 +4613,7 @@ class _SelectTypeState extends State<SelectType>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.notifications_none,
+                                Broken.notification_status,
                                 size: 48,
                                 color: muted.withValues(alpha: 0.3),
                               ),
@@ -4519,7 +4626,6 @@ class _SelectTypeState extends State<SelectType>
                           ),
                         )
                       : ListView.builder(
-                          controller: scrollCtrl,
                           itemCount: _notificationsList.length,
                           itemBuilder: (ctx, i) {
                             final n = _notificationsList[i];
@@ -4528,8 +4634,8 @@ class _SelectTypeState extends State<SelectType>
                             return ListTile(
                               leading: Icon(
                                 isError
-                                    ? Icons.error_outline
-                                    : Icons.info_outline,
+                                    ? Broken.close_circle
+                                    : Broken.info_circle,
                                 size: 18,
                                 color: isError ? Colors.redAccent : _kAccent,
                               ),
@@ -4571,9 +4677,6 @@ class _SelectTypeState extends State<SelectType>
                 ),
               ],
             ),
-          ),
-        );
-      },
     );
   }
 
@@ -5270,20 +5373,13 @@ class _SelectTypeState extends State<SelectType>
     final settings = SettingsService.I;
     final workspaceName = _currentWorkspaceName;
 
-    // STATUS_BAR_BORDER (statusbarpart.css `.status-border-top`, filet 1px).
-    // On réutilise les tokens de la silhouette : la séparation interne
-    // Sidebar/Editor → Status Bar est identique au reste du Workbench.
-    // Coin haut-gauche CREUSÉ : l'Activity Bar descend jusqu'au bas du shell et
-    // s'ouvre sur la barre d'état par un arc de cercle (rayon = rayon des coins
-    // du shell). Le fond du shell — la teinte de l'Activity Bar — remplit la
-    // cuvette, donc les deux se lisent comme une seule pièce courbe.
-    // Sans Activity Bar (mode plein écran) il n'y a rien à raccorder : le coin
-    // reste le coin extérieur arrondi du shell.
-    return ClipPath(
-      clipper: _sidebarState >= 1
-          ? const _ConcaveCornerClipper(radius: _kWorkbenchRadius)
-          : null,
-      child: DecoratedBox(
+    // STATUS_BAR_BORDER (statusbarpart.css `.status-border-top`, filet 1px) :
+    // la séparation interne Sidebar/Editor → Status Bar est identique au reste
+    // du Workbench.
+    // Le RACCORD avec la colonne Activity Bar est peint par-dessus le shell
+    // (_WorkbenchJunction) : la barre reste un simple rectangle — aucune
+    // échancrure, et surtout aucun « plan » d'une autre couleur.
+    return DecoratedBox(
         position: DecorationPosition.foreground,
         decoration: BoxDecoration(
           border: Border(
@@ -5303,8 +5399,9 @@ class _SelectTypeState extends State<SelectType>
                   final hub = EditorStatusHub.instance;
                   return PandaStatusBar(
                     height: _kStatusBarHeight,
-                    // Unification : barre d'état = Top Bar = Sidebar.
-                    background: isDark ? _kSidebarBgDark : _kSidebarBgLight,
+                    // Unification : barre d'état = Top Bar = Sidebar =
+                    // Activity Bar (une seule teinte de chrome).
+                    background: isDark ? _kChromeBgDark : _kChromeBgLight,
                     errorCount: errors,
                     warningCount: warnings,
                     infoCount: infos,
@@ -5329,7 +5426,7 @@ class _SelectTypeState extends State<SelectType>
                     aiLabel: settings.aiDefaultProvider,
                     aiActive: settings.aiInlineCompletions,
                     unreadNotifications: PandaNotifications.unreadCount,
-                    onNotificationsTap: () => _showNotificationInbox(context),
+                    onNotificationsTap: () => _openNotificationsTab(),
                   );
                 },
               );
@@ -5337,7 +5434,6 @@ class _SelectTypeState extends State<SelectType>
           );
         },
         ),
-      ),
     );
   }
 
@@ -5972,6 +6068,9 @@ class _SelectTypeState extends State<SelectType>
               _buildPandaAgentPanel(panelContext, appTheme, asPage: true),
         ),
       );
+    }
+    if (tab.id == 'notifications') {
+      return _buildNotificationsPage(appTheme);
     }
     if (tab.id == 'preview') {
       return const PreviewPanel();

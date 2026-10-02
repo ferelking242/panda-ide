@@ -23,16 +23,16 @@
 ///     darkened backgrounds computed from theme.ts.
 library;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/broken_icons.dart';
 import '../../extensions/language_feature_router.dart';
 import '../../extensions/ui/status_bar_manager.dart';
 
-/// Hauteur de ligne des libellés, en multiple de la taille de police (12px).
-/// VS Code pose `line-height: 22px` sur une barre de 22px : le glyphe est donc
-/// centré dans la hauteur de la barre. Flutter exprime cette hauteur en
-/// multiple de `font-size` ; on garde un cheveu de marge (12 × 1.6 ≈ 19px dans
-/// 22px) pour que le texte reste optiquement centré sans jamais déborder.
-const double _kStatusBarLineHeight = 1.6;
+/// Hauteur de ligne des libellés, en multiple de la taille de police.
+/// VS Code pose `line-height: 22px` sur une barre de 22px : la ligne remplit
+/// donc exactement la barre et le glyphe se retrouve centré. On reproduit
+/// cette valeur (22 / 12) au lieu d'un coefficient « au doigt mouillé ».
+const double _kStatusBarLineHeight = 22 / 12;
 
 
 
@@ -77,6 +77,15 @@ abstract final class StatusBarColors {
 }
 
 enum StatusBarEntryKind { normal, error, warning, prominent, remote, offline }
+
+/// Couleur de premier plan de la barre, déduite de son fond (VS Code change
+/// `statusBar.foreground` selon le thème : fond clair → texte sombre).
+/// Nécessaire aux entrées qui n'héritent pas de l'`IconTheme` — `SvgPicture`
+/// (logo Copilot) notamment.
+Color statusBarForeground(Color background) =>
+    ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+    ? Colors.white
+    : const Color(0xff3b3b3b);
 
 Color? _kindBackground(StatusBarEntryKind kind) => switch (kind) {
       StatusBarEntryKind.normal => null,
@@ -405,6 +414,9 @@ class PandaStatusBar extends StatelessWidget {
     return Row(mainAxisSize: MainAxisSize.min, children: parts);
   }
 
+  /// Entrée IA : le logo **GitHub Copilot** (le même asset que le panneau
+  /// Copilot), sans libellé texte — la barre reste compacte et l'icône suffit
+  /// à identifier le provider actif (son nom reste dans le tooltip).
   Widget? _aiItem() {
     final label = aiLabel;
     if (label == null) return null;
@@ -412,17 +424,16 @@ class PandaStatusBar extends StatelessWidget {
       tooltip: 'AI: $label${aiActive ? '' : ' (offline)'}',
       onTap: onAiTap,
       background: background,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Broken.magic_star,
-            size: 13,
-            color: aiActive ? const Color(0xFF4EC9B0) : Colors.white60,
+      child: SvgPicture.asset(
+        'assets/icons/github-copilot-icon.svg',
+        width: 14,
+        height: 14,
+        colorFilter: ColorFilter.mode(
+          statusBarForeground(background).withValues(
+            alpha: aiActive ? 1 : 0.55,
           ),
-          const SizedBox(width: 3),
-          Flexible(child: Text(label)),
-        ],
+          BlendMode.srcIn,
+        ),
       ),
     );
   }
@@ -770,9 +781,9 @@ class _StatusItemViewState extends State<_StatusItemView> {
 
   Color get _effectiveForeground =>
       widget.foreground ??
-      ((widget.kindBackground != null || _isDarkBar)
+      (widget.kindBackground != null
           ? Colors.white
-          : const Color(0xff3b3b3b));
+          : statusBarForeground(widget.background));
 
   Color get _hoverOverlay =>
       _isDarkBar ? StatusBarColors.hoverBackground : const Color(0x14000000);
@@ -803,10 +814,11 @@ class _StatusItemViewState extends State<_StatusItemView> {
         style: TextStyle(
           // .part.statusbar: font-size 12px; tabular-nums for stable counts.
           fontSize: 12,
-          // `.statusbar-item-label { line-height: 22px }` — VS Code centre le
-          // glyphe dans la hauteur de la barre ; `height: 1.0` collait le texte
-          // en haut de la boîte.
+          // `.statusbar-item-label { line-height: 22px }` — la ligne remplit la
+          // barre et le leading est réparti également au-dessus/en dessous du
+          // glyphe, donc le texte est centré dans les 22px.
           height: _kStatusBarLineHeight,
+          leadingDistribution: TextLeadingDistribution.even,
           color: _effectiveForeground,
           fontFeatures: const [FontFeature.tabularFigures()],
           overflow: TextOverflow.ellipsis,
@@ -816,7 +828,16 @@ class _StatusItemViewState extends State<_StatusItemView> {
         softWrap: false,
         child: IconTheme.merge(
           data: IconThemeData(size: 13, color: _effectiveForeground),
-          child: widget.child,
+          // VS Code centre la ligne dans les 22px (`line-height: 22px`). Sous
+          // contrainte de hauteur rigide, un `Text` pose sa ligne EN HAUT de sa
+          // boîte — d'où un texte qui « flottait » vers le haut. Ce centrage
+          // réel (widthFactor 1 : on conserve la largeur intrinsèque de
+          // l'entrée, aucun étirement) recentre le contenu dans la barre.
+          child: Align(
+            alignment: Alignment.center,
+            widthFactor: 1,
+            child: widget.child,
+          ),
         ),
       ),
     );
