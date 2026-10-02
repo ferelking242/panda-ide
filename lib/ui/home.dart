@@ -163,13 +163,57 @@ const Color _kWorkbenchBorderDark = Color(0xff2f2f2f);
 const Color _kWorkbenchBorderLight = Color(0xffdcdcdc);
 
 // ── Status Bar (VS Code `.part.statusbar { height: 22px; font-size: 12px }`) ──
+// La barre d'état partage EXACTEMENT la couleur de chrome du Top Bar et de la
+// Sidebar (_kSidebarBgDark / _kSidebarBgLight) : un seul ton pour les trois.
+// L'Activity Bar garde sa teinte propre (_kActivityBgDark / _kActivityBgLight)
+// pour que l'arc de raccord se lise.
 const double _kStatusBarHeight = 22; // VS Code statusbarpart.css
-const Color _kStatusBarBgLight = Color(0xfff3f3f3);
 const _kSectionTitle = TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
   letterSpacing: 1.2,
 );
+
+/// Coin INTERNE du Workbench : là où la barre d'état rencontre l'Activity Bar,
+/// un arc de cercle remplace l'angle droit — la colonne descend jusqu'en bas et
+/// « s'ouvre » sur la barre d'état.
+///
+/// On creuse donc le coin haut-gauche de la barre d'état : l'arc, centré en
+/// (r, r), est tangent à la verticale en (0, r) et à l'horizontale en (r, 0).
+/// La cuvette laisse voir le fond du shell (la teinte de l'Activity Bar), donc
+/// les deux pièces se lisent comme une seule courbe continue.
+class _ConcaveCornerClipper extends CustomClipper<Path> {
+  const _ConcaveCornerClipper({required this.radius});
+
+  /// Rayon de l'arc — aligné sur le rayon des coins du shell pour rester
+  /// discret (VS Code « Modern UI » : `--vscode-cornerRadius-large` = 8px),
+  /// donc pas de grande échancrure à gauche.
+  final double radius;
+
+  @override
+  Path getClip(Size size) {
+    final r = radius;
+    return Path()
+      ..moveTo(0, r)
+      // 180° = bord gauche ; +90° (sens horaire à l'écran) = bord supérieur.
+      // L'arc passe par (r·(1−√2/2), r·(1−√2/2)) : il CREUSE le coin au lieu
+      // de l'arrondir.
+      ..arcTo(
+        Rect.fromCircle(center: Offset(r, r), radius: r),
+        math.pi,
+        math.pi / 2,
+        false,
+      )
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+  }
+
+  @override
+  bool shouldReclip(_ConcaveCornerClipper oldClipper) =>
+      oldClipper.radius != radius;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 class SelectType extends StatefulWidget {
@@ -1432,11 +1476,24 @@ class _SelectTypeState extends State<SelectType>
                               Expanded(
                                 child: Row(
                                     children: [
-                                      // Activity bar — full height, spans editor AND terminal
+                                      // Activity bar — colonne PLEINE HAUTEUR :
+                                      // elle descend jusqu'au bas du shell, puis
+                                      // se raccorde à la barre d'état par un arc
+                                      // de cercle (voir _ConcaveCornerClipper).
                                       if (_sidebarState >= 1)
                                         _buildActivityBar(context, appTheme),
 
-                                      // ── Sidebar panel — pushes editor (VS Code style) ──
+                                      // ── Colonne de droite : la barre d'état ne
+                                      // passe JAMAIS sous l'Activity Bar, elle
+                                      // démarre à son bord droit.
+                                      Expanded(
+                                        child: Column(
+                                          children: [
+                                            Expanded(
+                                              child: Row(
+                                                children: [
+                                                  // ── Sidebar panel — pushes
+                                                  // editor (VS Code style) ──
                                       if (_sidebarState == 2)
                                         SizedBox(
                                           width: _workbenchSidebarWidth(context),
@@ -1566,16 +1623,23 @@ class _SelectTypeState extends State<SelectType>
                                                   _buildBottomPanel(),
                                                 ],
                                               ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
+                                      // ── Status Bar — démarre au bord DROIT de
+                                      // l'Activity Bar et court jusqu'au bord
+                                      // droit du shell. Son coin haut-gauche est
+                                      // creusé d'un arc de cercle qui prolonge la
+                                      // descente de l'Activity Bar : les deux se
+                                      // lisent comme une seule pièce courbe.
+                                      _buildWorkbenchStatusBar(appTheme),
                                     ],
                                   ),
                               ),
-                              // ── Status Bar — VS Code : barre pleine largeur,
-                              // tout en bas, sous l'Activity Bar, le Sidebar et
-                              // l'Editor. Dernier élément du shell : ses coins bas
-                              // suivent le rayon extérieur, la jonction avec
-                              // l'éditeur/la sidebar reste une droite (filet 1px).
-                              _buildWorkbenchStatusBar(appTheme),
+                                    ],
+                                  ),
+                              ),
                             ],
                           ),
                               ),
@@ -2088,6 +2152,10 @@ class _SelectTypeState extends State<SelectType>
     return Container(
       width: _fullScreen ? 0.0 : 48,
       color: railBg,
+      // La colonne descend jusqu'au bas du shell, mais ses items s'arrêtent
+      // au-dessus de la barre d'état (comme VS Code) : le raccord en arc de
+      // cercle a besoin de ces 22px de teinte pure.
+      padding: const EdgeInsets.only(bottom: _kStatusBarHeight),
       child: Column(
         children: [
           const SizedBox(height: 6),
@@ -4147,7 +4215,8 @@ class _SelectTypeState extends State<SelectType>
   ) {
     final isDark = appTheme.isDark;
     final fg = isDark ? Colors.grey[400]! : Colors.grey[700]!;
-    final bg = isDark ? _kActivityBgDark : _kActivityBgLight;
+    // Unification : Top Bar = Sidebar = Status Bar (une seule couleur de chrome).
+    final bg = isDark ? _kSidebarBgDark : _kSidebarBgLight;
     final boxBg = isDark ? const Color(0xff3a3a3a) : const Color(0xfff5f5f5);
     final boxBdr = isDark ? const Color(0xff666666) : const Color(0xffbbbbbb);
     final nameFg = isDark ? Colors.grey[200]! : Colors.grey[800]!;
@@ -5204,16 +5273,26 @@ class _SelectTypeState extends State<SelectType>
     // STATUS_BAR_BORDER (statusbarpart.css `.status-border-top`, filet 1px).
     // On réutilise les tokens de la silhouette : la séparation interne
     // Sidebar/Editor → Status Bar est identique au reste du Workbench.
-    return DecoratedBox(
-      position: DecorationPosition.foreground,
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: isDark ? _kWorkbenchBorderDark : _kWorkbenchBorderLight,
+    // Coin haut-gauche CREUSÉ : l'Activity Bar descend jusqu'au bas du shell et
+    // s'ouvre sur la barre d'état par un arc de cercle (rayon = rayon des coins
+    // du shell). Le fond du shell — la teinte de l'Activity Bar — remplit la
+    // cuvette, donc les deux se lisent comme une seule pièce courbe.
+    // Sans Activity Bar (mode plein écran) il n'y a rien à raccorder : le coin
+    // reste le coin extérieur arrondi du shell.
+    return ClipPath(
+      clipper: _sidebarState >= 1
+          ? const _ConcaveCornerClipper(radius: _kWorkbenchRadius)
+          : null,
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: isDark ? _kWorkbenchBorderDark : _kWorkbenchBorderLight,
+            ),
           ),
         ),
-      ),
-      child: WorkspaceDiagnosticsListener(
+        child: WorkspaceDiagnosticsListener(
         builder: (context, errors, warnings, infos) {
           return BlocBuilder<RepoStatusBloc, RepoStatusState>(
             builder: (context, repoState) {
@@ -5224,9 +5303,8 @@ class _SelectTypeState extends State<SelectType>
                   final hub = EditorStatusHub.instance;
                   return PandaStatusBar(
                     height: _kStatusBarHeight,
-                    background: isDark
-                        ? StatusBarColors.background
-                        : _kStatusBarBgLight,
+                    // Unification : barre d'état = Top Bar = Sidebar.
+                    background: isDark ? _kSidebarBgDark : _kSidebarBgLight,
                     errorCount: errors,
                     warningCount: warnings,
                     infoCount: infos,
@@ -5258,6 +5336,7 @@ class _SelectTypeState extends State<SelectType>
             },
           );
         },
+        ),
       ),
     );
   }

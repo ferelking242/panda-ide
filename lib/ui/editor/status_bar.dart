@@ -23,8 +23,16 @@
 ///     darkened backgrounds computed from theme.ts.
 library;
 import 'package:flutter/material.dart';
+import '../../core/broken_icons.dart';
 import '../../extensions/language_feature_router.dart';
 import '../../extensions/ui/status_bar_manager.dart';
+
+/// Hauteur de ligne des libellés, en multiple de la taille de police (12px).
+/// VS Code pose `line-height: 22px` sur une barre de 22px : le glyphe est donc
+/// centré dans la hauteur de la barre. Flutter exprime cette hauteur en
+/// multiple de `font-size` ; on garde un cheveu de marge (12 × 1.6 ≈ 19px dans
+/// 22px) pour que le texte reste optiquement centré sans jamais déborder.
+const double _kStatusBarLineHeight = 1.6;
 
 
 
@@ -89,7 +97,7 @@ class StatusEntry {
   final String name;
 
   /// Text shown after [icon]. Supports a leading codicon token like
-  /// `$(sync) Syncing…` which is mapped to a Material icon.
+  /// `$(sync) Syncing…` which is mapped to a Broken icon.
   final String text;
   final IconData? icon;
   final Color? foreground;
@@ -273,16 +281,16 @@ class PandaStatusBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error, size: 13),
+          const Icon(Broken.close_circle, size: 13),
           const SizedBox(width: 3),
           Flexible(child: Text(packNumber(errorCount))),
           const SizedBox(width: 8),
-          const Icon(Icons.warning, size: 13),
+          const Icon(Broken.warning_2, size: 13),
           const SizedBox(width: 3),
           Flexible(child: Text(packNumber(warningCount))),
           if (infoCount > 0) ...[
             const SizedBox(width: 8),
-            const Icon(Icons.info, size: 13),
+            const Icon(Broken.info_circle, size: 13),
             const SizedBox(width: 3),
             Flexible(child: Text(packNumber(infoCount))),
           ],
@@ -299,7 +307,7 @@ class PandaStatusBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.merge_type, size: 13),
+          const Icon(Broken.routing, size: 13),
           const SizedBox(width: 3),
           // `.statusbar-item-label { text-overflow: ellipsis }` — a long branch
           // name shrinks/ellipsizes instead of overflowing the thin bar.
@@ -321,7 +329,7 @@ class PandaStatusBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.sync, size: 13),
+          const Icon(Broken.refresh, size: 13),
           if (unpushedCount > 0) ...[
             const SizedBox(width: 2),
             Flexible(child: Text('$unpushedCount↑')),
@@ -345,7 +353,7 @@ class PandaStatusBar extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.computer, size: 13),
+          const Icon(Broken.monitor, size: 13),
           const SizedBox(width: 3),
           Flexible(child: Text(remoteName!)),
         ],
@@ -362,9 +370,7 @@ class PandaStatusBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            workspaceName != null
-                ? Icons.folder_open_outlined
-                : Icons.folder_outlined,
+            workspaceName != null ? Broken.folder_open : Broken.folder,
             size: 13,
           ),
           if (workspaceName != null) ...[
@@ -410,7 +416,7 @@ class PandaStatusBar extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.auto_awesome,
+            Broken.magic_star,
             size: 13,
             color: aiActive ? const Color(0xFF4EC9B0) : Colors.white60,
           ),
@@ -434,7 +440,7 @@ class PandaStatusBar extends StatelessWidget {
           ? Stack(
               clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.notifications_off, size: 14),
+                const Icon(Broken.notification_status, size: 14),
                 if (hasActivity)
                   Positioned(
                     right: -2,
@@ -447,11 +453,11 @@ class PandaStatusBar extends StatelessWidget {
               ? Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    const Icon(Icons.notifications, size: 14),
+                    const Icon(Broken.notification, size: 14),
                     Positioned(right: -2, top: -1, child: _bellDot()),
                   ],
                 )
-              : const Icon(Icons.notifications, size: 14),
+              : const Icon(Broken.notification, size: 14),
     );
   }
 
@@ -613,38 +619,38 @@ class PandaStatusBar extends StatelessWidget {
   }
 }
 
-/// Maps a leading `$(codicon)` token to a Material icon, returning
+/// Maps a leading `$(codicon)` token to a Broken icon, returning
 /// `(icon?, remainingText)` — mirrors how VS Code renders `$()` labels.
 (IconData?, String) parseCodicon(String raw) {
   final match = RegExp(r'^\$\(([a-z-]+)\)\s*(.*)$').firstMatch(raw.trim());
   if (match == null) return (null, raw);
 
   const map = <String, IconData>{
-    'error': Icons.error,
-    'warning': Icons.warning,
-    'info': Icons.info,
-    'bell': Icons.notifications,
-    'sync': Icons.sync,
-    'check': Icons.check,
-    'pass': Icons.check_circle,
-    'circle-check': Icons.check_circle,
-    'cloud': Icons.cloud,
-    'cloud-upload': Icons.cloud_upload,
-    'cloud-download': Icons.cloud_download,
-    'remote': Icons.computer,
-    'terminal': Icons.terminal,
-    'git-branch': Icons.merge_type,
-    'account': Icons.account_circle,
-    'beaker': Icons.science,
-    'rocket': Icons.rocket_launch,
-    'zap': Icons.bolt,
-    'shield': Icons.shield,
-    'loading': Icons.refresh,
-    'debug-start': Icons.play_arrow,
-    'debug-stop': Icons.stop,
-    'play': Icons.play_arrow,
-    'server': Icons.dns,
-    'broadcast': Icons.podcasts,
+    'error': Broken.close_circle,
+    'warning': Broken.warning_2,
+    'info': Broken.info_circle,
+    'bell': Broken.notification,
+    'sync': Broken.refresh,
+    'check': Broken.check,
+    'pass': Broken.tick_circle,
+    'circle-check': Broken.tick_circle,
+    'cloud': Broken.cloud,
+    'cloud-upload': Broken.cloud_plus,
+    'cloud-download': Broken.cloud_minus,
+    'remote': Broken.monitor,
+    'terminal': Broken.command_square,
+    'git-branch': Broken.routing,
+    'account': Broken.profile_circle,
+    'beaker': Broken.status,
+    'rocket': Broken.send_2,
+    'zap': Broken.flash,
+    'shield': Broken.shield_tick,
+    'loading': Broken.refresh,
+    'debug-start': Broken.play,
+    'debug-stop': Broken.stop,
+    'play': Broken.play,
+    'server': Broken.monitor,
+    'broadcast': Broken.radio,
   };
   final icon = map[match.group(1)];
   return (icon, match.group(2) ?? '');
@@ -797,7 +803,10 @@ class _StatusItemViewState extends State<_StatusItemView> {
         style: TextStyle(
           // .part.statusbar: font-size 12px; tabular-nums for stable counts.
           fontSize: 12,
-          height: 1.0,
+          // `.statusbar-item-label { line-height: 22px }` — VS Code centre le
+          // glyphe dans la hauteur de la barre ; `height: 1.0` collait le texte
+          // en haut de la boîte.
+          height: _kStatusBarLineHeight,
           color: _effectiveForeground,
           fontFeatures: const [FontFeature.tabularFigures()],
           overflow: TextOverflow.ellipsis,
