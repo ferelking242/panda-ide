@@ -15,7 +15,6 @@ import 'package:flutter/services.dart'
         SingleActivator;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:figma_squircle/figma_squircle.dart';
 import 'package:multi_split_view/multi_split_view.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:file_picker/file_picker.dart';
@@ -142,6 +141,24 @@ const _kAccent = Color(0xff6366f1);
 const _kSidebarBgDark = Color(0xff252526);
 const _kSidebarBgLight = Color(0xfff3f3f3);
 const _kSidebarWidth = 240.0;
+
+// ── Géométrie de la silhouette du Workbench ──────────────────────────────────
+// Reproduit le GEOMETRIC LAYOUT de VS Code « Modern UI » (floating panels),
+// sans copier son code. Valeurs réelles du dépôt microsoft/vscode :
+//   * floatingPanels.css : --modern-ui-floating-card-margin =
+//     --vscode-spacing-size40 = 4px → petite gouttière extérieure du Workbench.
+//   * floatingPanels.css : border-radius: var(--vscode-cornerRadius-large, 8px)
+//     → rayon des coins EXTERIEURS (8px : petit, jamais 20/22px).
+//   * layoutService.ts : FLOATING_PANEL_MARGIN = 4, FLOATING_PANEL_INNER_MARGIN
+//     = 0 → les cartes qui se touchent sont collées : les séparations INTERNES
+//     (Activity Bar | Sidebar | Editor) restent des droites.
+//   * activitybarPart.ts : ACTIVITYBAR_WIDTH = 48.
+// Une seule silhouette : seuls les coins extérieurs sont arrondis de 8px ; un
+// petit espace extérieur de 4px révèle le fond du Workbench à droite et en bas.
+const double _kWorkbenchInset = 4; // VS Code --vscode-spacing-size40
+const double _kWorkbenchRadius = 8; // VS Code --vscode-cornerRadius-large
+const Color _kWorkbenchBorderDark = Color(0xff2f2f2f);
+const Color _kWorkbenchBorderLight = Color(0xffdcdcdc);
 const _kSectionTitle = TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
@@ -231,9 +248,6 @@ class _SelectTypeState extends State<SelectType>
 
   // ── Resizable panels ──────────────────────────────────────
   double _bottomPanelHeight = 220;
-
-  // ── Resizable sidebar ─────────────────────────────────────
-  final double _sidebarWidth = _kSidebarWidth;
 
   // ── Full screen mode
   // ── Agent AI state ────────────────────────────────────────────────
@@ -1376,23 +1390,41 @@ class _SelectTypeState extends State<SelectType>
                     body: SafeArea(
                       child: Stack(
                         children: [
-                          Column(
+                          // ══════════════════════════════════════════════════════
+                          // SILHOUETTE DU WORKBENCH — un seul shell arrondi :
+                          //   TITLE BAR
+                          //   ACTIVITY | SIDEBAR | EDITOR (+ BOTTOM PANEL)
+                          // Seuls les coins EXTÉRIEURS sont arrondis ; toutes les
+                          // séparations internes restent des droites.
+                          // ══════════════════════════════════════════════════════
+                          Padding(
+                            padding: const EdgeInsets.all(_kWorkbenchInset),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: appTheme.isDark
+                                    ? _kActivityBgDark
+                                    : _kActivityBgLight,
+                                borderRadius: BorderRadius.circular(
+                                  _kWorkbenchRadius,
+                                ),
+                                border: Border.all(
+                                  color: appTheme.isDark
+                                      ? _kWorkbenchBorderDark
+                                      : _kWorkbenchBorderLight,
+                                ),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(
+                                  _kWorkbenchRadius,
+                                ),
+                                child: Column(
                             children: [
                               // ── Top bar spans full width ──────────────────────────
                               _buildTopBar(context, appTheme, appThemestate),
 
                               // ── Below top bar: activity bar (full-height) | editor + panel ─
                               Expanded(
-                                child: ColoredBox(
-                                  // Ensures the area revealed by ClipSmoothRect rounded
-                                  // corners (topLeft + bottomLeft) matches the activity-bar
-                                  // background — eliminating the colour artefact.
-                                  color: _sidebarState >= 1
-                                      ? (appTheme.isDark
-                                            ? _kActivityBgDark
-                                            : _kActivityBgLight)
-                                      : Colors.transparent,
-                                  child: Row(
+                                child: Row(
                                     children: [
                                       // Activity bar — full height, spans editor AND terminal
                                       if (_sidebarState >= 1)
@@ -1401,7 +1433,7 @@ class _SelectTypeState extends State<SelectType>
                                       // ── Sidebar panel — pushes editor (VS Code style) ──
                                       if (_sidebarState == 2)
                                         SizedBox(
-                                          width: _sidebarWidth,
+                                          width: _workbenchSidebarWidth(context),
                                           child: _buildSidebarPanel(
                                             context,
                                             appTheme,
@@ -1409,24 +1441,13 @@ class _SelectTypeState extends State<SelectType>
                                         ),
 
                                       // ── Right side: editor stacked above bottom panel ──
+                                      // Le bord Sidebar | Editor est une séparation
+                                      // INTERNE droite : aucun arrondi ici, les
+                                      // arrondis n'appartiennent qu'à la silhouette
+                                      // extérieure du shell.
                                       Expanded(
-                                        child: Stack(
+                                        child: Column(
                                           children: [
-                                            ClipSmoothRect(
-                                              radius: _sidebarState >= 1
-                                                  ? SmoothBorderRadius.only(
-                                                      topLeft: SmoothRadius(
-                                                        cornerRadius: 22,
-                                                        cornerSmoothing: 0.6,
-                                                      ),
-                                                      bottomLeft: SmoothRadius(
-                                                        cornerRadius: 22,
-                                                        cornerSmoothing: 0.6,
-                                                      ),
-                                                    )
-                                                  : SmoothBorderRadius.zero,
-                                              child: Column(
-                                                children: [
                                                   // ── Editor area ──────────────────────────────
                                                   Expanded(
                                                     child: Container(
@@ -1539,16 +1560,14 @@ class _SelectTypeState extends State<SelectType>
                                                   _buildBottomPanel(),
                                                 ],
                                               ),
-                                            ),
-
-                                          ],
-                                        ),
                                       ),
                                     ],
                                   ),
-                                ), // ColoredBox
                               ),
                             ],
+                          ),
+                              ),
+                            ),
                           ),
                           // Agent chat is rendered only through PandaAgentPage in the
                           // panel above; the former floating legacy overlay is disabled.
@@ -2384,6 +2403,19 @@ class _SelectTypeState extends State<SelectType>
         ],
       ),
     );
+  }
+
+  /// Largeur du Sidebar pour la largeur d'écran courante.
+  /// VS Code : side bar 300px par défaut ; ici elle s'adapte pour que le
+  /// Workbench garde toujours de la place pour l'éditeur (aucun overflow).
+  double _workbenchSidebarWidth(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final railWidth = _sidebarState >= 1 ? 48.0 : 0.0;
+    final available = screenWidth - _kWorkbenchInset * 2 - railWidth;
+    final preferred = screenWidth >= 1024
+        ? 300.0
+        : (screenWidth >= 600 ? 260.0 : available * 0.62);
+    return math.min(preferred, math.max(140.0, available * 0.62));
   }
 
   // ── Sidebar panel content ─────────────────────────────────────────────────
