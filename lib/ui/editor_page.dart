@@ -75,6 +75,16 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
   late final SSHPrivateKey? termuxInfo;
   late List<int> mruOrder;
   bool _allowImmediatePop = false, _didInitializeEditors = false;
+
+  /// How many times the one-shot editor bootstrap was retried after a failure.
+  ///
+  /// Building the editor needs code_forge's Rust bridge
+  /// ([CodeForgeController] → `RopeBridge`). `main.dart` starts
+  /// `RustLib.init()` behind an 8 s timeout and deliberately lets the app keep
+  /// running when it is slow or fails, so the first bootstrap attempt can
+  /// throw while the app is otherwise healthy.
+  int _editorInitAttempts = 0;
+  static const int _kMaxEditorInitAttempts = 12;
   bool _welcomeExplorerOpen = false; // welcome page: inline project explorer (v2)
   bool _viteUseHttps = false, _isOpeningVitePreview = false, _hasViteProject = false;
   Map<String, String> params = {}, headers = {};
@@ -1972,6 +1982,72 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
     );
   }
 
+  /// Registers the editor for [file] in the workbench's editor state.
+  ///
+  /// Returns `true` only once the editor really exists. This page renders the
+  /// file from `ActiveEditorBloc.activeEditors`; when that list is empty it
+  /// falls back to its project home, so a bootstrap that failed halfway would
+  /// show the project home for a file tab that is actually open.
+  bool _initializeEditorForFile(File file, LspConfig? lspConfig) {
+    try {
+      final isPreviewInitial = isPreviewFilePath(file.path);
+      final initialController = CodeForgeController(lspConfig: lspConfig);
+      if (isPreviewInitial) {
+        initialController.readOnly = true;
+      } else {
+        _applyPendingAgenticDiffForFile(initialController, file.path);
+      }
+      _activeEditorBloc.add(
+        ActiveEditorEvent([
+          ActiveEditor(
+            file: file,
+            controller: initialController,
+            languageDetails: widget.languageDetails ?? languages[0],
+            undoRedoController: UndoRedoController(),
+            isActive: true,
+            findController:
+                isPreviewInitial ? null : FindController(initialController),
+            hscroll: ScrollController(),
+            vscroll: ScrollController(),
+          ),
+        ]),
+      );
+      return true;
+    } catch (error) {
+      _scheduleEditorInitRetry(error, file, lspConfig);
+      return false;
+    }
+  }
+
+  /// Keeps retrying the editor bootstrap after [error] instead of leaving the
+  /// editor state empty forever — an empty editor state is what makes the
+  /// workbench keep showing the project home for an open file. The retries run
+  /// outside the build (so nothing flickers) and stop once the editor exists
+  /// or after [_kMaxEditorInitAttempts], so an editor backend that is never
+  /// available cannot spin.
+  void _scheduleEditorInitRetry(
+    Object error,
+    File file,
+    LspConfig? lspConfig,
+  ) {
+    // Bounded logging + bounded scheduled retries; the build path keeps
+    // attempting the bootstrap quietly after that (it latches on success).
+    if (_editorInitAttempts >= _kMaxEditorInitAttempts) return;
+    _editorInitAttempts++;
+    debugPrint(
+      '[EditorPage] editor bootstrap failed for ${file.path} '
+      '(attempt $_editorInitAttempts/$_kMaxEditorInitAttempts): $error',
+    );
+    Future<void>.delayed(const Duration(milliseconds: 750), () {
+      if (!mounted || _didInitializeEditors) return;
+      if (_initializeEditorForFile(file, lspConfig)) {
+        // Registered: latch the bootstrap. No setState needed — the bloc
+        // emission rebuilds the editor area with the file's editor.
+        _didInitializeEditors = true;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final AppTheme appTheme = context.read<AppThemeBloc>().state.appTheme;
@@ -2175,35 +2251,17 @@ class _EditorPageState extends State<EditorPage> with TickerProviderStateMixin, 
           path.join(widget.rootDir, ".git"),
         ).existsSync();
 
+        // One-shot bootstrap of the active editor. It is only latched once the
+        // editor really is registered (see [_initializeEditorForFile]): latching
+        // it before that used to leave the workbench with no editor at all when
+        // creating the editor failed, so the active file tab kept showing the
+        // project home instead of its file.
         if (!_didInitializeEditors) {
-          _didInitializeEditors = true;
           if (widget.isProject) {
+            _didInitializeEditors = true;
             _activeEditorBloc.add(OpenRecentActiveEditor());
-          } else {
-            final isPreviewInitial = isPreviewFilePath(target!.path);
-            final initialController = CodeForgeController(lspConfig: lspConfig);
-            if (isPreviewInitial) {
-              initialController.readOnly = true;
-            } else {
-              _applyPendingAgenticDiffForFile(initialController, target.path);
-            }
-            final initialUndoController = UndoRedoController();
-            _activeEditorBloc.add(
-              ActiveEditorEvent([
-                ActiveEditor(
-                  file: target,
-                  controller: initialController,
-                  languageDetails: widget.languageDetails ?? languages[0],
-                  undoRedoController: initialUndoController,
-                  isActive: true,
-                  findController: isPreviewInitial
-                      ? null
-                      : FindController(initialController),
-                  hscroll: ScrollController(),
-                  vscroll: ScrollController(),
-                ),
-              ]),
-            );
+          } else if (_initializeEditorForFile(target!, lspConfig)) {
+            _didInitializeEditors = true;
           }
         }
         return MultiBlocProvider(
