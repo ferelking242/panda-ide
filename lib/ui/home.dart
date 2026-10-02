@@ -30,6 +30,7 @@ import 'donation_page.dart';
 import 'file_manager.dart';
 import 'editor_page.dart';
 import 'editor/outline_view.dart';
+import 'editor/status_bar.dart';
 import 'editor/symbol_picker.dart';
 import 'editor/global_search_dialog.dart';
 import 'menu_screen.dart';
@@ -51,6 +52,7 @@ import '../utils/agentic_tools.dart';
 
 import '../utils/functions.dart';
 import '../utils/languages.dart';
+import '../utils/settings_service.dart';
 import '../utils/panda_log.dart';
 import '../utils/themes.dart';
 import '../services/android_update_service.dart';
@@ -159,6 +161,10 @@ const double _kWorkbenchInset = 4; // VS Code --vscode-spacing-size40
 const double _kWorkbenchRadius = 8; // VS Code --vscode-cornerRadius-large
 const Color _kWorkbenchBorderDark = Color(0xff2f2f2f);
 const Color _kWorkbenchBorderLight = Color(0xffdcdcdc);
+
+// ── Status Bar (VS Code `.part.statusbar { height: 22px; font-size: 12px }`) ──
+const double _kStatusBarHeight = 22; // VS Code statusbarpart.css
+const Color _kStatusBarBgLight = Color(0xfff3f3f3);
 const _kSectionTitle = TextStyle(
   fontSize: 11,
   fontWeight: FontWeight.w700,
@@ -1564,6 +1570,12 @@ class _SelectTypeState extends State<SelectType>
                                     ],
                                   ),
                               ),
+                              // ── Status Bar — VS Code : barre pleine largeur,
+                              // tout en bas, sous l'Activity Bar, le Sidebar et
+                              // l'Editor. Dernier élément du shell : ses coins bas
+                              // suivent le rayon extérieur, la jonction avec
+                              // l'éditeur/la sidebar reste une droite (filet 1px).
+                              _buildWorkbenchStatusBar(appTheme),
                             ],
                           ),
                               ),
@@ -5171,6 +5183,103 @@ class _SelectTypeState extends State<SelectType>
         },
       ),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // STATUS BAR — VS Code `.part.statusbar` (height 22px, font-size 12px),
+  // dernier élément du shell : pleine largeur, sous l'Activity Bar, le Sidebar
+  // et l'Editor. Réutilise le composant réel `PandaStatusBar` (aucune seconde
+  // status bar) et l'alimente avec les vraies sources du projet :
+  //   * Problems        → WorkspaceDiagnosticsListener (mêmes diagnostics)
+  //   * Git             → RepoStatusBloc (branche + unpushed/unpulled réels)
+  //   * Ln/Col, langage → EditorStatusHub (alimenté par l'éditeur)
+  //   * indentation / encodage / fin de ligne → SettingsService (vrais réglages)
+  //   * cloche          → PandaNotifications (système de notifications existant)
+  // ══════════════════════════════════════════════════════════════════════════
+  Widget _buildWorkbenchStatusBar(AppTheme appTheme) {
+    final isDark = appTheme.isDark;
+    final settings = SettingsService.I;
+    final workspaceName = _currentWorkspaceName;
+
+    // STATUS_BAR_BORDER (statusbarpart.css `.status-border-top`, filet 1px).
+    // On réutilise les tokens de la silhouette : la séparation interne
+    // Sidebar/Editor → Status Bar est identique au reste du Workbench.
+    return DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: isDark ? _kWorkbenchBorderDark : _kWorkbenchBorderLight,
+          ),
+        ),
+      ),
+      child: WorkspaceDiagnosticsListener(
+        builder: (context, errors, warnings, infos) {
+          return BlocBuilder<RepoStatusBloc, RepoStatusState>(
+            builder: (context, repoState) {
+              final loaded = repoState is RepoStatusLoaded;
+              return AnimatedBuilder(
+                animation: EditorStatusHub.instance,
+                builder: (context, _) {
+                  final hub = EditorStatusHub.instance;
+                  return PandaStatusBar(
+                    height: _kStatusBarHeight,
+                    background: isDark
+                        ? StatusBarColors.background
+                        : _kStatusBarBgLight,
+                    errorCount: errors,
+                    warningCount: warnings,
+                    infoCount: infos,
+                    branchName: loaded ? repoState.currentBranch : null,
+                    hasUpstream: loaded && repoState.hasUpstream,
+                    unpushedCount: loaded ? repoState.unpushedCount : 0,
+                    unpulledCount: loaded ? repoState.unpulledCount : 0,
+                    onBranchTap: () => setState(() {
+                      _rightPanelOpen = false;
+                      _sidebarState = 2;
+                      _activeRail = 3;
+                    }),
+                    workspaceName: workspaceName,
+                    onWorkspaceTap: () =>
+                        _showWorkspaceMenu(context, isDark, appTheme),
+                    cursorLine: hub.cursorLine,
+                    cursorColumn: hub.cursorColumn,
+                    language: hub.language,
+                    indentation: 'Spaces: ${settings.editorTabSize}',
+                    encoding: _statusEncodingLabel(settings.filesEncoding),
+                    endOfLine: settings.filesEol == '\r\n' ? 'CRLF' : 'LF',
+                    aiLabel: settings.aiDefaultProvider,
+                    aiActive: settings.aiInlineCompletions,
+                    unreadNotifications: PandaNotifications.unreadCount,
+                    onNotificationsTap: () => _showNotificationInbox(context),
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  /// `files.encoding` → libellé affiché (VS Code : « UTF-8 », « UTF-16 LE »…).
+  String _statusEncodingLabel(String raw) {
+    switch (raw.toLowerCase()) {
+      case 'utf8':
+      case 'utf-8':
+        return 'UTF-8';
+      case 'utf8bom':
+        return 'UTF-8 with BOM';
+      case 'utf16le':
+        return 'UTF-16 LE';
+      case 'utf16be':
+        return 'UTF-16 BE';
+      case 'latin1':
+      case 'iso88591':
+        return 'ISO 8859-1';
+      default:
+        return raw.toUpperCase();
+    }
   }
 
   // ── Bottom panel (terminal only) ───────────────────────────────────────────────────────────

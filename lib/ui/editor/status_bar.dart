@@ -275,16 +275,16 @@ class PandaStatusBar extends StatelessWidget {
         children: [
           const Icon(Icons.error, size: 13),
           const SizedBox(width: 3),
-          Text(packNumber(errorCount)),
+          Flexible(child: Text(packNumber(errorCount))),
           const SizedBox(width: 8),
           const Icon(Icons.warning, size: 13),
           const SizedBox(width: 3),
-          Text(packNumber(warningCount)),
+          Flexible(child: Text(packNumber(warningCount))),
           if (infoCount > 0) ...[
             const SizedBox(width: 8),
             const Icon(Icons.info, size: 13),
             const SizedBox(width: 3),
-            Text(packNumber(infoCount)),
+            Flexible(child: Text(packNumber(infoCount))),
           ],
         ],
       ),
@@ -301,7 +301,9 @@ class PandaStatusBar extends StatelessWidget {
         children: [
           const Icon(Icons.merge_type, size: 13),
           const SizedBox(width: 3),
-          Text(branchName!),
+          // `.statusbar-item-label { text-overflow: ellipsis }` — a long branch
+          // name shrinks/ellipsizes instead of overflowing the thin bar.
+          Flexible(child: Text(branchName!)),
         ],
       ),
     );
@@ -322,11 +324,11 @@ class PandaStatusBar extends StatelessWidget {
           const Icon(Icons.sync, size: 13),
           if (unpushedCount > 0) ...[
             const SizedBox(width: 2),
-            Text('$unpushedCount↑'),
+            Flexible(child: Text('$unpushedCount↑')),
           ],
           if (unpulledCount > 0) ...[
             const SizedBox(width: 4),
-            Text('$unpulledCount↓'),
+            Flexible(child: Text('$unpulledCount↓')),
           ],
         ],
       ),
@@ -345,7 +347,7 @@ class PandaStatusBar extends StatelessWidget {
         children: [
           const Icon(Icons.computer, size: 13),
           const SizedBox(width: 3),
-          Text(remoteName!),
+          Flexible(child: Text(remoteName!)),
         ],
       ),
     );
@@ -367,7 +369,7 @@ class PandaStatusBar extends StatelessWidget {
           ),
           if (workspaceName != null) ...[
             const SizedBox(width: 3),
-            Text(workspaceName!),
+            Flexible(child: Text(workspaceName!)),
           ],
         ],
       ),
@@ -413,7 +415,7 @@ class PandaStatusBar extends StatelessWidget {
             color: aiActive ? const Color(0xFF4EC9B0) : Colors.white60,
           ),
           const SizedBox(width: 3),
-          Text(label),
+          Flexible(child: Text(label)),
         ],
       ),
     );
@@ -453,14 +455,18 @@ class PandaStatusBar extends StatelessWidget {
     );
   }
 
-  static Widget _bellDot() => Container(
-        width: 5,
-        height: 5,
-        decoration: const BoxDecoration(
-          color: Color(0xFFFFFFFF),
-          shape: BoxShape.circle,
-        ),
-      );
+  Widget _bellDot() {
+    final dark =
+        ThemeData.estimateBrightnessForColor(background) == Brightness.dark;
+    return Container(
+      width: 5,
+      height: 5,
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFFFFFFFF) : const Color(0xff3b3b3b),
+        shape: BoxShape.circle,
+      ),
+    );
+  }
 
   // ── Extension entries via StatusBarManager (vscode.* API shim) ──
 
@@ -497,7 +503,7 @@ class PandaStatusBar extends StatelessWidget {
                         Icon(codicon, size: 13),
                         if (parsed.$2.isNotEmpty) const SizedBox(width: 3),
                       ],
-                      if (parsed.$2.isNotEmpty) Text(parsed.$2),
+                      if (parsed.$2.isNotEmpty) Flexible(child: Text(parsed.$2)),
                     ],
                   );
                 }),
@@ -545,15 +551,37 @@ class PandaStatusBar extends StatelessWidget {
       decoration: BoxDecoration(color: background),
       child: Row(
         children: [
-          // left-items: flex-grow 1 pushes right items to the far end.
+          // .left-items { flex-grow: 1 } — pushes the right items to the far
+          // end. Both groups scroll horizontally instead of overflowing
+          // (`overflow: hidden` + `.right-items { flex-wrap: wrap }` in
+          // statusbarpart.css): a long branch name or a narrow phone can never
+          // break the thin 22px bar.
           Expanded(
-            child: Row(children: [_edgePadding(left: true), ...leftItems]),
+            child: _hScroll(
+              Row(children: [_edgePadding(left: true), ...leftItems]),
+            ),
           ),
-          Row(children: [...rightItems, _edgePadding(left: false)]),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * 0.72,
+            ),
+            child: _hScroll(
+              Row(children: [...rightItems, _edgePadding(left: false)]),
+            ),
+          ),
         ],
       ),
     );
   }
+
+  /// VS Code hides status bar overflow; Flutter scrolls it. Keeps the bar
+  /// exactly one line tall (22px) so it never wraps the way the desktop
+  /// `.right-items { flex-wrap: wrap }` rule would.
+  Widget _hScroll(Widget child) => SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const ClampingScrollPhysics(),
+        child: child,
+      );
 
   Widget _edgePadding({required bool left}) {
     // statusbarpart.css: first-visible-item (left) gets padding-left 2px;
@@ -578,7 +606,7 @@ class PandaStatusBar extends StatelessWidget {
             Icon(entry.icon, size: 13),
             if (entry.text.isNotEmpty) const SizedBox(width: 3),
           ],
-          if (entry.text.isNotEmpty) Text(entry.text),
+          if (entry.text.isNotEmpty) Flexible(child: Text(entry.text)),
         ],
       ),
     );
@@ -727,15 +755,31 @@ class _StatusItemViewState extends State<_StatusItemView> {
 
   bool get _hasCommand => widget.onTap != null;
 
+  /// Light status bars (light theme) need a dark foreground; VS Code swaps
+  /// `statusBar.foreground` and its hover/active overlays per theme. Derived
+  /// from the bar colour so callers only pass the right background.
+  bool get _isDarkBar =>
+      ThemeData.estimateBrightnessForColor(widget.background) ==
+      Brightness.dark;
+
   Color get _effectiveForeground =>
-      widget.foreground ?? ((widget.kindBackground != null) ? Colors.white : StatusBarColors.foreground);
+      widget.foreground ??
+      ((widget.kindBackground != null || _isDarkBar)
+          ? Colors.white
+          : const Color(0xff3b3b3b));
+
+  Color get _hoverOverlay =>
+      _isDarkBar ? StatusBarColors.hoverBackground : const Color(0x14000000);
+
+  Color get _activeOverlay =>
+      _isDarkBar ? StatusBarColors.activeBackground : const Color(0x24000000);
 
   Color get _effectiveBackground {
     var base = widget.kindBackground ?? widget.background;
     if (_pressed && _hasCommand) {
-      base = Color.alphaBlend(StatusBarColors.activeBackground, base);
+      base = Color.alphaBlend(_activeOverlay, base);
     } else if (_hovered && _hasCommand) {
-      base = Color.alphaBlend(StatusBarColors.hoverBackground, base);
+      base = Color.alphaBlend(_hoverOverlay, base);
     }
     return base;
   }
